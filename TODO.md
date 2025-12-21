@@ -3,21 +3,31 @@
 ## Milestone: "Make leaks obvious"
 
 ### Core Requirements
-- [ ] Create repo structure (`agent/`, `runner/`, `examples/`)
-- [ ] Add README + this file
-- [ ] Add a `TODO.md` with v0.1 tasks
-- [ ] Add a "hello runner" that executes an iteration loop over a corpus directory
-- [ ] Add thread leak check that fails a demo target
+- [x] Create repo structure (`agent/`, `runner/`, `examples/`)
+- [x] Add README + this file
+- [x] Add a `TODO.md` with v0.1 tasks
+- [x] Add a "hello runner" that executes an iteration loop over a corpus directory
+- [x] Add thread leak check that fails a demo target
 
 ### Implementation Tasks
-- [ ] Implement iteration boundary API: `beginIteration()` / `endIteration()`
-- [ ] Implement thread leak detection (new non-daemon threads after iteration)
-- [ ] Implement basic executor/timer leak detection (best-effort)
-- [ ] Create minimal runner (CLI or JUnit extension)
-- [ ] Create one example target + README quickstart
+- [x] Implement iteration boundary API: `beginIteration()` / `endIteration()`
+- [x] Implement thread leak detection (new non-daemon threads after iteration)
+- [x] Implement basic executor/timer leak detection (best-effort)
+- [x] Create minimal runner (CLI or JUnit extension)
+- [x] Create one example target + README quickstart
+- [x] Add forked leak integration test (expects non-zero exit and leak text)
+- [ ] Add Gradle wrapper for consistent CI/dev usage
 
 ### Testing
-- [ ] Test with a small servlet/controller example
-- [ ] Verify thread leak detection works
-- [ ] Test 10,000 iterations
-- [ ] Demonstrate reliable detection of deliberate thread leak
+- [ ] Test with a small servlet/controller example (TBD)
+- [ ] Test 10,000 iterations locally and record metrics
+- [x] Demonstrate reliable detection of deliberate thread leak (local + test)
+- [x] Add CI workflow: build, test, proper demo; leak demo expected to fail
+
+### Operational Notes
+- Leak demo can hang the JVM due to non-daemon threads; use `-Dclosurejvm.forceExitOnLeak=true` in demos/CI to force fast termination on leak detection.
+
+### Next Up (v0.1 hardening)
+- [ ] Add simple metrics snapshot (thread count, heap delta) at iteration boundaries (print-only)
+- [ ] Tighten executor/timer tracking (more sources, e.g., ScheduledThreadPoolExecutor specifics)
+- [ ] Document quick flags in README (done) and add CI badge once wrapper lands

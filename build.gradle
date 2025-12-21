@@ -1,0 +1,94 @@
+// Build configuration for ClosureJVM
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'com.closurejvm'
+version = '0.1.0'
+sourceCompatibility = '17'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'net.bytebuddy:byte-buddy:1.14.12'
+    testImplementation 'junit:junit:4.13.2'
+}
+
+// Use current repo layout instead of src/main/java
+sourceSets {
+    main {
+        java {
+            srcDirs = ['agent', 'runner', 'examples']
+        }
+        resources {
+            srcDirs = []
+        }
+    }
+    test {
+        java {
+            srcDirs = ['test']
+        }
+        resources {
+            srcDirs = []
+        }
+    }
+}
+
+application {
+    mainClass = 'runner.Runner'
+}
+
+// Create a simple jar task
+jar {
+    manifest {
+        attributes(
+            'Main-Class': 'runner.Runner',
+            'Premain-Class': 'agent.Agent'
+        )
+    }
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+// Convenience run tasks
+tasks.register('runExampleProper', JavaExec) {
+    group = 'application'
+    description = 'Run examples.ThreadLeakExample with proper thread management.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'examples.ThreadLeakExample'
+}
+
+tasks.register('runExampleLeak', JavaExec) {
+    group = 'application'
+    description = 'Run examples.ThreadLeakExample with intentional thread leak (may hang).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'examples.ThreadLeakExample'
+    args 'leak'
+}
+
+tasks.register('runRunnerProper', JavaExec) {
+    group = 'application'
+    description = 'Run runner.Runner with demoTarget=proper.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.Runner'
+    jvmArgs '-DdemoTarget=proper'
+    args '5'
+}
+
+tasks.register('runRunnerLeak', JavaExec) {
+    group = 'application'
+    description = 'Run runner.Runner with demoTarget=leak (will detect and report leaks; process may be held by non-daemon threads).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.Runner'
+    jvmArgs '-DdemoTarget=leak'
+    args '1'
+}
+
+// Make `check` also run the non-leaking demos to verify wiring
+tasks.named('check') {
+    dependsOn 'runExampleProper', 'runRunnerProper'
+}

@@ -9,24 +9,40 @@ import java.util.concurrent.TimeUnit;
  * This is used to test the thread leak detection functionality
  */
 public class ThreadLeakExample {
-    
-    private static final int THREAD_COUNT = 5;
+
+    private static int threadCount() {
+        String v = System.getProperty("examples.threads");
+        if (v != null) {
+            try { return Math.max(1, Integer.parseInt(v)); } catch (NumberFormatException ignored) {}
+        }
+        return 5;
+    }
+
+    private static long sleepMs() {
+        String v = System.getProperty("examples.sleepMs");
+        if (v != null) {
+            try { return Math.max(0, Long.parseLong(v)); } catch (NumberFormatException ignored) {}
+        }
+        return 1000L;
+    }
     
     /**
      * Method that creates threads but doesn't properly clean them up
      * This simulates a thread leak that should be detected
      */
     public static void createLeakingThreads() {
-        ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
+        final int count = threadCount();
+        final long ms = sleepMs();
+        ExecutorService executor = agent.Agent.trackExecutor(Executors.newFixedThreadPool(count));
         
         // Submit tasks that will run for a while
-        for (int i = 0; i < THREAD_COUNT; i++) {
+        for (int i = 0; i < count; i++) {
             final int taskId = i;
             executor.submit(() -> {
                 System.out.println("Task " + taskId + " started");
                 try {
                     // Simulate work that takes some time
-                    Thread.sleep(1000);
+                    Thread.sleep(ms);
                     System.out.println("Task " + taskId + " completed");
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -36,7 +52,7 @@ public class ThreadLeakExample {
         
         // Note: We're not calling executor.shutdown() or executor.awaitTermination()
         // This causes thread leaks that should be detected by our harness
-        System.out.println("Created " + THREAD_COUNT + " threads but didn't shut down executor");
+        System.out.println("Created " + count + " threads but didn't shut down executor");
     }
     
     /**
@@ -44,15 +60,17 @@ public class ThreadLeakExample {
      * This should not cause leaks
      */
     public static void createProperThreads() {
-        ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
+        final int count = threadCount();
+        final long ms = sleepMs();
+        ExecutorService executor = agent.Agent.trackExecutor(Executors.newFixedThreadPool(count));
         
         // Submit tasks
-        for (int i = 0; i < THREAD_COUNT; i++) {
+        for (int i = 0; i < count; i++) {
             final int taskId = i;
             executor.submit(() -> {
                 System.out.println("Task " + taskId + " started");
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(ms);
                     System.out.println("Task " + taskId + " completed");
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -71,7 +89,7 @@ public class ThreadLeakExample {
             Thread.currentThread().interrupt();
         }
         
-        System.out.println("Properly managed " + THREAD_COUNT + " threads");
+        System.out.println("Properly managed " + count + " threads");
     }
     
     /**

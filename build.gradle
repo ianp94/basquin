@@ -60,6 +60,7 @@ tasks.register('runExampleProper', JavaExec) {
     description = 'Run examples.ThreadLeakExample with proper thread management.'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'examples.ThreadLeakExample'
+    jvmArgs '-Dexamples.sleepMs=50', '-Dexamples.threads=2'
 }
 
 tasks.register('runExampleLeak', JavaExec) {
@@ -68,6 +69,7 @@ tasks.register('runExampleLeak', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'examples.ThreadLeakExample'
     args 'leak'
+    jvmArgs '-Dexamples.sleepMs=50', '-Dexamples.threads=2'
 }
 
 tasks.register('runRunnerProper', JavaExec) {
@@ -75,7 +77,7 @@ tasks.register('runRunnerProper', JavaExec) {
     description = 'Run runner.Runner with demoTarget=proper.'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.Runner'
-    jvmArgs '-DdemoTarget=proper'
+    jvmArgs '-DdemoTarget=proper', '-Dexamples.sleepMs=50', '-Dexamples.threads=2'
     args '5'
 }
 
@@ -84,7 +86,7 @@ tasks.register('runRunnerLeak', JavaExec) {
     description = 'Run runner.Runner with demoTarget=leak (will detect and report leaks; process may be held by non-daemon threads).'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.Runner'
-    jvmArgs '-DdemoTarget=leak'
+    jvmArgs '-DdemoTarget=leak', '-Dexamples.sleepMs=50', '-Dexamples.threads=2', '-Dclosurejvm.forceExitOnLeak=true'
     args '1'
 }
 

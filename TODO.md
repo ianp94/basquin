@@ -16,7 +16,7 @@
 - [x] Create minimal runner (CLI or JUnit extension)
 - [x] Create one example target + README quickstart
 - [x] Add forked leak integration test (expects non-zero exit and leak text)
-- [ ] Add Gradle wrapper for consistent CI/dev usage
+- [x] Add Gradle wrapper for consistent CI/dev usage
 
 ### Testing
 - [ ] Test with a small servlet/controller example (TBD)

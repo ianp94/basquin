@@ -15,14 +15,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Gradle
+      - name: Gradle build
         uses: gradle/gradle-build-action@v3
-        with:
-          gradle-version: '8.9'
       - name: Build
-        run: gradle build --no-daemon --warning-mode all
+        run: ./gradlew build --no-daemon --warning-mode all
       - name: Test
-        run: gradle test --no-daemon --warning-mode all
+        run: ./gradlew test --no-daemon --warning-mode all
 
   leak-demo:
     runs-on: ubuntu-latest
@@ -35,15 +33,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Gradle
+      - name: Gradle build
         uses: gradle/gradle-build-action@v3
-        with:
-          gradle-version: '8.9'
       - name: Leak demo should fail (expected)
         shell: bash
         run: |
           set +e
-          gradle runRunnerLeak --no-daemon --warning-mode all
+          ./gradlew runRunnerLeak --no-daemon --warning-mode all
           status=$?
           echo "Leak demo exit status: $status"
           if [ $status -eq 0 ]; then

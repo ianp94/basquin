@@ -2,7 +2,27 @@ name: CI
 
 on:
   push:
+    paths:
+      - 'agent/**'
+      - 'runner/**'
+      - 'examples/**'
+      - 'test/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
   pull_request:
+    paths:
+      - 'agent/**'
+      - 'runner/**'
+      - 'examples/**'
+      - 'test/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
 
 jobs:
   build-and-test:

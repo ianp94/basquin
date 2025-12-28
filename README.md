@@ -121,10 +121,17 @@ Notes
 Example fuzzable app:
 - Target: `examples.targets.CalculatorFuzzTarget` (wraps `examples.fuzzapps.SimpleCalculator`).
 - Run: `./gradlew runFuzzCalculatorJQF -DenableJQF=true`.
+- Latency target: `examples.targets.LatencyFuzzTarget` (derives sleep from bytes/ASCII number).
+  - Fuzz: `./gradlew runFuzzLatencyJQF -DenableJQF=true` (soft latency invariant; seeds in `examples/corpus/latency`).
+  - Corpus: `./gradlew runLatencyCorpus`.
+- Heap target: `examples.targets.HeapFuzzTarget` (allocates KB from input; capped by `-Dexamples.heap.maxKb`).
+  - Fuzz: `./gradlew runFuzzHeapJQF -DenableJQF=true` (soft heap delta invariant; seeds in `examples/corpus/heap`).
+  - Corpus: `./gradlew runHeapCorpus`.
 - Saving inputs:
   - By default, interesting inputs (exceptions) are saved under `fuzz-results/` with a `.bin` file and a `.meta.txt` report.
   - Configure directory with `-Dclosurejvm.fuzz.resultsDir=path`.
   - JQF also saves coverage-interesting inputs under the guidance outdir: set `-Djqf.ei.DIRECTORY=path` (defaults to `fuzz-results/` in our Gradle tasks).
+  - Per-target defaults: Calculator → `fuzz-results/calculator`, HTTP → `fuzz-results/http`, JSON → `fuzz-results/json`, Generic → `fuzz-results/<target-simple-name>`.
 
 Seeding the fuzzer with a corpus:
 - Provide seeds to JQF with `-Dclosurejvm.fuzz.seedsDir=path`.
@@ -137,5 +144,7 @@ Seeding the fuzzer with a corpus:
 Corpus replay & minimization (no JQF required):
 - Replay a corpus directory: `./gradlew runCorpusReplay -Dclosurejvm.target=examples.targets.CalculatorFuzzTarget -Dclosurejvm.corpusDir=corpus`
 - Example calculator seeds: `./gradlew runCalculatorCorpus` (uses `examples/corpus/calculator`)
+- Example HTTP seeds: `./gradlew runHttpCorpus` (uses `examples/corpus/http`)
+- Example JSON seeds: `./gradlew runJsonCorpus` (uses `examples/corpus/json`)
 - Minimize a crashing input:
-  - `./gradlew minimizeInput -Dclosurejvm.target=examples.targets.CalculatorFuzzTarget -Dclosurejvm.min.input=fuzz-results/input-<ts>.bin -Dclosurejvm.min.output=fuzz-results/minimized.bin`
+  - `./gradlew minimizeInput -Dclosurejvm.target=<FQCN> -Dclosurejvm.min.input=fuzz-results/<target>/input-<ts>.bin -Dclosurejvm.min.output=fuzz-results/<target>/minimized.bin`

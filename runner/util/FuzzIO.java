@@ -45,5 +45,27 @@ public final class FuzzIO {
             System.err.println("[ClosureJVM][Fuzz] Failed to save input: " + ioe);
         }
     }
-}
 
+    public static void saveWithMeta(byte[] data, String classification, String details) {
+        String dirProp = System.getProperty("closurejvm.fuzz.resultsDir", "fuzz-results");
+        try {
+            Path dir = Paths.get(dirProp);
+            Files.createDirectories(dir);
+            long ts = Instant.now().toEpochMilli();
+            String base = String.format(Locale.ROOT, "input-%d", ts);
+            Path inputPath = dir.resolve(base + ".bin");
+            Files.write(inputPath, data);
+            Path meta = dir.resolve(base + ".meta.txt");
+            StringBuilder m = new StringBuilder();
+            m.append("classification=").append(classification).append('\n');
+            m.append("timestamp=").append(ts).append('\n');
+            if (details != null && !details.isEmpty()) {
+                m.append("details=\n").append(details).append('\n');
+            }
+            Files.write(meta, m.toString().getBytes(StandardCharsets.UTF_8));
+            System.err.println("[ClosureJVM][Fuzz] Saved input (" + classification + ") to " + inputPath);
+        } catch (IOException ioe) {
+            System.err.println("[ClosureJVM][Fuzz] Failed to save input: " + ioe);
+        }
+    }
+}

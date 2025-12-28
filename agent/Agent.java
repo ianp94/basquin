@@ -29,6 +29,7 @@ public class Agent {
     private static volatile long iterationStartNanos = 0L;
     private static volatile long baselineHeapUsedBytes = 0L;
     private static volatile int baselineThreadCount = 0;
+    private static volatile java.util.List<String> lastInvariantViolations = java.util.Collections.emptyList();
 
     /**
      * Entry point for the JVM agent
@@ -51,6 +52,7 @@ public class Agent {
         iterationStartNanos = System.nanoTime();
         baselineHeapUsedBytes = usedHeapBytes();
         baselineThreadCount = snapshotTotalThreadCount();
+        lastInvariantViolations = java.util.Collections.emptyList();
         baselineNonDaemonThreadIds = snapshotNonDaemonThreadIds();
         baselineActiveExecutorIdentities = snapshotActiveExecutorIdentities();
         baselineActiveTimerIdentities = snapshotActiveTimerIdentities();
@@ -251,6 +253,22 @@ public class Agent {
     private static long usedHeapBytes() {
         Runtime rt = Runtime.getRuntime();
         return rt.totalMemory() - rt.freeMemory();
+    }
+
+    static void setLastInvariantViolations(java.util.List<Invariants.Violation> violations) {
+        if (violations == null || violations.isEmpty()) {
+            lastInvariantViolations = java.util.Collections.emptyList();
+            return;
+        }
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (Invariants.Violation v : violations) {
+            out.add(v.name + ": " + v.detail);
+        }
+        lastInvariantViolations = out;
+    }
+
+    public static java.util.List<String> getLastInvariantViolations() {
+        return new java.util.ArrayList<>(lastInvariantViolations);
     }
 
     private static Set<ExecutorService> liveTrackedExecutors() {

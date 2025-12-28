@@ -34,6 +34,7 @@ public final class CorpusRunner {
         System.out.println("CorpusRunner: running " + inputs.size() + " inputs from " + corpusDir + " against target " + targetClass);
 
         int failures = 0;
+        int violations = 0;
         boolean stopOnFailure = Boolean.getBoolean("closurejvm.corpus.stopOnFailure");
         boolean failOnAny = Boolean.getBoolean("closurejvm.corpus.failOnAny");
 
@@ -65,13 +66,25 @@ public final class CorpusRunner {
                     break;
                 }
             } else {
-                System.out.println("[Corpus] PASS: " + p.getFileName());
+                // Check invariant violations in soft mode
+                java.util.List<String> v = agent.Agent.getLastInvariantViolations();
+                if (v != null && !v.isEmpty()) {
+                    violations++;
+                    String details = String.join("\n", v);
+                    System.err.println("[Corpus] VIOLATION: " + p.getFileName());
+                    FuzzIO.saveWithMeta(data, "Invariant", details);
+                    if (stopOnFailure) {
+                        break;
+                    }
+                } else {
+                    System.out.println("[Corpus] PASS: " + p.getFileName());
+                }
             }
         }
 
         target.close();
-        System.out.println("CorpusRunner complete. Failures=" + failures + ", Total=" + inputs.size());
-        if (failOnAny && failures > 0) {
+        System.out.println("CorpusRunner complete. Failures=" + failures + ", Violations=" + violations + ", Total=" + inputs.size());
+        if (failOnAny && (failures > 0 || violations > 0)) {
             System.exit(2);
         }
     }

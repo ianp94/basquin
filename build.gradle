@@ -189,7 +189,9 @@ tasks.register('runFuzzJQF', JavaExec) {
         }
         // Optional seeds & results directories
         def seeds = System.getProperty('closurejvm.fuzz.seedsDir')
-        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results'
+        def tgt = System.getProperty('closurejvm.target')
+        def simple = tgt?.tokenize('.')?.last() ?: 'generic'
+        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: "fuzz-results/${simple.toLowerCase()}"
         if (seeds) {
             jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
         }
@@ -215,7 +217,7 @@ tasks.register('runFuzzCalculatorJQF', JavaExec) {
         }
         jvmArgs '-Dclosurejvm.target=examples.targets.CalculatorFuzzTarget'
         // Allow user override of resultsDir; default to fuzz-results
-        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results'
+        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/calculator'
         jvmArgs "-Djqf.ei.DIRECTORY=${results}"
         jvmArgs "-Dclosurejvm.fuzz.resultsDir=${results}"
         // Seeds
@@ -245,6 +247,7 @@ tasks.register('runCalculatorCorpus', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.CorpusRunner'
     args 'examples.targets.CalculatorFuzzTarget', 'examples/corpus/calculator'
+    jvmArgs '-Dclosurejvm.fuzz.resultsDir=fuzz-results/calculator'
 }
 
 tasks.register('runHttpCorpus', JavaExec) {
@@ -253,6 +256,7 @@ tasks.register('runHttpCorpus', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.CorpusRunner'
     args 'examples.targets.HttpRequestLineTarget', 'examples/corpus/http'
+    jvmArgs '-Dclosurejvm.fuzz.resultsDir=fuzz-results/http'
 }
 
 tasks.register('runJsonCorpus', JavaExec) {
@@ -261,6 +265,7 @@ tasks.register('runJsonCorpus', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.CorpusRunner'
     args 'examples.targets.JsonTokenizerTarget', 'examples/corpus/json'
+    jvmArgs '-Dclosurejvm.fuzz.resultsDir=fuzz-results/json'
 }
 
 tasks.register('runFuzzHttpJQF', JavaExec) {
@@ -277,7 +282,7 @@ tasks.register('runFuzzHttpJQF', JavaExec) {
             jvmArgs "-javaagent:${agentJar.absolutePath}"
         }
         jvmArgs '-Dclosurejvm.target=examples.targets.HttpRequestLineTarget'
-        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results'
+        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/http'
         jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dclosurejvm.fuzz.resultsDir=${results}"
         def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/http'
         jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
@@ -298,11 +303,72 @@ tasks.register('runFuzzJsonJQF', JavaExec) {
             jvmArgs "-javaagent:${agentJar.absolutePath}"
         }
         jvmArgs '-Dclosurejvm.target=examples.targets.JsonTokenizerTarget'
-        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results'
+        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/json'
         jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dclosurejvm.fuzz.resultsDir=${results}"
         def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/json'
         jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
     }
+}
+
+tasks.register('runFuzzLatencyJQF', JavaExec) {
+    group = 'verification'
+    description = 'Run JQF on LatencyFuzzTarget (opt-in with -DenableJQF=true).'
+    onlyIf { Boolean.getBoolean('enableJQF') }
+    dependsOn 'classes', 'compileFuzzJava'
+    classpath = sourceSets.fuzz.runtimeClasspath + sourceSets.main.runtimeClasspath + configurations.jqf
+    mainClass = 'org.junit.runner.JUnitCore'
+    args 'examples.fuzz.JQFIterationHarness'
+    doFirst {
+        def agentJar = configurations.jqf.resolve().find { it.name.contains('jqf-instrument') }
+        if (agentJar != null) { jvmArgs "-javaagent:${agentJar.absolutePath}" }
+        jvmArgs '-Dclosurejvm.target=examples.targets.LatencyFuzzTarget'
+        // Invariant: low latency threshold, soft mode to collect
+        jvmArgs '-Dclosurejvm.invariant.latency.maxMs=50', '-Dclosurejvm.invariant.mode=soft'
+        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/latency'
+        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dclosurejvm.fuzz.resultsDir=${results}"
+        def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/latency'
+        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
+    }
+}
+
+tasks.register('runFuzzHeapJQF', JavaExec) {
+    group = 'verification'
+    description = 'Run JQF on HeapFuzzTarget (opt-in with -DenableJQF=true).'
+    onlyIf { Boolean.getBoolean('enableJQF') }
+    dependsOn 'classes', 'compileFuzzJava'
+    classpath = sourceSets.fuzz.runtimeClasspath + sourceSets.main.runtimeClasspath + configurations.jqf
+    mainClass = 'org.junit.runner.JUnitCore'
+    args 'examples.fuzz.JQFIterationHarness'
+    doFirst {
+        def agentJar = configurations.jqf.resolve().find { it.name.contains('jqf-instrument') }
+        if (agentJar != null) { jvmArgs "-javaagent:${agentJar.absolutePath}" }
+        jvmArgs '-Dclosurejvm.target=examples.targets.HeapFuzzTarget'
+        // Invariant: low heap delta threshold, soft mode to collect
+        jvmArgs '-Dclosurejvm.invariant.heapDelta.maxKb=128', '-Dclosurejvm.invariant.mode=soft'
+        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/heap'
+        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dclosurejvm.fuzz.resultsDir=${results}"
+        def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/heap'
+        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
+    }
+}
+
+// Corpus demos for invariants
+tasks.register('runLatencyCorpus', JavaExec) {
+    group = 'application'
+    description = 'Replay latency corpus against LatencyFuzzTarget and record latency violations (soft mode).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.CorpusRunner'
+    args 'examples.targets.LatencyFuzzTarget', 'examples/corpus/latency'
+    jvmArgs '-Dclosurejvm.invariant.latency.maxMs=50', '-Dclosurejvm.invariant.mode=soft', '-Dclosurejvm.fuzz.resultsDir=fuzz-results/latency'
+}
+
+tasks.register('runHeapCorpus', JavaExec) {
+    group = 'application'
+    description = 'Replay heap corpus against HeapFuzzTarget and record heap delta violations (soft mode).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.CorpusRunner'
+    args 'examples.targets.HeapFuzzTarget', 'examples/corpus/heap'
+    jvmArgs '-Dclosurejvm.invariant.heapDelta.maxKb=128', '-Dclosurejvm.invariant.mode=soft', '-Dclosurejvm.fuzz.resultsDir=fuzz-results/heap'
 }
 
 // Minimization runner: ddmin-like reduction for an input

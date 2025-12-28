@@ -79,12 +79,18 @@ public class JQFIterationHarness {
             }
             target.executeIteration();
         } catch (Throwable t) {
-            // Save interesting input then rethrow for JQF to record
+            // Save crashing input then rethrow for JQF to record
             FuzzIO.saveInteresting(data, t);
             if (t instanceof Exception) throw (Exception) t;
             throw new RuntimeException(t);
         } finally {
             Agent.endIteration();
+            // Save invariant violations even in soft mode (non-crashing)
+            java.util.List<String> v = agent.Agent.getLastInvariantViolations();
+            if (v != null && !v.isEmpty()) {
+                String details = String.join("\n", v);
+                FuzzIO.saveWithMeta(data, "Invariant", details);
+            }
         }
     }
 }

@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.closurejvm'
-version = '0.1.0'
+version = '0.2.0'
 sourceCompatibility = '17'
 
 repositories {
@@ -20,10 +20,14 @@ dependencies {
 // Optional configuration for Javalin demo so main build doesn't require it
 configurations {
     javalinDemo
+    jqf
 }
 
 dependencies {
     javalinDemo 'io.javalin:javalin:5.6.2'
+    // JQF dependencies (scoped): only resolved for fuzz tasks
+    jqf 'edu.berkeley.cs.jqf:jqf-fuzz:1.9'
+    jqf 'edu.berkeley.cs.jqf:jqf-instrument:1.9'
 }
 
 // Use current repo layout instead of src/main/java
@@ -31,6 +35,8 @@ sourceSets {
     main {
         java {
             srcDirs = ['agent', 'runner', 'examples']
+            // Exclude JQF harness from main compilation; compiled in separate 'fuzz' source set
+            exclude 'fuzz/**'
         }
         resources {
             srcDirs = []
@@ -43,6 +49,13 @@ sourceSets {
         resources {
             srcDirs = []
         }
+    }
+    // Separate source set for fuzz harnesses to avoid pulling JQF into main build
+    fuzz {
+        java {
+            srcDirs = ['examples/fuzz']
+        }
+        resources { srcDirs = [] }
     }
 }
 
@@ -144,6 +157,28 @@ tasks.register('runSoakProper', JavaExec) {
     mainClass = 'runner.GenericRunner'
     jvmArgs '-Dexamples.sleepMs=1', '-Dexamples.threads=2', '-Dexamples.mode=proper'
     args '10000', 'examples.targets.ThreadLeakTarget'
+}
+
+// JQF fuzzing (v0.3 preview) — only resolves when explicitly run
+tasks.register('runFuzzJQF', JavaExec) {
+    group = 'verification'
+    description = 'Run JQF with the Iteration harness. Usage: -Dclosurejvm.target=<FQCN>'
+    onlyIf { Boolean.getBoolean('enableJQF') }
+    dependsOn 'classes', 'compileFuzzJava'
+    classpath = sourceSets.fuzz.runtimeClasspath + sourceSets.main.runtimeClasspath + configurations.jqf
+    mainClass = 'org.junit.runner.JUnitCore'
+    args 'examples.fuzz.JQFIterationHarness'
+    doFirst {
+        def agentJar = configurations.jqf.resolve().find { it.name.contains('jqf-instrument') }
+        if (agentJar != null) {
+            jvmArgs "-javaagent:${agentJar.absolutePath}"
+        } else {
+            logger.lifecycle('Warning: jqf-instrument agent jar not found; coverage guidance may not work')
+        }
+        if (!System.getProperty('closurejvm.target')) {
+            throw new GradleException('Set -Dclosurejvm.target=<FQCN of IterationTarget>')
+        }
+    }
 }
 
 // Verification tasks (Gradle) for invariants and reset, avoiding hard-coded java exec in tests

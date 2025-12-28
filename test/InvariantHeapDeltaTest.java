@@ -21,11 +21,11 @@ public class InvariantHeapDeltaTest {
         cmd.add(javaBin);
         cmd.add("-cp");
         cmd.add(cp);
+        cmd.add("-Dclosurejvm.invariant.heapDelta.maxKb=64");
+        cmd.add("-Dexamples.heap.bumpKb=1024");
         cmd.add("runner.GenericRunner");
         cmd.add("1");
         cmd.add("examples.targets.HeapBumpTarget");
-        cmd.add("-Dclosurejvm.invariant.heapDelta.maxKb=64");
-        cmd.add("-Dexamples.heap.bumpKb=1024");
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
@@ -46,4 +46,3 @@ public class InvariantHeapDeltaTest {
         assertTrue("Output should mention invariant violation", output.contains("[Invariant]") || output.contains("Heap delta invariant"));
     }
 }
-

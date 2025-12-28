@@ -10,7 +10,7 @@ A persistent execution harness for JVM web applications that uses coverage-guide
 Prereqs: Java 17+, Gradle 8.x (or use the Gradle wrapper if present).
 
 - Build: `gradle build`
-- Run runner (simple): `java -jar build/libs/closurejvm-0.1.0.jar`
+- Run runner (simple): `java -jar build/libs/closurejvm-0.2.0.jar`
 - Run example (proper): `gradle runExampleProper`
 - Run runner demo (proper): `gradle runRunnerProper`
 
@@ -23,7 +23,7 @@ Javalin demo (optional; downloads Javalin only for this run):
 Generic runner (plug in any target):
 - Interface: implement `runner.api.IterationTarget` with `initialize/executeIteration/close`.
 - Run with class name: `gradle runGenericProper` or `gradle runGenericLeak`.
-- Direct usage: `java -cp build/libs/closurejvm-0.1.0.jar runner.GenericRunner 10 your.package.YourTarget`.
+- Direct usage: `java -cp build/libs/closurejvm-0.2.0.jar runner.GenericRunner 10 your.package.YourTarget`.
 
 Soak (local, proper mode):
 - `gradle runSoakProper` (10,000 iterations, prints metrics; use for stability checks)
@@ -87,9 +87,9 @@ public class YourTarget implements IterationTarget {
 Run it (two options):
 - Direct generic runner with explicit class:
   - Build: `./gradlew clean jar`
-  - Run: `java -cp build/libs/closurejvm-0.1.0.jar:<your-app-cp> runner.GenericRunner 100 your.pkg.YourTarget`
+  - Run: `java -cp build/libs/closurejvm-0.2.0.jar:<your-app-cp> runner.GenericRunner 100 your.pkg.YourTarget`
 - Via wrapper runner using a system property:
-  - `java -Dclosurejvm.target=your.pkg.YourTarget -cp build/libs/closurejvm-0.1.0.jar:<your-app-cp> runner.Runner 100`
+  - `java -Dclosurejvm.target=your.pkg.YourTarget -cp build/libs/closurejvm-0.2.0.jar:<your-app-cp> runner.Runner 100`
 
 Notes
 - Iteration metrics print per iteration (latency, heap delta, thread count).
@@ -108,3 +108,12 @@ Notes
   - Reset on failure: `-Dclosurejvm.reset.onFailure=true`
   - Optional max resets: `-Dclosurejvm.reset.maxResets=3`
   - Works with `runner.GenericRunner` by reloading your `IterationTarget` in a child-first loader for its package.
+
+## v0.3 Preview: Exploration (JQF)
+
+- JQF harness class: `examples.fuzz.JQFIterationHarness` (@RunWith(JQF), @Fuzz byte[] input)
+- Targets can optionally implement `runner.api.InputReceiver` to accept fuzz inputs.
+- Run (preview):
+  - `./gradlew runFuzzJQF -DenableJQF=true -Dclosurejvm.target=your.pkg.YourTarget` (downloads JQF artifacts)
+  - Note: This task is disabled by default and not part of CI; enable explicitly via `-DenableJQF=true`.
+  - Ensure a compatible JQF version is available; the task sets the `jqf-instrument` -javaagent automatically if found.

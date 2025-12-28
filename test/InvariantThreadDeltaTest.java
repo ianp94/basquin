@@ -21,10 +21,10 @@ public class InvariantThreadDeltaTest {
         cmd.add(javaBin);
         cmd.add("-cp");
         cmd.add(cp);
+        cmd.add("-Dclosurejvm.invariant.threadDelta.max=0");
         cmd.add("runner.GenericRunner");
         cmd.add("1");
         cmd.add("examples.targets.ThreadDeltaTarget");
-        cmd.add("-Dclosurejvm.invariant.threadDelta.max=0");
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
@@ -45,4 +45,3 @@ public class InvariantThreadDeltaTest {
         assertTrue("Output should mention invariant violation", output.contains("[Invariant]") || output.contains("Thread delta invariant"));
     }
 }
-

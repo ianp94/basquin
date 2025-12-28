@@ -17,6 +17,15 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
 }
 
+// Optional configuration for Javalin demo so main build doesn't require it
+configurations {
+    javalinDemo
+}
+
+dependencies {
+    javalinDemo 'io.javalin:javalin:5.6.2'
+}
+
 // Use current repo layout instead of src/main/java
 sourceSets {
     main {
@@ -38,7 +47,7 @@ sourceSets {
 }
 
 application {
-    mainClass = 'runner.Runner'
+    mainClass = 'runner.Runner' // thin wrapper that forwards to GenericRunner
 }
 
 // Create a simple jar task
@@ -74,20 +83,57 @@ tasks.register('runExampleLeak', JavaExec) {
 
 tasks.register('runRunnerProper', JavaExec) {
     group = 'application'
-    description = 'Run runner.Runner with demoTarget=proper.'
+    description = 'Run GenericRunner with ThreadLeakTarget (proper).'
     classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'runner.Runner'
-    jvmArgs '-DdemoTarget=proper', '-Dexamples.sleepMs=50', '-Dexamples.threads=2'
-    args '5'
+    mainClass = 'runner.GenericRunner'
+    jvmArgs '-Dexamples.sleepMs=50', '-Dexamples.threads=2', '-Dexamples.mode=proper'
+    args '5', 'examples.targets.ThreadLeakTarget'
 }
 
 tasks.register('runRunnerLeak', JavaExec) {
     group = 'application'
-    description = 'Run runner.Runner with demoTarget=leak (will detect and report leaks; process may be held by non-daemon threads).'
+    description = 'Run GenericRunner with ThreadLeakTarget (leak; will exit non-zero).'
     classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.GenericRunner'
+    jvmArgs '-Dexamples.sleepMs=50', '-Dexamples.threads=2', '-Dexamples.mode=leak', '-Dclosurejvm.forceExitOnLeak=true'
+    args '1', 'examples.targets.ThreadLeakTarget'
+}
+
+tasks.register('runRunnerJavalinLeak', JavaExec) {
+    group = 'application'
+    description = 'Run runner.Runner with demoTarget=javalinLeak (starts Javalin and calls /leak).'
+    classpath = sourceSets.main.runtimeClasspath + configurations.javalinDemo
     mainClass = 'runner.Runner'
-    jvmArgs '-DdemoTarget=leak', '-Dexamples.sleepMs=50', '-Dexamples.threads=2', '-Dclosurejvm.forceExitOnLeak=true'
+    jvmArgs '-DdemoTarget=javalinLeak', '-Dclosurejvm.forceExitOnLeak=true', '-Dexamples.javalin.port=7071'
     args '1'
+}
+
+// Generic runner tasks (use IterationTarget implementations)
+tasks.register('runGenericProper', JavaExec) {
+    group = 'application'
+    description = 'Run GenericRunner with examples.targets.ThreadLeakTarget (proper).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.GenericRunner'
+    jvmArgs '-Dexamples.sleepMs=50', '-Dexamples.threads=2'
+    args '5', 'examples.targets.ThreadLeakTarget'
+}
+
+tasks.register('runGenericLeak', JavaExec) {
+    group = 'application'
+    description = 'Run GenericRunner with examples.targets.ThreadLeakTarget (leak).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.GenericRunner'
+    jvmArgs '-Dexamples.sleepMs=50', '-Dexamples.threads=2', '-Dexamples.mode=leak', '-Dclosurejvm.forceExitOnLeak=true'
+    args '1', 'examples.targets.ThreadLeakTarget'
+}
+
+tasks.register('runGenericJavalinLeak', JavaExec) {
+    group = 'application'
+    description = 'Run GenericRunner with examples.targets.JavalinLeakTarget (requires Javalin).'
+    classpath = sourceSets.main.runtimeClasspath + configurations.javalinDemo
+    mainClass = 'runner.GenericRunner'
+    jvmArgs '-Dclosurejvm.forceExitOnLeak=true', '-Dexamples.javalin.port=7071'
+    args '1', 'examples.targets.JavalinLeakTarget'
 }
 
 // Make `check` also run the non-leaking demos to verify wiring

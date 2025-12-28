@@ -24,7 +24,8 @@ public class LeakIntegrationTest {
         cmd.add(javaBin);
         cmd.add("-cp");
         cmd.add(cp);
-        cmd.add("-DdemoTarget=leak");
+        cmd.add("-Dclosurejvm.target=examples.targets.ThreadLeakTarget");
+        cmd.add("-Dexamples.mode=leak");
         cmd.add("-Dexamples.sleepMs=50");
         cmd.add("-Dexamples.threads=2");
         cmd.add("-Dclosurejvm.forceExitOnLeak=true");

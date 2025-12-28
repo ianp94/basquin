@@ -12,6 +12,12 @@ public class LatencyFuzzTarget implements IterationTarget, InputReceiver {
     @Override
     public void executeIteration() {
         int ms = deriveDelayMs(last);
+        if (last == null) {
+            String prop = System.getProperty("examples.latency.ms");
+            if (prop != null) {
+                try { ms = Math.max(ms, Integer.parseInt(prop)); } catch (NumberFormatException ignored) {}
+            }
+        }
         if (ms > 0) {
             try { Thread.sleep(ms); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
         }
@@ -40,4 +46,3 @@ public class LatencyFuzzTarget implements IterationTarget, InputReceiver {
         return Math.max(0, Math.min(val, 2000));
     }
 }
-

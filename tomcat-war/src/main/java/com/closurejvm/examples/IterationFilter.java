@@ -23,10 +23,15 @@ public class IterationFilter implements Filter {
                 Agent.endIteration();
             } finally {
                 try {
+                    ClosureJVMMetrics.incRequests();
                     if (response instanceof HttpServletResponse) {
+                        HttpServletResponse resp = (HttpServletResponse) response;
+                        if (resp.getStatus() >= 500) {
+                            ClosureJVMMetrics.incCrashes();
+                        }
                         List<String> v = Agent.getLastInvariantViolations();
                         if (v != null && !v.isEmpty()) {
-                            HttpServletResponse resp = (HttpServletResponse) response;
+                            ClosureJVMMetrics.addInvariantCount(v.size());
                             resp.setHeader("X-ClosureJVM-Invariant-Count", String.valueOf(v.size()));
                             String first = v.get(0);
                             if (first != null && first.length() > 200) first = first.substring(0, 200);
@@ -38,4 +43,3 @@ public class IterationFilter implements Filter {
         }
     }
 }
-

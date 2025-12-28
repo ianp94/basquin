@@ -36,4 +36,13 @@
     <servlet-name>heap</servlet-name>
     <url-pattern>/heap</url-pattern>
   </servlet-mapping>
+
+  <servlet>
+    <servlet-name>status</servlet-name>
+    <servlet-class>com.closurejvm.examples.StatusServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>status</servlet-name>
+    <url-pattern>/closurejvm/status</url-pattern>
+  </servlet-mapping>
 </web-app>

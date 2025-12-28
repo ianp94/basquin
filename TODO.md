@@ -30,4 +30,38 @@
 ### Next Up (v0.1 hardening)
 - [x] Add simple metrics snapshot (thread count, heap delta) at iteration boundaries (print-only)
 - [x] Tighten executor/timer tracking (weak refs; ScheduledThreadPoolExecutor details)
-- [ ] Document quick flags in README (done) and add CI badge once wrapper lands
+- [x] Document quick flags in README (done) and add CI badge once wrapper lands
+
+---
+
+## Milestone: v0.2 — "Reset discipline"
+
+Goal: Turn findings into enforceable guarantees.
+
+### Deliverables
+- [x] Configurable invariants (latency, heap delta, thread delta) via `-Dclosurejvm.invariant.*`
+- [x] Hard failure vs soft signal modes (global and per-invariant)
+- [ ] First reset strategy: hard-reset fallback (ClassLoader swap)
+
+### Tasks
+1) Invariant polish
+   - [x] Hook invariant checks at iteration end (after metrics snapshot)
+   - [ ] Optionally include invariant summary line in output with structured key=val pairs
+   - [ ] Add heap/thread invariant tests similar to latency test
+
+2) Reset strategy: Hard reset fallback
+   - [ ] Implement child ClassLoader for target code; keep Agent/Runner in parent
+   - [ ] Load `runner.api.IterationTarget` implementation via child loader; re-instantiate on reset
+   - [ ] Add flags:
+       - `-Dclosurejvm.reset=classloader` (enable)
+       - `-Dclosurejvm.reset.onFailure=true` (reset after hard invariant/leak)
+   - [ ] Minimal smoke test that induces a failure, triggers reset, and runs another iteration
+
+3) Docs & DX
+   - [ ] README: document invariant flags (added) and reset flags/behavior (pending)
+   - [ ] Example snippet showing how to enable reset with GenericRunner
+   - [ ] CI job to run an invariant-soft mode and confirm non-zero vs zero behavior as appropriate
+
+### Non-goals (keep scope tight)
+- No coverage integration yet (v0.3)
+- No full static rollback; prefer classloader swap fallback

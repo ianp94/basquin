@@ -78,6 +78,18 @@ public class Agent {
                 "[ClosureJVM] Iteration %d metrics: latency=%dms, heapDelta=%+d KB, threads=%d (%+d)",
                 iteration, elapsedMs, heapDeltaBytes / 1024, threadsNow, threadsDelta));
 
+        // Configurable invariants (v0.2): thresholds checked here. Defaults disabled unless props set.
+        try {
+            Invariants.evaluateAndMaybeFail(iteration, elapsedMs, heapDeltaBytes, threadsNow, threadsDelta);
+        } catch (IllegalStateException e) {
+            // If configured to fail-hard, rethrow to stop the iteration loop fast
+            if (Boolean.getBoolean("closurejvm.forceExitOnLeak")) {
+                System.err.println("[ClosureJVM] Forcing process exit due to invariant violation (closurejvm.forceExitOnLeak=true)");
+                System.exit(2);
+            }
+            throw e;
+        }
+
         Map<Long, Thread> currentNonDaemon = snapshotNonDaemonThreads();
         Set<Long> currentIds = currentNonDaemon.keySet();
 

@@ -85,3 +85,12 @@ Notes
 - Iteration metrics print per iteration (latency, heap delta, thread count).
 - Leak oracles fail fast; add `-Dclosurejvm.forceExitOnLeak=true` to force a non-zero exit when leaks are found.
 - Gradle tests capture stdout by default; run the app directly (above) to see live output.
+
+## v0.2 Preview: Invariants & Reset
+
+- Configurable invariants (disabled by default; enable via props):
+  - `-Dclosurejvm.invariant.latency.maxMs=100`
+  - `-Dclosurejvm.invariant.heapDelta.maxKb=256`
+  - `-Dclosurejvm.invariant.threadDelta.max=2`
+  - Mode: `-Dclosurejvm.invariant.mode=hard|soft` (per-invariant override: `...latency.mode`, etc.)
+- Reset strategy (planned): start with hard reset fallback (ClassLoader swap) if needed.

@@ -23,11 +23,11 @@ public class InvariantSoftCaptureTest {
         cmd.add(javaBin);
         cmd.add("-cp");
         cmd.add(cp);
-        cmd.add("runner.CorpusRunner");
-        cmd.add("examples.targets.LatencyFuzzTarget");
-        cmd.add("examples/corpus/latency");
-        cmd.add("-Dclosurejvm.invariant.latency.maxMs=1");
+        cmd.add("-Dclosurejvm.invariant.heapDelta.maxKb=64");
         cmd.add("-Dclosurejvm.invariant.mode=soft");
+        cmd.add("runner.CorpusRunner");
+        cmd.add("examples.targets.HeapFuzzTarget");
+        cmd.add("examples/corpus/heap");
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);

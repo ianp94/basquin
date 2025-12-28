@@ -17,7 +17,13 @@ public class IterationFilter implements Filter {
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
         Agent.beginIteration();
         try {
-            chain.doFilter(request, response);
+            try {
+                chain.doFilter(request, response);
+            } catch (Throwable t) {
+                // Count crashes (5xx-producing exceptions)
+                ClosureJVMMetrics.incCrashes();
+                throw t;
+            }
         } finally {
             try {
                 Agent.endIteration();
@@ -26,9 +32,6 @@ public class IterationFilter implements Filter {
                     ClosureJVMMetrics.incRequests();
                     if (response instanceof HttpServletResponse) {
                         HttpServletResponse resp = (HttpServletResponse) response;
-                        if (resp.getStatus() >= 500) {
-                            ClosureJVMMetrics.incCrashes();
-                        }
                         List<String> v = Agent.getLastInvariantViolations();
                         if (v != null && !v.isEmpty()) {
                             ClosureJVMMetrics.addInvariantCount(v.size());

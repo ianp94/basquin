@@ -204,6 +204,11 @@ WAR + Docker (Phase 2) — outline
   - `./gradlew runFuzzTomcatDockerJQF -DenableJQF=true -Dexamples.tomcat.baseUrl=http://localhost:${TOMCAT_HOST_PORT:-8080}`
   - Seeds from `examples/corpus/tomcat`; results in `fuzz-results/tomcat-docker`.
   - The WAR includes an IterationFilter that wraps each request with iteration boundaries and exposes invariant info via `X-ClosureJVM-Invariant-*` headers, so the external fuzzer can save non-crashing invariant inputs.
+  - Server-side invariants (enabled by default via compose environment):
+    - `INVARIANT_MODE=soft`
+    - `INVARIANT_LATENCY_MS=50` and `INVARIANT_LATENCY_SAMPLE=true`
+    - `INVARIANT_HEAP_KB=128`
+    - Override by exporting env vars before `docker-compose up`, or append extra with `CATALINA_OPTS_EXTRA`.
 - Notes:
   - The agent runs inside the Tomcat JVM to capture threads/heap/latency on the server side.
   - MySQL is included for future `/db` route demos; not required for Phase 2 minimal demo.

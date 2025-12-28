@@ -1,3 +1,4 @@
 agents.md
 .gradle/*
 build/*
+fuzz-results

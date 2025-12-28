@@ -56,7 +56,16 @@ sourceSets {
             srcDirs = ['examples/fuzz']
         }
         resources { srcDirs = [] }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
     }
+}
+
+// Add compile dependencies for the fuzz source set after it is defined
+dependencies {
+    fuzzImplementation 'junit:junit:4.13.2'
+    fuzzImplementation 'edu.berkeley.cs.jqf:jqf-fuzz:1.9'
+    fuzzImplementation 'edu.berkeley.cs.jqf:jqf-instrument:1.9'
 }
 
 application {
@@ -178,6 +187,123 @@ tasks.register('runFuzzJQF', JavaExec) {
         if (!System.getProperty('closurejvm.target')) {
             throw new GradleException('Set -Dclosurejvm.target=<FQCN of IterationTarget>')
         }
+    }
+}
+
+tasks.register('runFuzzCalculatorJQF', JavaExec) {
+    group = 'verification'
+    description = 'Run JQF on CalculatorFuzzTarget with optional results saving.'
+    onlyIf { Boolean.getBoolean('enableJQF') }
+    dependsOn 'classes', 'compileFuzzJava'
+    classpath = sourceSets.fuzz.runtimeClasspath + sourceSets.main.runtimeClasspath + configurations.jqf
+    mainClass = 'org.junit.runner.JUnitCore'
+    args 'examples.fuzz.JQFIterationHarness'
+    doFirst {
+        def agentJar = configurations.jqf.resolve().find { it.name.contains('jqf-instrument') }
+        if (agentJar != null) {
+            jvmArgs "-javaagent:${agentJar.absolutePath}"
+        }
+        jvmArgs '-Dclosurejvm.target=examples.targets.CalculatorFuzzTarget'
+        // Allow user override of resultsDir; default to fuzz-results
+        if (!System.getProperty('closurejvm.fuzz.resultsDir')) {
+            jvmArgs '-Dclosurejvm.fuzz.resultsDir=fuzz-results'
+        }
+    }
+}
+
+// Corpus replay runner (no JQF): feed each file as input to a target
+tasks.register('runCorpusReplay', JavaExec) {
+    group = 'verification'
+    description = 'Replay a corpus directory against a target implementing IterationTarget (+InputReceiver).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.CorpusRunner'
+    doFirst {
+        def target = System.getProperty('closurejvm.target')
+        def corpus = System.getProperty('closurejvm.corpusDir') ?: 'corpus'
+        if (!target) throw new GradleException('Set -Dclosurejvm.target=<FQCN>')
+        jvmArgs "-Dclosurejvm.corpusDir=${corpus}" // allow override
+        args target, corpus
+    }
+}
+
+tasks.register('runCalculatorCorpus', JavaExec) {
+    group = 'application'
+    description = 'Replay example calculator corpus against CalculatorFuzzTarget.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.CorpusRunner'
+    args 'examples.targets.CalculatorFuzzTarget', 'examples/corpus/calculator'
+}
+
+tasks.register('runHttpCorpus', JavaExec) {
+    group = 'application'
+    description = 'Replay example HTTP request-line corpus against HttpRequestLineTarget.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.CorpusRunner'
+    args 'examples.targets.HttpRequestLineTarget', 'examples/corpus/http'
+}
+
+tasks.register('runJsonCorpus', JavaExec) {
+    group = 'application'
+    description = 'Replay example JSON corpus against JsonTokenizerTarget.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.CorpusRunner'
+    args 'examples.targets.JsonTokenizerTarget', 'examples/corpus/json'
+}
+
+tasks.register('runFuzzHttpJQF', JavaExec) {
+    group = 'verification'
+    description = 'Run JQF on HttpRequestLineTarget (opt-in with -DenableJQF=true).'
+    onlyIf { Boolean.getBoolean('enableJQF') }
+    dependsOn 'classes', 'compileFuzzJava'
+    classpath = sourceSets.fuzz.runtimeClasspath + sourceSets.main.runtimeClasspath + configurations.jqf
+    mainClass = 'org.junit.runner.JUnitCore'
+    args 'examples.fuzz.JQFIterationHarness'
+    doFirst {
+        def agentJar = configurations.jqf.resolve().find { it.name.contains('jqf-instrument') }
+        if (agentJar != null) {
+            jvmArgs "-javaagent:${agentJar.absolutePath}"
+        }
+        jvmArgs '-Dclosurejvm.target=examples.targets.HttpRequestLineTarget'
+        if (!System.getProperty('closurejvm.fuzz.resultsDir')) {
+            jvmArgs '-Dclosurejvm.fuzz.resultsDir=fuzz-results'
+        }
+    }
+}
+
+tasks.register('runFuzzJsonJQF', JavaExec) {
+    group = 'verification'
+    description = 'Run JQF on JsonTokenizerTarget (opt-in with -DenableJQF=true).'
+    onlyIf { Boolean.getBoolean('enableJQF') }
+    dependsOn 'classes', 'compileFuzzJava'
+    classpath = sourceSets.fuzz.runtimeClasspath + sourceSets.main.runtimeClasspath + configurations.jqf
+    mainClass = 'org.junit.runner.JUnitCore'
+    args 'examples.fuzz.JQFIterationHarness'
+    doFirst {
+        def agentJar = configurations.jqf.resolve().find { it.name.contains('jqf-instrument') }
+        if (agentJar != null) {
+            jvmArgs "-javaagent:${agentJar.absolutePath}"
+        }
+        jvmArgs '-Dclosurejvm.target=examples.targets.JsonTokenizerTarget'
+        if (!System.getProperty('closurejvm.fuzz.resultsDir')) {
+            jvmArgs '-Dclosurejvm.fuzz.resultsDir=fuzz-results'
+        }
+    }
+}
+
+// Minimization runner: ddmin-like reduction for an input
+tasks.register('minimizeInput', JavaExec) {
+    group = 'verification'
+    description = 'Minimize a crashing input for a given target (writes output file).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.MinimizeRunner'
+    doFirst {
+        def target = System.getProperty('closurejvm.target')
+        def inFile = System.getProperty('closurejvm.min.input')
+        def outFile = System.getProperty('closurejvm.min.output') ?: 'fuzz-results/minimized.bin'
+        if (!target || !inFile) {
+            throw new GradleException('Usage: -Dclosurejvm.target=<FQCN> -Dclosurejvm.min.input=<path> [-Dclosurejvm.min.output=<path>]')
+        }
+        args target, inFile, outFile
     }
 }
 

@@ -117,3 +117,16 @@ Notes
   - `./gradlew runFuzzJQF -DenableJQF=true -Dclosurejvm.target=your.pkg.YourTarget` (downloads JQF artifacts)
   - Note: This task is disabled by default and not part of CI; enable explicitly via `-DenableJQF=true`.
   - Ensure a compatible JQF version is available; the task sets the `jqf-instrument` -javaagent automatically if found.
+
+Example fuzzable app:
+- Target: `examples.targets.CalculatorFuzzTarget` (wraps `examples.fuzzapps.SimpleCalculator`).
+- Run: `./gradlew runFuzzCalculatorJQF -DenableJQF=true`.
+- Saving inputs:
+  - By default, interesting inputs (exceptions) are saved under `fuzz-results/` with a `.bin` file and a `.meta.txt` report.
+  - Configure directory with `-Dclosurejvm.fuzz.resultsDir=path`.
+
+Corpus replay & minimization (no JQF required):
+- Replay a corpus directory: `./gradlew runCorpusReplay -Dclosurejvm.target=examples.targets.CalculatorFuzzTarget -Dclosurejvm.corpusDir=corpus`
+- Example calculator seeds: `./gradlew runCalculatorCorpus` (uses `examples/corpus/calculator`)
+- Minimize a crashing input:
+  - `./gradlew minimizeInput -Dclosurejvm.target=examples.targets.CalculatorFuzzTarget -Dclosurejvm.min.input=fuzz-results/input-<ts>.bin -Dclosurejvm.min.output=fuzz-results/minimized.bin`

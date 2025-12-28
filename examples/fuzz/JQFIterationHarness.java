@@ -1,6 +1,7 @@
 package examples.fuzz;
 
 import agent.Agent;
+import runner.util.FuzzIO;
 import edu.berkeley.cs.jqf.fuzz.Fuzz;
 import edu.berkeley.cs.jqf.fuzz.JQF;
 import org.junit.runner.RunWith;
@@ -50,9 +51,13 @@ public class JQFIterationHarness {
                 ((InputReceiver) target).accept(data);
             }
             target.executeIteration();
+        } catch (Throwable t) {
+            // Save interesting input then rethrow for JQF to record
+            FuzzIO.saveInteresting(data, t);
+            if (t instanceof Exception) throw (Exception) t;
+            throw new RuntimeException(t);
         } finally {
             Agent.endIteration();
         }
     }
 }
-

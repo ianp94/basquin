@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
@@ -30,6 +31,11 @@ public class Agent {
     private static volatile long baselineHeapUsedBytes = 0L;
     private static volatile int baselineThreadCount = 0;
     private static volatile java.util.List<String> lastInvariantViolations = java.util.Collections.emptyList();
+    private static volatile String lastInvariantStack = "";
+    private static final Timer invariantSampler = new Timer("ClosureJVM-InvariantSampler", true);
+    private static volatile TimerTask samplingTask = null;
+    private static volatile Thread monitoredThread = null;
+    private static volatile String sampledExecStack = "";
 
     /**
      * Entry point for the JVM agent
@@ -53,6 +59,10 @@ public class Agent {
         baselineHeapUsedBytes = usedHeapBytes();
         baselineThreadCount = snapshotTotalThreadCount();
         lastInvariantViolations = java.util.Collections.emptyList();
+        lastInvariantStack = "";
+        sampledExecStack = "";
+        monitoredThread = Thread.currentThread();
+        scheduleLatencySampleIfConfigured();
         baselineNonDaemonThreadIds = snapshotNonDaemonThreadIds();
         baselineActiveExecutorIdentities = snapshotActiveExecutorIdentities();
         baselineActiveTimerIdentities = snapshotActiveTimerIdentities();
@@ -91,6 +101,7 @@ public class Agent {
             }
             throw e;
         }
+        cancelLatencySample();
 
         Map<Long, Thread> currentNonDaemon = snapshotNonDaemonThreads();
         Set<Long> currentIds = currentNonDaemon.keySet();
@@ -269,6 +280,91 @@ public class Agent {
 
     public static java.util.List<String> getLastInvariantViolations() {
         return new java.util.ArrayList<>(lastInvariantViolations);
+    }
+
+    static void setLastInvariantStack(String stack) {
+        lastInvariantStack = stack != null ? stack : "";
+    }
+
+    public static String getLastInvariantStack() {
+        return lastInvariantStack;
+    }
+
+    static void recordInvariantEvidence(java.util.List<Invariants.Violation> violations) {
+        setLastInvariantViolations(violations);
+        setLastInvariantStack(buildStackSnapshot());
+    }
+
+    private static String buildStackSnapshot() {
+        String mode = System.getProperty("closurejvm.invariant.stack", "current");
+        StringBuilder sb = new StringBuilder();
+        if (sampledExecStack != null && !sampledExecStack.isEmpty()) {
+            sb.append("executionThread(sampled)=\n").append(sampledExecStack);
+        }
+        if ("off".equalsIgnoreCase(mode)) {
+            return "";
+        }
+        if ("all".equalsIgnoreCase(mode)) {
+            int maxFrames = Integer.getInteger("closurejvm.invariant.stack.maxFrames", 10);
+            for (Map.Entry<Thread, StackTraceElement[]> e : Thread.getAllStackTraces().entrySet()) {
+                Thread t = e.getKey();
+                if (t == null || !t.isAlive()) continue;
+                sb.append("Thread '").append(t.getName()).append("' (id=").append(t.getId())
+                  .append(", state=").append(t.getState()).append(")\n");
+                StackTraceElement[] st = e.getValue();
+                int limit = Math.min(maxFrames, st != null ? st.length : 0);
+                for (int i = 0; i < limit; i++) {
+                    sb.append("  at ").append(st[i]).append('\n');
+                }
+                if (st != null && st.length > limit) sb.append("  ...").append(st.length - limit).append(" more\n");
+            }
+            return sb.toString();
+        }
+        // default: current thread only
+        Thread t = Thread.currentThread();
+        sb.append("Thread '").append(t.getName()).append("' (id=").append(t.getId())
+          .append(", state=").append(t.getState()).append(")\n");
+        StackTraceElement[] st = t.getStackTrace();
+        int limit = Math.min(Integer.getInteger("closurejvm.invariant.stack.maxFrames", 15), st.length);
+        for (int i = 0; i < limit; i++) sb.append("  at ").append(st[i]).append('\n');
+        if (st.length > limit) sb.append("  ...").append(st.length - limit).append(" more\n");
+        return sb.toString();
+    }
+
+    private static void scheduleLatencySampleIfConfigured() {
+        cancelLatencySample();
+        if (!Boolean.getBoolean("closurejvm.invariant.latency.sample")) return;
+        Long latencyMax = null;
+        try { latencyMax = Long.getLong("closurejvm.invariant.latency.maxMs"); } catch (Exception ignored) {}
+        if (latencyMax == null || latencyMax <= 0) return;
+        final Thread threadToSample = monitoredThread;
+        if (threadToSample == null) return;
+        samplingTask = new TimerTask() {
+            @Override public void run() {
+                try {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("Thread '").append(threadToSample.getName()).append("' (id=")
+                      .append(threadToSample.getId()).append(", state=")
+                      .append(threadToSample.getState()).append(")\n");
+                    StackTraceElement[] st = threadToSample.getStackTrace();
+                    int limit = Math.min(Integer.getInteger("closurejvm.invariant.stack.maxFrames", 15), st.length);
+                    for (int i = 0; i < limit; i++) sb.append("  at ").append(st[i]).append('\n');
+                    if (st.length > limit) sb.append("  ...").append(st.length - limit).append(" more\n");
+                    sampledExecStack = sb.toString();
+                } catch (Throwable ignored) {}
+            }
+        };
+        try {
+            invariantSampler.schedule(samplingTask, Math.max(1L, latencyMax));
+        } catch (IllegalStateException ignored) {}
+    }
+
+    private static void cancelLatencySample() {
+        try {
+            if (samplingTask != null) samplingTask.cancel();
+        } catch (Throwable ignored) {}
+        samplingTask = null;
+        monitoredThread = null;
     }
 
     private static Set<ExecutorService> liveTrackedExecutors() {

@@ -88,8 +88,12 @@ public class JQFIterationHarness {
             // Save invariant violations even in soft mode (non-crashing)
             java.util.List<String> v = agent.Agent.getLastInvariantViolations();
             if (v != null && !v.isEmpty()) {
-                String details = String.join("\n", v);
-                FuzzIO.saveWithMeta(data, "Invariant", details);
+                StringBuilder details = new StringBuilder(String.join("\n", v));
+                String stack = agent.Agent.getLastInvariantStack();
+                if (stack != null && !stack.isEmpty()) {
+                    details.append("\nstack=\n").append(stack);
+                }
+                FuzzIO.saveWithMeta(data, "Invariant", details.toString());
             }
         }
     }

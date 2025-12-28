@@ -70,9 +70,13 @@ public final class CorpusRunner {
                 java.util.List<String> v = agent.Agent.getLastInvariantViolations();
                 if (v != null && !v.isEmpty()) {
                     violations++;
-                    String details = String.join("\n", v);
+                    StringBuilder details = new StringBuilder(String.join("\n", v));
+                    String stack = agent.Agent.getLastInvariantStack();
+                    if (stack != null && !stack.isEmpty()) {
+                        details.append("\nstack=\n").append(stack);
+                    }
                     System.err.println("[Corpus] VIOLATION: " + p.getFileName());
-                    FuzzIO.saveWithMeta(data, "Invariant", details);
+                    FuzzIO.saveWithMeta(data, "Invariant", details.toString());
                     if (stopOnFailure) {
                         break;
                     }

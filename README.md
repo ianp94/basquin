@@ -109,6 +109,12 @@ Notes
   - Optional max resets: `-Dclosurejvm.reset.maxResets=3`
   - Works with `runner.GenericRunner` by reloading your `IterationTarget` in a child-first loader for its package.
 
+Invariant evidence (stacks)
+- Capture mode: `-Dclosurejvm.invariant.stack=current|all|off` (default `current`).
+- Frame limit: `-Dclosurejvm.invariant.stack.maxFrames=15`.
+- Latency stack sampling (captures execution stack at threshold):
+  - Enable: `-Dclosurejvm.invariant.latency.sample=true` (uses `closurejvm.invariant.latency.maxMs` as trigger).
+
 ## v0.3 Preview: Exploration (JQF)
 
 - JQF harness class: `examples.fuzz.JQFIterationHarness` (@RunWith(JQF), @Fuzz byte[] input)

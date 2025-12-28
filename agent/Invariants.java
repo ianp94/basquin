@@ -36,7 +36,7 @@ final class Invariants {
             violations.add(new Violation("latency", String.format("%dms > %dms", elapsedMs, latencyMax)));
             logViolation(iteration, "latency", String.format("%dms > %dms", elapsedMs, latencyMax));
             if (isHard("closurejvm.invariant.latency.mode")) {
-                agent.Agent.setLastInvariantViolations(violations);
+                agent.Agent.recordInvariantEvidence(violations);
                 throw new IllegalStateException("Latency invariant violated: elapsedMs=" + elapsedMs + " > maxMs=" + latencyMax);
             }
         }
@@ -48,7 +48,7 @@ final class Invariants {
             violations.add(new Violation("heapDelta", String.format("%dKB > %dKB", heapDeltaKb, heapMaxKb)));
             logViolation(iteration, "heapDelta", String.format("%dKB > %dKB", heapDeltaKb, heapMaxKb));
             if (isHard("closurejvm.invariant.heapDelta.mode")) {
-                agent.Agent.setLastInvariantViolations(violations);
+                agent.Agent.recordInvariantEvidence(violations);
                 throw new IllegalStateException("Heap delta invariant violated: deltaKb=" + heapDeltaKb + " > maxKb=" + heapMaxKb);
             }
         }
@@ -59,12 +59,12 @@ final class Invariants {
             violations.add(new Violation("threadDelta", String.format("%d > %d (threadsNow=%d)", threadsDelta, thrMax, threadsNow)));
             logViolation(iteration, "threadDelta", String.format("%d > %d (threadsNow=%d)", threadsDelta, thrMax, threadsNow));
             if (isHard("closurejvm.invariant.threadDelta.mode")) {
-                agent.Agent.setLastInvariantViolations(violations);
+                agent.Agent.recordInvariantEvidence(violations);
                 throw new IllegalStateException("Thread delta invariant violated: delta=" + threadsDelta + " > max=" + thrMax);
             }
         }
 
-        agent.Agent.setLastInvariantViolations(violations);
+        agent.Agent.recordInvariantEvidence(violations);
         if (!violations.isEmpty() && isHard(null)) {
             // Global mode hard with no per-invariant hard violation thrown above
             throw new IllegalStateException("Invariant(s) violated. See log for details.");

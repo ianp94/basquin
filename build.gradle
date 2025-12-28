@@ -36,7 +36,7 @@ sourceSets {
         java {
             srcDirs = ['agent', 'runner', 'examples']
             // Exclude JQF harness from main compilation; compiled in separate 'fuzz' source set
-            exclude 'fuzz/**'
+            exclude 'fuzz/**', 'server/**'
         }
         resources {
             srcDirs = []
@@ -59,6 +59,14 @@ sourceSets {
         compileClasspath += sourceSets.main.output
         runtimeClasspath += output + compileClasspath
     }
+    server {
+        java {
+            srcDirs = ['examples/server']
+        }
+        resources { srcDirs = [] }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
 }
 
 // Add compile dependencies for the fuzz source set after it is defined
@@ -66,6 +74,8 @@ dependencies {
     fuzzImplementation 'junit:junit:4.13.2'
     fuzzImplementation 'edu.berkeley.cs.jqf:jqf-fuzz:1.9'
     fuzzImplementation 'edu.berkeley.cs.jqf:jqf-instrument:1.9'
+    serverImplementation 'org.apache.tomcat.embed:tomcat-embed-core:10.1.24'
+    serverImplementation 'jakarta.servlet:jakarta.servlet-api:6.0.0'
 }
 
 application {
@@ -308,6 +318,35 @@ tasks.register('runFuzzJsonJQF', JavaExec) {
         def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/json'
         jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
     }
+}
+tasks.register('runFuzzTomcatJQF', JavaExec) {
+    group = 'verification'
+    description = 'Run JQF on embedded Tomcat target (opt-in with -DenableJQF=true).'
+    onlyIf { Boolean.getBoolean('enableJQF') }
+    dependsOn 'classes', 'compileFuzzJava', 'compileServerJava'
+    classpath = sourceSets.fuzz.runtimeClasspath + sourceSets.server.runtimeClasspath + sourceSets.main.runtimeClasspath + configurations.jqf
+    mainClass = 'org.junit.runner.JUnitCore'
+    args 'examples.fuzz.JQFIterationHarness'
+    doFirst {
+        def agentJar = configurations.jqf.resolve().find { it.name.contains('jqf-instrument') }
+        if (agentJar != null) { jvmArgs "-javaagent:${agentJar.absolutePath}" }
+        jvmArgs '-Dclosurejvm.target=examples.server.TomcatFuzzTarget'
+        jvmArgs '-Dclosurejvm.invariant.latency.maxMs=50', '-Dclosurejvm.invariant.mode=soft', '-Dclosurejvm.invariant.latency.sample=true'
+        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/tomcat'
+        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dclosurejvm.fuzz.resultsDir=${results}"
+        def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/tomcat'
+        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
+    }
+}
+
+tasks.register('runTomcatCorpus', JavaExec) {
+    group = 'application'
+    description = 'Replay tomcat corpus against embedded Tomcat target with invariant capture.'
+    dependsOn 'classes', 'compileServerJava'
+    classpath = sourceSets.server.runtimeClasspath + sourceSets.main.runtimeClasspath
+    mainClass = 'runner.CorpusRunner'
+    args 'examples.server.TomcatFuzzTarget', 'examples/corpus/tomcat'
+    jvmArgs '-Dclosurejvm.invariant.latency.maxMs=50', '-Dclosurejvm.invariant.mode=soft', '-Dclosurejvm.invariant.latency.sample=true', '-Dclosurejvm.fuzz.resultsDir=fuzz-results/tomcat'
 }
 
 tasks.register('runFuzzLatencyJQF', JavaExec) {

@@ -183,3 +183,9 @@ What this demonstrates
 - Path to real deployment compatibility (WAR + Docker) without losing the core “iteration cleanliness” signal.
 
 Status: Phase 1 is planned and will be added as an opt‑in example (kept out of CI by default). See `AGENTS.md` and `TODO.md` for details and guardrails.
+
+Embedded Tomcat (Phase 1) commands (opt‑in)
+- Fuzz (coverage‑guided, seeds included): `./gradlew runFuzzTomcatJQF -DenableJQF=true`
+- Replay seeds deterministically: `./gradlew runTomcatCorpus`
+- Results: `fuzz-results/tomcat/` (both Crash and Invariant artifacts with stacks)
+Note: These tasks run an embedded HTTP server and issue localhost requests; run locally (not CI) if your environment restricts network sockets.

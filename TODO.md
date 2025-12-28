@@ -70,27 +70,29 @@ Goal: Turn findings into enforceable guarantees.
 Goal: Add coverage-guided exploration without destabilizing the harness.
 
 ### Deliverables
-- [ ] Integration with a fuzzer: Jazzer or JQF (pick one)
-- [ ] Save interesting inputs + triage metadata (classification, timestamp, invariant, thread dump if relevant)
-- [ ] Minimization (basic ddmin or equivalent)
+- [x] Integration with a fuzzer: JQF (separate source set; opt-in Gradle tasks)
+- [x] Save interesting inputs + triage metadata (Crash + Invariant; timestamp; stacks via configurable capture/sampling)
+- [x] Minimization (basic ddmin via `runner.MinimizeRunner`)
 
 ### Tasks
 1) Pick exploration engine
-   - [ ] Choose Jazzer or JQF based on ease of embedding and determinism
-   - [ ] Minimal glue to feed inputs to IterationTarget
+   - [x] Choose JQF based on pure-Java embedding and clean iteration integration
+   - [x] Minimal glue to feed inputs to IterationTarget (`examples.fuzz.JQFIterationHarness`)
 
 2) Input management
-   - [ ] Store inputs that trigger invariant/leak/crash
-   - [ ] Record triage metadata (classification, stack traces, runtime stats)
-   - [ ] Provide a simple corpus directory layout
+   - [x] Store inputs that trigger crash (exceptions) and invariants (soft mode) in per-target results dirs
+   - [x] Record triage metadata: classification, timestamp, violation details, stacks (current/all; latency sampled execution stack)
+   - [x] Provide simple corpus layout with example seeds (calculator/http/json/latency/heap/tomcat)
+   - [ ] Optional: unify coverage-interesting inputs saved by JQF guidance with harness triage format (currently saved in `-Djqf.ei.DIRECTORY`)
 
 3) Minimization
-   - [ ] Implement a simple ddmin-like reducer or leverage engine support
-   - [ ] Ensure minimization respects iteration boundaries and invariants
+   - [x] Implement ddmin-like reducer (`runner.MinimizeRunner`)
+   - [x] Ensures boundaries via IterationTarget + begin/end in each trial
 
 4) Docs & DX
-- [ ] README quickstart for exploration runs
-- [ ] One example target wired to exploration
+   - [x] README quickstart for exploration runs, seeding, per-target results, minimization
+   - [x] Multiple example targets wired (calculator/http/json/latency/heap; optional tomcat)
+   - [x] Gradle tasks for fuzz and corpus replay per target; opt-in JQF via `-DenableJQF=true`
 
 ---
 

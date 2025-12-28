@@ -89,8 +89,42 @@ Goal: Add coverage-guided exploration without destabilizing the harness.
    - [ ] Ensure minimization respects iteration boundaries and invariants
 
 4) Docs & DX
-   - [ ] README quickstart for exploration runs
-   - [ ] One example target wired to exploration
+- [ ] README quickstart for exploration runs
+- [ ] One example target wired to exploration
+
+---
+
+## Milestone: v0.4 — "Real App Demo (Tomcat)"
+
+Goal: Deliver a realistic web app slice that surfaces both crashes and availability invariants in one place for stakeholder buy‑in.
+
+### Phase 1 — Embedded Tomcat (in‑JVM)
+- [ ] Add embedded Tomcat bootstrap under `examples.server.*` with three routes:
+  - [ ] `/crash?type=...` (throws)
+  - [ ] `/latency?ms=...` (sleeps)
+  - [ ] `/heap?kb=...` (allocates)
+- [ ] Add `examples.targets.TomcatFuzzTarget` (IterationTarget + InputReceiver) that:
+  - [ ] Starts/stops embedded Tomcat in initialize()/close().
+  - [ ] Maps `byte[]` → one HTTP request/iteration; treats 5xx as crash.
+- [ ] Seeds + tasks:
+  - [ ] Starter corpus for each route (`examples/corpus/tomcat/...`).
+  - [ ] `runFuzzTomcatJQF` (opt‑in): seeds + coverage‑guided; results to `fuzz-results/tomcat`.
+  - [ ] `runTomcatCorpus`: deterministic replay + invariant capture.
+- [ ] Docs:
+  - [ ] README section: purpose, commands, and what artifacts to expect.
+  - [ ] AGENTS guardrails reaffirmed for scope.
+
+### Phase 2 — WAR + External Tomcat (Docker)
+- [ ] Package routes as a minimal WAR.
+- [ ] `docker-compose.yml` with Tomcat + MySQL.
+- [ ] Inject agent via `CATALINA_OPTS=-javaagent:...` to capture server‑side invariants.
+- [ ] HTTP driver target issues one request/iteration; thresholds in soft mode to collect invariants.
+- [ ] Minimal `/db` route with knob to induce latency (e.g., sleep or query hints).
+
+### Phase 3 — Enrichment
+- [ ] Pool/queue sampling (servlet thread pool size, executor queues) and preset invariants.
+- [ ] Triage bundles: input + route + classification + stack/thread dump + metrics.
+- [ ] Minimization flow documented for Tomcat inputs.
 
 ### Non-goals (keep scope tight)
 - No coverage integration yet (v0.3)

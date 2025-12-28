@@ -145,7 +145,7 @@ Seeding the fuzzer with a corpus:
 - Example:
   - Calculator: `./gradlew runFuzzCalculatorJQF -DenableJQF=true` (uses `examples/corpus/calculator` as seeds)
   - HTTP: `./gradlew runFuzzHttpJQF -DenableJQF=true`
-  - JSON: `./gradlew runFuzzJsonJQF -DenableJQF=true`
+- JSON: `./gradlew runFuzzJsonJQF -DenableJQF=true`
 
 Corpus replay & minimization (no JQF required):
 - Replay a corpus directory: `./gradlew runCorpusReplay -Dclosurejvm.target=examples.targets.CalculatorFuzzTarget -Dclosurejvm.corpusDir=corpus`
@@ -154,3 +154,32 @@ Corpus replay & minimization (no JQF required):
 - Example JSON seeds: `./gradlew runJsonCorpus` (uses `examples/corpus/json`)
 - Minimize a crashing input:
   - `./gradlew minimizeInput -Dclosurejvm.target=<FQCN> -Dclosurejvm.min.input=fuzz-results/<target>/input-<ts>.bin -Dclosurejvm.min.output=fuzz-results/<target>/minimized.bin`
+
+## Real App Demo (Tomcat) — Roadmap
+
+Purpose
+- Provide a convincing, realistic demo where ClosureJVM finds both correctness crashes and availability violations (latency/heap) in one small app.
+- Use this as the “buy‑in” slice to show that input‑dependent availability bugs can be found quickly and deterministically.
+
+Plan (phased)
+- Phase 1 — Embedded Tomcat (in‑JVM):
+  - Start embedded Tomcat inside the harness for high‑signal metrics (threads/heap/latency).
+  - Routes:
+    - `/crash?type=…` → throws exceptions (HTTP 500). We rethrow client‑side so these are “crashes”.
+    - `/latency?ms=…` → sleeps to trigger latency invariants; optional sampled stacks at threshold.
+    - `/heap?kb=…` → allocates memory to trigger heap delta invariants.
+  - Fuzz target maps `byte[]` to one HTTP request/iteration; corpus seeds for each route.
+  - Results: per‑target outputs with both Crash and Invariant artifacts (stacks included).
+- Phase 2 — WAR + External Tomcat (Docker):
+  - Package the same routes as a WAR and run in Tomcat via docker‑compose alongside MySQL.
+  - Inject the agent into Tomcat (`CATALINA_OPTS=-javaagent:...`) so invariants come from the server JVM.
+  - Add a `/db` route to exercise DB latency/pool behavior and surface availability issues.
+- Phase 3 — Enrichment:
+  - Pool/queue sampling (servlet thread pools), preset invariants, triage bundles, and minimization workflow.
+
+What this demonstrates
+- Crashes and availability violations in the same app and run, saved with stacks and metadata.
+- Deterministic replay of saved inputs with corpus runner; easy minimization to shrink repros.
+- Path to real deployment compatibility (WAR + Docker) without losing the core “iteration cleanliness” signal.
+
+Status: Phase 1 is planned and will be added as an opt‑in example (kept out of CI by default). See `AGENTS.md` and `TODO.md` for details and guardrails.

@@ -146,6 +146,81 @@ tasks.register('runSoakProper', JavaExec) {
     args '10000', 'examples.targets.ThreadLeakTarget'
 }
 
+// Verification tasks (Gradle) for invariants and reset, avoiding hard-coded java exec in tests
+tasks.register('verifyLatencyInvariant', JavaExec) {
+    group = 'verification'
+    description = 'Assert a very low latency threshold triggers an invariant failure.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.Runner'
+    jvmArgs '-Dclosurejvm.target=examples.targets.ThreadLeakTarget', '-Dexamples.mode=proper', '-Dclosurejvm.invariant.latency.maxMs=1'
+    args '1'
+    ignoreExitValue = true
+    def outBuf = new ByteArrayOutputStream()
+    standardOutput = outBuf
+    errorOutput = outBuf
+    doLast {
+        def text = outBuf.toString('UTF-8')
+        def code = executionResult.get().exitValue
+        if (code == 0) {
+            throw new GradleException("Expected non-zero exit due to latency invariant; got 0")
+        }
+        if (!(text.contains('[Invariant]') || text.contains('Latency invariant'))) {
+            throw new GradleException("Invariant output not detected in:")
+        }
+    }
+}
+
+tasks.register('verifyResetClassloader', JavaExec) {
+    group = 'verification'
+    description = 'Assert classloader reset recovers from a deliberate failure in ResetSmokeTarget.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.GenericRunner'
+    jvmArgs '-Dclosurejvm.reset=classloader', '-Dclosurejvm.reset.onFailure=true'
+    args '2', 'examples.targets.ResetSmokeTarget'
+    def outBuf = new ByteArrayOutputStream()
+    standardOutput = outBuf
+    errorOutput = outBuf
+    doLast {
+        def text = outBuf.toString('UTF-8')
+        def code = executionResult.get().exitValue
+        if (code != 0) {
+            throw new GradleException("Expected success exit after reset; got ${code}")
+        }
+        if (!text.contains('Performed classloader reset')) {
+            throw new GradleException("Did not observe classloader reset in output")
+        }
+        if (!text.contains('Iteration 2')) {
+            throw new GradleException("Did not complete second iteration after reset")
+        }
+    }
+}
+
+// Include verification tasks in check
+tasks.named('check') {
+    dependsOn 'verifyLatencyInvariant', 'verifyResetClassloader'
+}
+
+// Demo run tasks (no assertions) to observe behavior directly
+tasks.register('runLatencyInvariantDemo', JavaExec) {
+    group = 'application'
+    description = 'Run a demo where a very low latency threshold triggers an invariant failure (non-zero exit).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.Runner'
+    jvmArgs '-Dclosurejvm.target=examples.targets.ThreadLeakTarget', '-Dexamples.mode=proper', '-Dclosurejvm.invariant.latency.maxMs=1'
+    args '1'
+    // Do not fail the Gradle task when the app exits non-zero; this demo is expected to fail
+    ignoreExitValue = true
+}
+
+tasks.register('runResetClassloaderDemo', JavaExec) {
+    group = 'application'
+    description = 'Run a demo that fails once then resets via classloader and succeeds.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.GenericRunner'
+    jvmArgs '-Dclosurejvm.reset=classloader', '-Dclosurejvm.reset.onFailure=true'
+    args '2', 'examples.targets.ResetSmokeTarget'
+}
+
 // Make `check` also run the non-leaking demos to verify wiring
 tasks.named('check') {
     dependsOn 'runExampleProper', 'runRunnerProper'

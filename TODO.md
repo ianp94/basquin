@@ -41,7 +41,7 @@ Goal: Turn findings into enforceable guarantees.
 ### Deliverables
 - [x] Configurable invariants (latency, heap delta, thread delta) via `-Dclosurejvm.invariant.*`
 - [x] Hard failure vs soft signal modes (global and per-invariant)
-- [ ] First reset strategy: hard-reset fallback (ClassLoader swap)
+- [x] First reset strategy: hard-reset fallback (ClassLoader swap)
 
 ### Tasks
 1) Invariant polish
@@ -50,11 +50,12 @@ Goal: Turn findings into enforceable guarantees.
    - [ ] Add heap/thread invariant tests similar to latency test
 
 2) Reset strategy: Hard reset fallback
-   - [ ] Implement child ClassLoader for target code; keep Agent/Runner in parent
-   - [ ] Load `runner.api.IterationTarget` implementation via child loader; re-instantiate on reset
-   - [ ] Add flags:
+   - [x] Implement child-first ClassLoader for target package; keep Agent/Runner in parent
+   - [x] Load `runner.api.IterationTarget` via child loader; re-instantiate on reset
+   - [x] Flags:
        - `-Dclosurejvm.reset=classloader` (enable)
        - `-Dclosurejvm.reset.onFailure=true` (reset after hard invariant/leak)
+       - `-Dclosurejvm.reset.maxResets=3` (cap)
    - [ ] Minimal smoke test that induces a failure, triggers reset, and runs another iteration
 
 3) Docs & DX

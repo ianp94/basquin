@@ -28,6 +28,10 @@ Generic runner (plug in any target):
 Soak (local, proper mode):
 - `gradle runSoakProper` (10,000 iterations, prints metrics; use for stability checks)
 
+Invariant/Reset demos:
+- `gradle runLatencyInvariantDemo` (sets a 1ms latency threshold to show invariant failure; non-zero exit expected)
+- `gradle runResetClassloaderDemo` (fails once, resets via classloader, then succeeds on the next iteration)
+
 ## Flags
 
 - `-Dclosurejvm.target=<FQCN>` — target class for `runner.Runner` forwarder.
@@ -93,4 +97,8 @@ Notes
   - `-Dclosurejvm.invariant.heapDelta.maxKb=256`
   - `-Dclosurejvm.invariant.threadDelta.max=2`
   - Mode: `-Dclosurejvm.invariant.mode=hard|soft` (per-invariant override: `...latency.mode`, etc.)
-- Reset strategy (planned): start with hard reset fallback (ClassLoader swap) if needed.
+- Reset strategy (preview, optional): hard reset fallback (ClassLoader swap) for targets
+  - Enable: `-Dclosurejvm.reset=classloader`
+  - Reset on failure: `-Dclosurejvm.reset.onFailure=true`
+  - Optional max resets: `-Dclosurejvm.reset.maxResets=3`
+  - Works with `runner.GenericRunner` by reloading your `IterationTarget` in a child-first loader for its package.

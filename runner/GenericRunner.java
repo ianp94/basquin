@@ -3,6 +3,13 @@ package runner;
 import agent.Agent;
 import runner.api.IterationTarget;
 
+import java.io.File;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Generic runner that loads a target class implementing runner.api.IterationTarget
  * and executes it across N iterations within begin/end iteration boundaries.
@@ -10,6 +17,10 @@ import runner.api.IterationTarget;
  * Usage:
  *   java -cp <cp> runner.GenericRunner [iterations] <targetClass>
  * or set -Dclosurejvm.target=<targetClass> and pass only [iterations].
+ *
+ * v0.2: Optional classloader reset fallback (disabled by default).
+ *   -Dclosurejvm.reset=classloader
+ *   -Dclosurejvm.reset.onFailure=true
  */
 public class GenericRunner {
 
@@ -24,26 +35,55 @@ public class GenericRunner {
             throw new IllegalArgumentException("Target class not specified. Pass as arg or -Dclosurejvm.target");
         }
 
-        System.out.println("Running " + iterations + " iterations with target: " + targetClass);
+        boolean resetViaClassloader = "classloader".equalsIgnoreCase(System.getProperty("closurejvm.reset"));
+        boolean resetOnFailure = Boolean.getBoolean("closurejvm.reset.onFailure");
+        int resets = 0;
+        int maxResets = Integer.getInteger("closurejvm.reset.maxResets", 3);
 
-        IterationTarget target = instantiateTarget(targetClass);
+        System.out.println("Running " + iterations + " iterations with target: " + targetClass +
+                (resetViaClassloader ? " [reset=classloader, onFailure=" + resetOnFailure + "]" : ""));
+
+        TargetHandle handle = createTargetHandle(targetClass, resetViaClassloader);
 
         try {
-            target.initialize();
+            handle.target.initialize();
             for (int i = 0; i < iterations; i++) {
                 System.out.println("Iteration " + (i + 1));
+                boolean failed = false;
                 Agent.beginIteration();
                 try {
-                    target.executeIteration();
-                } finally {
+                    handle.target.executeIteration();
                     Agent.endIteration();
+                } catch (Throwable t) {
+                    failed = true;
+                    // Ensure endIteration still runs metrics/leak checks if executeIteration failed earlier
+                    try { Agent.endIteration(); } catch (Throwable t2) { /* prefer original failure info */ }
+                    if (!(resetViaClassloader && resetOnFailure && resets < maxResets)) {
+                        // Bubble up if not resetting
+                        if (t instanceof RuntimeException) throw (RuntimeException) t;
+                        throw new RuntimeException("Failure during run", t);
+                    }
+                    System.err.println("[ClosureJVM] Iteration failed: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+                }
+
+                // Reset on failure if configured
+                if (failed && resetViaClassloader && resetOnFailure && resets < maxResets) {
+                    resets++;
+                    safeCloseTarget(handle);
+                    safeCloseLoader(handle);
+                    handle = createTargetHandle(targetClass, true);
+                    try { handle.target.initialize(); } catch (Exception e) {
+                        throw new RuntimeException("Failed to reinitialize target after reset", e);
+                    }
+                    System.out.println("[ClosureJVM] Performed classloader reset (#" + resets + ")");
                 }
             }
             System.out.println("GenericRunner completed " + iterations + " iterations");
         } catch (Exception e) {
             throw new RuntimeException("Failure during run", e);
         } finally {
-            try { target.close(); } catch (Exception ignored) {}
+            safeCloseTarget(handle);
+            safeCloseLoader(handle);
         }
     }
 
@@ -61,9 +101,26 @@ public class GenericRunner {
         return System.getProperty("closurejvm.target");
     }
 
-    private static IterationTarget instantiateTarget(String className) {
+    // --- Reset implementation helpers ---
+
+    private static class TargetHandle {
+        final IterationTarget target;
+        final URLClassLoader loader; // may be null if not using classloader reset
+        TargetHandle(IterationTarget t, URLClassLoader l) { this.target = t; this.loader = l; }
+    }
+
+    private static TargetHandle createTargetHandle(String className, boolean useChildLoader) {
+        if (!useChildLoader) {
+            return new TargetHandle(instantiateTargetWith(ClassLoader.getSystemClassLoader(), className), null);
+        }
+        String pkgPrefix = packagePrefix(className);
+        URLClassLoader child = new ChildFirstURLClassLoader(runtimeClasspathUrls(), GenericRunner.class.getClassLoader(), pkgPrefix);
+        return new TargetHandle(instantiateTargetWith(child, className), child);
+    }
+
+    private static IterationTarget instantiateTargetWith(ClassLoader loader, String className) {
         try {
-            Class<?> cls = Class.forName(className);
+            Class<?> cls = Class.forName(className, true, loader);
             Object o = cls.getDeclaredConstructor().newInstance();
             if (!(o instanceof IterationTarget)) {
                 throw new IllegalArgumentException("Class does not implement runner.api.IterationTarget: " + className);
@@ -73,5 +130,67 @@ public class GenericRunner {
             throw new IllegalStateException("Unable to instantiate target: " + className, e);
         }
     }
-}
 
+    private static String packagePrefix(String className) {
+        int i = className.lastIndexOf('.');
+        return i > 0 ? className.substring(0, i + 1) : ""; // include trailing dot for startsWith checks
+    }
+
+    private static URL[] runtimeClasspathUrls() {
+        String cp = System.getProperty("java.class.path", "");
+        String sep = File.pathSeparator;
+        String[] parts = cp.split(java.util.regex.Pattern.quote(sep));
+        List<URL> urls = new ArrayList<>();
+        for (String p : parts) {
+            if (p == null || p.isEmpty()) continue;
+            try { urls.add(new File(p).toURI().toURL()); } catch (MalformedURLException ignored) {}
+        }
+        return urls.toArray(new URL[0]);
+    }
+
+    private static void safeCloseTarget(TargetHandle handle) {
+        if (handle != null && handle.target != null) {
+            try { handle.target.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    private static void safeCloseLoader(TargetHandle handle) {
+        if (handle != null && handle.loader != null) {
+            try { handle.loader.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    // Child-first loader for target package to enable class redefinition via new loader instances
+    private static final class ChildFirstURLClassLoader extends URLClassLoader {
+        private final String targetPrefix;
+        ChildFirstURLClassLoader(URL[] urls, ClassLoader parent, String targetPrefix) {
+            super(urls, parent);
+            this.targetPrefix = targetPrefix == null ? "" : targetPrefix;
+        }
+
+        @Override
+        protected synchronized Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+            // Avoid messing with core/platform or harness classes
+            if (parentFirst(name)) {
+                return super.loadClass(name, resolve);
+            }
+            // child-first
+            Class<?> c = findLoadedClass(name);
+            if (c == null) {
+                try {
+                    c = findClass(name);
+                } catch (ClassNotFoundException e) {
+                    // fallback to parent
+                    c = super.loadClass(name, resolve);
+                }
+            }
+            if (resolve) resolveClass(c);
+            return c;
+        }
+
+        private boolean parentFirst(String name) {
+            return name.startsWith("java.") || name.startsWith("javax.") || name.startsWith("jdk.") || name.startsWith("sun.")
+                    || name.startsWith("agent.") || name.startsWith("runner.") || (!targetPrefix.isEmpty() && !name.startsWith(targetPrefix));
+        }
+    }
+}

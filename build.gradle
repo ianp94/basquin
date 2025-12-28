@@ -339,6 +339,27 @@ tasks.register('runFuzzTomcatJQF', JavaExec) {
     }
 }
 
+tasks.register('runFuzzTomcatDockerJQF', JavaExec) {
+    group = 'verification'
+    description = 'Run JQF against external Tomcat (Docker) via HTTP (opt-in with -DenableJQF=true).'
+    onlyIf { Boolean.getBoolean('enableJQF') }
+    dependsOn 'classes', 'compileFuzzJava'
+    classpath = sourceSets.fuzz.runtimeClasspath + sourceSets.main.runtimeClasspath + configurations.jqf
+    mainClass = 'org.junit.runner.JUnitCore'
+    args 'examples.fuzz.JQFIterationHarness'
+    doFirst {
+        def agentJar = configurations.jqf.resolve().find { it.name.contains('jqf-instrument') }
+        if (agentJar != null) { jvmArgs "-javaagent:${agentJar.absolutePath}" }
+        jvmArgs '-Dclosurejvm.target=examples.targets.HttpDockerFuzzTarget'
+        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/tomcat-docker'
+        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dclosurejvm.fuzz.resultsDir=${results}"
+        def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/tomcat'
+        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
+        def base = System.getProperty('examples.tomcat.baseUrl') ?: 'http://localhost:8080'
+        jvmArgs "-Dexamples.tomcat.baseUrl=${base}"
+    }
+}
+
 tasks.register('runTomcatCorpus', JavaExec) {
     group = 'application'
     description = 'Replay tomcat corpus against embedded Tomcat target with invariant capture.'
@@ -424,6 +445,19 @@ tasks.register('minimizeInput', JavaExec) {
             throw new GradleException('Usage: -Dclosurejvm.target=<FQCN> -Dclosurejvm.min.input=<path> [-Dclosurejvm.min.output=<path>]')
         }
         args target, inFile, outFile
+    }
+}
+
+// Post-process JQF outputs into ClosureJVM triage meta files
+tasks.register('postprocessJQF', JavaExec) {
+    group = 'verification'
+    description = 'Create triage .meta.txt files for JQF coverage-interesting inputs.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.util.PostprocessJQF'
+    doFirst {
+        def jqfDir = System.getProperty('closurejvm.jqf.dir')
+        if (!jqfDir) throw new GradleException('Set -Dclosurejvm.jqf.dir=<JQF output dir>')
+        // closurejvm.fuzz.resultsDir is optional; defaults to jqfDir
     }
 }
 

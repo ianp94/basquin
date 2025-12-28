@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/web-app_6_0.xsd"
+         version="6.0">
+  <filter>
+    <filter-name>iteration</filter-name>
+    <filter-class>com.closurejvm.examples.IterationFilter</filter-class>
+  </filter>
+  <filter-mapping>
+    <filter-name>iteration</filter-name>
+    <url-pattern>/*</url-pattern>
+  </filter-mapping>
+  <servlet>
+    <servlet-name>crash</servlet-name>
+    <servlet-class>com.closurejvm.examples.CrashServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>crash</servlet-name>
+    <url-pattern>/crash</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>latency</servlet-name>
+    <servlet-class>com.closurejvm.examples.LatencyServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>latency</servlet-name>
+    <url-pattern>/latency</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>heap</servlet-name>
+    <servlet-class>com.closurejvm.examples.HeapServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>heap</servlet-name>
+    <url-pattern>/heap</url-pattern>
+  </servlet-mapping>
+</web-app>

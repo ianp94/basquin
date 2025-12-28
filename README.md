@@ -189,3 +189,22 @@ Embedded Tomcat (Phase 1) commands (opt‑in)
 - Replay seeds deterministically: `./gradlew runTomcatCorpus`
 - Results: `fuzz-results/tomcat/` (both Crash and Invariant artifacts with stacks)
 Note: These tasks run an embedded HTTP server and issue localhost requests; run locally (not CI) if your environment restricts network sockets.
+
+WAR + Docker (Phase 2) — outline
+- Build WAR: `./gradlew :tomcat-war:build`
+- Build agent fat JAR: `./gradlew jar`
+- Run: `docker-compose up tomcat` (starts Tomcat; mounts the WAR to ROOT.war, injects agent and adds agent classes to bootclasspath)
+- Optional DB: `MYSQL_HOST_PORT=3307 docker-compose --profile db up` (starts MySQL on an alternate host port if 3306 is busy)
+- Hit endpoints:
+  - `http://localhost:8080/crash?type=NPE`
+  - `http://localhost:8080/latency?ms=250`
+  - `http://localhost:8080/heap?kb=512`
+- Fuzz against Docker Tomcat:
+  - Start docker-compose first.
+  - `./gradlew runFuzzTomcatDockerJQF -DenableJQF=true -Dexamples.tomcat.baseUrl=http://localhost:${TOMCAT_HOST_PORT:-8080}`
+  - Seeds from `examples/corpus/tomcat`; results in `fuzz-results/tomcat-docker`.
+  - The WAR includes an IterationFilter that wraps each request with iteration boundaries and exposes invariant info via `X-ClosureJVM-Invariant-*` headers, so the external fuzzer can save non-crashing invariant inputs.
+- Notes:
+  - The agent runs inside the Tomcat JVM to capture threads/heap/latency on the server side.
+  - MySQL is included for future `/db` route demos; not required for Phase 2 minimal demo.
+  - Keep this out of CI; it’s for local demos.

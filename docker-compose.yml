@@ -1,0 +1,24 @@
+version: '3.8'
+services:
+  tomcat:
+    image: tomcat:10.1-jdk17
+    ports:
+      - "${TOMCAT_HOST_PORT:-8080}:8080"
+    environment:
+      - CATALINA_OPTS=-javaagent:/usr/local/tomcat/closurejvm-agent.jar -Xbootclasspath/a:/usr/local/tomcat/closurejvm-agent.jar
+    volumes:
+      - ./tomcat-war/build/libs/closurejvm-demo-0.1.0.war:/usr/local/tomcat/webapps/ROOT.war:ro
+      - ./build/libs/closurejvm-0.2.0.jar:/usr/local/tomcat/closurejvm-agent.jar:ro
+  mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=closurejvm
+      - MYSQL_DATABASE=demo
+    ports:
+      - "${MYSQL_HOST_PORT:-3306}:3306"
+    profiles: ["db"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

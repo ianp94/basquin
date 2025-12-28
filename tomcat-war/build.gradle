@@ -1,0 +1,27 @@
+plugins {
+    id 'java'
+    id 'war'
+}
+
+group = 'com.closurejvm.examples'
+version = '0.1.0'
+sourceCompatibility = '17'
+
+repositories { mavenCentral() }
+
+dependencies {
+    providedCompile 'jakarta.servlet:jakarta.servlet-api:6.0.0'
+    // Compile against agent API without bundling into the WAR; the agent jar is mounted in Tomcat and added to bootclasspath.
+    compileOnly project(':')
+}
+
+war {
+    archiveBaseName = 'closurejvm-demo'
+}
+
+tasks.register('printWarPath') {
+    group = 'help'
+    doLast {
+        println("WAR: " + tasks.war.archiveFile.get())
+    }
+}

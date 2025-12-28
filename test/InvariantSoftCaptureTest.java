@@ -46,7 +46,7 @@ public class InvariantSoftCaptureTest {
 
         // Soft mode should not crash process; should report violations
         assertEquals(0, exit);
-        assertTrue("Should report a corpus violation in soft mode", output.contains("[Corpus] VIOLATION"));
+        assertTrue("Should report violations in summary", output.contains("Violations="));
+        assertTrue("Violations should be non-zero", !output.contains("Violations=0"));
     }
 }
-

@@ -2,3 +2,4 @@ agents.md
 .gradle/*
 build/*
 fuzz-results
+tomcat-war/build

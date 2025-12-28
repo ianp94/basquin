@@ -124,6 +124,15 @@ Example fuzzable app:
 - Saving inputs:
   - By default, interesting inputs (exceptions) are saved under `fuzz-results/` with a `.bin` file and a `.meta.txt` report.
   - Configure directory with `-Dclosurejvm.fuzz.resultsDir=path`.
+  - JQF also saves coverage-interesting inputs under the guidance outdir: set `-Djqf.ei.DIRECTORY=path` (defaults to `fuzz-results/` in our Gradle tasks).
+
+Seeding the fuzzer with a corpus:
+- Provide seeds to JQF with `-Dclosurejvm.fuzz.seedsDir=path`.
+- Our fuzz tasks also pre-seed deterministically by replaying seeds once: `-Dclosurejvm.fuzz.preseedDir=path` (auto-set to seedsDir in tasks).
+- Example:
+  - Calculator: `./gradlew runFuzzCalculatorJQF -DenableJQF=true` (uses `examples/corpus/calculator` as seeds)
+  - HTTP: `./gradlew runFuzzHttpJQF -DenableJQF=true`
+  - JSON: `./gradlew runFuzzJsonJQF -DenableJQF=true`
 
 Corpus replay & minimization (no JQF required):
 - Replay a corpus directory: `./gradlew runCorpusReplay -Dclosurejvm.target=examples.targets.CalculatorFuzzTarget -Dclosurejvm.corpusDir=corpus`

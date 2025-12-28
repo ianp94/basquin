@@ -35,6 +35,33 @@ public class JQFIterationHarness {
                 }
                 target = (IterationTarget) o;
                 target.initialize();
+                // Optional: pre-seed from a corpus directory deterministically before fuzzing
+                String preseed = System.getProperty("closurejvm.fuzz.preseedDir");
+                if (preseed != null && !preseed.isBlank()) {
+                    java.nio.file.Path dir = java.nio.file.Paths.get(preseed);
+                    if (java.nio.file.Files.exists(dir)) {
+                        int count = 0;
+                        try (java.nio.file.DirectoryStream<java.nio.file.Path> ds = java.nio.file.Files.newDirectoryStream(dir)) {
+                            for (java.nio.file.Path p : ds) {
+                                if (!java.nio.file.Files.isRegularFile(p)) continue;
+                                byte[] data = java.nio.file.Files.readAllBytes(p);
+                                Agent.beginIteration();
+                                try {
+                                    if (target instanceof InputReceiver) {
+                                        ((InputReceiver) target).accept(data);
+                                    }
+                                    target.executeIteration();
+                                } catch (Throwable t) {
+                                    FuzzIO.saveInteresting(data, t);
+                                } finally {
+                                    Agent.endIteration();
+                                }
+                                count++;
+                            }
+                        }
+                        System.out.println("[ClosureJVM][Fuzz] Pre-seeded " + count + " input(s) from " + preseed);
+                    }
+                }
                 initialized = true;
             } catch (Exception e) {
                 throw new RuntimeException("Failed to initialize target for JQF", e);

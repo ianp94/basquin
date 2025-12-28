@@ -187,6 +187,16 @@ tasks.register('runFuzzJQF', JavaExec) {
         if (!System.getProperty('closurejvm.target')) {
             throw new GradleException('Set -Dclosurejvm.target=<FQCN of IterationTarget>')
         }
+        // Optional seeds & results directories
+        def seeds = System.getProperty('closurejvm.fuzz.seedsDir')
+        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results'
+        if (seeds) {
+            jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
+        }
+        jvmArgs "-Djqf.ei.DIRECTORY=${results}"
+        if (!System.getProperty('closurejvm.fuzz.resultsDir')) {
+            jvmArgs "-Dclosurejvm.fuzz.resultsDir=${results}"
+        }
     }
 }
 
@@ -205,9 +215,12 @@ tasks.register('runFuzzCalculatorJQF', JavaExec) {
         }
         jvmArgs '-Dclosurejvm.target=examples.targets.CalculatorFuzzTarget'
         // Allow user override of resultsDir; default to fuzz-results
-        if (!System.getProperty('closurejvm.fuzz.resultsDir')) {
-            jvmArgs '-Dclosurejvm.fuzz.resultsDir=fuzz-results'
-        }
+        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results'
+        jvmArgs "-Djqf.ei.DIRECTORY=${results}"
+        jvmArgs "-Dclosurejvm.fuzz.resultsDir=${results}"
+        // Seeds
+        def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/calculator'
+        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
     }
 }
 
@@ -264,9 +277,10 @@ tasks.register('runFuzzHttpJQF', JavaExec) {
             jvmArgs "-javaagent:${agentJar.absolutePath}"
         }
         jvmArgs '-Dclosurejvm.target=examples.targets.HttpRequestLineTarget'
-        if (!System.getProperty('closurejvm.fuzz.resultsDir')) {
-            jvmArgs '-Dclosurejvm.fuzz.resultsDir=fuzz-results'
-        }
+        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results'
+        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dclosurejvm.fuzz.resultsDir=${results}"
+        def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/http'
+        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
     }
 }
 
@@ -284,9 +298,10 @@ tasks.register('runFuzzJsonJQF', JavaExec) {
             jvmArgs "-javaagent:${agentJar.absolutePath}"
         }
         jvmArgs '-Dclosurejvm.target=examples.targets.JsonTokenizerTarget'
-        if (!System.getProperty('closurejvm.fuzz.resultsDir')) {
-            jvmArgs '-Dclosurejvm.fuzz.resultsDir=fuzz-results'
-        }
+        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results'
+        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dclosurejvm.fuzz.resultsDir=${results}"
+        def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/json'
+        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
     }
 }
 

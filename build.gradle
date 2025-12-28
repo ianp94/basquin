@@ -195,9 +195,55 @@ tasks.register('verifyResetClassloader', JavaExec) {
     }
 }
 
+tasks.register('verifyHeapInvariant', JavaExec) {
+    group = 'verification'
+    description = 'Assert heap delta threshold triggers an invariant failure.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.GenericRunner'
+    args '1', 'examples.targets.HeapBumpTarget'
+    jvmArgs '-Dclosurejvm.invariant.heapDelta.maxKb=64', '-Dexamples.heap.bumpKb=1024'
+    ignoreExitValue = true
+    def outBuf = new ByteArrayOutputStream()
+    standardOutput = outBuf
+    errorOutput = outBuf
+    doLast {
+        def text = outBuf.toString('UTF-8')
+        def code = executionResult.get().exitValue
+        if (code == 0) {
+            throw new GradleException("Expected non-zero exit due to heap delta invariant; got 0")
+        }
+        if (!text.contains('[Invariant]')) {
+            throw new GradleException("Invariant output not detected for heap delta")
+        }
+    }
+}
+
+tasks.register('verifyThreadDeltaInvariant', JavaExec) {
+    group = 'verification'
+    description = 'Assert thread delta threshold triggers an invariant failure.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.GenericRunner'
+    args '1', 'examples.targets.ThreadDeltaTarget'
+    jvmArgs '-Dclosurejvm.invariant.threadDelta.max=0'
+    ignoreExitValue = true
+    def outBuf = new ByteArrayOutputStream()
+    standardOutput = outBuf
+    errorOutput = outBuf
+    doLast {
+        def text = outBuf.toString('UTF-8')
+        def code = executionResult.get().exitValue
+        if (code == 0) {
+            throw new GradleException("Expected non-zero exit due to thread delta invariant; got 0")
+        }
+        if (!text.contains('[Invariant]')) {
+            throw new GradleException("Invariant output not detected for thread delta")
+        }
+    }
+}
+
 // Include verification tasks in check
 tasks.named('check') {
-    dependsOn 'verifyLatencyInvariant', 'verifyResetClassloader'
+    dependsOn 'verifyLatencyInvariant', 'verifyHeapInvariant', 'verifyThreadDeltaInvariant', 'verifyResetClassloader'
 }
 
 // Demo run tasks (no assertions) to observe behavior directly

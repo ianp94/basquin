@@ -32,6 +32,12 @@ Invariant/Reset demos:
 - `gradle runLatencyInvariantDemo` (sets a 1ms latency threshold to show invariant failure; non-zero exit expected)
 - `gradle runResetClassloaderDemo` (fails once, resets via classloader, then succeeds on the next iteration)
 
+Reset (how it works):
+- GenericRunner can reload your target via a child-first `URLClassLoader` scoped to the target’s package.
+- Parent loader retains the harness (`agent.*`, `runner.*`) and JDK classes; only target code is reloaded.
+- On reset, it closes the target and child loader, creates a fresh loader, re-instantiates the target, and calls `initialize()`.
+- Caveats: long-lived resources (threads, sockets, timers) created by target code must be shut down or they will outlive resets. Use the leak checks to enforce cleanliness.
+
 ## Flags
 
 - `-Dclosurejvm.target=<FQCN>` — target class for `runner.Runner` forwarder.

@@ -47,7 +47,7 @@ Goal: Turn findings into enforceable guarantees.
 1) Invariant polish
    - [x] Hook invariant checks at iteration end (after metrics snapshot)
    - [ ] Optionally include invariant summary line in output with structured key=val pairs
-   - [ ] Add heap/thread invariant tests similar to latency test
+   - [x] Add heap/thread invariant tests similar to latency test
 
 2) Reset strategy: Hard reset fallback
    - [x] Implement child-first ClassLoader for target package; keep Agent/Runner in parent
@@ -59,9 +59,38 @@ Goal: Turn findings into enforceable guarantees.
    - [ ] Minimal smoke test that induces a failure, triggers reset, and runs another iteration
 
 3) Docs & DX
-   - [ ] README: document invariant flags (added) and reset flags/behavior (pending)
-   - [ ] Example snippet showing how to enable reset with GenericRunner
-   - [ ] CI job to run an invariant-soft mode and confirm non-zero vs zero behavior as appropriate
+   - [x] README: document invariant flags and reset flags/behavior
+   - [x] Example snippet showing how to enable reset with GenericRunner
+   - [x] CI job includes Gradle 'check' (verification tasks)
+
+---
+
+## Milestone: v0.3 — "Exploration"
+
+Goal: Add coverage-guided exploration without destabilizing the harness.
+
+### Deliverables
+- [ ] Integration with a fuzzer: Jazzer or JQF (pick one)
+- [ ] Save interesting inputs + triage metadata (classification, timestamp, invariant, thread dump if relevant)
+- [ ] Minimization (basic ddmin or equivalent)
+
+### Tasks
+1) Pick exploration engine
+   - [ ] Choose Jazzer or JQF based on ease of embedding and determinism
+   - [ ] Minimal glue to feed inputs to IterationTarget
+
+2) Input management
+   - [ ] Store inputs that trigger invariant/leak/crash
+   - [ ] Record triage metadata (classification, stack traces, runtime stats)
+   - [ ] Provide a simple corpus directory layout
+
+3) Minimization
+   - [ ] Implement a simple ddmin-like reducer or leverage engine support
+   - [ ] Ensure minimization respects iteration boundaries and invariants
+
+4) Docs & DX
+   - [ ] README quickstart for exploration runs
+   - [ ] One example target wired to exploration
 
 ### Non-goals (keep scope tight)
 - No coverage integration yet (v0.3)

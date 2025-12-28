@@ -43,6 +43,8 @@ jobs:
         run: ./gradlew build --no-daemon --warning-mode all
       - name: Test
         run: ./gradlew test --no-daemon --warning-mode all
+      - name: Check (verifications)
+        run: ./gradlew check --no-daemon --warning-mode all
 
   leak-demo:
     runs-on: ubuntu-latest

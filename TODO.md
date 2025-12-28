@@ -101,32 +101,38 @@ Goal: Add coverage-guided exploration without destabilizing the harness.
 Goal: Deliver a realistic web app slice that surfaces both crashes and availability invariants in one place for stakeholder buy‑in.
 
 ### Phase 1 — Embedded Tomcat (in‑JVM)
-- [ ] Add embedded Tomcat bootstrap under `examples.server.*` with three routes:
-  - [ ] `/crash?type=...` (throws)
-  - [ ] `/latency?ms=...` (sleeps)
-  - [ ] `/heap?kb=...` (allocates)
-- [ ] Add `examples.targets.TomcatFuzzTarget` (IterationTarget + InputReceiver) that:
-  - [ ] Starts/stops embedded Tomcat in initialize()/close().
-  - [ ] Maps `byte[]` → one HTTP request/iteration; treats 5xx as crash.
-- [ ] Seeds + tasks:
-  - [ ] Starter corpus for each route (`examples/corpus/tomcat/...`).
-  - [ ] `runFuzzTomcatJQF` (opt‑in): seeds + coverage‑guided; results to `fuzz-results/tomcat`.
-  - [ ] `runTomcatCorpus`: deterministic replay + invariant capture.
-- [ ] Docs:
-  - [ ] README section: purpose, commands, and what artifacts to expect.
-  - [ ] AGENTS guardrails reaffirmed for scope.
+- [x] Add embedded Tomcat bootstrap under `examples.server.*` with three routes:
+  - [x] `/crash?type=...` (throws)
+  - [x] `/latency?ms=...` (sleeps)
+  - [x] `/heap?kb=...` (allocates)
+- [x] Add `examples.targets.TomcatFuzzTarget` (IterationTarget + InputReceiver) that:
+  - [x] Starts/stops embedded Tomcat in initialize()/close().
+  - [x] Maps `byte[]` → one HTTP request/iteration; treats 5xx as crash.
+- [x] Seeds + tasks:
+  - [x] Starter corpus for each route (`examples/corpus/tomcat/...`).
+  - [x] `runFuzzTomcatJQF` (opt‑in): seeds + coverage‑guided; results to `fuzz-results/tomcat`.
+  - [x] `runTomcatCorpus`: deterministic replay + invariant capture.
+- [x] Docs:
+  - [x] README section: purpose, commands, and what artifacts to expect.
+  - [x] AGENTS guardrails reaffirmed for scope.
 
 ### Phase 2 — WAR + External Tomcat (Docker)
-- [ ] Package routes as a minimal WAR.
-- [ ] `docker-compose.yml` with Tomcat + MySQL.
-- [ ] Inject agent via `CATALINA_OPTS=-javaagent:...` to capture server‑side invariants.
-- [ ] HTTP driver target issues one request/iteration; thresholds in soft mode to collect invariants.
-- [ ] Minimal `/db` route with knob to induce latency (e.g., sleep or query hints).
+- [x] Package routes as a minimal WAR.
+- [x] `docker-compose.yml` with Tomcat + MySQL (Compose v2 recommended).
+- [x] Inject agent via `CATALINA_OPTS=-javaagent:...` to capture server‑side invariants.
+- [x] HTTP driver target issues one request/iteration; thresholds in soft mode to collect invariants.
+- [x] Minimal `/db` route with knob to induce latency (`SELECT SLEEP()` via tiny pool).
+- [x] Status servlet and simple UI page with recent invariant details and short stack snippet.
+
+Open items for Phase 2 hardening
+- [ ] Add Compose troubleshooting (v1 vs v2) to README (install and `COMPOSE_API_VERSION` fallback).
+- [ ] Smoke test for Docker path (blip a latency invariant; assert headers and status JSON fields).
 
 ### Phase 3 — Enrichment
 - [ ] Pool/queue sampling (servlet thread pool size, executor queues) and preset invariants.
 - [ ] Triage bundles: input + route + classification + stack/thread dump + metrics.
 - [ ] Minimization flow documented for Tomcat inputs.
+- [ ] Optionally pull server-side stack snippet into Docker fuzz triage metadata.
 
 ### Non-goals (keep scope tight)
 - No coverage integration yet (v0.3)

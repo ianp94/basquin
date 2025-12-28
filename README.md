@@ -182,7 +182,7 @@ What this demonstrates
 - Deterministic replay of saved inputs with corpus runner; easy minimization to shrink repros.
 - Path to real deployment compatibility (WAR + Docker) without losing the core “iteration cleanliness” signal.
 
-Status: Phase 1 is planned and will be added as an opt‑in example (kept out of CI by default). See `AGENTS.md` and `TODO.md` for details and guardrails.
+Status: Phase 1 (embedded) is implemented; Phase 2 (WAR + Docker) baseline is available. The WAR includes a status page and headers for invariant triage, and a /db route for DB‑latency demos. Kept out of CI by default. See `agents.md` and `TODO.md`.
 
 Embedded Tomcat (Phase 1) commands (opt‑in)
 - Fuzz (coverage‑guided, seeds included): `./gradlew runFuzzTomcatJQF -DenableJQF=true`
@@ -199,11 +199,14 @@ WAR + Docker (Phase 2) — outline
   - `http://localhost:8080/crash?type=NPE`
   - `http://localhost:8080/latency?ms=250`
   - `http://localhost:8080/heap?kb=512`
+  - `http://localhost:8080/db?sleepMs=500`
 - Fuzz against Docker Tomcat:
   - Start docker-compose first.
   - `./gradlew runFuzzTomcatDockerJQF -DenableJQF=true -Dexamples.tomcat.baseUrl=http://localhost:${TOMCAT_HOST_PORT:-8080}`
   - Seeds from `examples/corpus/tomcat`; results in `fuzz-results/tomcat-docker`.
   - The WAR includes an IterationFilter that wraps each request with iteration boundaries and exposes invariant info via `X-ClosureJVM-Invariant-*` headers, so the external fuzzer can save non-crashing invariant inputs.
+  - Status UI: `http://localhost:8080/closurejvm/index.html` shows requests, crashes, invariant events, recent violations, and a short stack snippet captured by the agent.
+  - Status JSON: `GET /closurejvm/status` returns `{requests, crashes, invariants, recent[], stack}`.
   - Server-side invariants (enabled by default via compose environment):
     - `INVARIANT_MODE=soft`
     - `INVARIANT_LATENCY_MS=50` and `INVARIANT_LATENCY_SAMPLE=true`

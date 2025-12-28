@@ -2,6 +2,9 @@
 
 A persistent execution harness for JVM web applications that uses coverage-guided exploration to discover availability, performance, and correctness failures — not just crashes.
 
+<!-- Replace OWNER/REPO with your GitHub repo to enable the badge -->
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+
 ## Quick Start
 
 Prereqs: Java 17+, Gradle 8.x (or use the Gradle wrapper if present).
@@ -21,6 +24,18 @@ Generic runner (plug in any target):
 - Interface: implement `runner.api.IterationTarget` with `initialize/executeIteration/close`.
 - Run with class name: `gradle runGenericProper` or `gradle runGenericLeak`.
 - Direct usage: `java -cp build/libs/closurejvm-0.1.0.jar runner.GenericRunner 10 your.package.YourTarget`.
+
+Soak (local, proper mode):
+- `gradle runSoakProper` (10,000 iterations, prints metrics; use for stability checks)
+
+## Flags
+
+- `-Dclosurejvm.target=<FQCN>` — target class for `runner.Runner` forwarder.
+- `-Dclosurejvm.forceExitOnLeak=true` — exit process immediately when a leak is detected (useful for demos/CI).
+- `-Dexamples.mode=leak|proper` — behavior selector for examples.
+- `-Dexamples.sleepMs=<n>` — simulate work duration in ms (examples).
+- `-Dexamples.threads=<n>` — number of example worker threads.
+- `-Dexamples.javalin.port=<n>` — port for Javalin demo server.
 
 ## Directory Structure
 

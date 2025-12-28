@@ -19,7 +19,7 @@
 - [x] Add Gradle wrapper for consistent CI/dev usage
 
 ### Testing
-- [ ] Test with a small servlet/controller example (TBD)
+- [x] Test with a small servlet/controller example (Javalin leak demo task)
 - [ ] Test 10,000 iterations locally and record metrics
 - [x] Demonstrate reliable detection of deliberate thread leak (local + test)
 - [x] Add CI workflow: build, test, proper demo; leak demo expected to fail
@@ -29,5 +29,5 @@
 
 ### Next Up (v0.1 hardening)
 - [x] Add simple metrics snapshot (thread count, heap delta) at iteration boundaries (print-only)
-- [ ] Tighten executor/timer tracking (more sources, e.g., ScheduledThreadPoolExecutor specifics)
+- [x] Tighten executor/timer tracking (weak refs; ScheduledThreadPoolExecutor details)
 - [ ] Document quick flags in README (done) and add CI badge once wrapper lands

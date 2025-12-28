@@ -20,8 +20,9 @@ public class Agent {
 
     private static volatile Set<Long> baselineNonDaemonThreadIds = Collections.emptySet();
     private static volatile int iteration = 0;
-    private static final Set<ExecutorService> trackedExecutors = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private static final Set<Timer> trackedTimers = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    // Keep weak references so tracking doesn't retain executors/timers long-term
+    private static final Set<java.lang.ref.WeakReference<ExecutorService>> trackedExecutorRefs = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private static final Set<java.lang.ref.WeakReference<Timer>> trackedTimerRefs = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private static volatile Set<Integer> baselineActiveExecutorIdentities = Collections.emptySet();
     private static volatile Set<Integer> baselineActiveTimerIdentities = Collections.emptySet();
     // Simple metrics baselines captured at iteration start
@@ -107,7 +108,7 @@ public class Agent {
 
         // Best-effort executor leak detection: executors created during this iteration that are not shutdown
         Set<ExecutorService> newActiveExecutors = new HashSet<>();
-        for (ExecutorService ex : trackedExecutors) {
+        for (ExecutorService ex : liveTrackedExecutors()) {
             if (ex == null) continue;
             int id = System.identityHashCode(ex);
             if (!baselineActiveExecutorIdentities.contains(id) && !ex.isShutdown()) {
@@ -119,12 +120,19 @@ public class Agent {
             for (ExecutorService ex : newActiveExecutors) {
                 String type = ex.getClass().getName();
                 String extra = "";
-                if (ex instanceof ThreadPoolExecutor) {
+                if (ex instanceof ScheduledExecutorService) {
+                    ThreadPoolExecutor tpe = ex instanceof ThreadPoolExecutor ? (ThreadPoolExecutor) ex : null;
+                    int q = -1;
+                    if (tpe != null && tpe.getQueue() != null) q = tpe.getQueue().size();
+                    extra = String.format(" [scheduledExecutor, poolSize=%s, active=%s, queued=%d, isTerminated=%s]",
+                            tpe != null ? tpe.getPoolSize() : -1,
+                            tpe != null ? tpe.getActiveCount() : -1,
+                            q,
+                            ex.isTerminated());
+                } else if (ex instanceof ThreadPoolExecutor) {
                     ThreadPoolExecutor tpe = (ThreadPoolExecutor) ex;
                     extra = String.format(" [poolSize=%d, active=%d, queued=%d, isTerminated=%s]",
                             tpe.getPoolSize(), tpe.getActiveCount(), tpe.getQueue() != null ? tpe.getQueue().size() : -1, ex.isTerminated());
-                } else if (ex instanceof ScheduledExecutorService) {
-                    extra = String.format(" [scheduledExecutor, isTerminated=%s]", ex.isTerminated());
                 }
                 System.err.println("  - Executor " + type + "@" + Integer.toHexString(System.identityHashCode(ex)) + extra);
             }
@@ -133,7 +141,7 @@ public class Agent {
 
         // Best-effort timer leak detection: timers created during this iteration that are not cancelled
         Set<Timer> newActiveTimers = new HashSet<>();
-        for (Timer t : trackedTimers) {
+        for (Timer t : liveTrackedTimers()) {
             if (t == null) continue;
             int id = System.identityHashCode(t);
             // Timer has no isCancelled API; we can only infer via purge()/cancel usage. Best-effort: assume live if thread exists.
@@ -185,21 +193,21 @@ public class Agent {
 
     public static <T extends ExecutorService> T trackExecutor(T executor) {
         if (executor != null) {
-            trackedExecutors.add(executor);
+            trackedExecutorRefs.add(new java.lang.ref.WeakReference<>(executor));
         }
         return executor;
     }
 
     public static Timer trackTimer(Timer timer) {
         if (timer != null) {
-            trackedTimers.add(timer);
+            trackedTimerRefs.add(new java.lang.ref.WeakReference<>(timer));
         }
         return timer;
     }
 
     private static Set<Integer> snapshotActiveExecutorIdentities() {
         Set<Integer> ids = new HashSet<>();
-        for (ExecutorService ex : trackedExecutors) {
+        for (ExecutorService ex : liveTrackedExecutors()) {
             if (ex != null && !ex.isShutdown()) {
                 ids.add(System.identityHashCode(ex));
             }
@@ -209,7 +217,7 @@ public class Agent {
 
     private static Set<Integer> snapshotActiveTimerIdentities() {
         Set<Integer> ids = new HashSet<>();
-        for (Timer t : trackedTimers) {
+        for (Timer t : liveTrackedTimers()) {
             if (t != null) {
                 ids.add(System.identityHashCode(t));
             }
@@ -231,5 +239,25 @@ public class Agent {
     private static long usedHeapBytes() {
         Runtime rt = Runtime.getRuntime();
         return rt.totalMemory() - rt.freeMemory();
+    }
+
+    private static Set<ExecutorService> liveTrackedExecutors() {
+        Set<ExecutorService> live = new HashSet<>();
+        trackedExecutorRefs.removeIf(ref -> ref == null || ref.get() == null);
+        for (java.lang.ref.WeakReference<ExecutorService> ref : trackedExecutorRefs) {
+            ExecutorService ex = ref.get();
+            if (ex != null) live.add(ex);
+        }
+        return live;
+    }
+
+    private static Set<Timer> liveTrackedTimers() {
+        Set<Timer> live = new HashSet<>();
+        trackedTimerRefs.removeIf(ref -> ref == null || ref.get() == null);
+        for (java.lang.ref.WeakReference<Timer> ref : trackedTimerRefs) {
+            Timer t = ref.get();
+            if (t != null) live.add(t);
+        }
+        return live;
     }
 }

@@ -136,6 +136,16 @@ tasks.register('runGenericJavalinLeak', JavaExec) {
     args '1', 'examples.targets.JavalinLeakTarget'
 }
 
+// Long-run soak (local): 10,000 iterations, proper mode
+tasks.register('runSoakProper', JavaExec) {
+    group = 'verification'
+    description = 'Run 10,000 iterations in proper mode to observe stability and metrics.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.GenericRunner'
+    jvmArgs '-Dexamples.sleepMs=1', '-Dexamples.threads=2', '-Dexamples.mode=proper'
+    args '10000', 'examples.targets.ThreadLeakTarget'
+}
+
 // Make `check` also run the non-leaking demos to verify wiring
 tasks.named('check') {
     dependsOn 'runExampleProper', 'runRunnerProper'

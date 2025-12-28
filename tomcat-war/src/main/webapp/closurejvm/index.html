@@ -39,6 +39,16 @@
     <div><code id="endpoint">/closurejvm/status</code></div>
   </div>
 
+  <div class="row">
+    <div class="label">Recent Invariant Details</div>
+    <div id="recent"></div>
+  </div>
+
+  <div class="row">
+    <div class="label">Stack Snippet</div>
+    <pre class="card" style="white-space:pre-wrap" id="stack"></pre>
+  </div>
+
   <script>
     const requestsEl = document.getElementById('requests');
     const crashesEl = document.getElementById('crashes');
@@ -46,6 +56,8 @@
     const epEl = document.getElementById('endpoint');
     const endpoint = '/closurejvm/status';
     epEl.textContent = endpoint;
+    const recentEl = document.getElementById('recent');
+    const stackEl = document.getElementById('stack');
 
     async function tick() {
       try {
@@ -54,6 +66,9 @@
         requestsEl.textContent = data.requests ?? 0;
         crashesEl.textContent = data.crashes ?? 0;
         invsEl.textContent = data.invariants ?? 0;
+        const rec = Array.isArray(data.recent) ? data.recent : [];
+        recentEl.textContent = rec.length ? ('- ' + rec.join('\n- ')) : '(none)';
+        stackEl.textContent = data.stack || '';
       } catch (e) {
         console.error('status fetch failed', e);
       }
@@ -63,4 +78,3 @@
   </script>
 </body>
 </html>
-

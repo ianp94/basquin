@@ -45,4 +45,13 @@
     <servlet-name>status</servlet-name>
     <url-pattern>/closurejvm/status</url-pattern>
   </servlet-mapping>
+
+  <servlet>
+    <servlet-name>db</servlet-name>
+    <servlet-class>com.closurejvm.examples.DbServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>db</servlet-name>
+    <url-pattern>/db</url-pattern>
+  </servlet-mapping>
 </web-app>

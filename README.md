@@ -193,8 +193,8 @@ Note: These tasks run an embedded HTTP server and issue localhost requests; run 
 WAR + Docker (Phase 2) — outline
 - Build WAR: `./gradlew :tomcat-war:build`
 - Build agent fat JAR: `./gradlew jar`
-- Run: `docker-compose up tomcat` (starts Tomcat; mounts the WAR to ROOT.war, injects agent and adds agent classes to bootclasspath)
-- Optional DB: `MYSQL_HOST_PORT=3307 docker-compose --profile db up` (starts MySQL on an alternate host port if 3306 is busy)
+- Run: `docker compose up tomcat` (Compose v2; starts Tomcat, mounts the WAR to ROOT.war, injects the agent and adds agent classes to bootclasspath)
+- Optional DB: `MYSQL_HOST_PORT=3307 docker compose --profile db up` (starts MySQL on an alternate host port if 3306 is busy)
 - Hit endpoints:
   - `http://localhost:8080/crash?type=NPE`
   - `http://localhost:8080/latency?ms=250`

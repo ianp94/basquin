@@ -13,6 +13,8 @@ dependencies {
     providedCompile 'jakarta.servlet:jakarta.servlet-api:6.0.0'
     // Compile against agent API without bundling into the WAR; the agent jar is mounted in Tomcat and added to bootclasspath.
     compileOnly project(':')
+    // MySQL driver for /db route (runtime only, not needed for compile)
+    runtimeOnly 'com.mysql:mysql-connector-j:8.0.33'
 }
 
 war {

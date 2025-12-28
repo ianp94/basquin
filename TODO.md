@@ -28,6 +28,6 @@
 - Leak demo can hang the JVM due to non-daemon threads; use `-Dclosurejvm.forceExitOnLeak=true` in demos/CI to force fast termination on leak detection.
 
 ### Next Up (v0.1 hardening)
-- [ ] Add simple metrics snapshot (thread count, heap delta) at iteration boundaries (print-only)
+- [x] Add simple metrics snapshot (thread count, heap delta) at iteration boundaries (print-only)
 - [ ] Tighten executor/timer tracking (more sources, e.g., ScheduledThreadPoolExecutor specifics)
 - [ ] Document quick flags in README (done) and add CI badge once wrapper lands

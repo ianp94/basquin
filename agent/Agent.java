@@ -24,6 +24,10 @@ public class Agent {
     private static final Set<Timer> trackedTimers = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private static volatile Set<Integer> baselineActiveExecutorIdentities = Collections.emptySet();
     private static volatile Set<Integer> baselineActiveTimerIdentities = Collections.emptySet();
+    // Simple metrics baselines captured at iteration start
+    private static volatile long iterationStartNanos = 0L;
+    private static volatile long baselineHeapUsedBytes = 0L;
+    private static volatile int baselineThreadCount = 0;
 
     /**
      * Entry point for the JVM agent
@@ -42,6 +46,10 @@ public class Agent {
     public static void beginIteration() {
         iteration++;
         System.out.println("Beginning iteration");
+        // Metrics baseline
+        iterationStartNanos = System.nanoTime();
+        baselineHeapUsedBytes = usedHeapBytes();
+        baselineThreadCount = snapshotTotalThreadCount();
         baselineNonDaemonThreadIds = snapshotNonDaemonThreadIds();
         baselineActiveExecutorIdentities = snapshotActiveExecutorIdentities();
         baselineActiveTimerIdentities = snapshotActiveTimerIdentities();
@@ -58,6 +66,16 @@ public class Agent {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+
+        // Simple metrics snapshot and print-only signal
+        final long elapsedMs = Math.max(0L, (System.nanoTime() - iterationStartNanos) / 1_000_000L);
+        final long heapNow = usedHeapBytes();
+        final long heapDeltaBytes = heapNow - baselineHeapUsedBytes;
+        final int threadsNow = snapshotTotalThreadCount();
+        final int threadsDelta = threadsNow - baselineThreadCount;
+        System.out.println(String.format(
+                "[ClosureJVM] Iteration %d metrics: latency=%dms, heapDelta=%+d KB, threads=%d (%+d)",
+                iteration, elapsedMs, heapDeltaBytes / 1024, threadsNow, threadsDelta));
 
         Map<Long, Thread> currentNonDaemon = snapshotNonDaemonThreads();
         Set<Long> currentIds = currentNonDaemon.keySet();
@@ -160,6 +178,11 @@ public class Agent {
         return result;
     }
 
+    private static int snapshotTotalThreadCount() {
+        // Total live threads (daemon + non-daemon), best-effort via all stack traces
+        return Thread.getAllStackTraces().keySet().size();
+    }
+
     public static <T extends ExecutorService> T trackExecutor(T executor) {
         if (executor != null) {
             trackedExecutors.add(executor);
@@ -203,5 +226,10 @@ public class Agent {
             }
         }
         return false;
+    }
+
+    private static long usedHeapBytes() {
+        Runtime rt = Runtime.getRuntime();
+        return rt.totalMemory() - rt.freeMemory();
     }
 }

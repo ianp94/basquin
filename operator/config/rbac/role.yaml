@@ -15,6 +15,40 @@ rules:
   - update
   - watch
 - apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - closurejvm.dev
+  resources:
+  - closurejvmcampaigns
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - closurejvm.dev
+  resources:
+  - closurejvmcampaigns/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - closurejvm.dev
+  resources:
+  - closurejvmcampaigns/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - closurejvm.dev
   resources:
   - closurejvmtargets
@@ -38,6 +72,22 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - ""
   resources:

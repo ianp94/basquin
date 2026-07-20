@@ -16,6 +16,12 @@ retention, thread/executor leaks — as first-class bug oracles, not just crashe
 *Above: the live status screen during a 200-iteration HTTP drive against an unmodified
 [JPetStore](https://github.com/mybatis/jpetstore-6), flagging the app's real per-request latency.*
 
+## Built with AI assistance
+
+Much of ClosureJVM's code and documentation was written by Anthropic's Claude (via Claude Code),
+with the author directing the design, making the architecture and semantic decisions, and reviewing
+the work. This is noted for transparency — the project is not presented as entirely hand-written.
+
 ## Why it exists
 
 Fuzzers like Jazzer and JQF are excellent, but their oracle is "did it throw / crash." The gap

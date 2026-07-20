@@ -223,6 +223,10 @@ td code { white-space: nowrap; }
 .footer a { color: var(--text-muted); }
 .footer a:hover { color: var(--accent); }
 .footer .links { display: flex; gap: 18px; flex-wrap: wrap; }
+.footer .ai-note {
+  margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border);
+  font-size: .85rem; color: var(--text-muted); width: 100%;
+}
 
 /* ---------- misc ---------- */
 .tag-list { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }

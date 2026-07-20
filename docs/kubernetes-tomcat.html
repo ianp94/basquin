@@ -178,6 +178,12 @@ D=$(mktemp -d); (cd "$D" &amp;&amp; unzip -q /abs/your-app.war 'WEB-INF/classes/
   <span class="f">-Dclosurejvm.invariant.latency.maxMs</span>=<span class="s">25</span> \
   <span class="f">-Dclosurejvm.invariant.mode</span>=<span class="s">soft</span> \
   <span class="f">-Dclosurejvm.dashboard.push</span>=<span class="s">localhost:7070</span></code></pre>
+      <p>Here <code>examples/grammar/yourapp.grammar</code> is a placeholder for your own routes — the
+        repo ships a real, working grammar at
+        <a href="https://github.com/ianp94/closureJVM/blob/main/examples/grammar/jpetstore.grammar"><code>examples/grammar/jpetstore.grammar</code></a>
+        you can copy and adapt. (Grammar syntax is covered in
+        <a href="how-it-works.html">How it works</a> and
+        <a href="https://github.com/ianp94/closureJVM/blob/main/docs/USAGE.md">USAGE.md</a>.)</p>
       <p>The live panel shows execs, latency, invariant finds (harvested server-side from the pod via
         the valve headers), and the coverage % of your app's code (pulled from the pod's JaCoCo agent).
         Prefer coverage without guided mutation? Use <code>runHttpDriveCoverage</code>. No coverage at
@@ -210,11 +216,13 @@ D=$(mktemp -d); (cd "$D" &amp;&amp; unzip -q /abs/your-app.war 'WEB-INF/classes/
     <p>It is an <strong>explicit-patch controller</strong>, not a mutating admission webhook: a
       namespaced <code>Role</code> that only patches Deployments you name, never cluster-wide pod
       mutation.</p>
-    <p><strong>Status — be precise:</strong> the design is settled and <strong>P1 (the kubebuilder
-      scaffold, CRD, and a no-op controller that only writes status) is merged</strong>. Injection
-      (P2), the coverage Service (P3), and campaign orchestration (the <code>ClosureJVMCampaign</code>
-      CRD that fires off a whole run — P5) are roadmap. The operator does <em>not</em> orchestrate
-      runs today. Design details:
+    <p><strong>Status — be precise:</strong> the design is settled and the operator is
+      <strong>in progress</strong>. The kubebuilder scaffold, CRD, and a no-op status-only controller
+      (P1) are merged; Deployment injection — copying the agents in and appending the flags (P2) — is
+      landing in an open PR. So <em>instrumenting</em> a target is arriving now. The operator does
+      <strong>not</strong> orchestrate runs today, though: launching the runner and dashboard against a
+      target (the <code>ClosureJVMCampaign</code> CRD that fires off a whole test — P5) is roadmap, not
+      built. Design details:
       <a href="https://github.com/ianp94/closureJVM/blob/main/docs/OPERATOR-DESIGN.md">OPERATOR-DESIGN.md</a>.</p>
   </div>
 </main>
@@ -228,6 +236,7 @@ D=$(mktemp -d); (cd "$D" &amp;&amp; unzip -q /abs/your-app.war 'WEB-INF/classes/
       <a href="how-it-works.html">How it works</a>
       <a href="https://github.com/ianp94/closureJVM">GitHub</a>
     </div>
+    <div class="ai-note">Built with AI assistance (Anthropic's Claude / Claude Code), directed and reviewed by the author.</div>
   </div>
 </footer>
 

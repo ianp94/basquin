@@ -1,0 +1,1 @@
+/actions/Catalog.action?viewProduct=&productId=FI-SW-01

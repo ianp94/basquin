@@ -252,24 +252,115 @@ and the dashboard) — decide once the boundaries are clear.
   .recordCoverage(covered, total)` plumbing (v0.9); v0.10 supplies the source. A true "% of code
   explored" needs a covered/total denominator, which requires instrumenting the code under test —
   hence it belongs with the coverage agent below, not the client-only JQF path.
-- [ ] **Coverage-guided over HTTP**: a server-side coverage agent inside the app JVM (JaCoCo-style
-  or JVMTI-based) tracks per-request edge coverage and reports it back to the client fuzzer
-  (response header or a `/closurejvm/coverage` endpoint). The client feeds it to
-  `StatusReporter.recordCoverage` and uses it as the guidance signal to mutate HTTP request
-  inputs — coverage feedback from the *app under test*, not the harness JVM. The real
-  "coverage-guided via HTTP requests" vision.
+- [x] **Coverage signal over HTTP** (DD-012): JaCoCo agent (tcpserver) in the app JVM;
+  client `JacocoCoverageProvider` dumps + analyzes against the app classes; `CoverageDriver`
+  polls it into the panel. Verified: real coverage % of JPetStore (`org.mybatis.jpetstore.*`)
+  in the live panel. `runHttpDriveCoverage` task + `docker-compose.coverage.yml`.
+- [x] **Coverage-*guided*** exploration (`CoverageGuidedRun`, task `runCoverageGuided`): mutates
+  HTTP inputs (route + params grammar), samples coverage after each request, and keeps the inputs
+  that reach new code. Verified against the kind JPetStore pod: coverage climbed 4.4% -> 8.6%
+  (281 -> 549 edges) vs the flat round-robin driver, then plateaued.
+  - [x] The plateau was NOT "GET-only reach" as first assumed — it was a hardcoded route list
+    reaching 7 of JPetStore's 21 handlers (DD-016). Fixed by making the surface data:
+    seed corpus `examples/corpus/jpetstore/` (all 21 handlers) -> **17.3%**, then a request
+    grammar `examples/grammar/jpetstore.grammar` (`-Dclosurejvm.grammar=`) that also supplies the
+    parameter value space with fuzzing generators (`<int> <string> <long> <empty>`) -> **17.7%**,
+    and distinct crash sites found in the app's own code went 4 -> 6 (DD-017).
+  - [x] **Input viewer**: dashboard cluster rows expand to show the concrete inputs behind a
+    finding (read from the saved `.bin`), selectable for copy-paste replay.
+  - [x] **Rich input viewer**: cluster rows expand to show, per sample, the input (copyable, with
+    a "curl" button), the exception + message, the invariant detail, the stack trace, and the full
+    raw record on demand. Dashboard UI moved to `resources/dashboard.html` (it outgrew being a
+    Java string literal).
+  - [x] **Corpus/structure split + sessions (DD-018)**: corpus supplies VALUES
+    (`@values/itemId.txt`), grammar supplies STRUCTURE (`~EST-[0-9]{1,4}`); driver maintains a
+    JSESSIONID and alternates authenticated/anonymous session epochs. Coverage 17.7% → **22.1%**;
+    verified with a control (listOrders: 200 with session, 500 without). Crash sites 6 → 7.
+  - [x] **Multi-step sequences (DD-020)**: `@sequence` blocks in the grammar; steps run in order on
+    one session and placeholders bind ONCE per execution so a transaction is coherent. Coverage
+    22.1% → **23.1%**.
+  - [x] **Run config in the dashboard (DD-020)**: driver pushes its parameters + grammar source
+    once per run; shown per campaign (credential-looking values redacted).
+  - [x] **Cross-target clustering (DD-020)**: `/api/clusters` merges the same defect found on
+    several targets into one row with campaign attribution.
+  - [x] Fixed: the invariants card read 0 while findings were full of heapDelta — app-reported and
+    harness-measured invariants are now counted and labelled separately.
+  - [ ] POST support with form bodies — several handlers are POST-only in real usage.
+
+### Multi-instance targets (one driver, N replicas behind a Service) — DD-020 known limits
+- [ ] **Coverage merge across replicas.** JaCoCo's tcpserver connection lands on one pod while
+  requests load-balance across all of them, so coverage reflects ~1/N of what ran. Poll every
+  replica and merge `ExecutionDataStore`s.
+- [ ] **Session affinity.** `JSESSIONID` is pinned to one pod; a round-robin Service breaks
+  multi-step sequences. Needs `sessionAffinity: ClientIP` or per-pod addressing.
+- [ ] **Per-instance attribution.** Findings don't record which replica served the request, so
+  "one sick pod" looks the same as "systemic". Cheap fix: the valve stamps `HOSTNAME` into a
+  response header the driver already parses.
+
+### Dashboard as a control plane (needs a decision before building)
+Currently the dashboard is strictly read-only: drivers push, it displays (DD-013). Making it
+*launch runs* or *reject corpus entries* reverses that and is a real architectural fork, not just
+a feature — it would need a control channel back to drivers, and a dashboard that can start
+processes is effectively remote code execution on whatever it runs on.
+- [ ] Launch/stop campaigns from the dashboard — decide the trust model first (who can reach it,
+  what it's allowed to run, auth). Probably belongs with the operator, which already needs
+  scheduling authority, rather than bolted onto the read-only viewer.
+- [ ] Reject/mute a cluster. A dashboard-local "dismiss" (hides it from triage, changes nothing in
+  the driver) needs no control channel and is safe to build now. Truly removing an entry from a
+  driver's corpus does need one — and conflicts with DD-006/DD-014's "never drop a finding".
 - [ ] Optional in-process coverage %: a JaCoCo provider for the local JQF targets, so the panel
   shows a real percentage without the server round-trip.
-- [ ] **Kubernetes deploy**: Helm chart / manifests to run the harness + target app; the agent
-  and valve injected into the target pod.
+- [x] **Kubernetes deploy**: `kind` demo environment (`deploy/k8s/`): JPetStore as a pod with
+  valve + JaCoCo + ClosureJVM agent baked into a self-contained image, ClusterIP Service,
+  one-command `up.sh`. Verified in-cluster: valve invariant headers, 96 server-side invariant
+  finds, and live coverage % (281/6368 edges) all working against the pod. Demo `docs/demo-k8s.svg`.
 - [ ] **Auto-injection agent**: a mutating admission webhook (operator) that injects the
   `-javaagent` + valve into annotated pods automatically — likely its own repo.
-- [ ] **Web UI dashboard**: a browser dashboard over the k8s deployment — campaigns across pods,
-  live findings, coverage growth, corpus, invariant violations, triage bundles. The "product"
-  surface. Candidate separate repo.
-  - [ ] Surface the actual findings in the UI: per-finding crash detail (exception, message,
-    stack), invariant violations (kind, threshold, sampled stack), the saved input, and the
-    route/metrics — i.e. browse the triage bundles, not just counts.
-  - [ ] Optional Claude-API-backed analysis: with a configured API key, let Claude analyze a
-    finding (or a campaign) from the dashboard — cluster/dedupe findings, explain a stack, suggest
-    a root cause / minimized repro. Opt-in; key stays server-side.
+- [x] **Web dashboard, decoupled (DD-013)**: `DashboardServer` is a standalone aggregator process
+  (own port, no driving logic) that many drivers push to via `DashboardClient`
+  (`-Dclosurejvm.dashboard.push=host:port`), keyed by campaign id (defaults to `HOSTNAME` — a pod's
+  name in k8s). Fleet view (campaign cards, alive/stale) + drill-down into one campaign's metric
+  cards, coverage bar, and findings table (route/detail/classification/time). Verified live: two
+  independent processes, dashboard showed the driver's real numbers via push. Task: `runDashboard`.
+  This IS the aggregation point the auto-injection operator (below) would point every pod at.
+  - [ ] Persistence/eviction beyond in-memory (fine for the demo scale; a real deployment would
+    want a TTL or a small store).
+  - [ ] Full crash stack / sampled stack drill-down in the findings view (currently a text excerpt).
+  - [x] **Noise reduction / clustering (DD-014)**: findings are grouped at read time by
+    fingerprint (classification + invariant kind + route shape, or crash + exception class) with
+    count / distinct-routes / magnitude-range / last-seen. Nothing is dropped at save time — the
+    corpus stays whole for exploration. Verified against 937 real findings: 937 → 19 clusters.
+  - [x] **Optional Claude-API analysis (DD-015)**: `POST /api/analyze/{campaign}` +
+    "Analyze with Claude" button; prompts from the *clustered* summary, key server-side only
+    (`ANTHROPIC_API_KEY`), explicit-click only, never on the auto-refresh. Strictly advisory —
+    it explains clusters, it never decides what counts as a finding.
+    - [ ] Not yet exercised against a live key (verified only that the request is well-formed and
+      the API rejects a bad key cleanly). Needs one real end-to-end call to confirm.
+
+---
+
+## Post-v1.0: simplify the Kubernetes deploy
+
+Explicitly deferred past v1.0 (2026-07-20) — the current `deploy/k8s/` path works and is verified,
+but it's more manual than it should be for a real user. Pain points noticed while building it:
+
+- `up.sh` hand-bakes a per-app Dockerfile (`Dockerfile.jpetstore`) with the WAR + all three agent
+  jars `COPY`'d in — every new target app means a new bespoke image build, not a reusable pattern.
+- Coverage requires manually extracting `WEB-INF/classes` from the WAR on the host and pointing
+  `-Dclosurejvm.coverage.classes` at it by hand.
+- Reaching the pod means a `kubectl port-forward` the user has to manage themselves. (The Service
+  is deliberately ClusterIP: JaCoCo's remote-control port is unauthenticated and must not be
+  published — see DD-022.)
+- No Helm chart / single manifest set; `jpetstore.yaml` is demo-specific, not a template for "any
+  WAR."
+
+Ideas for later (not decided; revisit once the auto-injection operator direction is clearer, since
+that will reshape a lot of this anyway):
+- A sidecar/init-container pattern instead of baking a custom image per app, so any existing app
+  image can be instrumented by adding a container/volume, not rebuilding its Dockerfile.
+- A Helm chart (or `kustomize` base) parameterized by image + WAR path instead of a hand-written
+  Dockerfile per target.
+- Have the coverage class extraction happen automatically (from the mounted WAR/image at pod
+  start) instead of a manual host-side unzip step.
+- A single CLI entry point that replaces the current mix of `up.sh` + manual `kubectl`/`docker`
+  commands from the README/deploy docs.

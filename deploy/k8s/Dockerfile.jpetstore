@@ -1,0 +1,17 @@
+# Self-contained JPetStore demo image with all ClosureJVM agents baked in.
+# Build context must contain: jpetstore.war, closurejvm-agent.jar, closurejvm-valve.jar,
+# jacocoagent.jar, context.xml (staged by deploy/k8s/up.sh).
+FROM tomcat:9.0-jdk17-temurin
+
+COPY jpetstore.war        /usr/local/tomcat/webapps/ROOT.war
+COPY closurejvm-agent.jar /usr/local/tomcat/closurejvm-agent.jar
+COPY closurejvm-valve.jar /usr/local/tomcat/lib/closurejvm-valve.jar
+COPY jacocoagent.jar      /jacocoagent.jar
+COPY context.xml          /usr/local/tomcat/conf/context.xml
+
+# JaCoCo agent (tcpserver, scoped to the app) + ClosureJVM agent, both in the app JVM.
+ENV CATALINA_OPTS="-javaagent:/jacocoagent.jar=output=tcpserver,address=0.0.0.0,port=6300,includes=org.mybatis.jpetstore.* \
+-javaagent:/usr/local/tomcat/closurejvm-agent.jar -Xbootclasspath/a:/usr/local/tomcat/closurejvm-agent.jar \
+-Dclosurejvm.invariant.mode=soft -Dclosurejvm.invariant.latency.maxMs=25 -Dclosurejvm.invariant.heapDelta.maxKb=256"
+
+EXPOSE 8080 6300

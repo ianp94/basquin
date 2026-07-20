@@ -1,0 +1,13 @@
+fish
+dog
+cat
+snake
+bird
+angel
+koi
+tiger
+poodle
+dalmation
+iguana
+finch
+parrot

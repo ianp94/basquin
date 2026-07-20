@@ -1,0 +1,33 @@
+# Coverage-guided-over-HTTP (v0.10): run a javax.servlet app on Tomcat 9 with BOTH the ClosureJVM
+# valve (iteration boundaries + invariants) AND the JaCoCo agent in tcpserver mode, so the client
+# driver can pull the app-under-test's real coverage over the wire and show a "% of code explored".
+#
+#   ./gradlew stageAgents
+#   # extract the app's classes for the analyzer, e.g.:
+#   #   (cd /some/dir && unzip -q app.war 'WEB-INF/classes/*')
+#   WAR_PATH=/abs/app.war docker compose -f docker-compose.coverage.yml up tomcat9-coverage
+#   ./gradlew runHttpDriveCoverage \
+#     -Dexamples.http.baseUrl=http://localhost:8080 \
+#     -Dclosurejvm.coverage.jacoco=localhost:6300 \
+#     -Dclosurejvm.coverage.classes=/some/dir/WEB-INF/classes \
+#     -Dclosurejvm.invariant.latency.maxMs=25 -Dclosurejvm.invariant.mode=soft
+#
+services:
+  tomcat9-coverage:
+    image: tomcat:9.0-jdk17-temurin
+    ports:
+      - "${TOMCAT_HOST_PORT:-8080}:8080"
+      - "${JACOCO_HOST_PORT:-6300}:6300"
+    environment:
+      # JaCoCo agent (tcpserver) + ClosureJVM agent, both in the app JVM. Scope JaCoCo's
+      # instrumentation to the app package via COVERAGE_INCLUDES so we measure the app, not libs.
+      - CATALINA_OPTS=-javaagent:/jacocoagent.jar=output=tcpserver,address=0.0.0.0,port=6300,includes=${COVERAGE_INCLUDES:-org.mybatis.jpetstore.*} -javaagent:/usr/local/tomcat/closurejvm-agent.jar -Xbootclasspath/a:/usr/local/tomcat/closurejvm-agent.jar -Dclosurejvm.invariant.mode=${INVARIANT_MODE:-soft} -Dclosurejvm.invariant.latency.maxMs=${INVARIANT_LATENCY_MS:-50} -Dclosurejvm.invariant.heapDelta.maxKb=${INVARIANT_HEAP_KB:-256} ${CATALINA_OPTS_EXTRA:-}
+    volumes:
+      - ${WAR_PATH:?set WAR_PATH to a javax.servlet WAR}:/usr/local/tomcat/webapps/ROOT.war:ro
+      # Stable paths produced by `./gradlew stageAgents` -- a version-pinned path would be
+      # created by Docker as an empty DIRECTORY after a version bump, and Tomcat would then
+      # abort with an unrelated-looking -javaagent error.
+      - ./build/stage/closurejvm-agent.jar:/usr/local/tomcat/closurejvm-agent.jar:ro
+      - ./build/stage/closurejvm-valve.jar:/usr/local/tomcat/lib/closurejvm-valve.jar:ro
+      - ./deploy/valve/context.xml:/usr/local/tomcat/conf/context.xml:ro
+      - ./build/jacoco/jacocoagent.jar:/jacocoagent.jar:ro

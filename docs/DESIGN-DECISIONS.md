@@ -289,3 +289,469 @@ Use the filter for our demo WAR, the valve for third-party WARs; never both.
 Also: match the servlet namespace — a `jakarta` valve requires Tomcat 10+, a
 `javax` app requires Tomcat 9 and a `javax`-compiled valve. See
 docs/THIRD-PARTY-APPS.md.
+
+---
+
+## DD-012: Coverage over HTTP via a JaCoCo agent in the app JVM, read by the client (2026-07-19)
+
+**Context.** The exploration panel needs a real "% of code explored," and the north-star is
+coverage-*guided* fuzzing of HTTP inputs. The app under test runs in its own JVM (Tomcat), so its
+coverage cannot be seen by the client-side harness/JQF JVM. A percentage also needs a
+covered/total denominator, which only instrumenting the app provides.
+
+**Decision.** Put a **JaCoCo agent in the app JVM** (`-javaagent:jacocoagent.jar=output=tcpserver`)
+alongside the ClosureJVM agent + valve. A client-side `JacocoCoverageProvider` connects to the
+agent's TCP server, dumps execution data (accumulating, no reset), and analyzes it against the
+app's class files with JaCoCo's `Analyzer` to compute covered/total instruction probes.
+`CoverageDriver` polls this on a background thread and feeds it to
+`StatusReporter.recordCoverage`, so the panel shows a real percentage. JaCoCo lives in a scoped
+`coverage` source set so it never enters the main jar.
+
+**Why in the app JVM, pulled by the client.** The coverage signal must come from the code under
+test; measuring the harness JVM is meaningless for guiding HTTP inputs. JaCoCo's tcpserver is the
+standard remote-collection path and needs no app cooperation beyond the `-javaagent` flag the
+valve deployment already uses. Accumulating dumps give campaign-total coverage; the client owns
+the analysis (and the class files), so nothing app-specific ships in the harness.
+
+**Status.** The coverage *signal* works end to end (verified: ~4.4% of JPetStore's `org.mybatis
+.jpetstore.*` from catalog-route traffic). Using coverage as a *guidance* signal — mutating HTTP
+inputs toward new edges — is the next step; this establishes the measurement it needs.
+
+**Rejected.** In-process JaCoCo/JQF coverage of the harness JVM (measures the driver, not the
+app); a custom JVMTI coverage agent (JaCoCo is battle-tested and gives covered/total directly);
+parsing JaCoCo `.exec` files on disk per sample (the tcpserver dump is live and needs no shared
+volume); resetting coverage per request (campaign-total is what a "% explored" means; per-request
+deltas are a later refinement for guidance).
+
+---
+
+## DD-013: Decouple the dashboard from the driver process — push to a standalone aggregator (2026-07-20)
+
+**Context.** v0.10's first dashboard slice (`StatusServer`) was an HTTP server embedded in the
+harness driver process itself (`GenericRunner`/`CoverageGuidedRun`). It never touched the
+app-under-test's JVM — that part was already correctly isolated — but it still coupled the
+dashboard's lifetime and blast radius to the process doing the actual measuring and driving, and
+it could only ever show one campaign. That's the wrong shape for the stated next step: an
+auto-injection operator that instruments many pods and needs one place to watch aggregate metrics
+across all of them.
+
+**Decision.** Split into two processes. `DashboardServer` is a standalone aggregator: an
+in-memory store keyed by campaign id, fed by `POST /ingest/status?id=` and
+`POST /ingest/findings?id=` with the raw JSON a driver already produces, served back verbatim via
+`GET /api/campaign/{id}/status|findings` and summarized via `GET /api/campaigns`. `DashboardClient`
+runs inside the driver and periodically pushes to it — the driver process never opens a listening
+port. The dashboard's page gained a fleet view (campaign cards, alive/stale by last-seen) with
+drill-down into one campaign's full metrics + findings.
+
+**Why raw-JSON store-and-forward, not real parsing.** `DashboardServer` never parses the payload
+structurally — it stores the harness's JSON text and replays it to the browser, which does the
+real `JSON.parse`. The one exception is a narrow best-effort regex scrape of a few numeric fields
+(iterations/crashes/coverage %) purely for the fleet-view summary cards; it degrades to "—" on a
+miss and never throws. This keeps the aggregator schema-agnostic (no coupling to
+`StatusReporter`'s JSON shape, no dependency on a JSON library) and correctly stateless about
+what a campaign's payload means — exactly the shape that lets many different pods/producers push
+to one dashboard without the dashboard needing to understand or version their internals.
+
+**Why id defaults to `HOSTNAME`.** In Kubernetes, `HOSTNAME` is the pod's name by default — so a
+driver running as (or alongside) a pod reports under a natural, unique identity with zero
+configuration, which is the identity the future auto-injection operator would want per instrumented
+pod.
+
+**Verified (2026-07-20).** Two independent processes: `DashboardServer` on its own port, a
+`CoverageGuidedRun` driver hitting the kind JPetStore pod and pushing to it. Fleet view showed the
+live campaign (`alive:true`, real iteration/crash/coverage numbers); campaign detail and findings
+endpoints round-tripped the driver's data correctly.
+
+**Rejected.** Keeping the embedded per-driver dashboard (DD-012's `StatusServer`) — couples
+lifetime, no cross-campaign view, and is the wrong foundation for the operator's "watch the whole
+fleet" goal; a message bus between driver and dashboard (same reasoning as DD-006 — the
+measurement cost is elsewhere, and a bus is overkill for a store-and-forward relay at this scale);
+full server-side JSON parsing/validation of the payload (adds a dependency and a schema coupling
+the aggregator doesn't need for v1).
+
+---
+
+## DD-014: Noise reduction by deterministic clustering on the read path, not by dropping findings (2026-07-20)
+
+**Context.** Soft-mode invariants are deliberately generous — that's what makes them useful for
+exploration. But it means a single systemic behavior (JPetStore allocating proportionally to page
+size) produced 125 near-identical `heapDelta` findings on one route shape. Reviewing "genuine
+issues" in a list like that is hopeless; the signal is real but the presentation buries it. The
+temptation is to filter at save time (thresholds, rate limits, dedupe-before-write).
+
+**Decision.** Never change what gets saved. Cluster at **read time**, in the dashboard, by a
+fingerprint: `classification + invariant-kind + route-pattern` (parameter *values* stripped, shape
+kept), or `crash + exception-class` for crashes. Each cluster reports count, distinct concrete
+routes, magnitude range, and first/last seen. The corpus on disk stays whole.
+
+**Why not filter at save time.** DD-006's "never drop a finding" exists because exploration needs
+the full corpus — a finding that looks redundant to a human is still a distinct input that reached
+distinct state, and the coverage-guided loop (DD-012) may care. Dropping at write time is
+irreversible and couples the *oracle* to a *presentation* concern. Clustering is a pure function
+of saved data: reversible, tunable later, and it can be recomputed differently without re-running
+a campaign.
+
+**Why deterministic, not the LLM.** agents.md's "enforcement > inference": anything the bug oracle
+or triage relies on should be a hard check. A model deciding what counts as a duplicate finding
+would make results non-reproducible run-to-run. The Claude layer (DD-015) sits strictly *on top*
+of these clusters, explaining what a human is already looking at — it never decides what is or
+isn't a finding.
+
+**Verified (2026-07-20).** Against 937 real findings accumulated across this project's runs:
+937 → 19 clusters. Testing at that scale caught two real bugs that unit-sized data would have
+hidden: (1) a `(?:[^"\\]|\\.)*`-style regex for matching escaped JSON strings overflows the stack
+(Java's `Pattern$Loop` recurses per character) on findings text of a few thousand chars — replaced
+with an iterative scanner (`JsonScan`); (2) two different saved-finding formats exist in the wild
+(HTTP-driven writes `detail=kind: …`, local/JQF writes the bare `kind: …` line), so keying only on
+`detail=` left every local finding's kind unresolved as `?`.
+
+**Rejected.** Save-time thresholds/dedupe (irreversible, couples oracle to presentation); stack-
+hash fingerprinting for invariants (the sampled stack is nearly identical across these — it's the
+route + kind that distinguishes them); LLM-based grouping (non-reproducible, see above).
+
+---
+
+## DD-015: Claude API analysis is opt-in, dashboard-side, and strictly advisory (2026-07-20)
+
+**Context.** Clustered findings answer "what's distinct"; they don't answer "which of these is
+actually a bug versus expected proportional behavior, and what would I check first."
+
+**Decision.** An optional `POST /api/analyze/{campaign}` on the standalone dashboard builds a
+prompt from the *already-clustered* summary plus campaign status, calls the Claude Messages API,
+and returns prose. Triggered only by an explicit button click — never on the 1.5s auto-refresh.
+The API key is read only by the `DashboardServer` process (`ANTHROPIC_API_KEY` or
+`-Dclosurejvm.claude.apiKey`); it is never passed to a driver, never sent to the app under test,
+and never rendered in the UI. Absent a key the endpoint returns a clear "not configured" message
+and the rest of the dashboard is unaffected.
+
+**Why advisory only.** The oracle stays deterministic (DD-014). Claude summarizes clusters a human
+is already reviewing — it cannot create, suppress, or reclassify a finding. That keeps
+reproducibility intact: two runs over the same corpus produce the same clusters regardless of
+whether anyone clicked Analyze.
+
+**Why the dashboard process.** It's the one component that already aggregates across campaigns and
+is deliberately decoupled from both the driver and the app (DD-013) — the natural place for an
+outbound network dependency and a secret, and the only place with the cross-campaign context that
+makes the analysis worth asking for.
+
+**Rejected.** Auto-analysis on refresh (unbounded cost, and would make the page's content
+non-deterministic); running analysis in the driver (would put a secret and an outbound dependency
+next to the measurement loop, violating DD-013); using the LLM to filter/dedupe findings
+(see DD-014); an SDK dependency (one `HttpURLConnection` POST matches the project's
+no-extra-dependency posture).
+
+---
+
+## DD-016: The exploration surface is a seed corpus, not compiled code (2026-07-20)
+
+**Context.** `CoverageGuidedRun` originally hardcoded JPetStore's routes as Java string arrays and
+synthesized new ones in a `randomRoute()` switch. Coverage plateaued at 8.6% and I attributed it
+to "GET-only exploration can't reach checkout/order without sessions." That explanation was wrong,
+and reviewing the app's actual endpoint surface proved it: JPetStore exposes **21 handler methods**
+across 4 Stripes ActionBeans, and the hardcoded grammar reached **7 of them**. All of
+`AccountActionBean` (7 handlers) and `OrderActionBean` (4) were unreachable — not because they
+need sessions, but because no code path ever generated their URLs. Every other target in this repo
+had `examples/corpus/<name>/`; JPetStore had none.
+
+**Decision.** Endpoints come from a seed corpus (`examples/corpus/jpetstore/`, one route per file,
+`-Dclosurejvm.corpusDir`), covering all 21 handlers. `CoverageGuidedRun` loads seeds, deterministically
+exercises each one once before random exploration, and mutates only *parameter values* using
+dictionaries. `randomRoute()` is deleted — the runner no longer invents endpoints. An empty corpus
+warns loudly instead of silently exploring almost nothing.
+
+**Why.** Baking the reachable surface into compiled code makes the fuzzer's ceiling invisible: the
+coverage number looks like a property of the app when it's really a property of a hardcoded list.
+As data, the surface is inspectable, diffable, extendable without a rebuild, and reusable across
+targets — and a missing corpus becomes an obvious gap rather than a silent cap.
+
+**Verified (2026-07-20).** Same app, same driver, same duration — coverage **8.6% → 17.3%**
+(549 → 1103 of 6368 instructions), exactly doubling by reaching the previously-unreachable half of
+the app. It also immediately surfaced **4 genuine crash clusters** where the run had previously
+reported zero crashes:
+
+```
+java.lang.NullPointerException: Cannot invoke
+  "AccountActionBean.getAccount()" because "accountBean" is null
+    at OrderActionBean.listOrders(OrderActionBean.java:110)
+```
+
+`listOrders`, `viewOrder`, `newAccount`, and `editAccount` dereference the session account bean
+with no null check, so an unauthenticated request yields an unhandled NPE and HTTP 500 instead of
+a redirect to sign-on. These are real defects in the app under test, found only because the
+exploration surface stopped being hardcoded.
+
+**Rejected.** Keeping the hardcoded grammar and "explaining" the plateau (the explanation was
+wrong and would have permanently hidden half the app); generating routes by crawling links (real,
+but a bigger feature — a corpus is the honest primitive underneath it and is needed either way).
+
+---
+
+## DD-017: Grammar-driven request generation, and showing the input that caused a finding (2026-07-20)
+
+**Context.** DD-016 moved *routes* out of code into a seed corpus, doubling coverage. But the
+*parameter value space* was still hardcoded Java arrays (`CATS`, `PRODS`, `ITEMS`, `KW`), so the
+fuzzer could only ever submit values someone had already thought of — it could reach every
+endpoint but only with known-good inputs. Separately, the dashboard showed *that* a finding
+happened but never *what input caused it*, even though `FuzzIO` had been saving each input as a
+`.bin` beside every `.meta.txt` all along. Both gaps were reported by the user reviewing results.
+
+**Decision — grammar.** A `RequestGrammar` file supplies both the routes and their value space:
+
+```
+$itemId  = EST-1 | EST-2 | <string> | <empty>
+/actions/Cart.action?addItemToCart=&workingItemId=${itemId}
+```
+
+Rules mix literal dictionary values (to stay on happy paths and reach deep code) with
+**generators** — `<int>` (boundary-biased), `<string>` (short, sometimes metacharacters),
+`<long>`, `<empty>` — which produce values no hand-written list would. Mutation re-expands the
+template behind an input, so mutants stay well-formed instead of becoming garbage URLs. Grammar
+takes precedence over a plain seed corpus; both are data, neither is compiled in.
+
+**Decision — input viewer.** `DashboardClient` now reads the sibling `.bin` for each finding
+(text if ≥90% printable, else hex, capped at 2KB), the clusterer keeps a bounded sample of
+concrete inputs per cluster, and cluster rows in the dashboard expand to show them — selectable,
+so an HTTP finding can be copy-pasted straight into `curl` to reproduce. Crash findings don't
+write a `route=` line, so their route now falls back to the saved input; previously every crash on
+every endpoint collapsed into one cluster keyed only by exception class, which is what made the
+dashboard read `route=(none)`.
+
+**Verified (2026-07-20)** against the JPetStore pod, same driver and duration:
+- corpus-only (DD-016): 17.3% coverage, crashes at 4 sites
+- grammar: 17.7% coverage, crashes at **6 distinct sites in the app's own code**
+
+The extra site is the point: `CartActionBean.addItemToCart:81 → CatalogService.isItemInStock:88`
+NPEs on a `workingItemId` that isn't a real item — only reachable because `<string>` generated an
+id no dictionary contained. Coverage barely moved (+23 edges) while *distinct defects found* went
+up 50%, which is the honest way to read this: grammar generators buy bug-finding depth at a given
+coverage level, not raw coverage breadth.
+
+**Rejected.** A full BNF/EBNF grammar (this is a URL-shaped domain — one line per template with
+`${}` placeholders covers it, and stays hand-editable); pure random byte mutation of URLs (breaks
+the request shape immediately and never reaches deep handlers); shipping input bytes on every
+status push regardless of size (capped and sampled instead — a campaign can save thousands).
+
+---
+
+## DD-018: Corpus supplies values, grammar supplies structure — and sessions are the real coverage ceiling (2026-07-20)
+
+**Context.** Two limits surfaced while reviewing results. (1) The grammar file conflated two
+different things: concrete values (`FISH`, `EST-1`) and value *structure*. (2) Coverage stalled at
+17.7% even with all 21 handlers reachable — because every request was a stateless GET, so
+JPetStore's authenticated handlers found a null account bean in the session and 500'd instead of
+running their real logic. No amount of grammar tuning fixes that; it's state, not surface.
+
+**Decision — split values from structure.** The **corpus** supplies values
+(`$itemId = @../corpus/jpetstore/values/itemId.txt`, one per line, versioned alongside the app's
+other seeds). The **grammar** supplies structure (`~EST-[0-9]{1,4}`, `~[A-Z]{2}-[A-Z]{2}-[0-9]{2}`)
+— a mini generator over literals, `[a-z]`-style classes and `{n,m}` repetition. A rule mixes both,
+plus the existing `<int>/<string>/<long>/<empty>` generators.
+
+**Why the split matters.** Real values reach happy paths and deep code. *Structurally valid but
+nonexistent* values (`EST-847`) get past parsing and format validation and into the lookup and
+dereference code — where the interesting failures are. Purely random junk usually gets rejected at
+the first validation and never gets that far. Keeping values as corpus data also means adding a new
+product id is editing a text file, not a grammar.
+
+**Decision — sessions.** The driver maintains a `JSESSIONID` cookie and alternates *session
+epochs*: sign on for `-Dclosurejvm.session.epoch` iterations (default 40), then go anonymous, and
+repeat — so both authenticated and unauthenticated paths keep getting probed rather than the run
+committing to one. Disable with `-Dclosurejvm.session=false`.
+
+**Verified (2026-07-20)** on the JPetStore pod. Coverage **17.7% → 22.1%** (1126 → 1409 of 6368),
+still climbing when the run ended. The session mechanism was confirmed directly rather than
+inferred, with a control:
+
+```
+listOrders WITH session:  200
+listOrders WITHOUT:       500      # the NPE from DD-016
+```
+
+Distinct app-code crash sites went 6 → 7; the new one, `CatalogActionBean.viewItem:181`, is
+reachable only via structurally-generated ids (`EST-####` that parse but don't exist) — exactly
+the case the corpus/structure split was meant to buy.
+
+**Rejected.** One cookie jar for the whole run (would explore only the authenticated half);
+logging in before every request (hides all unauthenticated-path bugs, which is where DD-016's
+findings came from); a full cookie-policy/redirect stack (`JSESSIONID` plus follow-redirects is
+all this needs, and it stays dependency-free).
+
+---
+
+## DD-019: A crash finding must carry the APP's stack, not the harness's (2026-07-20)
+
+**Context.** Reviewing crash findings in the dashboard, every single one showed the same stack:
+
+```
+java.lang.RuntimeException: HTTP 500 for /actions/Order.action?listOrders=
+  at runner.coverage.CoverageGuidedRun.request(CoverageGuidedRun.java:228)
+  at runner.coverage.CoverageGuidedRun.main(CoverageGuidedRun.java:147)
+```
+
+That is the driver's own stack. It records *that* a 500 happened and nothing about *why* — the
+actual `NullPointerException at OrderActionBean.listOrders:110` existed only in the container log,
+which had to be read by hand. A crash finding you can't triage from is barely a finding.
+
+**Decision.** On a 5xx the driver captures the response body (capped, only for errors) instead of
+draining it, parses the container's error page for the server-side exception and frames, and
+installs them on the thrown exception via `setStackTrace`. `FuzzIO` then persists the app's
+exception type, message, and stack into the finding, so the dashboard shows a directly triageable
+record. When no stack can be parsed, the message says so explicitly rather than pretending.
+
+**Why the response body.** The container already renders the failure there, so it needs no
+cooperation from the app, no agent change, and works for any servlet app. The alternative — having
+the valve capture the throwable — doesn't work here: Stripes catches the exception in its own
+handler and returns 500, so nothing propagates out to the valve to catch.
+
+**Verified (2026-07-20)**, and testing against the live app found three bugs a code review of the
+parser would not have:
+1. Tomcat emits **two** `<pre>` blocks — the framework wrapper first
+   (`StripesServletException: Unhandled exception in exception handler`), then a **Root Cause**
+   block holding the app's real exception. The first implementation took the first block, i.e. the
+   useless one. Now it prefers the root cause.
+2. Tomcat's error page renders frames **without** the `at ` prefix that a logged stack has. The
+   parser required it and would have extracted **zero frames** on every finding.
+3. `/` is HTML-escaped as `&#47;`, so class paths came back mangled; numeric entities are now
+   decoded.
+
+A finding now reads, e.g., `DataIntegrityViolationException` with the MyBatis/Spring frames — which
+also settled an open triage question, confirming the `newAccount` 500s are duplicate-key violations
+from fuzzed usernames (a validation smell) rather than the null-dereference class of defect.
+
+**Rejected.** Capturing the throwable in the valve (the framework swallows it first); scraping the
+container log (couples the driver to log access and formatting, and breaks entirely across a
+network/pod boundary); reporting only the HTTP status (the status quo — untriageable).
+
+---
+
+## DD-020: Multi-step transactions, run configuration in the dashboard, and what breaks with many target instances (2026-07-20)
+
+**Context.** Three things, all from reviewing real runs.
+
+**1. Multi-step transactions.** Order-placement code needs a *populated cart*, not just a login, so
+no amount of single-request fuzzing reaches it. The grammar gained `@sequence` blocks: indented
+steps run in order against one session. The critical detail is that placeholders **bind once per
+sequence execution**, so `${itemId}` is the same item in `viewItem`, `addItemToCart` and
+`removeItemFromCart`. Re-randomising per step would produce an incoherent transaction that adds
+one item and removes a different one, never reaching the code a real checkout does. Coverage went
+**22.1% → 23.1%** (1409 → 1469 of 6368).
+
+**2. Run configuration is part of the result.** "23% coverage, 7 crash sites" is uninterpretable
+without knowing which grammar, endpoints and thresholds produced it. The driver now pushes its
+configuration once per run — the `closurejvm.*`/`examples.*` parameters plus the grammar source —
+and the dashboard shows it per campaign. Values whose names look like credentials are redacted:
+system properties aren't a deliberate secret store, but this payload is rendered verbatim in a
+browser that may be shared.
+
+**3. Findings cluster across target instances.** Fingerprints are instance-independent by
+construction (invariant kind + route shape, or exception class), so the same defect found on
+several targets merges into one row via `/api/clusters`, with `campaigns` recording where it was
+seen — rather than the same bug appearing as N unrelated clusters in N campaigns.
+
+**Also fixed: the invariants card read 0 while findings were full of heapDelta.** Invariants arrive
+from two different places — the harness measures latency/heap/thread in ITS OWN JVM, while the
+app's agent reports its own through response headers, which land as `Invariant-Remote` findings.
+The card only counted the former. It now shows both, separately labelled ("app" vs "harness"),
+because conflating them is exactly what made the display look broken.
+
+**Known limits with many target instances.** Cross-campaign clustering solves the
+*one-driver-per-pod* topology. The *one-driver-behind-a-Service* topology (N replicas, one driver)
+has sharper problems that clustering does not address, and they are not yet fixed:
+
+- **Coverage under-reports.** The JaCoCo tcpserver connection lands on ONE pod while requests
+  load-balance across all N, so the coverage figure reflects roughly 1/N of what was actually
+  exercised. Fixing it means polling every replica and merging `ExecutionDataStore`s (JaCoCo
+  supports merging) rather than talking to a single address.
+- **Sessions break.** `JSESSIONID` is pinned to the pod that created it, but a round-robin Service
+  will route the next step elsewhere, so multi-step sequences silently lose their session. Needs
+  `sessionAffinity: ClientIP` on the Service (or per-pod addressing).
+- **No per-instance attribution.** A finding records the route and the app's stack but not *which*
+  replica served it, so "one sick pod" is indistinguishable from "systemic". The cheap fix is for
+  the valve to stamp its pod identity (`HOSTNAME`) into a response header the driver already reads.
+
+**Rejected.** Merging findings across campaigns by mutating what each driver saves (clustering is
+a read-path concern — DD-014); making a sequence abort on a failing step (later steps may still
+reach code, and stopping early hides it); pushing configuration every interval (it is immutable
+for a run).
+
+---
+
+## DD-021: The harness's own logic gets unit tests (2026-07-20)
+
+**Context.** v0.10 added ~1,800 lines of pure logic — grammar parsing and generation, findings
+clustering, JSON scanning, server-error parsing — with **zero** tests. CI was green only because
+nothing exercised any of it. Four real bugs were found in that code during development, every one
+by hand: a regex that stack-overflowed on realistic input, an error-page parser reading the wrong
+`<pre>` block, a frame parser requiring an `at ` prefix Tomcat doesn't emit, and a kind extractor
+that only understood one of the two saved-finding formats. None of those were caught by anything
+repeatable, and `agents.md` already says a feature is done when it has a minimal test. A tool whose
+job is finding other people's bugs cannot credibly ship untested parsing logic.
+
+**Decision.** Unit-test the pure logic that decides what the tool can find and how it reports it:
+`JsonScan`, `FindingsClusterer`, `RequestGrammar`. Prefer regression tests tied to bugs that
+actually happened over breadth-for-coverage's sake, and state in each test *why* it exists so the
+next person doesn't delete it as redundant. Integration behaviour (agent, invariants, leak
+detection, reset) keeps its existing forked-process tests.
+
+**Notable cases pinned.** The `JsonScan` stack-overflow guard uses a 20k-frame value, because the
+original failure needed only length, not exotic input. The clustering tests encode both saved
+formats and the crash route-fallback. The grammar tests pin the sequence invariant — a placeholder
+binds **once per sequence execution** — since re-randomising per step yields a transaction that
+adds one cart item and removes a different one, which still *looks* fine in a dashboard while
+never reaching checkout code.
+
+**Verified by mutation, not just by passing.** Sequence binding was deliberately broken
+(`computeIfAbsent` → bind per step); `placeholdersBindOncePerSequenceExecution` failed and nothing
+else did. A test that passes but wouldn't fail on the bug it names is worse than no test, so the
+guard was checked rather than assumed. 41 tests total, 31 new.
+
+**Rejected.** Chasing a coverage percentage on the harness itself (the goal is regression safety on
+logic that has already broken, not a number); unit-testing the HTTP/dashboard plumbing (its value
+is in real integration, which the live runs against JPetStore already exercise); deleting the
+now-redundant manual verification steps from the docs (they document how the bugs were found).
+
+---
+
+## DD-022: The dashboard is loopback-only, guarded, and never CORS-open (2026-07-20)
+
+**Context.** PR review found the dashboard bound `new InetSocketAddress(port)` — all interfaces —
+with `Access-Control-Allow-Origin: *` on every response and no authentication, while exposing
+`POST /api/analyze/{id}`, which spends the operator's Claude credit. A cross-origin POST with no
+custom headers isn't preflighted, so any page the operator had open could trigger billed calls in
+a loop, and anyone on the same network could do so directly.
+
+**Decision.** Three layers, cheapest first:
+1. **Bind `127.0.0.1` by default** (`closurejvm.dashboard.bind` to override). This is a local
+   operator tool; network exposure should be opt-in, not the default.
+2. **No CORS headers at all.** The UI is same-origin, so the wildcard bought nothing and only
+   enabled cross-origin reads.
+3. **Require an `X-ClosureJVM-Dashboard` header** on every state-changing or billed endpoint
+   (`/ingest/*`, `/api/analyze/*`). A cross-origin "simple" request cannot set a custom header
+   without a preflight, and with no CORS headers the preflight fails — so this closes the drive-by
+   CSRF path without any token distribution. An optional `closurejvm.dashboard.token` adds a shared
+   secret; when the bind is non-loopback and no token is set, `/api/analyze` refuses outright and
+   the server says so at startup.
+
+**Why a header rather than only a token.** A token has to be handed to both the driver and the
+browser, which invites embedding it in the page. The header alone defeats the CSRF vector because
+of how the browser's preflight rules work; the token is then optional hardening for the deliberate
+non-loopback case rather than load-bearing for the default one.
+
+**Verified (2026-07-20).** `ss` confirms the listener is `127.0.0.1:7070` only; `/ingest/status`
+and `/api/analyze` both return `missing X-ClosureJVM-Dashboard header` without it and succeed with
+it; no `Access-Control-*` header appears on any response.
+
+**Also fixed from the same review.** The kind deploy targeted whatever kubectl context happened to
+be current (`kind create cluster` sets it, and is skipped on re-run) — every `kubectl` call is now
+pinned to `--context kind-$CLUSTER`, since the failure mode was deploying into a shared cluster.
+The JaCoCo tcpserver was published as a NodePort even though its protocol is unauthenticated and
+permits *resetting* execution data; the Service is now `ClusterIP`, matching the docs that already
+said to use `port-forward`. A fixed `:latest` tag made re-runs a silent no-op that reported success
+while the pod kept the old image, so the tag is now unique per build and the deploy does an
+explicit `set image`. And `COVERAGE_INCLUDES` defaulted to `*`, directly contradicting the comment
+above it and instrumenting Tomcat and MyBatis — inflating the coverage denominator and adding
+enough overhead to fake latency violations.
+
+**Rejected.** Leaving the bind wide with a warning (the default should be safe, not documented as
+unsafe); putting a token in the served HTML (turns a shared secret into a page-readable one);
+disabling `/api/analyze` entirely (the feature is wanted, it just needed a trust boundary).

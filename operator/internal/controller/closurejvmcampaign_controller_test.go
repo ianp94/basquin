@@ -165,6 +165,9 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 		Expect(jto).To(ContainSubstring("-Dclosurejvm.summary.out=/dev/termination-log"))
 		Expect(tmpl.Containers[0].Args).To(Equal([]string{"500"}))
 		Expect(job.OwnerReferences).To(ContainElement(HaveField("Name", campaignName)))
+		// Driver pods carry component=driver so the rerun cleanup can target them without hitting the
+		// dashboard pod (which shares the closurejvm.dev/campaign label).
+		Expect(job.Spec.Template.Labels).To(HaveKeyWithValue("app.kubernetes.io/component", "driver"))
 
 		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
 		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())

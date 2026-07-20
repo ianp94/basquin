@@ -186,9 +186,11 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 		if derr := r.Delete(ctx, &job, &client.DeleteOptions{PropagationPolicy: &policy}); derr != nil && !apierrors.IsNotFound(derr) {
 			return ctrl.Result{}, derr
 		}
-		// Drop the stale run's summary pods so the recreated run's status isn't read from the old pod.
+		// Drop the stale run's DRIVER pods so the recreated run's status isn't read from the old pod.
+		// Scope to component=driver: the dashboard pod shares the closurejvm.dev/campaign label, and it
+		// must survive a rerun (only the driver run restarts).
 		_ = r.DeleteAllOf(ctx, &corev1.Pod{}, client.InNamespace(campaign.Namespace),
-			client.MatchingLabels{"closurejvm.dev/campaign": campaign.Name})
+			client.MatchingLabels{"closurejvm.dev/campaign": campaign.Name, "app.kubernetes.io/component": "driver"})
 		campaign.Status.Phase = closurejvmv1alpha1.CampaignProvisioning
 		if uerr := r.Status().Update(ctx, &campaign); uerr != nil {
 			return ctrl.Result{}, uerr
@@ -394,6 +396,13 @@ const specHashAnnotation = "closurejvm.dev/spec-hash"
 // computed from the spec as stored — the in-memory GrammarKey resolution isn't persisted, so both the
 // create-time stamp and the later comparison hash the same value. Target-driven inputs (app image,
 // coverage endpoint) are deliberately excluded: those changing is handled as TargetGone, not a rerun.
+//
+// This hashes the Driver/Dashboard structs whole (today every field of both feeds the Job, so that
+// equals an allowlist). Note for future edits: ANY new field added to CampaignDriverSpec or
+// CampaignDashboardSpec joins this hash and will trigger a rerun on edit even if buildDriverJob never
+// reads it — exclude display-only/non-run-defining fields here if that's not desired.
+// Upgrade note: driver Jobs created before this annotation existed hash-mismatch on first reconcile,
+// so every in-flight Running campaign restarts once on rollout to this version.
 func driverSpecHash(c *closurejvmv1alpha1.ClosureJVMCampaign) string {
 	payload := struct {
 		BaseURL   string

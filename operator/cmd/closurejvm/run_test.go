@@ -16,7 +16,67 @@ limitations under the License.
 
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestReadCorpusDir(t *testing.T) {
+	dir := t.TempDir()
+	// top-level route-seed files + a values/ subdir + an unrelated nested dir (must be skipped).
+	mustWrite(t, filepath.Join(dir, "catalog_item.txt"), "/actions/Catalog.action\n")
+	mustWrite(t, filepath.Join(dir, "cart_add.txt"), "/actions/Cart.action\n")
+	if err := os.Mkdir(filepath.Join(dir, "values"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(dir, "values", "categoryId.txt"), "FISH\nDOGS\n")
+	if err := os.Mkdir(filepath.Join(dir, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(dir, "nested", "ignored.txt"), "x\n")
+
+	data, err := readCorpusDir(dir)
+	if err != nil {
+		t.Fatalf("readCorpusDir: %v", err)
+	}
+	for _, k := range []string{"catalog_item.txt", "cart_add.txt", "categoryId.txt"} {
+		if _, ok := data[k]; !ok {
+			t.Errorf("missing key %q", k)
+		}
+	}
+	if _, ok := data["ignored.txt"]; ok {
+		t.Error("nested subdir files must not be included (non-recursive)")
+	}
+	if data["categoryId.txt"] != "FISH\nDOGS\n" {
+		t.Errorf("values file content = %q", data["categoryId.txt"])
+	}
+}
+
+func TestReadCorpusDirBasenameCollision(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "dup.txt"), "top\n")
+	if err := os.Mkdir(filepath.Join(dir, "values"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(dir, "values", "dup.txt"), "nested\n")
+	if _, err := readCorpusDir(dir); err == nil {
+		t.Error("expected a basename-collision error")
+	}
+}
+
+func TestReadCorpusDirMissing(t *testing.T) {
+	if _, err := readCorpusDir(filepath.Join(t.TempDir(), "nope")); err == nil {
+		t.Error("expected an error for a missing --corpus directory")
+	}
+}
+
+func mustWrite(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestBuildCampaignIterations(t *testing.T) {
 	cp := buildCampaign(runOpts{

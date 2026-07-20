@@ -129,8 +129,12 @@ func runRun(args []string) error {
 	ctx := context.Background()
 
 	// Create the campaign FIRST so the grammar/corpus ConfigMaps can be owner-referenced to it (GC on
-	// `kubectl delete campaign`). The reconciler gates on the ConfigMaps existing before it launches
-	// the driver Job, so the brief window where the campaign exists without them just requeues.
+	// `kubectl delete campaign`; the owner UID only exists once the campaign is created). If the
+	// reconciler launches the driver Job in the brief window before the ConfigMaps land, that's safe by
+	// kubelet mount-retry semantics — a pod referencing a not-yet-existent ConfigMap volume stays
+	// Pending/FailedMount and is retried automatically; it never terminates, so it can't count toward
+	// the Job's backoff or push the campaign to a terminal Failed. (review #30: this is the actual
+	// safety mechanism — there is no app-level "ConfigMap exists" gate in the reconciler.)
 	grammarCM, grammarKey := "", ""
 	corpusCM := ""
 	if o.grammarFile != "" {
@@ -200,6 +204,24 @@ func createConfigMapFromFile(ctx context.Context, c client.Client, name, ns, pat
 // in its values/ subdir (the corpus layout — route-seed files at top level, value files under values/),
 // mirroring `kubectl create configmap --from-file=dir/ --from-file=dir/values/`. Returns the file count.
 func createConfigMapFromDir(ctx context.Context, c client.Client, name, ns, dir string, owner metav1.OwnerReference) (int, error) {
+	data, err := readCorpusDir(dir)
+	if err != nil {
+		return 0, err
+	}
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, OwnerReferences: []metav1.OwnerReference{owner}},
+		Data:       data,
+	}
+	return len(data), createOrReplaceConfigMap(ctx, c, cm)
+}
+
+// readCorpusDir reads the corpus into a basename-keyed map: files directly in dir AND in its values/
+// subdir (route-seed files at top level, value files under values/), non-recursive, mirroring
+// `kubectl create configmap --from-file=dir/ --from-file=dir/values/`. Pure (no cluster) for testing.
+func readCorpusDir(dir string) (map[string]string, error) {
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		return nil, fmt.Errorf("--corpus %q is not a readable directory", dir)
+	}
 	data := map[string]string{}
 	for _, d := range []string{dir, filepath.Join(dir, "values")} {
 		entries, err := os.ReadDir(d)
@@ -207,7 +229,7 @@ func createConfigMapFromDir(ctx context.Context, c client.Client, name, ns, dir 
 			if os.IsNotExist(err) {
 				continue // no values/ subdir is fine
 			}
-			return 0, err
+			return nil, err
 		}
 		for _, e := range entries {
 			if e.IsDir() {
@@ -215,22 +237,18 @@ func createConfigMapFromDir(ctx context.Context, c client.Client, name, ns, dir 
 			}
 			b, err := os.ReadFile(filepath.Join(d, e.Name()))
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
 			if _, dup := data[e.Name()]; dup {
-				return 0, fmt.Errorf("corpus basename %q appears in both %s and its values/ subdir; basenames must be unique", e.Name(), dir)
+				return nil, fmt.Errorf("corpus basename %q appears in both %s and its values/ subdir; basenames must be unique", e.Name(), dir)
 			}
 			data[e.Name()] = string(b)
 		}
 	}
 	if len(data) == 0 {
-		return 0, fmt.Errorf("no files found under %s", dir)
+		return nil, fmt.Errorf("no files found under %s", dir)
 	}
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, OwnerReferences: []metav1.OwnerReference{owner}},
-		Data:       data,
-	}
-	return len(data), createOrReplaceConfigMap(ctx, c, cm)
+	return data, nil
 }
 
 // createOrReplaceConfigMap creates the ConfigMap, or replaces an existing one's data (idempotent).
@@ -244,6 +262,10 @@ func createOrReplaceConfigMap(ctx context.Context, c client.Client, cm *corev1.C
 		return err
 	default:
 		existing.Data = cm.Data
+		// Re-own it: replacing a stale/pre-existing same-named ConfigMap must re-point it at THIS
+		// campaign, or it keeps its old (possibly deleted) owner and gets orphan-GC'd out from under
+		// the driver Job (review #30).
+		existing.OwnerReferences = cm.OwnerReferences
 		return c.Update(ctx, &existing)
 	}
 }

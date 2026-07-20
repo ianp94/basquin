@@ -73,6 +73,7 @@ Notes:
 ## Docs
 
 - Architecture & rationale: `docs/ARCHITECTURE.md`
+- Design decisions & rejected alternatives: `docs/DESIGN-DECISIONS.md`
 - Maintainer guide: `AGENTS.md`
 
 ## Use With Your App (Generic Runner)

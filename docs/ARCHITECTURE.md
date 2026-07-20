@@ -2,6 +2,9 @@
 
 This document explains the “why” and “how” behind ClosureJVM. The root README stays short and points here for details.
 
+Significant design choices (and the alternatives we rejected) are logged in
+[DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) — consult it before revisiting settled questions.
+
 ## Why
 
 Modern JVM web apps often fail due to availability issues rather than crashes:

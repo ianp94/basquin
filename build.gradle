@@ -271,6 +271,19 @@ tasks.register('runHttpDriveCoverage', JavaExec) {
     args System.getProperty('drive.iterations', '300'), 'examples.targets.HttpRouteDriveTarget'
 }
 
+// Coverage-GUIDED exploration: mutate HTTP inputs, keep the ones that reach new code (the
+// coverage % climbs). Requires the target's JaCoCo agent + the app's class files.
+tasks.register('runCoverageGuided', JavaExec) {
+    group = 'application'
+    description = 'Coverage-guided HTTP exploration: mutate inputs toward new coverage of the app under test.'
+    classpath = sourceSets.coverage.runtimeClasspath
+    mainClass = 'runner.coverage.CoverageGuidedRun'
+    jvmArgs '-Dclosurejvm.status=true'
+    systemProperties System.getProperties().findAll { k, v ->
+        k.toString().startsWith('examples.http.') || k.toString().startsWith('closurejvm.') }
+    args System.getProperty('drive.iterations', '600')
+}
+
 // JQF fuzzing (v0.3 preview) — only resolves when explicitly run
 tasks.register('runFuzzJQF', JavaExec) {
     group = 'verification'

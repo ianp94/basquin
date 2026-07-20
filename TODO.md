@@ -256,8 +256,11 @@ and the dashboard) — decide once the boundaries are clear.
   client `JacocoCoverageProvider` dumps + analyzes against the app classes; `CoverageDriver`
   polls it into the panel. Verified: real coverage % of JPetStore (`org.mybatis.jpetstore.*`)
   in the live panel. `runHttpDriveCoverage` task + `docker-compose.coverage.yml`.
-- [ ] **Coverage-*guided*** next: use the coverage delta as a signal to mutate HTTP request
-  inputs toward new edges (the measurement above is the foundation it needs).
+- [x] **Coverage-*guided*** exploration (`CoverageGuidedRun`, task `runCoverageGuided`): mutates
+  HTTP inputs (route + params grammar), samples coverage after each request, and keeps the inputs
+  that reach new code. Verified against the kind JPetStore pod: coverage climbed 4.4% -> 8.6%
+  (281 -> 549 edges) vs the flat round-robin driver, then plateaued (GET-only reach).
+  - [ ] Deeper reach: sessions/POST (cart checkout, account, order) to get past the GET plateau.
 - [ ] Optional in-process coverage %: a JaCoCo provider for the local JQF targets, so the panel
   shows a real percentage without the server round-trip.
 - [x] **Kubernetes deploy**: `kind` demo environment (`deploy/k8s/`): JPetStore as a pod with

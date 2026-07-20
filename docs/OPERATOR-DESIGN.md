@@ -236,6 +236,9 @@ privilege is bounded and inspectable, versus "mutate any pod at admission time."
   DD-023 driver flag end to end across replicas.
 - **P4 — docs + demo.** Replace the bake-it-into-the-image path in `deploy/k8s` with an
   apply-a-CR path; USAGE + ARCHITECTURE updates; record **DD-024**.
+- **P5 — orchestration (`ClosureJVMCampaign`).** The second CRD that fires off a whole test —
+  launches the runner + dashboard against an instrumented target and aggregates status. Designed in
+  full (likely **DD-025**) then implemented. See §10.
 
 ## 9. Rejected alternatives (summary)
 
@@ -251,3 +254,55 @@ privilege is bounded and inspectable, versus "mutate any pod at admission time."
   welds the control plane to the JVM/Gradle world exactly when the intent is for it to outlive that
   scope (multi-runtime, §7.1). The operator only names an image and writes flags, so it shares no
   code with the agents anyway — the "one language" benefit is smaller than it looks.
+
+---
+
+## 10. Operator-orchestrated test — `ClosureJVMCampaign` (P5)
+
+**Status (2026-07-20):** direction and CRD shape **confirmed** — two CRDs, campaign built as **P5**
+after the P1–P4 injection work (a campaign needs a working instrumented target to drive). Full CRD
+schema + reconcile design still to be written before implementation (likely its own **DD-025**).
+
+**The ask.** The operator shouldn't only *instrument* a target — it should orchestrate the **whole
+test**: bring up the target's instrumentation, launch the **runner** (the coverage-guided HTTP
+driver) and the **dashboard** (aggregator), wire them together, and fire the run off from a single
+custom resource. "Create a test, everything starts."
+
+**Confirmed shape: two CRDs — a `ClosureJVMCampaign` distinct from `ClosureJVMTarget`.**
+
+- `ClosureJVMTarget` (P1–P4) stays the *instrument-a-Deployment* primitive: long-lived, "this app
+  carries the agents." A target can exist with no test running.
+- `ClosureJVMCampaign` is the *test* unit — ephemeral, bounded. It references a target (or a target
+  selector) and specifies the driver (grammar, corpus, duration, invariants, coverage endpoints) and
+  the dashboard. This is the "test CRD that fires everything off."
+
+Why two CRDs rather than folding it into `ClosureJVMTarget`: separation of lifecycle. A target is a
+Deployment-like steady state; a campaign is a Job-like bounded run. One target may be driven by many
+campaigns over time (a nightly run, an ad-hoc repro), and a campaign should be deletable without
+tearing down the instrumentation. Collapsing them would force "instrumented" and "currently being
+tested" to be the same state, which they aren't.
+
+**What the campaign reconciler does** (sketch, to be fleshed out):
+1. Ensure the referenced target is instrumented (reuse the `ClosureJVMTarget` machinery, or require
+   an already-`Injected` target).
+2. Create/ensure the **dashboard** (aggregator `Deployment` + `Service`) for this campaign.
+3. Create the **driver** as a `Job` — the coverage-guided runner — pointed at the target `Service`,
+   the JaCoCo endpoints (the DD-023 headless Service), and the dashboard push endpoint.
+4. Aggregate `status`: running/complete, finds, coverage %, dashboard URL.
+5. Lifecycle: owner references + a finalizer tear the driver `Job` and dashboard down when the
+   campaign is deleted; whether campaign deletion also reverts the target's instrumentation is a
+   sub-decision (probably not, since targets can be shared).
+
+**New build components this pulls in** (tracked in TODO Backlog → *Operator orchestration*): the
+**runner** and **dashboard** need to ship as images the operator can launch, alongside the
+`closurejvm/agents` image the injection path already needs.
+
+**This absorbs a previously-open question.** TODO's "launch/stop campaigns from the dashboard —
+probably belongs with the operator" is answered here: the *operator* owns scheduling (it already has
+the RBAC and the reconcile model for it), and the dashboard stays read-only (DD-013). The control
+channel a dashboard-driven launcher would have needed — effectively RCE on the dashboard host — never
+gets built; the operator's existing, namespaced authority does the job instead.
+
+**Open sub-decisions before building:** one campaign → one target or many; does the campaign embed
+the driver config or reference a ConfigMap; how run results/corpora are persisted beyond the Job's
+lifetime; and whether this warrants its own DD (likely yes, as `DD-025`).

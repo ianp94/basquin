@@ -46,7 +46,6 @@ Goal: Turn findings into enforceable guarantees.
 ### Tasks
 1) Invariant polish
    - [x] Hook invariant checks at iteration end (after metrics snapshot)
-   - [ ] Optionally include invariant summary line in output with structured key=val pairs
    - [x] Add heap/thread invariant tests similar to latency test
 
 2) Reset strategy: Hard reset fallback
@@ -56,7 +55,6 @@ Goal: Turn findings into enforceable guarantees.
        - `-Dclosurejvm.reset=classloader` (enable)
        - `-Dclosurejvm.reset.onFailure=true` (reset after hard invariant/leak)
        - `-Dclosurejvm.reset.maxResets=3` (cap)
-   - [ ] Minimal smoke test that induces a failure, triggers reset, and runs another iteration
 
 3) Docs & DX
    - [x] README: document invariant flags and reset flags/behavior
@@ -83,7 +81,6 @@ Goal: Add coverage-guided exploration without destabilizing the harness.
    - [x] Store inputs that trigger crash (exceptions) and invariants (soft mode) in per-target results dirs
    - [x] Record triage metadata: classification, timestamp, violation details, stacks (current/all; latency sampled execution stack)
    - [x] Provide simple corpus layout with example seeds (calculator/http/json/latency/heap/tomcat)
-   - [ ] Optional: unify coverage-interesting inputs saved by JQF guidance with harness triage format (currently saved in `-Djqf.ei.DIRECTORY`)
 
 3) Minimization
    - [x] Implement ddmin-like reducer (`runner.MinimizeRunner`)
@@ -124,15 +121,8 @@ Goal: Deliver a realistic web app slice that surfaces both crashes and availabil
 - [x] Minimal `/db` route with knob to induce latency (`SELECT SLEEP()` via tiny pool).
 - [x] Status servlet and simple UI page with recent invariant details and short stack snippet.
 
-Open items for Phase 2 hardening
-- [ ] Add Compose troubleshooting (v1 vs v2) to README (install and `COMPOSE_API_VERSION` fallback).
-- [ ] Smoke test for Docker path (blip a latency invariant; assert headers and status JSON fields).
-
-### Phase 3 — Enrichment
-- [ ] Pool/queue sampling (servlet thread pool size, executor queues) and preset invariants.
-- [ ] Triage bundles: input + route + classification + stack/thread dump + metrics.
-- [ ] Minimization flow documented for Tomcat inputs.
-- [ ] Optionally pull server-side stack snippet into Docker fuzz triage metadata.
+> Phase 2 hardening + Phase 3 enrichment open items are consolidated in the **Backlog** section
+> below (Docs & DX, Signal & triage quality).
 
 ### Non-goals (keep scope tight)
 - No coverage integration yet (v0.3)
@@ -157,12 +147,9 @@ Goal: Make the measurement layer trustworthy and cheap enough to point at real a
 - [x] JDK 17 + 21 CI matrix; bytecode targets 17
 
 ### Concurrency decision (A now, C later — decided)
-- [ ] Option A: serialize iterations in the WAR IterationFilter (global lock) + doc note that the harness measures iteration cleanliness, not throughput under load
-- [ ] Option C (later): explicit IterationContext API (`ctx = Agent.begin(); Agent.end(ctx)`) as the v0.6 refactor
+- [x] Option A: serialize iterations in the WAR IterationFilter — DONE and **still the live mechanism by design**. DD-010 deliberately KEPT the DD-005 serialization lock (`IterationFilter`'s `ReentrantLock ITERATION_LOCK`, "iterations are SERIALIZED"), because heap/thread deltas are process-global and would lie under concurrent requests. Option C did not remove it.
+- [x] Option C: explicit IterationContext API (`ctx = Agent.begin(); Agent.end(ctx)`) — done in v0.6 (DD-010); made the code concurrency-safe *without* dropping Option A's lock
 - Rejected: ThreadLocal-only contexts (per-request heap/thread deltas would silently lie under concurrency); external message bus for metrics (capture cost is in-process; bus is for a future multi-node fleet, not single-harness throughput)
-
-### Triage decoupling
-- [ ] In-process bounded handoff queue (ArrayBlockingQueue + one consumer thread) so triage I/O (bundles, stacks, saved inputs) never stalls the iteration loop; design the enqueue payload alongside Option C's context object
 
 ### Real-app targets (after the above)
 - [x] Injection mechanism decided + built: Tomcat valve (DD-009), verified loading in real
@@ -171,10 +158,10 @@ Goal: Make the measurement layer trustworthy and cheap enough to point at real a
 - [x] JPetStore (MyBatis) live run DONE (2026-07-19): javax.servlet, deployed on Tomcat 9 with
       the namespace-free valve; server-side latency (up to 531ms cold) + heap (up to 44MB/req)
       invariants captured in the unmodified app. See docs/THIRD-PARTY-APPS.md.
-- [ ] HTTP driver target + seed corpus to explore JPetStore routes automatically (vs manual curls)
-- [ ] WebGoat / OWASP Benchmark for guaranteed-findings calibration of triage output
-- [ ] JSPWiki as the "real Apache project" target (markup parsing = latency-pathology hunting ground)
-- [ ] Stretch: XWiki or OpenMRS once pool/queue sampling (Phase 3) lands
+- [x] HTTP driver + seed corpus to explore JPetStore routes automatically — done in v0.10
+      (grammar/corpus-driven coverage-guided exploration).
+
+> More calibration targets (WebGoat/OWASP Benchmark, JSPWiki, XWiki/OpenMRS) are in the **Backlog**.
 
 ---
 
@@ -189,10 +176,9 @@ concurrency correctness stops depending on a serialization lock.
   Contract test in IterationContextTest; full suite + native leak-set verified green. (DD-010)
 - [x] Documented the boundary: latency/leak-set scope cleanly per context; heap/thread deltas
   remain process-global and are only trustworthy under serialized or single-flight runs
-- [ ] Triage handoff payload (DD-006) carries the context snapshot (result fields now exposed
-  on IterationContext; wiring the payload is the remaining step)
-- [ ] Optional: IterationFilter/valve move to explicit begin()/end(ctx) (still serialized;
-  the ThreadLocal wrapper already makes them per-thread correct, so this is cleanup only)
+
+> Remaining v0.6 threads (triage handoff payload carrying the context snapshot; valve/filter moving
+> to explicit begin/end(ctx)) are in the **Backlog** under Signal & triage quality.
 
 ---
 
@@ -209,7 +195,6 @@ Goal: Make a running harness legible at a glance, AFL-style.
 - [x] HTTP driver target (`examples.targets.HttpRouteDriveTarget`, task `runHttpDrive`):
   client-side latency + 5xx-as-crash, harvests server-side `X-ClosureJVM-Invariant-*` headers.
 - [x] Animated demo (`docs/demo.svg`) from real frames, embedded in the rewritten README.
-- [ ] Optional: periodic machine-readable status line (JSON) for tooling
 
 ---
 
@@ -248,10 +233,9 @@ Goal: Run ClosureJVM against apps in a cluster, and make exploration coverage-gu
 app's own execution over HTTP. Some of this may live in a **separate repo** (the operator/agent
 and the dashboard) — decide once the boundaries are clear.
 
-- [ ] **Coverage % in the exploration panel**: the UI already has the row + `StatusReporter
-  .recordCoverage(covered, total)` plumbing (v0.9); v0.10 supplies the source. A true "% of code
-  explored" needs a covered/total denominator, which requires instrumenting the code under test —
-  hence it belongs with the coverage agent below, not the client-only JQF path.
+- [x] **Coverage % in the exploration panel**: done — the JaCoCo coverage source (below, DD-012)
+  supplies the covered/total denominator and the panel shows a real "% of code explored", extended
+  to the fleet by DD-023.
 - [x] **Coverage signal over HTTP** (DD-012): JaCoCo agent (tcpserver) in the app JVM;
   client `JacocoCoverageProvider` dumps + analyzes against the app classes; `CoverageDriver`
   polls it into the panel. Verified: real coverage % of JPetStore (`org.mybatis.jpetstore.*`)
@@ -285,7 +269,8 @@ and the dashboard) — decide once the boundaries are clear.
     several targets into one row with campaign attribution.
   - [x] Fixed: the invariants card read 0 while findings were full of heapDelta — app-reported and
     harness-measured invariants are now counted and labelled separately.
-  - [ ] POST support with form bodies — several handlers are POST-only in real usage.
+
+> Open exploration threads (POST/form-body support) are in the **Backlog** (Exploration & coverage).
 
 ### Multi-instance targets (one driver, N replicas behind a Service) — DD-020 known limits
 - [x] **Coverage merge across replicas.** JaCoCo's tcpserver connection lands on one pod while
@@ -294,25 +279,21 @@ and the dashboard) — decide once the boundaries are clear.
   comma-separated endpoint list; a headless Service name expands to all pod IPs via
   `getAllByName`; every responder OR-merges into one store for true union coverage; the panel
   shows `[N/M pods]` when a replica is missing.)*
-- [ ] **Session affinity.** `JSESSIONID` is pinned to one pod; a round-robin Service breaks
-  multi-step sequences. Needs `sessionAffinity: ClientIP` or per-pod addressing.
-- [ ] **Per-instance attribution.** Findings don't record which replica served the request, so
-  "one sick pod" looks the same as "systemic". Cheap fix: the valve stamps `HOSTNAME` into a
-  response header the driver already parses.
+
+> Remaining multi-instance limits (session affinity for sequences; per-instance finding attribution)
+> are in the **Backlog** (Exploration & coverage).
 
 ### Dashboard as a control plane (needs a decision before building)
 Currently the dashboard is strictly read-only: drivers push, it displays (DD-013). Making it
 *launch runs* or *reject corpus entries* reverses that and is a real architectural fork, not just
 a feature — it would need a control channel back to drivers, and a dashboard that can start
-processes is effectively remote code execution on whatever it runs on.
-- [ ] Launch/stop campaigns from the dashboard — decide the trust model first (who can reach it,
-  what it's allowed to run, auth). Probably belongs with the operator, which already needs
-  scheduling authority, rather than bolted onto the read-only viewer.
-- [ ] Reject/mute a cluster. A dashboard-local "dismiss" (hides it from triage, changes nothing in
-  the driver) needs no control channel and is safe to build now. Truly removing an entry from a
-  driver's corpus does need one — and conflicts with DD-006/DD-014's "never drop a finding".
-- [ ] Optional in-process coverage %: a JaCoCo provider for the local JQF targets, so the panel
-  shows a real percentage without the server round-trip.
+processes is effectively remote code execution on whatever it runs on. **Update (2026-07-20):** the
+"launch runs" half is being taken up by the **operator-orchestrated test** direction — the operator
+(not the read-only dashboard) owns scheduling. See the Backlog's *Operator orchestration* group.
+
+> Control-plane threads (launch/stop campaigns → now operator orchestration; dashboard-local
+> dismiss/mute of a cluster; optional in-process JQF coverage %) are in the **Backlog**.
+
 - [x] **Kubernetes deploy**: `kind` demo environment (`deploy/k8s/`): JPetStore as a pod with
   valve + JaCoCo + ClosureJVM agent baked into a self-contained image, ClusterIP Service,
   one-command `up.sh`. Verified in-cluster: valve invariant headers, 96 server-side invariant
@@ -346,9 +327,6 @@ processes is effectively remote code execution on whatever it runs on.
   cards, coverage bar, and findings table (route/detail/classification/time). Verified live: two
   independent processes, dashboard showed the driver's real numbers via push. Task: `runDashboard`.
   This IS the aggregation point the auto-injection operator (below) would point every pod at.
-  - [ ] Persistence/eviction beyond in-memory (fine for the demo scale; a real deployment would
-    want a TTL or a small store).
-  - [ ] Full crash stack / sampled stack drill-down in the findings view (currently a text excerpt).
   - [x] **Noise reduction / clustering (DD-014)**: findings are grouped at read time by
     fingerprint (classification + invariant kind + route shape, or crash + exception class) with
     count / distinct-routes / magnitude-range / last-seen. Nothing is dropped at save time — the
@@ -357,8 +335,69 @@ processes is effectively remote code execution on whatever it runs on.
     "Analyze with Claude" button; prompts from the *clustered* summary, key server-side only
     (`ANTHROPIC_API_KEY`), explicit-click only, never on the auto-refresh. Strictly advisory —
     it explains clusters, it never decides what counts as a finding.
-    - [ ] Not yet exercised against a live key (verified only that the request is well-formed and
-      the API rejects a bad key cleanly). Needs one real end-to-end call to confirm.
+    - [x] `verifyClaude` smoke check merged (PR #5) — audited the request/parse against the live API
+      shape. One real `[claude-check] OK` run against a key is the last step (**Backlog**, Dashboard).
+
+> Remaining dashboard threads (persistence/TTL; full crash/sampled-stack drill-down; the live-key
+> Claude run) are in the **Backlog** (Dashboard).
+
+---
+
+## Backlog — future work (bubbled forward; nothing here is lost)
+
+Open threads consolidated out of the completed milestones above, plus components surfaced while
+building the operator. Grouped by theme, not ordered by priority. The active, sequenced work is the
+operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0** section below.
+
+### Signal & triage quality
+- [ ] Structured invariant summary line (key=val pairs) in output *(v0.2)*
+- [ ] Reset smoke test: induce a failure, trigger a classloader reset, run another clean iteration *(v0.2)*
+- [ ] Unify JQF coverage-interesting inputs (`-Djqf.ei.DIRECTORY`) with the harness triage format *(v0.3)*
+- [ ] Triage handoff payload carries the IterationContext snapshot (DD-006) — the bounded handoff **queue itself is already built** (`runner/util/TriageSink.java`: `ArrayBlockingQueue` + daemon consumer, `-Dclosurejvm.triage.queueCapacity`, synchronous fallback, shutdown flush; wired into FuzzIO/GenericRunner/CorpusRunner/CoverageGuidedRun/JQFIterationHarness). Result fields are exposed on IterationContext; wiring the context *snapshot* into the enqueued payload is the remaining step *(v0.6)*
+- [ ] IterationFilter/valve move to explicit `begin()/end(ctx)` — cleanup only; still serialized (Option A's lock stays), and the ThreadLocal wrapper already makes them per-thread correct *(v0.6)*
+- [ ] Triage bundles: input + route + classification + stack/thread-dump + metrics in one artifact *(v0.4 P3)*
+- [ ] Pool/queue sampling (servlet thread pool size, executor queues) + preset invariants *(v0.4 P3)*
+- [ ] Minimization flow documented for Tomcat/HTTP inputs *(v0.4 P3)*
+- [ ] Pull the server-side stack snippet into Docker/valve fuzz triage metadata *(v0.4 P3)*
+
+### Exploration & coverage
+- [ ] POST support with form bodies — several JPetStore handlers are POST-only in real usage *(v0.10)*
+- [ ] Session affinity for multi-pod sequences (`sessionAffinity: ClientIP` or per-pod addressing) — a round-robin Service breaks `@sequence` transactions *(v0.10, DD-020 limit)*
+- [ ] Per-instance finding attribution — valve stamps `HOSTNAME` into a response header the driver already parses, so "one sick pod" ≠ "systemic" *(v0.10, DD-020 limit)*
+- [ ] Optional in-process JaCoCo coverage % for the local JQF targets (no HTTP round-trip) *(v0.10)*
+
+### Dashboard
+- [ ] Dismiss/mute a cluster (dashboard-local hide; no control channel, safe to build now — distinct from removing it from a driver's corpus, which conflicts with DD-006/DD-014 "never drop a finding") *(v0.10)*
+- [ ] Persistence / eviction beyond in-memory (TTL or small store) for real deployments *(v0.10)*
+- [ ] Full crash / sampled-stack drill-down in the findings view (currently a text excerpt) *(v0.10)*
+- [ ] Exercise the Claude analysis path against a live key — the `verifyClaude` smoke check is merged (PR #5); one real `[claude-check] OK` run closes it *(v0.10, DD-015)*
+- [ ] Periodic machine-readable status line (JSON) on stdout for external tooling (distinct from the dashboard push) *(v0.7)*
+
+### Operator orchestration — P5 (confirmed 2026-07-20: two CRDs, after P2–P4)
+The operator owns the whole test, not just injection. Two-CRD shape confirmed; built as **P5** after
+the P1–P4 injection work (a campaign needs a working instrumented target). Design in full first
+(likely DD-025). See §10 of [`docs/OPERATOR-DESIGN.md`](OPERATOR-DESIGN.md).
+- [ ] **`ClosureJVMCampaign` (test) CRD** — a second CRD that fires off a complete test run: reference a `ClosureJVMTarget`, spec the driver (grammar/corpus/duration/invariants) and the dashboard, and the operator reconciles it into a running campaign
+- [ ] Operator launches the **driver** as a Job (the coverage-guided runner) pointed at the target Service + JaCoCo endpoints + dashboard push
+- [ ] Operator launches/ensures the **dashboard** (aggregator Deployment + Service) and wires the driver's push at it
+- [ ] Campaign lifecycle: owner refs + finalizer tear the driver/dashboard down on delete; status aggregates run state, finds, and coverage onto the Campaign
+- [ ] Package the **runner** and **dashboard** images the operator launches (alongside the `closurejvm/agents` image below)
+
+### Operator (post-P1 platform work — beyond the P2–P4 checklist)
+- [ ] Build & publish the versioned `closurejvm/agents:<tag>` image the operator's initContainer copies from (P2 depends on it existing)
+- [ ] Operator CI: `go build` / `go vet` / `gofmt` (and envtest when assets are cached) in the pipeline — today only the Java build is in CI
+- [ ] Validating enforcement for `container` required-when-ambiguous (a CRD schema can't express "required only when the pod has >1 container") — pairs with P2
+- [ ] Namespaced metrics security: re-enable a metrics-protection approach that needs no cluster-scoped binding (the kube-rbac-proxy sidecar was dropped in P1 because it requires a `system:auth-delegator` ClusterRoleBinding)
+- [ ] **Multi-runtime profiles** (`runtimeProfile: jvm | node | …`) — the forward reason for Go: the CR/reconcile/inject/revert control plane is runtime-agnostic; a new profile supplies different agents/flags without touching the machinery
+
+### Calibration & real-app targets
+- [ ] WebGoat / OWASP Benchmark for guaranteed-findings calibration of triage output *(v0.5)*
+- [ ] JSPWiki as the "real Apache project" target (markup parsing = latency-pathology hunting ground) *(v0.5)*
+- [ ] Stretch: XWiki or OpenMRS once pool/queue sampling lands *(v0.5)*
+
+### Docs & DX
+- [ ] Compose v1-vs-v2 troubleshooting in the README (install + `COMPOSE_API_VERSION` fallback) *(v0.4)*
+- [ ] Smoke test for the Docker path (blip a latency invariant; assert headers + status JSON fields) *(v0.4)*
 
 ---
 

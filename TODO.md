@@ -252,16 +252,18 @@ and the dashboard) — decide once the boundaries are clear.
   .recordCoverage(covered, total)` plumbing (v0.9); v0.10 supplies the source. A true "% of code
   explored" needs a covered/total denominator, which requires instrumenting the code under test —
   hence it belongs with the coverage agent below, not the client-only JQF path.
-- [ ] **Coverage-guided over HTTP**: a server-side coverage agent inside the app JVM (JaCoCo-style
-  or JVMTI-based) tracks per-request edge coverage and reports it back to the client fuzzer
-  (response header or a `/closurejvm/coverage` endpoint). The client feeds it to
-  `StatusReporter.recordCoverage` and uses it as the guidance signal to mutate HTTP request
-  inputs — coverage feedback from the *app under test*, not the harness JVM. The real
-  "coverage-guided via HTTP requests" vision.
+- [x] **Coverage signal over HTTP** (DD-012): JaCoCo agent (tcpserver) in the app JVM;
+  client `JacocoCoverageProvider` dumps + analyzes against the app classes; `CoverageDriver`
+  polls it into the panel. Verified: real coverage % of JPetStore (`org.mybatis.jpetstore.*`)
+  in the live panel. `runHttpDriveCoverage` task + `docker-compose.coverage.yml`.
+- [ ] **Coverage-*guided*** next: use the coverage delta as a signal to mutate HTTP request
+  inputs toward new edges (the measurement above is the foundation it needs).
 - [ ] Optional in-process coverage %: a JaCoCo provider for the local JQF targets, so the panel
   shows a real percentage without the server round-trip.
-- [ ] **Kubernetes deploy**: Helm chart / manifests to run the harness + target app; the agent
-  and valve injected into the target pod.
+- [ ] **Kubernetes deploy**: a `kind` (Kubernetes-in-Docker) demo environment running the whole
+  stack — JPetStore as a pod (Tomcat 9 + valve + JaCoCo + ClosureJVM agent), a Service, and a
+  driver/harness. Manifests under `deploy/k8s/`, one-command bring-up. Then verify every feature
+  (invariants, valve, coverage %, exploration) works in-cluster.
 - [ ] **Auto-injection agent**: a mutating admission webhook (operator) that injects the
   `-javaagent` + valve into annotated pods automatically — likely its own repo.
 - [ ] **Web UI dashboard**: a browser dashboard over the k8s deployment — campaigns across pods,

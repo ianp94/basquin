@@ -24,13 +24,18 @@ dependencies {
 configurations {
     javalinDemo
     jqf
+    jacocoAgent   // resolves the standalone jacocoagent.jar to inject into the target JVM
 }
+
+def jacocoVersion = '0.8.12'
 
 dependencies {
     javalinDemo 'io.javalin:javalin:5.6.2'
     // JQF dependencies (scoped): only resolved for fuzz tasks
     jqf 'edu.berkeley.cs.jqf:jqf-fuzz:1.9'
     jqf 'edu.berkeley.cs.jqf:jqf-instrument:1.9'
+    // JaCoCo agent (runtime classifier = the standalone -javaagent jar)
+    jacocoAgent "org.jacoco:org.jacoco.agent:${jacocoVersion}:runtime"
 }
 
 // Use current repo layout instead of src/main/java
@@ -38,8 +43,8 @@ sourceSets {
     main {
         java {
             srcDirs = ['agent', 'runner', 'examples']
-            // Exclude JQF harness from main compilation; compiled in separate 'fuzz' source set
-            exclude 'fuzz/**', 'server/**'
+            // Exclude JQF harness + coverage client from main; compiled in separate source sets
+            exclude 'fuzz/**', 'server/**', 'coverage/**'
         }
         resources {
             srcDirs = []
@@ -70,6 +75,15 @@ sourceSets {
         compileClasspath += sourceSets.main.output
         runtimeClasspath += output + compileClasspath
     }
+    // Client-side JaCoCo coverage collection; kept out of the main jar.
+    coverage {
+        java {
+            srcDirs = ['runner/coverage']
+        }
+        resources { srcDirs = [] }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
 }
 
 // Add compile dependencies for the fuzz source set after it is defined
@@ -77,6 +91,7 @@ dependencies {
     fuzzImplementation 'junit:junit:4.13.2'
     fuzzImplementation 'edu.berkeley.cs.jqf:jqf-fuzz:1.9'
     fuzzImplementation 'edu.berkeley.cs.jqf:jqf-instrument:1.9'
+    coverageImplementation "org.jacoco:org.jacoco.core:${jacocoVersion}"
     serverImplementation 'org.apache.tomcat.embed:tomcat-embed-core:10.1.24'
     serverImplementation 'jakarta.servlet:jakarta.servlet-api:6.0.0'
 }
@@ -232,6 +247,28 @@ tasks.register('runHttpDrive', JavaExec) {
     systemProperties System.getProperties().findAll { k, v -> k.toString().startsWith('examples.http.') || k.toString().startsWith('closurejvm.') }
     jvmArgs '-Dclosurejvm.status=true'
     args System.getProperty('drive.iterations', '200'), 'examples.targets.HttpRouteDriveTarget'
+}
+
+// Copy the JaCoCo agent jar to a stable path for mounting into a target container.
+tasks.register('copyJacocoAgent', Copy) {
+    group = 'build'
+    description = 'Copy the JaCoCo agent jar to build/jacoco/jacocoagent.jar (for -javaagent in the target JVM).'
+    from configurations.jacocoAgent
+    into layout.buildDirectory.dir('jacoco')
+    rename '.*', 'jacocoagent.jar'
+}
+
+// Coverage-guided-over-HTTP driver: polls the target's JaCoCo coverage into the live panel,
+// then drives HTTP routes. Point it at a running app that has the JaCoCo agent + valve.
+tasks.register('runHttpDriveCoverage', JavaExec) {
+    group = 'application'
+    description = 'Drive HTTP routes while showing the app-under-test coverage % from its JaCoCo agent.'
+    classpath = sourceSets.coverage.runtimeClasspath
+    mainClass = 'runner.coverage.CoverageDriver'
+    jvmArgs '-Dclosurejvm.status=true'
+    systemProperties System.getProperties().findAll { k, v ->
+        k.toString().startsWith('examples.http.') || k.toString().startsWith('closurejvm.') }
+    args System.getProperty('drive.iterations', '300'), 'examples.targets.HttpRouteDriveTarget'
 }
 
 // JQF fuzzing (v0.3 preview) — only resolves when explicitly run

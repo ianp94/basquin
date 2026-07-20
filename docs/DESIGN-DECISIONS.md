@@ -289,3 +289,36 @@ Use the filter for our demo WAR, the valve for third-party WARs; never both.
 Also: match the servlet namespace — a `jakarta` valve requires Tomcat 10+, a
 `javax` app requires Tomcat 9 and a `javax`-compiled valve. See
 docs/THIRD-PARTY-APPS.md.
+
+---
+
+## DD-012: Coverage over HTTP via a JaCoCo agent in the app JVM, read by the client (2026-07-19)
+
+**Context.** The exploration panel needs a real "% of code explored," and the north-star is
+coverage-*guided* fuzzing of HTTP inputs. The app under test runs in its own JVM (Tomcat), so its
+coverage cannot be seen by the client-side harness/JQF JVM. A percentage also needs a
+covered/total denominator, which only instrumenting the app provides.
+
+**Decision.** Put a **JaCoCo agent in the app JVM** (`-javaagent:jacocoagent.jar=output=tcpserver`)
+alongside the ClosureJVM agent + valve. A client-side `JacocoCoverageProvider` connects to the
+agent's TCP server, dumps execution data (accumulating, no reset), and analyzes it against the
+app's class files with JaCoCo's `Analyzer` to compute covered/total instruction probes.
+`CoverageDriver` polls this on a background thread and feeds it to
+`StatusReporter.recordCoverage`, so the panel shows a real percentage. JaCoCo lives in a scoped
+`coverage` source set so it never enters the main jar.
+
+**Why in the app JVM, pulled by the client.** The coverage signal must come from the code under
+test; measuring the harness JVM is meaningless for guiding HTTP inputs. JaCoCo's tcpserver is the
+standard remote-collection path and needs no app cooperation beyond the `-javaagent` flag the
+valve deployment already uses. Accumulating dumps give campaign-total coverage; the client owns
+the analysis (and the class files), so nothing app-specific ships in the harness.
+
+**Status.** The coverage *signal* works end to end (verified: ~4.4% of JPetStore's `org.mybatis
+.jpetstore.*` from catalog-route traffic). Using coverage as a *guidance* signal — mutating HTTP
+inputs toward new edges — is the next step; this establishes the measurement it needs.
+
+**Rejected.** In-process JaCoCo/JQF coverage of the harness JVM (measures the driver, not the
+app); a custom JVMTI coverage agent (JaCoCo is battle-tested and gives covered/total directly);
+parsing JaCoCo `.exec` files on disk per sample (the tcpserver dump is live and needs no shared
+volume); resetting coverage per request (campaign-total is what a "% explored" means; per-request
+deltas are a later refinement for guidance).

@@ -1,0 +1,1 @@
+/actions/Catalog.action?searchProducts=&keyword=fish

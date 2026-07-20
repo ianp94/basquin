@@ -53,6 +53,25 @@ final class JsonScan {
         return unescape(json.substring(vs, ve));
     }
 
+    /** Raw (unquoted) literal for {@code "key":<number|true|false>}; null if absent. */
+    static String rawNumber(String json, String key, int from) {
+        String needle = "\"" + key + "\"";
+        int k = json.indexOf(needle, from);
+        if (k < 0) return null;
+        int colon = json.indexOf(':', k + needle.length());
+        if (colon < 0) return null;
+        int i = colon + 1;
+        while (i < json.length() && json.charAt(i) == ' ') i++;
+        int start = i;
+        while (i < json.length()) {
+            char c = json.charAt(i);
+            if (c == ',' || c == '}' || c == ']') break;
+            i++;
+        }
+        String v = json.substring(start, i).trim();
+        return v.isEmpty() ? null : v;
+    }
+
     static String unescape(String s) {
         StringBuilder b = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {

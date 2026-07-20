@@ -259,8 +259,18 @@ and the dashboard) — decide once the boundaries are clear.
 - [x] **Coverage-*guided*** exploration (`CoverageGuidedRun`, task `runCoverageGuided`): mutates
   HTTP inputs (route + params grammar), samples coverage after each request, and keeps the inputs
   that reach new code. Verified against the kind JPetStore pod: coverage climbed 4.4% -> 8.6%
-  (281 -> 549 edges) vs the flat round-robin driver, then plateaued (GET-only reach).
-  - [ ] Deeper reach: sessions/POST (cart checkout, account, order) to get past the GET plateau.
+  (281 -> 549 edges) vs the flat round-robin driver, then plateaued.
+  - [x] The plateau was NOT "GET-only reach" as first assumed — it was a hardcoded route list
+    reaching 7 of JPetStore's 21 handlers (DD-016). Fixed by making the surface data:
+    seed corpus `examples/corpus/jpetstore/` (all 21 handlers) -> **17.3%**, then a request
+    grammar `examples/grammar/jpetstore.grammar` (`-Dclosurejvm.grammar=`) that also supplies the
+    parameter value space with fuzzing generators (`<int> <string> <long> <empty>`) -> **17.7%**,
+    and distinct crash sites found in the app's own code went 4 -> 6 (DD-017).
+  - [x] **Input viewer**: dashboard cluster rows expand to show the concrete inputs behind a
+    finding (read from the saved `.bin`), selectable for copy-paste replay.
+  - [ ] "Copy as curl" button + download link for binary inputs.
+  - [ ] Session-aware sequences (signon -> add to cart -> checkout). The remaining ceiling is
+    *state*, not surface: some handlers only do real work after a successful signon.
 - [ ] Optional in-process coverage %: a JaCoCo provider for the local JQF targets, so the panel
   shows a real percentage without the server round-trip.
 - [x] **Kubernetes deploy**: `kind` demo environment (`deploy/k8s/`): JPetStore as a pod with

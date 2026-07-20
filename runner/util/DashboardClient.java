@@ -144,8 +144,69 @@ public final class DashboardClient {
             else if (line.startsWith("timestamp=")) timestamp = line.substring("timestamp=".length());
         }
         String body = text.length() > 800 ? text.substring(0, 800) + "…" : text;
+
+        // The actual input that produced this finding lives in the sibling .bin that FuzzIO wrote
+        // (input-<ts>-<seq>.meta.txt <-> input-<ts>-<seq>.bin). Surfacing it is what makes a
+        // finding reproducible: for HTTP-driven runs the input IS the route, so it can be replayed
+        // directly; for byte-fuzz targets it's raw bytes, rendered as hex.
+        Input input = readInput(meta);
+
         return "{\"file\":\"" + esc(meta.getFileName().toString()) + "\",\"classification\":\"" + esc(classification)
-                + "\",\"timestamp\":\"" + esc(timestamp) + "\",\"text\":\"" + esc(body) + "\"}";
+                + "\",\"timestamp\":\"" + esc(timestamp) + "\",\"text\":\"" + esc(body) + "\""
+                + ",\"input\":\"" + esc(input.rendered) + "\",\"inputSize\":" + input.size
+                + ",\"inputBinary\":" + input.binary + "}";
+    }
+
+    private static final class Input {
+        final String rendered;
+        final int size;
+        final boolean binary;
+        Input(String rendered, int size, boolean binary) {
+            this.rendered = rendered; this.size = size; this.binary = binary;
+        }
+    }
+
+    private static final int MAX_INPUT_PREVIEW_BYTES = 2048;
+
+    private static Input readInput(Path meta) {
+        String name = meta.getFileName().toString();
+        if (!name.endsWith(".meta.txt")) return new Input("", 0, false);
+        Path bin = meta.resolveSibling(name.substring(0, name.length() - ".meta.txt".length()) + ".bin");
+        if (!Files.isRegularFile(bin)) return new Input("", 0, false);
+        byte[] data;
+        long fullSize;
+        try {
+            fullSize = Files.size(bin);
+            data = Files.readAllBytes(bin);
+        } catch (IOException e) {
+            return new Input("", 0, false);
+        }
+        int shown = Math.min(data.length, MAX_INPUT_PREVIEW_BYTES);
+        boolean binary = !mostlyPrintable(data, shown);
+        String rendered;
+        if (binary) {
+            StringBuilder hex = new StringBuilder();
+            for (int i = 0; i < shown; i++) {
+                if (i > 0 && i % 16 == 0) hex.append('\n');
+                else if (i > 0) hex.append(' ');
+                hex.append(String.format("%02x", data[i] & 0xff));
+            }
+            rendered = hex.toString();
+        } else {
+            rendered = new String(data, 0, shown, StandardCharsets.UTF_8);
+        }
+        if (data.length > shown) rendered += "\n… (" + (fullSize - shown) + " more bytes)";
+        return new Input(rendered, (int) fullSize, binary);
+    }
+
+    private static boolean mostlyPrintable(byte[] data, int len) {
+        if (len == 0) return true;
+        int printable = 0;
+        for (int i = 0; i < len; i++) {
+            int b = data[i] & 0xff;
+            if ((b >= 0x20 && b < 0x7f) || b == '\n' || b == '\r' || b == '\t') printable++;
+        }
+        return printable * 10 >= len * 9; // >=90% printable reads as text
     }
 
     private static String esc(String s) {

@@ -45,7 +45,24 @@ public final class FindingsClusterer {
         public long maxMagnitude = Long.MIN_VALUE;
         public final TreeSet<String> distinctRoutes = new TreeSet<>();
         public String exampleText = "";
+        /** Bounded sample of the actual inputs that produced this cluster, for the viewer. */
+        public final List<Sample> samples = new ArrayList<>();
     }
+
+    /** One concrete input that produced a finding — what you'd replay to reproduce it. */
+    public static final class Sample {
+        public final long timestamp;
+        public final String input;
+        public final int inputSize;
+        public final boolean inputBinary;
+        public final String text;
+        Sample(long timestamp, String input, int inputSize, boolean inputBinary, String text) {
+            this.timestamp = timestamp; this.input = input; this.inputSize = inputSize;
+            this.inputBinary = inputBinary; this.text = text;
+        }
+    }
+
+    private static final int MAX_SAMPLES_PER_CLUSTER = 10;
 
     /**
      * Cluster a findings JSON array in the shape DashboardClient produces
@@ -69,14 +86,26 @@ public final class FindingsClusterer {
 
             String timestamp = JsonScan.extract(findingsJsonArray, "timestamp", classEnd);
             String text = JsonScan.extract(findingsJsonArray, "text", classEnd);
+            String input = JsonScan.extract(findingsJsonArray, "input", classEnd);
+            String inputSizeRaw = JsonScan.rawNumber(findingsJsonArray, "inputSize", classEnd);
+            boolean inputBinary = "true".equals(JsonScan.rawNumber(findingsJsonArray, "inputBinary", classEnd));
             cursor = classEnd + 1;
             if (timestamp == null || text == null) continue;
+            if (input == null) input = "";
 
             long ts = parseLongSafe(timestamp);
 
             String exception = field(text, "exception=");
-            String route = field(text, "route=");
             String detail = extractDetail(text);
+
+            // Prefer an explicit route= line (HTTP-driven invariant finds write one). Crash finds
+            // don't, but for HTTP targets the saved input IS the route — so fall back to it rather
+            // than reporting route=(none) and collapsing every crash on every endpoint into one
+            // cluster keyed only by exception class.
+            String route = field(text, "route=");
+            if (route.isEmpty() && input.startsWith("/")) {
+                route = input.split("\\s", 2)[0];
+            }
             String routePattern = route.isEmpty() ? "" : route.replaceAll("=[^&]*", "=");
 
             String fingerprint;
@@ -103,6 +132,10 @@ public final class FindingsClusterer {
             c.count++;
             c.firstSeenMs = Math.min(c.firstSeenMs, ts);
             c.lastSeenMs = Math.max(c.lastSeenMs, ts);
+            if (c.samples.size() < MAX_SAMPLES_PER_CLUSTER && !input.isEmpty()) {
+                c.samples.add(new Sample(ts, input, (int) parseLongSafe(
+                        inputSizeRaw == null ? "0" : inputSizeRaw), inputBinary, text));
+            }
             if (!route.isEmpty() && c.distinctRoutes.size() < 12) {
                 c.distinctRoutes.add(route);
             }
@@ -133,7 +166,18 @@ public final class FindingsClusterer {
               .append(",\"minMagnitude\":").append(c.minMagnitude == Long.MAX_VALUE ? -1 : c.minMagnitude)
               .append(",\"maxMagnitude\":").append(c.maxMagnitude == Long.MIN_VALUE ? -1 : c.maxMagnitude)
               .append(",\"distinctRoutes\":").append(c.distinctRoutes.size())
-              .append(",\"exampleText\":\"").append(esc(c.exampleText)).append("\"}");
+              .append(",\"exampleText\":\"").append(esc(c.exampleText)).append('"')
+              .append(",\"samples\":[");
+            for (int j = 0; j < c.samples.size(); j++) {
+                if (j > 0) sb.append(',');
+                Sample s = c.samples.get(j);
+                sb.append("{\"timestamp\":").append(s.timestamp)
+                  .append(",\"input\":\"").append(esc(s.input)).append('"')
+                  .append(",\"inputSize\":").append(s.inputSize)
+                  .append(",\"inputBinary\":").append(s.inputBinary)
+                  .append(",\"text\":\"").append(esc(s.text)).append("\"}");
+            }
+            sb.append("]}");
         }
         return sb.append(']').toString();
     }

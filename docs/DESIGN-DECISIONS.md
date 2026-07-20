@@ -439,3 +439,94 @@ non-deterministic); running analysis in the driver (would put a secret and an ou
 next to the measurement loop, violating DD-013); using the LLM to filter/dedupe findings
 (see DD-014); an SDK dependency (one `HttpURLConnection` POST matches the project's
 no-extra-dependency posture).
+
+---
+
+## DD-016: The exploration surface is a seed corpus, not compiled code (2026-07-20)
+
+**Context.** `CoverageGuidedRun` originally hardcoded JPetStore's routes as Java string arrays and
+synthesized new ones in a `randomRoute()` switch. Coverage plateaued at 8.6% and I attributed it
+to "GET-only exploration can't reach checkout/order without sessions." That explanation was wrong,
+and reviewing the app's actual endpoint surface proved it: JPetStore exposes **21 handler methods**
+across 4 Stripes ActionBeans, and the hardcoded grammar reached **7 of them**. All of
+`AccountActionBean` (7 handlers) and `OrderActionBean` (4) were unreachable — not because they
+need sessions, but because no code path ever generated their URLs. Every other target in this repo
+had `examples/corpus/<name>/`; JPetStore had none.
+
+**Decision.** Endpoints come from a seed corpus (`examples/corpus/jpetstore/`, one route per file,
+`-Dclosurejvm.corpusDir`), covering all 21 handlers. `CoverageGuidedRun` loads seeds, deterministically
+exercises each one once before random exploration, and mutates only *parameter values* using
+dictionaries. `randomRoute()` is deleted — the runner no longer invents endpoints. An empty corpus
+warns loudly instead of silently exploring almost nothing.
+
+**Why.** Baking the reachable surface into compiled code makes the fuzzer's ceiling invisible: the
+coverage number looks like a property of the app when it's really a property of a hardcoded list.
+As data, the surface is inspectable, diffable, extendable without a rebuild, and reusable across
+targets — and a missing corpus becomes an obvious gap rather than a silent cap.
+
+**Verified (2026-07-20).** Same app, same driver, same duration — coverage **8.6% → 17.3%**
+(549 → 1103 of 6368 instructions), exactly doubling by reaching the previously-unreachable half of
+the app. It also immediately surfaced **4 genuine crash clusters** where the run had previously
+reported zero crashes:
+
+```
+java.lang.NullPointerException: Cannot invoke
+  "AccountActionBean.getAccount()" because "accountBean" is null
+    at OrderActionBean.listOrders(OrderActionBean.java:110)
+```
+
+`listOrders`, `viewOrder`, `newAccount`, and `editAccount` dereference the session account bean
+with no null check, so an unauthenticated request yields an unhandled NPE and HTTP 500 instead of
+a redirect to sign-on. These are real defects in the app under test, found only because the
+exploration surface stopped being hardcoded.
+
+**Rejected.** Keeping the hardcoded grammar and "explaining" the plateau (the explanation was
+wrong and would have permanently hidden half the app); generating routes by crawling links (real,
+but a bigger feature — a corpus is the honest primitive underneath it and is needed either way).
+
+---
+
+## DD-017: Grammar-driven request generation, and showing the input that caused a finding (2026-07-20)
+
+**Context.** DD-016 moved *routes* out of code into a seed corpus, doubling coverage. But the
+*parameter value space* was still hardcoded Java arrays (`CATS`, `PRODS`, `ITEMS`, `KW`), so the
+fuzzer could only ever submit values someone had already thought of — it could reach every
+endpoint but only with known-good inputs. Separately, the dashboard showed *that* a finding
+happened but never *what input caused it*, even though `FuzzIO` had been saving each input as a
+`.bin` beside every `.meta.txt` all along. Both gaps were reported by the user reviewing results.
+
+**Decision — grammar.** A `RequestGrammar` file supplies both the routes and their value space:
+
+```
+$itemId  = EST-1 | EST-2 | <string> | <empty>
+/actions/Cart.action?addItemToCart=&workingItemId=${itemId}
+```
+
+Rules mix literal dictionary values (to stay on happy paths and reach deep code) with
+**generators** — `<int>` (boundary-biased), `<string>` (short, sometimes metacharacters),
+`<long>`, `<empty>` — which produce values no hand-written list would. Mutation re-expands the
+template behind an input, so mutants stay well-formed instead of becoming garbage URLs. Grammar
+takes precedence over a plain seed corpus; both are data, neither is compiled in.
+
+**Decision — input viewer.** `DashboardClient` now reads the sibling `.bin` for each finding
+(text if ≥90% printable, else hex, capped at 2KB), the clusterer keeps a bounded sample of
+concrete inputs per cluster, and cluster rows in the dashboard expand to show them — selectable,
+so an HTTP finding can be copy-pasted straight into `curl` to reproduce. Crash findings don't
+write a `route=` line, so their route now falls back to the saved input; previously every crash on
+every endpoint collapsed into one cluster keyed only by exception class, which is what made the
+dashboard read `route=(none)`.
+
+**Verified (2026-07-20)** against the JPetStore pod, same driver and duration:
+- corpus-only (DD-016): 17.3% coverage, crashes at 4 sites
+- grammar: 17.7% coverage, crashes at **6 distinct sites in the app's own code**
+
+The extra site is the point: `CartActionBean.addItemToCart:81 → CatalogService.isItemInStock:88`
+NPEs on a `workingItemId` that isn't a real item — only reachable because `<string>` generated an
+id no dictionary contained. Coverage barely moved (+23 edges) while *distinct defects found* went
+up 50%, which is the honest way to read this: grammar generators buy bug-finding depth at a given
+coverage level, not raw coverage breadth.
+
+**Rejected.** A full BNF/EBNF grammar (this is a URL-shaped domain — one line per template with
+`${}` placeholders covers it, and stays hand-editable); pure random byte mutation of URLs (breaks
+the request shape immediately and never reaches deep handlers); shipping input bytes on every
+status push regardless of size (capped and sampled instead — a campaign can save thousands).

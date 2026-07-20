@@ -1,0 +1,54 @@
+# JPetStore request grammar — the app's reachable surface and its parameter value space as DATA.
+# Used by runner.coverage.CoverageGuidedRun via -Dclosurejvm.grammar=<this file>.
+#
+# Syntax:
+#   $name = a | b | <generator>     dictionary rule (literals and/or generators)
+#   /path?x=${name}                 route template; ${name} expands to a random choice
+#
+# Generators:  <int> boundary-biased integers · <string> short random/metachar strings
+#              <long> long strings · <empty> the empty string
+#
+# JPetStore is dispatched entirely through *.action (one servlet mapping in web.xml), across
+# 4 Stripes ActionBeans with 21 handler methods total. All 21 are represented below.
+
+# ---- dictionaries -----------------------------------------------------------------
+# Valid values keep the app on its happy paths (needed to reach deep code); generators
+# probe what a hand-written list never would.
+$categoryId = FISH | DOGS | CATS | BIRDS | REPTILES | <string> | <empty>
+$productId  = FI-SW-01 | FI-SW-02 | FI-FW-01 | FI-FW-02 | K9-BD-01 | K9-CW-01 | K9-DL-01 | K9-RT-01 | K9-RT-02 | RP-SN-01 | RP-LI-02 | AV-CB-01 | AV-SB-02 | FL-DSH-01 | FL-DLH-02 | <string>
+$itemId     = EST-1 | EST-2 | EST-3 | EST-4 | EST-5 | EST-6 | EST-7 | EST-8 | EST-9 | EST-10 | EST-11 | EST-12 | EST-13 | EST-14 | EST-16 | EST-18 | EST-20 | EST-26 | EST-28 | <string> | <empty>
+$keyword    = fish | dog | cat | snake | bird | angel | koi | tiger | poodle | dalmation | iguana | finch | parrot | <string> | <empty> | <long>
+$orderId    = 1 | 2 | 1000 | <int>
+$username   = j2ee | ACID | <string> | <empty>
+$password   = j2ee | <string> | <empty>
+$quantity   = 1 | 0 | -1 | 999999 | <int>
+
+# ---- CatalogActionBean (viewMain, viewCategory, viewProduct, viewItem, searchProducts) ----
+/
+/actions/Catalog.action
+/actions/Catalog.action?viewCategory=&categoryId=${categoryId}
+/actions/Catalog.action?viewProduct=&productId=${productId}
+/actions/Catalog.action?viewItem=&itemId=${itemId}
+/actions/Catalog.action?searchProducts=&keyword=${keyword}
+
+# ---- CartActionBean (addItemToCart, removeItemFromCart, updateCartQuantities, viewCart, checkOut) ----
+/actions/Cart.action?viewCart=
+/actions/Cart.action?addItemToCart=&workingItemId=${itemId}
+/actions/Cart.action?removeItemFromCart=&workingItemId=${itemId}
+/actions/Cart.action?updateCartQuantities=&quantity=${quantity}
+/actions/Cart.action?checkOut=
+
+# ---- AccountActionBean (signonForm, signon, signoff, newAccountForm, newAccount, editAccountForm, editAccount) ----
+/actions/Account.action?signonForm=
+/actions/Account.action?signon=&username=${username}&password=${password}
+/actions/Account.action?signoff=
+/actions/Account.action?newAccountForm=
+/actions/Account.action?newAccount=&username=${username}&password=${password}
+/actions/Account.action?editAccountForm=
+/actions/Account.action?editAccount=&username=${username}
+
+# ---- OrderActionBean (listOrders, newOrderForm, newOrder, viewOrder) ----
+/actions/Order.action?listOrders=
+/actions/Order.action?newOrderForm=
+/actions/Order.action?newOrder=
+/actions/Order.action?viewOrder=&orderId=${orderId}

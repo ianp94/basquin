@@ -28,7 +28,10 @@ import java.util.Random;
  */
 public final class CoverageGuidedRun {
 
-    // A small grammar/dictionary of JPetStore routes and known ids to mutate over.
+    // Parameter dictionaries used to MUTATE seed routes. The set of reachable endpoints is NOT
+    // hardcoded here — it comes from the seed corpus (-Dclosurejvm.corpusDir), so the exploration
+    // surface is data, not compiled code. Baking routes in previously capped this run at 7 of
+    // JPetStore's 21 handlers (all of Account and Order were unreachable) — see DD-016.
     private static final String[] CATS = {"FISH", "DOGS", "CATS", "BIRDS", "REPTILES"};
     private static final String[] PRODS = {"FI-SW-01", "FI-SW-02", "FI-FW-01", "FI-FW-02", "K9-BD-01",
             "K9-CW-01", "K9-DL-01", "K9-RT-01", "K9-RT-02", "RP-SN-01", "RP-LI-02", "AV-CB-01", "AV-SB-02",
@@ -37,6 +40,54 @@ public final class CoverageGuidedRun {
     private static final String[] KW = {"fish", "dog", "cat", "snake", "bird", "angel", "koi", "tiger",
             "poodle", "dalmation", "iguana", "finch", "parrot"};
     static { for (int i = 0; i < 28; i++) ITEMS[i] = "EST-" + (i + 1); }
+
+    /** Load the request grammar if one is configured and readable; null to fall back to seeds. */
+    private static RequestGrammar loadGrammar(Random rnd) {
+        String path = System.getProperty("closurejvm.grammar");
+        if (path == null || path.isEmpty()) return null;
+        try {
+            RequestGrammar g = RequestGrammar.load(Paths.get(path), rnd);
+            if (g.isEmpty()) {
+                System.err.println("[ClosureJVM] grammar " + path + " has no route templates; ignoring it");
+                return null;
+            }
+            System.out.println("[ClosureJVM] loaded grammar " + path + ": "
+                    + g.routeCount() + " route template(s), " + g.ruleCount() + " rule(s)");
+            return g;
+        } catch (Exception e) {
+            System.err.println("[ClosureJVM] failed to load grammar " + path + ": " + e);
+            return null;
+        }
+    }
+
+    /** Seed routes loaded from the corpus dir; falls back to a bare catalog hit if none found. */
+    private static List<String> loadSeeds() {
+        String dir = System.getProperty("closurejvm.corpusDir", "examples/corpus/jpetstore");
+        List<String> seeds = new ArrayList<>();
+        java.nio.file.Path root = Paths.get(dir);
+        if (java.nio.file.Files.isDirectory(root)) {
+            try (java.util.stream.Stream<java.nio.file.Path> s = java.nio.file.Files.walk(root)) {
+                for (java.nio.file.Path p : s.filter(java.nio.file.Files::isRegularFile)
+                        .collect(java.util.stream.Collectors.toList())) {
+                    for (String line : new String(java.nio.file.Files.readAllBytes(p),
+                            StandardCharsets.UTF_8).split("\n")) {
+                        String t = line.trim();
+                        if (!t.isEmpty() && t.startsWith("/")) seeds.add(t);
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("[ClosureJVM] failed reading seed corpus " + dir + ": " + e);
+            }
+        }
+        if (seeds.isEmpty()) {
+            System.err.println("[ClosureJVM] no seeds in " + dir + "; falling back to a single catalog route. "
+                    + "Exploration will be badly limited — point -Dclosurejvm.corpusDir at a seed corpus.");
+            seeds.add("/actions/Catalog.action");
+        } else {
+            System.out.println("[ClosureJVM] loaded " + seeds.size() + " seed route(s) from " + dir);
+        }
+        return seeds;
+    }
 
     public static void main(String[] args) throws Exception {
         TriageSink.ensureStarted();
@@ -53,13 +104,34 @@ public final class CoverageGuidedRun {
         JacocoCoverageProvider cov = new JacocoCoverageProvider(host, port, Paths.get(classes));
 
         Random rnd = new Random(1);
-        List<String> corpus = new ArrayList<>();
-        corpus.add("/actions/Catalog.action");
+
+        // Input source, in order of preference:
+        //  1. a request grammar (routes + parameter value space, both as data, with generators)
+        //  2. a plain seed corpus (routes only, fixed values)
+        // Either way the reachable surface is data, never compiled-in (DD-016/DD-017).
+        RequestGrammar grammar = loadGrammar(rnd);
+        List<String> seeds = grammar != null ? grammar.expandAll() : loadSeeds();
+        // Start the corpus as the full seed set so every seeded endpoint is exercised, rather than
+        // relying on random discovery to stumble onto them.
+        List<String> corpus = new ArrayList<>(seeds);
         long best = 0, total = 0;
 
         for (int i = 0; i < iterations; i++) {
-            boolean fresh = corpus.isEmpty() || rnd.nextInt(100) < 30;
-            String input = fresh ? randomRoute(rnd) : mutate(corpus.get(rnd.nextInt(corpus.size())), rnd);
+            String input;
+            if (i < seeds.size()) {
+                // Deterministic first pass: hit every seed once so no endpoint is left to chance.
+                input = seeds.get(i);
+            } else if (grammar != null) {
+                // Grammar-driven: 30% a fresh expansion of any route template, otherwise re-expand
+                // the template behind a corpus entry that previously found new coverage.
+                input = rnd.nextInt(100) < 30
+                        ? grammar.randomRequest()
+                        : grammar.mutate(corpus.get(rnd.nextInt(corpus.size())));
+            } else {
+                boolean fresh = rnd.nextInt(100) < 30;
+                input = fresh ? seeds.get(rnd.nextInt(seeds.size()))
+                              : mutate(corpus.get(rnd.nextInt(corpus.size())), rnd);
+            }
 
             Agent.beginIteration();
             try {
@@ -111,27 +183,18 @@ public final class CoverageGuidedRun {
         if (code >= 500) { throw new RuntimeException("HTTP " + code + " for " + path); }
     }
 
-    private static String randomRoute(Random r) {
-        switch (r.nextInt(8)) {
-            case 0: return "/";
-            case 1: return "/actions/Catalog.action";
-            case 2: return "/actions/Catalog.action?viewCategory=&categoryId=" + CATS[r.nextInt(CATS.length)];
-            case 3: return "/actions/Catalog.action?viewProduct=&productId=" + PRODS[r.nextInt(PRODS.length)];
-            case 4: return "/actions/Catalog.action?viewItem=&itemId=" + ITEMS[r.nextInt(ITEMS.length)];
-            case 5: return "/actions/Catalog.action?searchProducts=&keyword=" + KW[r.nextInt(KW.length)];
-            case 6: return "/actions/Cart.action?addItemToCart=&workingItemId=" + ITEMS[r.nextInt(ITEMS.length)];
-            default: return "/actions/Cart.action?viewCart=";
-        }
-    }
-
     private static String mutate(String input, Random r) {
-        if (r.nextBoolean() || !input.contains("=")) { return randomRoute(r); }
+        // No route synthesis here: an un-mutatable input is returned as-is and the caller's
+        // seed-picking branch supplies variety. Endpoints come from the corpus, not from code.
+        if (!input.contains("=")) { return input; }
         if (input.contains("categoryId=")) return replaceParam(input, "categoryId=", CATS[r.nextInt(CATS.length)]);
         if (input.contains("productId=")) return replaceParam(input, "productId=", PRODS[r.nextInt(PRODS.length)]);
         if (input.contains("itemId=")) return replaceParam(input, "itemId=", ITEMS[r.nextInt(ITEMS.length)]);
         if (input.contains("workingItemId=")) return replaceParam(input, "workingItemId=", ITEMS[r.nextInt(ITEMS.length)]);
         if (input.contains("keyword=")) return replaceParam(input, "keyword=", KW[r.nextInt(KW.length)]);
-        return randomRoute(r);
+        // Params we have no dictionary for (orderId, username, …): leave the seed untouched so
+        // its endpoint still gets exercised.
+        return input;
     }
 
     private static String replaceParam(String input, String key, String val) {

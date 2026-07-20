@@ -180,12 +180,16 @@ Goal: Make the measurement layer trustworthy and cheap enough to point at real a
 Goal: Replace the static per-iteration Agent state with an explicit context object so
 concurrency correctness stops depending on a serialization lock.
 
-- [ ] `IterationContext` API: `ctx = Agent.begin(); ... Agent.end(ctx)` — per-iteration
-  baselines (latency, heap, thread set) move onto the context
-- [ ] IterationFilter uses per-request contexts instead of the global lock (DD-005 step C)
-- [ ] Triage handoff payload (DD-006) carries the context snapshot, not global state
-- [ ] Document the boundary: latency/leak-set scope cleanly per context; heap/thread deltas
+- [x] `IterationContext` API: `ctx = Agent.begin(); ... Agent.end(ctx)` — per-iteration
+  baselines (latency, heap, thread set, sampler) moved onto the context; legacy
+  beginIteration/endIteration kept as ThreadLocal-backed wrappers (all callers unchanged).
+  Contract test in IterationContextTest; full suite + native leak-set verified green. (DD-010)
+- [x] Documented the boundary: latency/leak-set scope cleanly per context; heap/thread deltas
   remain process-global and are only trustworthy under serialized or single-flight runs
+- [ ] Triage handoff payload (DD-006) carries the context snapshot (result fields now exposed
+  on IterationContext; wiring the payload is the remaining step)
+- [ ] Optional: IterationFilter/valve move to explicit begin()/end(ctx) (still serialized;
+  the ThreadLocal wrapper already makes them per-thread correct, so this is cleanup only)
 
 ---
 

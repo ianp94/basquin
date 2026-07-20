@@ -127,6 +127,37 @@ while making the invariants quietly lie, the worst outcome for signal quality.
 
 ---
 
+## DD-010: IterationContext replaces static per-iteration Agent state (2026-07-19)
+
+**Context.** Delivers the "C" half of DD-005. Per-iteration baselines (latency
+start, heap, thread set, executor/timer identities, latency-sample task) were
+static fields on `Agent` — a single global slot that overlapping begin/end pairs
+overwrite.
+
+**Decision.** An `IterationContext` object holds all per-iteration state.
+`Agent.begin()` returns one; `Agent.end(ctx)` consumes it. The legacy
+`beginIteration()`/`endIteration()` remain as wrappers that stash the context in a
+`ThreadLocal`, so every existing caller (runners, filter, valve, JQF, tests) is
+unchanged. Result fields (latency, deltas, violations, leak flag) live on the
+context, ready to feed the triage payload (DD-006) without touching global state.
+
+**Why.** Latency and the leak set now scope per-context — concurrent iterations no
+longer corrupt them. It's the clean, testable foundation the context-carrying
+triage payload needs, and it removes a whole class of cross-iteration bugs.
+
+**What it does NOT change.** Heap and thread deltas are still process-global (they
+measure the whole JVM), so they remain trustworthy only under serialized /
+single-flight execution. The servlet integrations therefore keep the DD-005
+serialization lock; the context makes the *code* concurrency-safe without claiming
+the *heap/thread signals* are. A per-signal concurrency model is future work.
+
+**Rejected.** Removing the serialization lock now that contexts exist — would make
+heap/thread deltas lie under load (the DD-005(B) trap again). Changing the public
+`beginIteration`/`endIteration` signatures — needless churn across all callers when
+a ThreadLocal wrapper is transparent.
+
+---
+
 ## DD-006: Triage decoupling via an in-process bounded queue — not a message bus (2026-07-19)
 
 **Context.** Proposal: publish metrics/findings to Kafka (or similar) so

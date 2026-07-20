@@ -2,9 +2,11 @@ package agent;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Timer;
@@ -13,31 +15,39 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Core agent for ClosureJVM - a persistent execution harness for JVM web applications
  * that uses coverage-guided exploration to discover availability, performance, and
  * correctness failures.
+ *
+ * Per-iteration state lives on an {@link IterationContext} (v0.6): {@link #begin()} returns
+ * one and {@link #end(IterationContext)} consumes it. The legacy {@link #beginIteration()} /
+ * {@link #endIteration()} pair is retained as thread-local-backed wrappers so existing
+ * callers are unchanged; because the context is per-thread, concurrent begin/end pairs no
+ * longer stomp each other's latency baseline or leak set. See docs/DESIGN-DECISIONS.md
+ * DD-005 / DD-010.
  */
 public class Agent {
 
-    private static volatile Set<Long> baselineNonDaemonThreadIds = Collections.emptySet();
-    private static volatile int iteration = 0;
-    // Keep weak references so tracking doesn't retain executors/timers long-term
+    private static final AtomicInteger ITERATION = new AtomicInteger(0);
+
+    // Global registries and infrastructure (not per-iteration).
+    // Keep weak references so tracking doesn't retain executors/timers long-term.
     private static final Set<java.lang.ref.WeakReference<ExecutorService>> trackedExecutorRefs = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private static final Set<java.lang.ref.WeakReference<Timer>> trackedTimerRefs = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private static volatile Set<Integer> baselineActiveExecutorIdentities = Collections.emptySet();
-    private static volatile Set<Integer> baselineActiveTimerIdentities = Collections.emptySet();
-    // Simple metrics baselines captured at iteration start
-    private static volatile long iterationStartNanos = 0L;
-    private static volatile long baselineHeapUsedBytes = 0L;
-    private static volatile int baselineThreadCount = 0;
-    private static volatile java.util.List<String> lastInvariantViolations = java.util.Collections.emptyList();
-    private static volatile String lastInvariantStack = "";
     private static final Timer invariantSampler = new Timer("ClosureJVM-InvariantSampler", true);
-    private static volatile TimerTask samplingTask = null;
-    private static volatile Thread monitoredThread = null;
-    private static volatile String sampledExecStack = "";
+    private static final ThreadMXBean THREAD_MX = ManagementFactory.getThreadMXBean();
+
+    // "Last completed iteration" evidence, exposed to servlet integrations (filter/valve,
+    // status servlet). Under serialized execution this reflects the just-finished iteration.
+    private static volatile List<String> lastInvariantViolations = Collections.emptyList();
+    private static volatile String lastInvariantStack = "";
+
+    // Backs the legacy beginIteration()/endIteration() wrappers: the context for the
+    // iteration in progress on this thread.
+    private static final ThreadLocal<IterationContext> CURRENT = new ThreadLocal<>();
 
     /**
      * Entry point for the JVM agent
@@ -49,40 +59,33 @@ public class Agent {
         // Agent initialization logic would go here
     }
 
-    /**
-     * Begin a new iteration boundary
-     * This method should be called at the start of each iteration
-     */
-    public static void beginIteration() {
-        iteration++;
+    // --- Explicit context API (preferred) ---
+
+    /** Begin an iteration, returning its context. Pass the result to {@link #end(IterationContext)}. */
+    public static IterationContext begin() {
+        IterationContext ctx = new IterationContext(ITERATION.incrementAndGet());
         System.out.println("Beginning iteration");
-        // Metrics baseline
-        // Keep baseline and end-of-iteration heap readings symmetric (see endIteration);
-        // GC runs before the latency clock starts so it never counts against the iteration
+        // Keep baseline and end-of-iteration heap readings symmetric (see end());
+        // GC runs before the latency clock starts so it never counts against the iteration.
         if (Boolean.getBoolean("closurejvm.heap.gcBeforeMeasure")) {
             System.gc();
         }
-        iterationStartNanos = System.nanoTime();
-        baselineHeapUsedBytes = usedHeapBytes();
-        baselineThreadCount = snapshotTotalThreadCount();
-        lastInvariantViolations = java.util.Collections.emptyList();
-        lastInvariantStack = "";
-        sampledExecStack = "";
-        monitoredThread = Thread.currentThread();
-        scheduleLatencySampleIfConfigured();
-        baselineNonDaemonThreadIds = snapshotNonDaemonThreadIds();
-        baselineActiveExecutorIdentities = snapshotActiveExecutorIdentities();
-        baselineActiveTimerIdentities = snapshotActiveTimerIdentities();
+        ctx.startNanos = System.nanoTime();
+        ctx.baselineHeapBytes = usedHeapBytes();
+        ctx.baselineThreadCount = snapshotTotalThreadCount();
+        ctx.monitoredThread = Thread.currentThread();
+        scheduleLatencySampleIfConfigured(ctx);
+        ctx.baselineNonDaemonThreadIds = snapshotNonDaemonThreadIds();
+        ctx.baselineActiveExecutorIdentities = snapshotActiveExecutorIdentities();
+        ctx.baselineActiveTimerIdentities = snapshotActiveTimerIdentities();
+        return ctx;
     }
 
-    /**
-     * End current iteration boundary
-     * This method should be called at the end of each iteration
-     */
-    public static void endIteration() {
+    /** End the iteration described by {@code ctx}, running metrics, invariants, and leak checks. */
+    public static void end(IterationContext ctx) {
         // Latency is measured at entry, before the grace sleep below, so the
         // grace period never counts against the iteration's latency invariant.
-        final long elapsedMs = Math.max(0L, (System.nanoTime() - iterationStartNanos) / 1_000_000L);
+        final long elapsedMs = Math.max(0L, (System.nanoTime() - ctx.startNanos) / 1_000_000L);
 
         // Small grace period: allow short-lived tasks to finish before the leak snapshot
         try {
@@ -98,17 +101,24 @@ public class Agent {
             System.gc();
         }
         final long heapNow = usedHeapBytes();
-        final long heapDeltaBytes = heapNow - baselineHeapUsedBytes;
+        final long heapDeltaBytes = heapNow - ctx.baselineHeapBytes;
         final int threadsNow = snapshotTotalThreadCount();
-        final int threadsDelta = threadsNow - baselineThreadCount;
+        final int threadsDelta = threadsNow - ctx.baselineThreadCount;
+        ctx.latencyMs = elapsedMs;
+        ctx.heapDeltaBytes = heapDeltaBytes;
+        ctx.threadCount = threadsNow;
+        ctx.threadDelta = threadsDelta;
         System.out.println(String.format(
                 "[ClosureJVM] Iteration %d metrics: latency=%dms, heapDelta=%+d KB, threads=%d (%+d)",
-                iteration, elapsedMs, heapDeltaBytes / 1024, threadsNow, threadsDelta));
+                ctx.iterationNumber, elapsedMs, heapDeltaBytes / 1024, threadsNow, threadsDelta));
 
         // Configurable invariants (v0.2): thresholds checked here. Defaults disabled unless props set.
         try {
-            Invariants.evaluateAndMaybeFail(iteration, elapsedMs, heapDeltaBytes, threadsNow, threadsDelta);
+            Invariants.evaluateAndMaybeFail(ctx, elapsedMs, heapDeltaBytes, threadsNow, threadsDelta);
         } catch (IllegalStateException e) {
+            // Publish evidence before the throw propagates so servlet integrations can read it.
+            publishInvariantEvidence(ctx);
+            cancelLatencySample(ctx);
             // If configured to fail-hard, rethrow to stop the iteration loop fast
             if (Boolean.getBoolean("closurejvm.forceExitOnLeak")) {
                 System.err.println("[ClosureJVM] Forcing process exit due to invariant violation (closurejvm.forceExitOnLeak=true)");
@@ -116,18 +126,19 @@ public class Agent {
             }
             throw e;
         }
-        cancelLatencySample();
+        publishInvariantEvidence(ctx);
+        cancelLatencySample(ctx);
 
         Map<Long, Thread> currentNonDaemon = snapshotNonDaemonThreads();
         Set<Long> currentIds = currentNonDaemon.keySet();
 
         // New non-daemon threads that were not present at iteration start
         Set<Long> newNonDaemon = new HashSet<>(currentIds);
-        newNonDaemon.removeAll(baselineNonDaemonThreadIds);
+        newNonDaemon.removeAll(ctx.baselineNonDaemonThreadIds);
 
         boolean leakDetected = false;
         if (!newNonDaemon.isEmpty()) {
-            System.err.println("[ClosureJVM] Thread leak detected after iteration " + iteration + ": " + newNonDaemon.size() + " new non-daemon thread(s) remain");
+            System.err.println("[ClosureJVM] Thread leak detected after iteration " + ctx.iterationNumber + ": " + newNonDaemon.size() + " new non-daemon thread(s) remain");
             for (Long id : newNonDaemon) {
                 Thread t = currentNonDaemon.get(id);
                 if (t == null) {
@@ -151,12 +162,12 @@ public class Agent {
         for (ExecutorService ex : liveTrackedExecutors()) {
             if (ex == null) continue;
             int id = System.identityHashCode(ex);
-            if (!baselineActiveExecutorIdentities.contains(id) && !ex.isShutdown()) {
+            if (!ctx.baselineActiveExecutorIdentities.contains(id) && !ex.isShutdown()) {
                 newActiveExecutors.add(ex);
             }
         }
         if (!newActiveExecutors.isEmpty()) {
-            System.err.println("[ClosureJVM] Executor leak detected after iteration " + iteration + ": " + newActiveExecutors.size() + " executor(s) not shutdown");
+            System.err.println("[ClosureJVM] Executor leak detected after iteration " + ctx.iterationNumber + ": " + newActiveExecutors.size() + " executor(s) not shutdown");
             for (ExecutorService ex : newActiveExecutors) {
                 String type = ex.getClass().getName();
                 String extra = "";
@@ -185,18 +196,19 @@ public class Agent {
             if (t == null) continue;
             int id = System.identityHashCode(t);
             // Timer has no isCancelled API; we can only infer via purge()/cancel usage. Best-effort: assume live if thread exists.
-            if (!baselineActiveTimerIdentities.contains(id)) {
+            if (!ctx.baselineActiveTimerIdentities.contains(id)) {
                 newActiveTimers.add(t);
             }
         }
         if (!newActiveTimers.isEmpty()) {
-            System.err.println("[ClosureJVM] Timer leak (best-effort) after iteration " + iteration + ": " + newActiveTimers.size() + " timer(s) may be active");
+            System.err.println("[ClosureJVM] Timer leak (best-effort) after iteration " + ctx.iterationNumber + ": " + newActiveTimers.size() + " timer(s) may be active");
             for (Timer t : newActiveTimers) {
                 System.err.println("  - Timer " + t.getClass().getName() + "@" + Integer.toHexString(System.identityHashCode(t)) + " (daemon=" + timerDaemonStatus(t) + ")");
             }
             leakDetected = true;
         }
 
+        ctx.leakDetected = leakDetected;
         if (leakDetected) {
             // Optional hard-exit for demos/CI so leaked non-daemon threads don't keep JVM alive
             if (Boolean.getBoolean("closurejvm.forceExitOnLeak")) {
@@ -204,17 +216,43 @@ public class Agent {
                 System.exit(2);
             }
             // Fail fast for v0.1 to make leaks obvious
-            throw new IllegalStateException("Leak(s) detected after iteration " + iteration);
+            throw new IllegalStateException("Leak(s) detected after iteration " + ctx.iterationNumber);
         }
 
         System.out.println("Ending iteration");
     }
 
+    // --- Legacy API (thread-local-backed wrappers over the context API) ---
+
+    /**
+     * Begin a new iteration boundary on the current thread.
+     * Prefer {@link #begin()} in new code; this stores the context in a thread-local.
+     */
+    public static void beginIteration() {
+        CURRENT.set(begin());
+    }
+
+    /**
+     * End the current thread's iteration boundary.
+     * Prefer {@link #end(IterationContext)} in new code.
+     */
+    public static void endIteration() {
+        IterationContext ctx = CURRENT.get();
+        if (ctx == null) {
+            // Defensive: end without a matching begin. Synthesize an empty context so we
+            // still run the checks rather than NPE, but this signals a caller-ordering bug.
+            ctx = begin();
+        }
+        try {
+            end(ctx);
+        } finally {
+            CURRENT.remove();
+        }
+    }
+
     private static Set<Long> snapshotNonDaemonThreadIds() {
         return new HashSet<>(snapshotNonDaemonThreads().keySet());
     }
-
-    private static final ThreadMXBean THREAD_MX = ManagementFactory.getThreadMXBean();
 
     private static Map<Long, Thread> snapshotNonDaemonThreads() {
         // Preferred source: the JVMTI native agent's event-maintained leak set — real Thread
@@ -322,40 +360,39 @@ public class Agent {
         return rt.totalMemory() - rt.freeMemory();
     }
 
-    static void setLastInvariantViolations(java.util.List<Invariants.Violation> violations) {
-        if (violations == null || violations.isEmpty()) {
-            lastInvariantViolations = java.util.Collections.emptyList();
-            return;
-        }
-        java.util.List<String> out = new java.util.ArrayList<>();
-        for (Invariants.Violation v : violations) {
-            out.add(v.name + ": " + v.detail);
-        }
-        lastInvariantViolations = out;
+    private static void publishInvariantEvidence(IterationContext ctx) {
+        lastInvariantViolations = ctx.invariantViolations;
+        lastInvariantStack = ctx.invariantStack;
     }
 
     public static java.util.List<String> getLastInvariantViolations() {
-        return new java.util.ArrayList<>(lastInvariantViolations);
-    }
-
-    static void setLastInvariantStack(String stack) {
-        lastInvariantStack = stack != null ? stack : "";
+        return new ArrayList<>(lastInvariantViolations);
     }
 
     public static String getLastInvariantStack() {
         return lastInvariantStack;
     }
 
-    static void recordInvariantEvidence(java.util.List<Invariants.Violation> violations) {
-        setLastInvariantViolations(violations);
-        setLastInvariantStack(buildStackSnapshot());
+    /** Called by {@link Invariants} during evaluation to record evidence onto the context. */
+    static void recordInvariantEvidence(IterationContext ctx, List<Invariants.Violation> violations) {
+        if (violations == null || violations.isEmpty()) {
+            ctx.invariantViolations = Collections.emptyList();
+        } else {
+            List<String> out = new ArrayList<>();
+            for (Invariants.Violation v : violations) {
+                out.add(v.name + ": " + v.detail);
+            }
+            ctx.invariantViolations = out;
+        }
+        ctx.invariantStack = buildStackSnapshot(ctx);
     }
 
-    private static String buildStackSnapshot() {
+    private static String buildStackSnapshot(IterationContext ctx) {
         String mode = System.getProperty("closurejvm.invariant.stack", "current");
         StringBuilder sb = new StringBuilder();
-        if (sampledExecStack != null && !sampledExecStack.isEmpty()) {
-            sb.append("executionThread(sampled)=\n").append(sampledExecStack);
+        String sampled = ctx.sampledExecStack;
+        if (sampled != null && !sampled.isEmpty()) {
+            sb.append("executionThread(sampled)=\n").append(sampled);
         }
         if ("off".equalsIgnoreCase(mode)) {
             return "";
@@ -387,15 +424,14 @@ public class Agent {
         return sb.toString();
     }
 
-    private static void scheduleLatencySampleIfConfigured() {
-        cancelLatencySample();
+    private static void scheduleLatencySampleIfConfigured(IterationContext ctx) {
         if (!Boolean.getBoolean("closurejvm.invariant.latency.sample")) return;
         Long latencyMax = null;
         try { latencyMax = Long.getLong("closurejvm.invariant.latency.maxMs"); } catch (Exception ignored) {}
         if (latencyMax == null || latencyMax <= 0) return;
-        final Thread threadToSample = monitoredThread;
+        final Thread threadToSample = ctx.monitoredThread;
         if (threadToSample == null) return;
-        samplingTask = new TimerTask() {
+        TimerTask task = new TimerTask() {
             @Override public void run() {
                 try {
                     StringBuilder sb = new StringBuilder();
@@ -406,21 +442,21 @@ public class Agent {
                     int limit = Math.min(Integer.getInteger("closurejvm.invariant.stack.maxFrames", 15), st.length);
                     for (int i = 0; i < limit; i++) sb.append("  at ").append(st[i]).append('\n');
                     if (st.length > limit) sb.append("  ...").append(st.length - limit).append(" more\n");
-                    sampledExecStack = sb.toString();
+                    ctx.sampledExecStack = sb.toString();
                 } catch (Throwable ignored) {}
             }
         };
+        ctx.samplingTask = task;
         try {
-            invariantSampler.schedule(samplingTask, Math.max(1L, latencyMax));
+            invariantSampler.schedule(task, Math.max(1L, latencyMax));
         } catch (IllegalStateException ignored) {}
     }
 
-    private static void cancelLatencySample() {
+    private static void cancelLatencySample(IterationContext ctx) {
         try {
-            if (samplingTask != null) samplingTask.cancel();
+            if (ctx.samplingTask != null) ctx.samplingTask.cancel();
         } catch (Throwable ignored) {}
-        samplingTask = null;
-        monitoredThread = null;
+        ctx.samplingTask = null;
     }
 
     private static Set<ExecutorService> liveTrackedExecutors() {

@@ -342,7 +342,7 @@ are reported as end-to-end **drift** (`heapDriftKb`/`threadDrift`), measured on 
 **Or with the CLI:**
 
 ```bash
-closurejvm run -n closurejvm-system --mode load --target jpetstore \
+closurejvm run -n closurejvm-system --name jpetstore-load --mode load --target jpetstore \
   --base-url http://jpetstore-app...:8080 \
   --duration 30m --concurrency 50 --corpus ./saved-corpus --watch
 # Completed ✓  ... load: 1284003 requests, 713.4 rps, p99 61ms, 12 latency violations

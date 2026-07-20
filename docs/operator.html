@@ -304,7 +304,7 @@ spec:
 <span class="c">#  "heapDriftKb":1840,"threadDrift":0,"violations":{"latency":12,"heap":0,"thread":0}}</span>
 
 <span class="c"># ...or via the CLI:</span>
-closurejvm run --mode load --target jpetstore --base-url http://jpetstore-app...:8080 \
+closurejvm run --name jpetstore-load --mode load --target jpetstore --base-url http://jpetstore-app...:8080 \
   --duration 30m --concurrency 50 --corpus ./saved-corpus --watch</code></pre>
   <p>First cut: only <code>violations.latency</code> is threshold-gated (against
     <code>invariants.latencyMaxMs</code>); heap/thread are reported as end-to-end drift, measured on the

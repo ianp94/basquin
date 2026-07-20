@@ -81,6 +81,9 @@ An explore run emits its interesting inputs as `status.corpusConfigMap` (`<campa
 concurrency for a duration, watching the same invariants:
 
 ```yaml
+apiVersion: closurejvm.dev/v1alpha1
+kind: ClosureJVMCampaign
+metadata: { name: myapp-load, namespace: closurejvm-system }
 spec:
   mode: load
   targetRef: { name: myapp }

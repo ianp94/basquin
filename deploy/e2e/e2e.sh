@@ -107,6 +107,9 @@ if [ "${INSTALL:-kustomize}" = "helm" ]; then
       closurejvm-leader-election-role closurejvm-leader-election-rolebinding --ignore-not-found >/dev/null 2>&1 || true
     $K delete clusterrole closurejvm-manager-role --ignore-not-found >/dev/null 2>&1 || true
   fi
+  # Helm installs CRDs from crds/ but NEVER upgrades them (documented caveat). Apply them explicitly so
+  # an iterating e2e picks up CRD changes (new fields like spec.mode) instead of strict-decoding errors.
+  $K apply -f "$ROOT/operator/config/crd/bases/"
   helm --kube-context "kind-${CLUSTER}" upgrade --install closurejvm "$ROOT/deploy/helm/closurejvm-operator" \
     --namespace "$NS" --create-namespace \
     --set fullnameOverride=closurejvm \
@@ -115,7 +118,10 @@ if [ "${INSTALL:-kustomize}" = "helm" ]; then
     --set images.runner="$RUNNER_IMAGE" \
     --set images.dashboard="$DASHBOARD_IMAGE" \
     --wait --timeout=150s
-  $K -n "$NS" rollout status deploy/closurejvm-controller-manager --timeout=120s
+  # Same image tag across runs => the Deployment spec is unchanged => helm won't restart the pod, so a
+  # freshly `kind load`ed image wouldn't be picked up. Force a restart (the kustomize path does too).
+  $K -n "$NS" rollout restart deploy/closurejvm-controller-manager
+  $K -n "$NS" rollout status  deploy/closurejvm-controller-manager --timeout=120s
 else
   say "Install CRDs + deploy operator (kustomize, namespaced RBAC) into '$NS'"
   $K apply -f "$ROOT/operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml"

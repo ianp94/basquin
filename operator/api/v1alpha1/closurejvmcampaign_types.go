@@ -119,6 +119,11 @@ type ClosureJVMCampaignStatus struct {
 	CoveragePct string `json:"coveragePct,omitempty"`
 	// +optional
 	Findings int32 `json:"findings,omitempty"`
+	// CorpusConfigMap names a ConfigMap the operator emits at end-of-run holding the run's interesting
+	// "replay corpus" (the inputs that reached new coverage), for reproducibility, the dashboard corpus
+	// view, and load-mode replay (DD-026 PR 1). Owner-referenced to the campaign, so it GCs with it.
+	// +optional
+	CorpusConfigMap string `json:"corpusConfigMap,omitempty"`
 	// +optional
 	StartTime *metav1.Time `json:"startTime,omitempty"`
 	// +optional

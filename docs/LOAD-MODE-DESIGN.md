@@ -162,9 +162,14 @@ status:
 ## 6. Phased plan
 
 - [x] **PR 0 — this design note (DD-026).**
-- [ ] **PR 1 — producer.** Runner writes the interesting corpus out; operator captures it into a
-  campaign-owned ConfigMap and sets `status.corpusConfigMap`. Ships on its own (reproducibility +
-  dashboard corpus view). Adds no `load` behavior yet.
+- [x] **PR 1 — producer.** **Chosen transport: reuse the termination-message channel, not a sidecar.**
+  The driver splices a byte-capped (~3 KB, ≈top-N) `replayCorpus` array into the summary it already
+  writes to `/dev/termination-log`; the operator (which now has `configmaps: create;update`) reads it
+  back and materializes a campaign-owned `<campaign>-corpus-out` ConfigMap, setting
+  `status.corpusConfigMap`. This keeps the driver **credential-less** (no new pod SA/identity — the
+  costly path §3 flagged) and the top-N cap is the right load-replay semantics anyway. Trade-off: the
+  emitted corpus is bounded to what fits the ~4 KiB termination message; a larger transport
+  (sidecar/PVC) is a future extension if corpora need to be bigger.
 - [ ] **PR 2 — consumer.** `mode: load` + `driver.concurrency`; the load driver; `status.load` metrics
   + dashboard wiring.
 

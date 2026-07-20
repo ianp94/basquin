@@ -169,3 +169,31 @@ Goal: Make the measurement layer trustworthy and cheap enough to point at real a
 - [ ] WebGoat / OWASP Benchmark for guaranteed-findings calibration of triage output
 - [ ] JSPWiki as the "real Apache project" target (markup parsing = latency-pathology hunting ground)
 - [ ] Stretch: XWiki or OpenMRS once pool/queue sampling (Phase 3) lands
+
+---
+
+## Milestone: v0.6 — "Iteration context"
+
+Goal: Replace the static per-iteration Agent state with an explicit context object so
+concurrency correctness stops depending on a serialization lock.
+
+- [ ] `IterationContext` API: `ctx = Agent.begin(); ... Agent.end(ctx)` — per-iteration
+  baselines (latency, heap, thread set) move onto the context
+- [ ] IterationFilter uses per-request contexts instead of the global lock (DD-005 step C)
+- [ ] Triage handoff payload (DD-006) carries the context snapshot, not global state
+- [ ] Document the boundary: latency/leak-set scope cleanly per context; heap/thread deltas
+  remain process-global and are only trustworthy under serialized or single-flight runs
+
+---
+
+## Milestone: v0.7 — "Operator DX"
+
+Goal: Make a running harness legible at a glance, AFL-style.
+
+- [ ] Live in-place CLI status screen (`-Dclosurejvm.status`): elapsed, iterations,
+  iters/sec, crashes, invariant violations by kind (latency/heap/thread), leaks, latency
+  p50/max, heap delta, live threads, resets
+- [ ] TTY-aware: redraw in place on a terminal; degrade to periodic one-line summaries when
+  output is piped/non-interactive or in CI
+- [ ] Suppress the per-iteration metrics spam when the status screen is active
+- [ ] Optional: periodic machine-readable status line (JSON) for tooling

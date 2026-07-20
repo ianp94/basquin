@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How it works — ClosureJVM</title>
+<meta name="description" content="The iteration boundary, availability invariants, the JVMTI agent, the Tomcat valve, coverage-guided exploration, and the decoupled dashboard.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html">
+      <svg class="logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="8" fill="#5b3df5"/>
+        <path d="M12 9c-3 0-4 2-4 4v2.2c0 1-.4 1.6-1.4 1.8 1 .2 1.4.8 1.4 1.8V23c0 2 1 4 4 4" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+        <path d="M20 9c3 0 4 2 4 4v2.2c0 1 .4 1.6 1.4 1.8-1 .2-1.4.8-1.4 1.8V23c0 2-1 4-4 4" stroke="#c4b3ff" stroke-width="2" stroke-linecap="round" fill="none"/>
+      </svg>
+      ClosureJVM
+    </a>
+    <nav class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="getting-started.html">Get started</a>
+      <a href="how-it-works.html" class="active">How it works</a>
+      <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
+      <a class="gh" href="https://github.com/ianp94/closureJVM">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <div class="breadcrumb">docs / how-it-works</div>
+    <h1>How it works</h1>
+    <p class="lead">Run thousands of iterations inside a single JVM with strict boundaries. Coverage
+      guides where to explore; availability invariants define what a bug is.</p>
+  </div>
+
+  <h2>The loop</h2>
+  <p>Every input flows through the same pipeline. Exploration (fuzzing / HTTP driving) doesn't get its
+    own special path — it feeds the identical boundaries and invariant checks.</p>
+
+  <div class="pipeline">
+    <div class="stage">Inputs</div>
+    <div class="arrow">→</div>
+    <div class="stage accent">Runner<br>begin / end</div>
+    <div class="arrow">→</div>
+    <div class="stage">App entry</div>
+    <div class="arrow">→</div>
+    <div class="stage">Metrics &amp;<br>coverage</div>
+    <div class="arrow">→</div>
+    <div class="stage accent">Invariants</div>
+    <div class="arrow">→</div>
+    <div class="stage">Reset</div>
+    <div class="arrow">↺</div>
+  </div>
+
+  <ol class="steps">
+    <li>
+      <h3>Iteration boundary</h3>
+      <p>The runner executes each iteration between strict <code>Agent.beginIteration()</code> /
+        <code>Agent.endIteration()</code> boundaries. This is the whole foundation: cleanliness is
+        <strong>enforced, not assumed</strong>. Latency is measured before the end-of-iteration grace
+        sleep so the grace period is never counted.</p>
+    </li>
+    <li>
+      <h3>Measure &amp; check invariants</h3>
+      <p>At iteration end the agent snapshots latency, heap delta, and thread count, then evaluates
+        the configured invariants. An iteration is failing or interesting if it exceeds a latency
+        budget, grows the heap past a bound, or leaves new non-daemon threads / un-shut executors
+        behind. Each invariant is a <strong>hard</strong> oracle (fail fast) or a <strong>soft</strong>
+        signal (record with triage metadata and continue).</p>
+    </li>
+    <li>
+      <h3>Reset</h3>
+      <p>Reset prefers enforced cleanliness, falling back to a child-first classloader swap of the
+        target's package (<code>-Dclosurejvm.reset=classloader</code>, preview). The philosophy is
+        <em>enforcement over inference</em> — prove the JVM is clean rather than guess.</p>
+    </li>
+    <li>
+      <h3>Triage, off the hot path</h3>
+      <p>Interesting inputs are saved with a classification, the invariant violated, stacks, and basic
+        runtime stats — handed off through an in-process queue so triage work never slows the
+        iteration loop.</p>
+    </li>
+  </ol>
+
+  <h2>Availability invariants</h2>
+  <p>The invariants are the bug oracles. They surface the input- and state-dependent pathologies that
+    crash-only testing can't see.</p>
+  <div class="cards">
+    <div class="card">
+      <span class="ico">// latency</span>
+      <h3>Latency</h3>
+      <p>Per-iteration wall time against a budget. Optionally samples the execution stack at the
+        threshold, so you get the slow path, not just the number.</p>
+    </div>
+    <div class="card">
+      <span class="ico">// heap</span>
+      <h3>Heap delta</h3>
+      <p>Growth per iteration against a bound. With <code>gcBeforeMeasure</code> the delta reflects
+        real retention, not allocation noise.</p>
+    </div>
+    <div class="card">
+      <span class="ico">// threads</span>
+      <h3>Thread / executor leaks</h3>
+      <p>New non-daemon threads that survive the boundary, executors that never shut down, timers
+        created within the iteration — reported with stack evidence.</p>
+    </div>
+  </div>
+
+  <h2>The JVMTI native agent</h2>
+  <p>Thread counting on the hot path used to mean <code>Thread.getAllStackTraces()</code> — a
+    safepoint stack walk. The optional JVMTI native agent replaces that with
+    <strong>event-driven</strong> tracking: it subscribes to <code>ThreadStart</code> /
+    <code>ThreadEnd</code> (seeded at VM init from <code>GetAllThreads</code>) and keeps weak global
+    refs to live non-daemon threads. No polling, no safepoint walks. When the agent isn't loaded the
+    harness transparently falls back to <code>ThreadMXBean</code>. One jar covers JDK 17 and 21.</p>
+  <pre><code>./gradlew buildNativeAgent          <span class="c"># -> build/native/libclosurejvmti.so (needs cc + JDK headers)</span>
+LIB=$PWD/build/native/libclosurejvmti.so
+java -agentpath:$LIB -Dclosurejvm.native.lib=$LIB -cp ... runner.GenericRunner ...</code></pre>
+
+  <h2>The Tomcat valve</h2>
+  <p>To test an app you can't modify, ClosureJVM attaches its iteration boundaries with a
+    <strong>Tomcat valve</strong> — <code>com.closurejvm.valve.ClosureJVMValve</code>, dropped into
+    Tomcat's <code>lib/</code> and registered globally — instead of editing the WAR or its
+    <code>web.xml</code>. The valve jar is <strong>namespace-free</strong>: a single artifact runs on
+    both Tomcat 9 (<code>javax.servlet</code>) and Tomcat 10+ (<code>jakarta.servlet</code>). Invariant
+    results are exposed per response as <code>X-ClosureJVM-Invariant-*</code> headers, which the HTTP
+    driver harvests.</p>
+  <div class="note">
+    <span class="tag">note</span>
+    <p>The valve and the in-WAR <code>IterationFilter</code> are mutually exclusive — use the filter
+      for the demo WAR, the valve for third-party WARs. Running both wraps every request twice and
+      produces meaningless nested boundaries.</p>
+  </div>
+
+  <h2>Coverage-guided exploration</h2>
+  <p>Coverage comes from the <em>app under test</em>: a JaCoCo agent runs in the target's JVM and the
+    driver reads it over the wire, so the coverage % is a real "% of code explored," not something
+    measured in the harness. Coverage-guided mutation then keeps the inputs that reach new code.</p>
+  <p>The reachable surface is <strong>data, not code</strong>. A request grammar supplies route
+    templates and a parameter value space; the corpus supplies real values; and structural generation
+    (e.g. <code>~EST-[0-9]{1,4}</code>) invents ids that <em>parse but don't exist</em> — which is how
+    the deepest crashes were found. <code>@sequence</code> blocks run ordered, session-carrying
+    transactions (sign on → add to cart → check out) to reach code a single request never can.</p>
+  <pre><code><span class="c"># a rule: alternatives may be literals, a corpus file, a structure, or a generator</span>
+$itemId     = @../corpus/jpetstore/values/itemId.txt | ~EST-[0-9]{1,4} | &lt;empty&gt; | &lt;string&gt;
+$categoryId = FISH | DOGS | ~[A-Z]{4,8}
+
+<span class="c"># a route template; ${name} expands to one alternative of that rule</span>
+/actions/Catalog.action?viewItem=&amp;itemId=${itemId}</code></pre>
+  <p>Why all three kinds of value: real values reach happy paths and deep code; structurally valid but
+    nonexistent values get past parsing into the lookup/dereference code where the interesting failures
+    live; purely random junk gets rejected at the first validation. Using only one finds noticeably
+    less.</p>
+
+  <h2>The decoupled dashboard</h2>
+  <p>The web dashboard is a <strong>standalone process</strong> — never embedded in a driver, never
+    anywhere near the app under test. Run it once; any number of drivers (one per campaign, one per
+    pod) push their status and findings to it, keyed by campaign id (defaults to <code>HOSTNAME</code>,
+    a pod's name in Kubernetes). The page shows a fleet view of every reporting campaign, with
+    drill-down into metric cards, a coverage bar, and a findings table — route, detail, and
+    classification, not just counts.</p>
+  <p>It uses the JDK's built-in <code>httpserver</code> (no extra dependency on either side), binds
+    <strong>127.0.0.1</strong> by default, and guards its ingest/analyze endpoints — the analysis
+    endpoint spends API credit, so network exposure is opt-in.</p>
+  <div class="pipeline">
+    <div class="stage">Driver A</div>
+    <div class="arrow">↘</div>
+    <div class="stage accent">Dashboard<br>127.0.0.1:7070</div>
+    <div class="arrow">↖</div>
+    <div class="stage">Driver B</div>
+  </div>
+
+  <div class="note">
+    <span class="tag">design</span>
+    <p>Every significant choice — the decoupled dashboard (DD-013), the namespace-free valve (DD-011),
+      union coverage across replicas (DD-023) — is recorded with its rejected alternatives in
+      <a href="https://github.com/ianp94/closureJVM/blob/main/docs/DESIGN-DECISIONS.md">DESIGN-DECISIONS.md</a>.
+      The fuller architecture writeup is
+      <a href="https://github.com/ianp94/closureJVM/blob/main/docs/ARCHITECTURE.md">ARCHITECTURE.md</a>.</p>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap-wide footer-inner">
+    <div>ClosureJVM — availability-first testing for JVM web apps.</div>
+    <div class="links">
+      <a href="index.html">Home</a>
+      <a href="getting-started.html">Get started</a>
+      <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
+      <a href="https://github.com/ianp94/closureJVM">GitHub</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

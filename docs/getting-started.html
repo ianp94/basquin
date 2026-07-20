@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started — ClosureJVM</title>
+<meta name="description" content="Clone and build ClosureJVM, run the thread-leak demo, drive a running web app, and read the live status panel.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html">
+      <svg class="logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="8" fill="#5b3df5"/>
+        <path d="M12 9c-3 0-4 2-4 4v2.2c0 1-.4 1.6-1.4 1.8 1 .2 1.4.8 1.4 1.8V23c0 2 1 4 4 4" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+        <path d="M20 9c3 0 4 2 4 4v2.2c0 1 .4 1.6 1.4 1.8-1 .2-1.4.8-1.4 1.8V23c0 2-1 4-4 4" stroke="#c4b3ff" stroke-width="2" stroke-linecap="round" fill="none"/>
+      </svg>
+      ClosureJVM
+    </a>
+    <nav class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="getting-started.html" class="active">Get started</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
+      <a class="gh" href="https://github.com/ianp94/closureJVM">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <div class="breadcrumb">docs / getting-started</div>
+    <h1>Getting started</h1>
+    <p class="lead">Clone, build, catch a deliberate leak, then drive a real app and read the live
+      status panel. Every command below is a real Gradle task or flag.</p>
+    <div class="tag-list">
+      <span class="pill">Java 17+ (tested 17 &amp; 21)</span>
+      <span class="pill">Gradle wrapper included</span>
+    </div>
+  </div>
+
+  <h2>1 &nbsp;Clone &amp; build</h2>
+  <p>Java 17 or newer is the only prerequisite; the Gradle wrapper is bundled.</p>
+  <pre><code><span class="c"># clone</span>
+git clone https://github.com/ianp94/closureJVM.git
+cd closureJVM
+
+<span class="c"># compile + run checks</span>
+./gradlew build
+
+<span class="c"># build the fat jar (agent + runner + examples)</span>
+./gradlew jar   <span class="c"># -> build/libs/closurejvm-0.2.0.jar</span></code></pre>
+
+  <h2>2 &nbsp;See a leak get caught</h2>
+  <p>The fastest way to see the point of the tool: run the deliberate thread-leak demo. It
+    <strong>fails on purpose</strong> — a worker thread survives the iteration boundary and the
+    harness reports it with a stack.</p>
+  <pre><code><span class="c"># thread-leak demo — non-zero exit, that's the demo working</span>
+./gradlew runRunnerLeak
+
+<span class="c"># prove stability instead: 10,000 clean iterations, prints metrics</span>
+./gradlew runSoakProper</code></pre>
+  <div class="note">
+    <span class="tag">tip</span>
+    <p>For demos and CI, add <code>-Dclosurejvm.forceExitOnLeak=true</code> so the process exits
+      immediately on a leak or hard invariant instead of finishing the run.</p>
+  </div>
+
+  <h2>3 &nbsp;Drive a running web app</h2>
+  <p>Point the HTTP driver at any running app to measure real end-to-end latency, treat 5xx as a
+    crash, and watch the live status screen. If the app carries the ClosureJVM valve/filter, the
+    driver also harvests server-side <code>X-ClosureJVM-Invariant-*</code> response headers.</p>
+  <pre><code>./gradlew runHttpDrive \
+  <span class="f">-Dexamples.http.baseUrl</span>=<span class="s">http://localhost:8080</span> \
+  <span class="f">-Dclosurejvm.invariant.latency.maxMs</span>=<span class="s">50</span> \
+  <span class="f">-Dclosurejvm.invariant.mode</span>=<span class="s">soft</span> \
+  <span class="f">-Ddrive.iterations</span>=<span class="s">200</span></code></pre>
+  <p>Set a latency budget with <code>-Dclosurejvm.invariant.latency.maxMs</code> and use
+    <code>soft</code> mode to record and keep going (rather than <code>hard</code>, which fails fast
+    on the first violation). For coverage-guided exploration with a request grammar and a live
+    dashboard, see <a href="kubernetes-tomcat.html">the Kubernetes / Tomcat guide</a>.</p>
+
+  <h2>4 &nbsp;Run against embedded Tomcat</h2>
+  <p>ClosureJVM ships a small embedded-Tomcat target with three routes — <code>/crash</code>,
+    <code>/latency</code>, <code>/heap</code> — that exercise both the crash and the invariant
+    oracles inside a single JVM (opt-in; JQF is not run in CI).</p>
+  <pre><code><span class="c"># coverage-guided exploration of the embedded Tomcat routes</span>
+./gradlew runFuzzTomcatJQF -DenableJQF=true
+
+<span class="c"># deterministic replay of the saved corpus (no JQF needed)</span>
+./gradlew runTomcatCorpus</code></pre>
+  <p>Saved inputs land under <code>fuzz-results/&lt;target&gt;/</code> as a <code>.bin</code> plus a
+    <code>.meta.txt</code> triage report (classification, timestamp, invariant violated, stacks).</p>
+
+  <h2>5 &nbsp;Point it at <em>your</em> app</h2>
+  <p>Implement the three-method <code>IterationTarget</code> interface — one iteration is one request
+    or unit of work. Optionally implement <code>InputReceiver</code> to accept fuzz input.</p>
+  <pre><code>package your.pkg;
+import runner.api.IterationTarget;
+
+public class YourTarget implements IterationTarget {
+  public void initialize()       throws Exception { <span class="c">/* start app/server */</span> }
+  public void executeIteration() throws Exception { <span class="c">/* one request / unit of work */</span> }
+  public void close()            throws Exception { <span class="c">/* cleanup */</span> }
+}</code></pre>
+  <pre><code>java -cp build/libs/closurejvm-0.2.0.jar:&lt;your-cp&gt; \
+  runner.GenericRunner 100 your.pkg.YourTarget</code></pre>
+
+  <h2>Key flags</h2>
+  <p>The flags you'll reach for first. The full catalog is in
+    <a href="https://github.com/ianp94/closureJVM/blob/main/docs/USAGE.md">USAGE.md</a>.</p>
+
+  <h3>Invariants</h3>
+  <p>Disabled unless set. Modes: <code>hard</code> (fail fast) or <code>soft</code> (record and
+    continue); mode can be overridden per invariant (e.g. <code>...latency.mode</code>).</p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Flag</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>-Dclosurejvm.invariant.latency.maxMs=100</code></td><td>Latency budget per iteration</td></tr>
+        <tr><td><code>-Dclosurejvm.invariant.heapDelta.maxKb=256</code></td><td>Max heap growth per iteration</td></tr>
+        <tr><td><code>-Dclosurejvm.invariant.threadDelta.max=2</code></td><td>Max surviving new threads</td></tr>
+        <tr><td><code>-Dclosurejvm.invariant.mode=hard|soft</code></td><td>Fail fast, or record + continue</td></tr>
+        <tr><td><code>-Dclosurejvm.invariant.stack=current|all|off</code></td><td>Evidence captured on violation (default <code>current</code>)</td></tr>
+        <tr><td><code>-Dclosurejvm.invariant.latency.sample=true</code></td><td>Sample the execution stack at the latency threshold</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Runner &amp; measurement</h3>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Flag</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>-Dclosurejvm.status=true</code></td><td>Live AFL-style status screen (suppresses per-iteration log spam)</td></tr>
+        <tr><td><code>-Dclosurejvm.status.forceTty=true</code></td><td>Render the status box even when output is piped</td></tr>
+        <tr><td><code>-Dclosurejvm.heap.gcBeforeMeasure=true</code></td><td>GC before heap baseline so the delta is retention, not allocation noise</td></tr>
+        <tr><td><code>-Dclosurejvm.forceExitOnLeak=true</code></td><td>Exit immediately on a leak / hard invariant (demos, CI)</td></tr>
+        <tr><td><code>-Dclosurejvm.native.lib=&lt;abs path&gt;</code></td><td>Load the JVMTI native agent (same path as <code>-agentpath</code>)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>HTTP driver</h3>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Flag</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>-Dexamples.http.baseUrl=&lt;url&gt;</code></td><td>Target base URL for the HTTP driver</td></tr>
+        <tr><td><code>-Dexamples.http.routes=&lt;csv&gt;</code></td><td>Routes to drive</td></tr>
+        <tr><td><code>-Ddrive.iterations=&lt;n&gt;</code></td><td>Number of requests to send</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Reading the status panel</h2>
+  <p>With <code>-Dclosurejvm.status=true</code> the runner draws a live AFL-style status screen (redraw
+    interval <code>-Dclosurejvm.status.intervalMs</code>, default 1000ms). What the rows mean:</p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Row</th><th>What it tells you</th></tr></thead>
+      <tbody>
+        <tr><td><strong>execs / execs/sec</strong></td><td>Iterations completed and throughput.</td></tr>
+        <tr><td><strong>crashes</strong></td><td>Genuine faults only — unhandled exceptions and 5xx. Expected input rejections are counted separately as <em>rejected</em>, not here.</td></tr>
+        <tr><td><strong>invariant finds</strong></td><td>Iterations that tripped a latency / heap / thread invariant. On a valve-instrumented app these are harvested server-side.</td></tr>
+        <tr><td><strong>rejected</strong></td><td>Inputs a target's <code>CrashClassifier</code> declared as expected validation failures — not bugs.</td></tr>
+        <tr><td><strong>corpus / last find</strong></td><td>Corpus size and time since the last interesting input, during exploration.</td></tr>
+        <tr><td><strong>coverage %</strong></td><td>Real "% of code explored" in the app under test, read from its JaCoCo agent — lights up only when a coverage source reports.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">
+    <span class="tag">next</span>
+    <p>Want the whole picture — the iteration boundary, invariants, the JVMTI agent, the valve, and
+      coverage-guided exploration? Read <a href="how-it-works.html">How it works</a>. To instrument
+      your own Tomcat WAR in Kubernetes, see the
+      <a href="kubernetes-tomcat.html">K8s / Tomcat guide</a>.</p>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap-wide footer-inner">
+    <div>ClosureJVM — availability-first testing for JVM web apps.</div>
+    <div class="links">
+      <a href="index.html">Home</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
+      <a href="https://github.com/ianp94/closureJVM">GitHub</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

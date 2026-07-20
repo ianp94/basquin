@@ -1,0 +1,361 @@
+# ClosureJVM operator — usage guide
+
+How to actually drive the operator: instrument a running app, run a bounded coverage-guided test
+against it, and read the result. For *why* the operator is shaped this way (explicit-patch vs.
+admission webhook, the two-CRD split, the trust boundary), see [OPERATOR-DESIGN.md](OPERATOR-DESIGN.md)
+and [CAMPAIGN-DESIGN.md](CAMPAIGN-DESIGN.md); this doc is the task-oriented companion to them.
+
+The canonical, always-working reference is [`deploy/e2e/e2e.sh`](../deploy/e2e/e2e.sh) — it builds
+every image, deploys the operator, instruments a raw JPetStore, runs a campaign, and asserts the
+result in a kind cluster. Every YAML block below is adapted from it.
+
+## 1. Overview
+
+The operator is two custom resources in group `closurejvm.dev/v1alpha1`:
+
+- **`ClosureJVMTarget`** — *instrument a Deployment*. Long-lived: it patches an unmodified app
+  Deployment to load the ClosureJVM agents (thread tracker, JaCoCo coverage) and, optionally, stands
+  up a headless coverage Service. Reversible — deleting it restores the app exactly. "This app
+  carries the agents."
+- **`ClosureJVMCampaign`** — *run a bounded test*. Ephemeral: it references an already-instrumented
+  target, launches the coverage-guided driver as a `Job`, and (by default) a per-campaign dashboard,
+  then aggregates the result into status. One target can be driven by many campaigns over time.
+
+You instrument once (target), then run tests against it (campaigns).
+
+> **Namespaced by design.** The operator watches and mutates only its own namespace — `WATCH_NAMESPACE`
+> is set from the pod's namespace via the downward API, and the operator *refuses to start* if it's
+> empty rather than defaulting to cluster-wide. The standing privilege is a `Role`/`RoleBinding` in
+> one namespace, never a `ClusterRole`. To instrument another namespace, install another instance.
+> See [OPERATOR-DESIGN.md §6](OPERATOR-DESIGN.md#6-rbac--the-trust-boundary-concretely).
+
+## 2. Prerequisites & install
+
+The operator install is three things: the **two CRDs**, the **namespaced RBAC** (ServiceAccount +
+Role + RoleBinding), and the **controller Deployment**. It also needs three images it launches or
+injects — you supply each via a flag:
+
+| Image | Flag | Used for |
+|-------|------|----------|
+| `closurejvm/agents` | `--agents-image` | the initContainer the target injection copies agents from |
+| `closurejvm/runner` | `--runner-image` | the campaign driver `Job` (coverage-guided runner) |
+| `closurejvm/dashboard` | `--dashboard-image` | the per-campaign dashboard Deployment |
+
+Each flag empty falls back to a built-in default; in practice you pin them to a fixed tag you built
+and loaded, so the cluster uses your image instead of pulling.
+
+> **No Helm chart yet** — it's on the roadmap. Installation today is kustomize (`config/default`)
+> plus wiring the three image flags onto the controller Deployment, exactly as below.
+
+**Build the three images** (each `build.sh` takes `[TAG] [KIND_CLUSTER]`; with a cluster name it also
+`kind load`s the image):
+
+```bash
+deploy/agents-image/build.sh    0.2.0 <kind-cluster>    # => closurejvm/agents:0.2.0
+deploy/runner-image/build.sh    0.2.0 <kind-cluster>    # => closurejvm/runner:0.2.0
+deploy/dashboard-image/build.sh 0.2.0 <kind-cluster>    # => closurejvm/dashboard:0.2.0
+
+# operator image (a fixed tag => IfNotPresent, so kind uses the loaded image, not controller:latest)
+docker build -t closurejvm/operator:0.2.0 operator/
+kind load docker-image closurejvm/operator:0.2.0 --name <kind-cluster>
+```
+
+**Install the CRDs + operator** (kustomize, pinning the operator image):
+
+```bash
+kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml
+kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmcampaigns.yaml
+kubectl create namespace closurejvm-system
+
+kubectl kustomize operator/config/default \
+  | sed 's#image: controller:latest#image: closurejvm/operator:0.2.0#' \
+  | kubectl apply -f -                      # controller Deployment + ServiceAccount/Role/RoleBinding
+```
+
+**Wire the three image flags** onto the controller (append to its container args, then restart):
+
+```bash
+for arg in \
+  --agents-image=closurejvm/agents:0.2.0 \
+  --runner-image=closurejvm/runner:0.2.0 \
+  --dashboard-image=closurejvm/dashboard:0.2.0 ; do
+  kubectl -n closurejvm-system patch deploy closurejvm-controller-manager --type=json \
+    -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"$arg\"}]"
+done
+
+kubectl -n closurejvm-system rollout status deploy/closurejvm-controller-manager --timeout=120s
+```
+
+(The e2e script guards each patch so repeated runs don't append duplicate args — do the same if you
+re-run it by hand.)
+
+## 3. Instrument an app (`ClosureJVMTarget`)
+
+Point a `ClosureJVMTarget` at a Deployment in the same namespace. The operator patches that
+Deployment's pod template — an initContainer copies the agents into a shared `emptyDir`, the agent
+flags are **appended** to the container's JVM opts env var (never replacing your heap/GC flags), the
+coverage port is exposed — then rolls it out.
+
+```yaml
+apiVersion: closurejvm.dev/v1alpha1
+kind: ClosureJVMTarget
+metadata:
+  name: jpetstore
+  namespace: closurejvm-system
+spec:
+  # WHAT to instrument — a Deployment in this namespace.
+  deploymentRef:
+    name: jpetstore
+  # WHICH container in the pod template. Optional when the pod has one container; REQUIRED otherwise.
+  container: jpetstore
+
+  # HOW the JVM picks up the agents. The operator APPENDS its flags to this env var's existing value.
+  #   CATALINA_OPTS       — Tomcat images
+  #   JAVA_TOOL_OPTIONS   — everything else (the default)
+  jvmOptsVar: CATALINA_OPTS
+
+  # WHICH agents to inject. Each toggles independently.
+  agents:
+    threadTracker: true          # native JVMTI agent (-agentpath) — the leak/thread oracle (default true)
+    coverage:
+      enabled: true              # JaCoCo tcpserver for coverage-guided-over-HTTP
+      port: 6300                 # coverage port inside the pod (default 6300)
+      includes: "org.mybatis.jpetstore.*"   # REQUIRED when enabled — no wildcard default (DD-022)
+
+  # Invariant thresholds, passed through as -Dclosurejvm.invariant.* flags.
+  invariants:
+    mode: soft                   # soft (record + continue) | hard (fail the iteration). default soft
+    latencyMaxMs: 25
+    heapDeltaMaxKb: 256
+
+  # Create a headless Service selecting this target's pods on the coverage port, so one driver can
+  # reach every replica by DNS for DD-023 union coverage. Opt-in.
+  coverageService: true
+```
+
+Field notes:
+
+- **`agents.coverage.includes` is mandatory when coverage is enabled** and has no default. A `"*"`
+  filter silently instruments Tomcat/MyBatis, inflating the coverage denominator and faking latency
+  violations (DD-022); the CRD's CEL rule rejects an empty/omitted `includes` at apply time.
+- **`agents.valve`** (Tomcat server-side invariant valve, default true in the schema) exists but valve
+  *mounting* is deferred — it needs a `context.xml` entry, not a JVM flag — so leave it as is for now.
+- **`jvmOptsVar`** is an enum: only `CATALINA_OPTS` or `JAVA_TOOL_OPTIONS`. The original value is
+  stashed so revert is exact.
+- **`dashboardPush`** (`host:port`) — optional; push server-side status/findings to a standalone
+  dashboard. Leave empty unless you already run one.
+
+**Check it landed.** Wait for `status.phase` to reach `Injected` and grab the coverage endpoint the
+campaign will consume:
+
+```bash
+kubectl -n closurejvm-system get closurejvmtargets
+# NAME        DEPLOYMENT   PHASE      INSTRUMENTED   AGE
+# jpetstore   jpetstore    Injected   1              30s
+
+kubectl -n closurejvm-system get closurejvmtarget jpetstore -o jsonpath='{.status.coverageEndpoint}'
+# jpetstore-cjvm-jacoco.closurejvm-system.svc.cluster.local:6300
+```
+
+Phases: `Pending → Injecting → Injected` (or `Reverting`/`Error`). With `coverageService: true` the
+operator creates a headless Service named after the **Deployment it targets** —
+`<deploymentRef.name>-cjvm-jacoco` (not the `ClosureJVMTarget` CR's own name; they match in this
+example) — and writes its DNS name to `status.coverageEndpoint`.
+
+## 4. Run a test (`ClosureJVMCampaign`)
+
+Once the target is `Injected`, a `ClosureJVMCampaign` drives it. The operator gates on the target
+being `Injected`, reads its `status.coverageEndpoint` for coverage, launches the driver `Job`, and
+aggregates status.
+
+```yaml
+apiVersion: closurejvm.dev/v1alpha1
+kind: ClosureJVMCampaign
+metadata:
+  name: jpetstore-campaign
+  namespace: closurejvm-system
+spec:
+  # WHAT to drive — an existing ClosureJVMTarget in this namespace (must be Injected before the run).
+  targetRef:
+    name: jpetstore
+
+  # REQUIRED — the app's HTTP entrypoint. The operator does NOT front the app with a Service of its
+  # own, so name an in-cluster Service URL here (you create the app Service yourself).
+  baseURL: http://jpetstore-app.closurejvm-system.svc.cluster.local:8080
+
+  driver:
+    # Bound the run — set EXACTLY ONE of iterations / duration (CEL-enforced).
+    iterations: 200
+    # duration: "10m"            # ...or a Go-style duration; the runner exits cleanly at the deadline
+
+    # Grammar + corpus come from ConfigMaps (see §5).
+    grammarConfigMap: jpetstore-grammar
+    corpusConfigMap: jpetstore-corpus
+    # grammarKey: jpetstore.grammar   # optional; defaults to the ConfigMap's sole key
+
+    # Where the app's .class files live INSIDE the target's container image. An initContainer copies
+    # them out for JaCoCo covered/total analysis. Default is the Tomcat WAR layout below.
+    classesPath: /usr/local/tomcat/webapps/ROOT/WEB-INF/classes
+
+    # Optional — invariants for the driver JVM (same shape as the target's).
+    # invariants: { mode: soft, latencyMaxMs: 25, heapDeltaMaxKb: 256 }
+
+  # dashboard: {}                # per-campaign dashboard on by default — see §6
+```
+
+Field notes:
+
+- **`baseURL` is required** — there's no default. It's the URL the driver hits, typically a ClusterIP
+  Service you put in front of the app pods.
+- **`driver.iterations` XOR `driver.duration`** — set exactly one. `iterations` uses the runner's
+  count cap; `duration` (e.g. `"10m"`, `"30s"`) makes the runner stop and exit cleanly at the deadline
+  so its summary still gets written (a hard kill would skip it — DD-025 §7.2).
+- **`driver.classesPath`** must point at real `.class` *files in the target image*. A war-only image
+  (no exploded `WEB-INF/classes`) has nothing to copy and coverage reports zero — see Troubleshooting.
+
+## 5. Grammar & corpus ConfigMaps
+
+The driver's exploration surface is a **grammar** (structure) and a **corpus** (values), each delivered
+as a ConfigMap. The split — corpus supplies real values, grammar supplies how to invent new ones that
+look real — is DD-018; for writing a grammar see [USAGE.md → "Writing a request grammar"](USAGE.md#writing-a-request-grammar).
+
+**Grammar ConfigMap** — one key, the grammar file. `grammarKey` defaults to the sole key, so you can
+omit it if the ConfigMap has exactly one entry:
+
+```bash
+kubectl -n closurejvm-system create configmap jpetstore-grammar \
+  --from-file=jpetstore.grammar=examples/grammar/jpetstore.grammar \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+**Corpus ConfigMap** — a *flat* map of files keyed by basename. The example corpus has two levels —
+route-seed files at the top (`cart_add.txt`, `catalog_item.txt`, …) and value files under `values/`
+(`itemId.txt`, `categoryId.txt`, …). `kubectl create configmap --from-file` on a directory is
+**non-recursive**, so pass *both* levels; each file lands as a key named by its basename:
+
+```bash
+kubectl -n closurejvm-system create configmap jpetstore-corpus \
+  --from-file=examples/corpus/jpetstore/ \
+  --from-file=examples/corpus/jpetstore/values/ \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+How this resolves at run time: the driver mounts the ConfigMap and runs with
+`-Dclosurejvm.corpusDir=<mount>`. The route-seed files are walked for `/`-prefixed routes, and the
+grammar's `@`-value-file references — e.g. `@../corpus/jpetstore/values/itemId.txt` — fall back to
+`<corpusDir>/<basename>` (i.e. the key `itemId.txt`). That's why the flat basename convention matters:
+`@../a/b/c/itemId.txt` and a ConfigMap key `itemId.txt` must line up.
+
+## 6. Dashboard
+
+By default every campaign gets its **own** dashboard — the operator creates a Deployment + Service
+(`<campaign>-dashboard`, ClusterIP on port **7070**), owner-referenced to the campaign so it's
+garbage-collected when the campaign is deleted. The URL is published to `status.dashboardURL`. It's a
+ClusterIP with **no auth**, so reach it with a port-forward:
+
+```bash
+kubectl -n closurejvm-system get closurejvmcampaign jpetstore-campaign -o jsonpath='{.status.dashboardURL}'
+# http://jpetstore-campaign-dashboard.closurejvm-system.svc.cluster.local:7070
+
+kubectl -n closurejvm-system port-forward svc/jpetstore-campaign-dashboard 7070:7070
+# then open http://localhost:7070
+```
+
+The dashboard **outlives the run** — it's GC'd with the campaign, not with the driver Job, so results
+stay viewable after the driver completes.
+
+Two alternatives on `spec.dashboard`:
+
+```yaml
+dashboard:
+  enabled: false                 # don't create a dashboard at all
+```
+```yaml
+dashboard:
+  externalPush: "closurejvm-dashboard.closurejvm-system.svc:7070"   # push to a shared, long-lived one
+```
+
+`externalPush` fans many campaigns into one dashboard for cross-campaign comparison. `enabled` is a
+`*bool` deliberately, so `enabled: false` actually sticks (a plain bool would re-default to true).
+
+> The no-auth ClusterIP posture is fine for single-tenant use — nothing is exposed outside the
+> cluster without a port-forward or Ingress you add. See [CAMPAIGN-DESIGN.md §7 decision 3](CAMPAIGN-DESIGN.md#7-decisions).
+
+## 7. Reading results
+
+The driver writes a machine-readable summary the operator surfaces in campaign status — no dashboard
+scraping needed:
+
+```bash
+kubectl -n closurejvm-system get closurejvmcampaign
+# NAME                 TARGET      PHASE       COVERAGE   FINDINGS   AGE
+# jpetstore-campaign   jpetstore   Completed   23.1       19         5m
+
+kubectl -n closurejvm-system get closurejvmcampaign jpetstore-campaign -o yaml | less
+# status.phase / coveragePct / findings / dashboardURL / driverJob / startTime / completionTime
+```
+
+Phase machine: **`Pending`** (target not yet `Injected`) → **`Provisioning`** (creating dashboard /
+driver Job) → **`Running`** (driver Job active) → **`Completed`** (Job succeeded, summary read) or
+**`Failed`** (driver failed, or the target went away mid-run). `status.driverJob` names the `Job` —
+tail its logs to triage a run:
+
+```bash
+kubectl -n closurejvm-system logs job/$(kubectl -n closurejvm-system get closurejvmcampaign \
+  jpetstore-campaign -o jsonpath='{.status.driverJob}')
+```
+
+## 8. Editing a running campaign
+
+The campaign spec is hashed onto the driver `Job`. Jobs are immutable, so **editing the spec triggers
+a fresh run** — the operator deletes and recreates the driver Job with the new config. That's the
+intended semantics for "I changed the test": change `iterations`, the grammar ConfigMap ref, or an
+invariant, and re-apply, and a new run starts. A steady, unchanged campaign is a no-op reconcile.
+
+## 9. Cleanup
+
+Delete the CRs; owner references and finalizers do the rest.
+
+```bash
+# Delete the campaign FIRST — owner refs GC its driver Job + dashboard.
+kubectl -n closurejvm-system delete closurejvmcampaign jpetstore-campaign
+
+# Then the target — a finalizer reverts the Deployment to its exact pre-injection state
+# (initContainer/volume/env/port removed, jvmOptsVar restored) and GCs the coverage Service.
+kubectl -n closurejvm-system delete closurejvmtarget jpetstore
+```
+
+Delete the campaign before the target: the campaign's driver Job depends on the target's coverage
+Service, so let it GC first. Deleting a campaign never un-instruments the app — targets are shared and
+outlive campaigns.
+
+## 10. Troubleshooting
+
+- **Target stuck `Pending`, never `Injected`.** The operator observed the CR but hasn't injected.
+  Check `--agents-image` is wired onto the controller and pullable; check the operator logs for RBAC
+  `forbidden` errors (`kubectl -n <ns> logs deploy/closurejvm-controller-manager`); confirm
+  `deploymentRef.name` matches a real Deployment in the *same* namespace, and that `container` names a
+  real container when the pod has more than one.
+- **No `status.coverageEndpoint`.** You didn't set `coverageService: true`, or coverage isn't enabled.
+  The campaign needs this endpoint — with it absent, there's nothing to read coverage from.
+- **Campaign stuck `Pending`.** The target isn't `Injected` yet (the campaign gates on it and requeues).
+  Fix the target first; the campaign starts as soon as injection completes.
+- **Campaign `Failed` with `InitContainerFailed` — "no .class files extracted".** The `verify-classes`
+  initContainer found nothing at `driver.classesPath`, so the run fails loudly instead of reporting a
+  misleading 0% coverage. The usual cause is a **war-only image**: it has no exploded `WEB-INF/classes`
+  to copy (Tomcat only unpacks the WAR at runtime, so the files aren't in the image layers). The image
+  must ship the classes as files — the e2e explodes `ROOT.war` into `webapps/ROOT/` for exactly this
+  reason. Point `classesPath` at the real in-image location, or bake an exploded webapp. The reason and
+  message are in `status.conditions` (`kubectl get closurejvmcampaign -o yaml`), not only in pod logs.
+- **Campaign `Failed` for other reasons.** Check `status.conditions[].reason`/`message`, then tail
+  `job/<status.driverJob>` logs. Common causes: `baseURL` unreachable from the driver pod (wrong
+  Service name/namespace/port → `DriverFailed`), or the target reverted/was deleted mid-run
+  (`TargetGone`).
+- **Grammar/corpus mismatch — value files reported missing.** The grammar's `@`-value-file basenames
+  must exist as ConfigMap keys. Remember `--from-file` on a directory is non-recursive: include the
+  `values/` subdir explicitly (§5), or the value keys won't be present in the mount.
+- **RBAC `forbidden` in operator logs.** The install's Role is missing a grant, or the operator is
+  running against the wrong namespace. The operator is namespaced-by-design — confirm `WATCH_NAMESPACE`
+  is set (it refuses to start otherwise) and that the RoleBinding is in the namespace you're applying
+  CRs into.
+```

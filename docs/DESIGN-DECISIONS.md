@@ -790,3 +790,41 @@ parallelism that having replicas buys, and still misses whatever the other pods'
 state reach); scraping per-pod files and merging offline (a live campaign needs the number now, and
 the tcpserver dump already streams it); averaging pod percentages (a covered line on any pod is
 covered — union, not mean, is the fleet's real reach).
+
+## DD-024: The operator instruments by appending, is idempotent, and reverts via a finalizer (2026-07-20)
+
+**Context.** Operator P2 (docs/OPERATOR-DESIGN.md §4) makes the `ClosureJVMTarget` controller patch
+the referenced Deployment to carry the agents in an *unmodified* app image. Several sub-decisions
+shape whether that patch is safe and reversible.
+
+**Decision.**
+1. **Copy agents in via an initContainer + shared `emptyDir`.** The app image doesn't contain our
+   agents, so an initContainer running a versioned `closurejvm/agents` image copies them into an
+   `emptyDir` mounted into the app container at `/closurejvm`. Agent upgrades are an image-tag bump,
+   never a target rebuild. The image is operator-configurable (`--agents-image`).
+2. **Append to `jvmOptsVar`, never replace.** The app's own `CATALINA_OPTS`/`JAVA_TOOL_OPTIONS`
+   (heap sizing, GC flags) must survive. The original value is stashed in a
+   `closurejvm.dev/original-jvmopts` annotation and the injected value is always recomputed as
+   `<original> + " " + <agent flags>`, so re-reconciling never double-appends.
+3. **Idempotency by spec hash.** A `closurejvm.dev/injected: <hash>` annotation records the spec the
+   Deployment was last patched for; a steady target is a no-op on every resync, and a spec change
+   re-derives from the stashed original rather than layering onto an already-injected value.
+4. **Revert via a finalizer, not owner references.** The target holds a `closurejvm.dev/revert`
+   finalizer; deleting it removes the initContainer/volume/mount/port and restores the original
+   `jvmOptsVar` — the Deployment returns to exactly its pre-injection shape. Owner references were
+   **rejected**: the operator patches a Deployment it does not own, and an owner ref would make
+   Kubernetes *garbage-collect that Deployment* when the target is deleted, when the intent is to
+   revert it. Drift and late-appearing Deployments are handled by a mapping watch instead (list
+   targets in the namespace whose `deploymentRef.name` matches the Deployment).
+5. **The valve is deferred.** The Tomcat valve is not a JVM flag — it needs a Catalina
+   `context.xml` Valve entry — so `agents.valve` injects nothing in P2; the JVMTI agent, Java agent
+   (+ bootclasspath), JaCoCo coverage agent, and `-Dclosurejvm.*` flags (all pure JVM opts) are the
+   P2 surface. Valve mounting is backlog.
+
+**Verified.** envtest (real apiserver) asserts: the patch shape (initContainer/volume/mount/env/port),
+that the original `jvmOptsVar` is preserved at the front, idempotency across repeated reconciles, the
+`Injected` phase once replicas roll over, a `ContainerNotResolved` error on an ambiguous container,
+and — the safety property — that deleting the target reverts the Deployment byte-for-byte.
+
+**Not yet.** End-to-end against a real pod needs the `closurejvm/agents` image built and published
+(backlog); P2 proves the reconcile/patch/revert logic, which is the risky part.

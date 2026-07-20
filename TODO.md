@@ -313,9 +313,11 @@ processes is effectively remote code execution on whatever it runs on. **Update 
     and **namespaced** RBAC — one `ClusterRole` bound via `RoleBinding` (no `ClusterRoleBinding`,
     no webhook), manager cache scoped to `WATCH_NAMESPACE` and refuses to run cluster-wide. Zero
     mutation risk. Renders clean (`kubectl kustomize`), `go build`/`go vet` green.
-  - [ ] **P2 — injection + revert.** Deployment patch (initContainer + `emptyDir` + appended
-    `jvmOptsVar` + coverage port), spec-hash idempotency, finalizer-based exact revert. Verify by
-    instrumenting the **stock** JPetStore image instead of the baked one. Record **DD-024** here.
+  - [x] **P2 — injection + revert (DD-024).** Deployment patch (initContainer + `emptyDir` + appended
+    `jvmOptsVar` + coverage port), spec-hash idempotency, finalizer-based exact revert, Deployment
+    mapping-watch (no owner refs — they'd GC the Deployment). envtest verifies patch shape / append /
+    idempotency / exact revert / Injected phase (7/7). *Remaining:* e2e against a real pod needs the
+    `closurejvm/agents` image (Backlog); valve mounting deferred (needs Tomcat `context.xml`).
   - [ ] **P3 — coverage Service + status.** Headless Service (Ready-pod IPs), `status.coverageEndpoint`,
     wired end-to-end to the DD-023 union-coverage driver flag across replicas.
   - [ ] **P4 — docs + demo.** Replace the bake-into-the-image path in `deploy/k8s` with an

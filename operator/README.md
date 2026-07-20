@@ -5,18 +5,24 @@ rationale: [`../docs/OPERATOR-DESIGN.md`](../docs/OPERATOR-DESIGN.md). Built wit
 controller-runtime as a self-contained Go module so the control plane stays runtime-agnostic (the
 Gradle/JVM build is untouched).
 
-## Status: P1 — scaffold + CRD + no-op controller
+## Status: P2 — injection + finalizer revert (DD-024)
 
-This is the first, deliberately **zero-mutation** phase. The controller only *observes*:
+The controller now **instruments** the referenced Deployment, reversibly:
 
-- It watches `ClosureJVMTarget` resources and reads (never writes) the Deployment each one names.
-- It reports what it sees into `status` — `phase: Pending`, `observedGeneration`, and a `Ready`
-  condition (`DeploymentNotFound` if the target is missing, else `ObserveOnly` stating plainly that
-  this build does not inject yet).
-- `instrumentedReplicas` is always `0` here — **no pod is ever patched in P1.**
+- Patches the pod template: an initContainer copies the agents from a versioned image into a shared
+  `emptyDir`, mounts it into the app container, **appends** the agent flags to the container's
+  `jvmOptsVar` (`CATALINA_OPTS`/`JAVA_TOOL_OPTIONS`) — never replacing the app's own flags — and
+  exposes the coverage port.
+- **Idempotent**: a `closurejvm.dev/injected: <spec-hash>` annotation makes a steady target a no-op;
+  the original `jvmOptsVar` is stashed so re-reconciles never double-append.
+- **Reverts exactly**: a `closurejvm.dev/revert` finalizer restores the Deployment to its
+  pre-injection shape when the target is deleted. No owner references (they would make Kubernetes
+  garbage-collect the Deployment, not revert it); drift is handled by a Deployment mapping-watch.
+- `status.phase` is `Injecting` → `Injected`, with `instrumentedReplicas` from the rollout.
 
-Injection (the Deployment patch, finalizer, and exact revert) lands in **P2**, which is where this
-records DD-024. See the phased plan in the design doc §8.
+**Not yet:** end-to-end against a real pod needs the `closurejvm/agents` image built (backlog); the
+Tomcat valve is deferred (it needs a `context.xml` Valve entry, not a JVM flag). P1's observe-only
+behavior is superseded by injection. See the phased plan in the design doc §8.
 
 ## The `ClosureJVMTarget` API
 

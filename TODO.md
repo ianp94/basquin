@@ -168,7 +168,10 @@ Goal: Make the measurement layer trustworthy and cheap enough to point at real a
 - [x] Injection mechanism decided + built: Tomcat valve (DD-009), verified loading in real
       Tomcat 10.1; valve and in-WAR filter are mutually exclusive. Scaffolding:
       `tomcat-valve/`, `deploy/valve/context.xml`, `docker-compose.valve.yml`, docs/THIRD-PARTY-APPS.md
-- [ ] JPetStore (MyBatis) live run — needs a jakarta-compatible WAR build; wire HTTP driver + seed corpus for its routes
+- [x] JPetStore (MyBatis) live run DONE (2026-07-19): javax.servlet, deployed on Tomcat 9 with
+      the namespace-free valve; server-side latency (up to 531ms cold) + heap (up to 44MB/req)
+      invariants captured in the unmodified app. See docs/THIRD-PARTY-APPS.md.
+- [ ] HTTP driver target + seed corpus to explore JPetStore routes automatically (vs manual curls)
 - [ ] WebGoat / OWASP Benchmark for guaranteed-findings calibration of triage output
 - [ ] JSPWiki as the "real Apache project" target (markup parsing = latency-pathology hunting ground)
 - [ ] Stretch: XWiki or OpenMRS once pool/queue sampling (Phase 3) lands
@@ -207,16 +210,15 @@ Goal: Make a running harness legible at a glance, AFL-style.
 
 ---
 
-## Milestone: v0.8 — "Cross-namespace"
+## Milestone: v0.8 — "Cross-namespace" — DONE
 
 Goal: Run against `javax.servlet` apps (Tomcat 9), not just `jakarta.servlet` (Tomcat 10+).
-The valve's only hard namespace coupling is `jakarta.servlet.ServletException` in the
-`invoke` signature; everything else can use the Catalina `Request`/`Response` directly.
 
-- [ ] javax-compiled valve variant (Tomcat 9 Catalina API). Decide: separate module vs a
-  shared-source, two-flavor build (one .java, two source sets against javax/jakarta APIs)
-- [ ] `docker-compose.valve9.yml` (or a WAR-namespace switch) for the Tomcat 9 path
-- [ ] Drop the unnecessary `HttpServletResponse` import from the valve so only the
-  `ServletException` throws clause differs between flavors
-- [ ] Verify against a real javax app (older JPetStore release, or another javax WAR)
-- [ ] Docs: THIRD-PARTY-APPS namespace-selection table (app namespace → Tomcat → valve flavor)
+- [x] Decision (DD-011): NOT a second module — made the valve bytecode namespace-free so ONE
+  jar runs on both. Narrowed `invoke` to `throws IOException`, headers via Catalina Response,
+  `sneakyThrow` for the checked exception. `javap`-verified: zero servlet-namespace references.
+- [x] `docker-compose.valve9.yml` for the Tomcat 9 path (WAR_PATH-driven).
+- [x] Dropped the servlet-api imports from the valve entirely (not just HttpServletResponse).
+- [x] Verified against a real javax app: JPetStore-6 on Tomcat 9, server-side invariants
+  captured (see docs/THIRD-PARTY-APPS.md); same jar re-verified on Tomcat 10 (no regression).
+- [x] Docs: THIRD-PARTY-APPS namespace-selection table + JPetStore findings.

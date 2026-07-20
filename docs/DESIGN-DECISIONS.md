@@ -158,6 +158,40 @@ a ThreadLocal wrapper is transparent.
 
 ---
 
+## DD-011: One namespace-free valve for both javax (Tomcat 9) and jakarta (Tomcat 10+) (2026-07-19)
+
+**Context.** DD-009's valve was compiled against Tomcat 10 (jakarta). Third-party
+targets are split: JPetStore and many real apps are still `javax.servlet` (Tomcat 9),
+while newer apps are `jakarta.servlet` (Tomcat 10+). The obvious fix — a second
+`javax`-compiled valve module — means duplicated source and two artifacts to ship.
+
+**Decision.** Write the valve so its compiled bytecode references **no** servlet
+class at all, and one jar loads on both. Three moves: (1) narrow the `invoke`
+override to `throws IOException` only (a legal narrowing of ValveBase's
+`throws IOException, ServletException`); (2) write headers through the Catalina
+`org.apache.catalina.connector.Response` (its `setHeader`/`isCommitted` are concrete
+methods, not the servlet interface); (3) re-raise the checked exception from
+`getNext().invoke(...)` via a generic `sneakyThrow` helper without naming
+`ServletException`. Verified with `javap`: the only external types referenced are
+`java.io.IOException` and `org.apache.catalina.*` — zero `javax.servlet` / `jakarta.servlet`.
+
+**Why.** The servlet namespace is the *only* thing that differs between the two
+Tomcat lines for this valve; the Catalina connector API (`Request`, `Response`,
+`ValveBase`, `getNext`) is stable across 9 and 10. A checked-exception throws clause
+is compile-time only (not in the JVM method descriptor), so a T10-compiled override
+is a valid override of T9's `ValveBase.invoke` at runtime. One jar, no duplication.
+
+**Verified (2026-07-19).** Same jar: on Tomcat 10.1 (demo WAR) it wraps requests as
+before; on Tomcat 9 it loads clean and captures real server-side invariants against
+an unmodified JPetStore (see docs/THIRD-PARTY-APPS.md).
+
+**Rejected.** Separate `javax` module (duplicate source, two artifacts, drift risk);
+shared-source two-flavor build (needs two source sets and API deps — more machinery
+than the namespace-free single artifact); catching `Exception` and wrapping in a
+`RuntimeException` (changes the exception Tomcat sees — a real semantic difference).
+
+---
+
 ## DD-006: Triage decoupling via an in-process bounded queue — not a message bus (2026-07-19)
 
 **Context.** Proposal: publish metrics/findings to Kafka (or similar) so

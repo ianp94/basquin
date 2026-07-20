@@ -10,6 +10,20 @@ Rationale and rejected alternatives: `DESIGN-DECISIONS.md` DD-009.
 > 6 `beginIteration` calls for 3 requests), producing nested, meaningless iteration
 > boundaries. Never enable both on the same app.
 
+## Servlet namespace → Tomcat → compose
+
+The valve jar is **namespace-free** (DD-011): one artifact runs on both Tomcat lines.
+Pick the Tomcat image to match the *app's* servlet namespace:
+
+| App servlet namespace | Tomcat image        | Compose file                 |
+|-----------------------|---------------------|------------------------------|
+| `jakarta.servlet`     | `tomcat:10.1-jdk17` | `docker-compose.valve.yml`   |
+| `javax.servlet`       | `tomcat:9.0-jdk17`  | `docker-compose.valve9.yml`  |
+
+To check an app: `unzip -l app.war | grep -E 'spring-web|servlet'` and look at
+`WEB-INF/web.xml`'s root namespace (`http://java.sun.com/...` and `javax.servlet.jsp.jstl`
+→ javax; `jakarta.*` → jakarta).
+
 ## Pieces
 
 - `tomcat-valve/` — `com.closurejvm.valve.ClosureJVMValve` (extends `ValveBase`), built
@@ -33,30 +47,50 @@ Verified deploy signals: `ClosureJVM Agent initialized` in the log (premain ran)
 WAR deploys with no `SEVERE`, routes serve, and `GET /closurejvm/status` shows
 server-side `requests`/`crashes`/`invariants` counters advancing.
 
-## JPetStore (MyBatis) — first real target
+## JPetStore (MyBatis) — first real target — DONE
 
-JPetStore is a small, readable e-commerce WAR — findings are easy to hand-verify.
+JPetStore-6 is `javax.servlet` (bundles `spring-web-5.3.39`, old javaee `web.xml`), so it
+runs on **Tomcat 9** with the (namespace-free) valve.
 
-1. **Get a WAR.** Build MyBatis JPetStore-6 (`github.com/mybatis/jpetstore-6`) or use a
-   build you trust. Note the servlet namespace:
-   - Recent JPetStore (Jakarta EE, `jakarta.servlet`) → Tomcat 10.1 (matches this setup).
-   - Older JPetStore (`javax.servlet`) → needs Tomcat 9 **and** a `javax`-compiled valve
-     variant. Don't mix a `jakarta` valve into a `javax` Tomcat; they won't link.
-2. **Point the compose at it:**
+1. **Build the WAR.** JPetStore master targets JDK 17 but its build plugins demand newer
+   tooling; build with Maven 3.9+ and the version gates skipped:
    ```
-   WAR_PATH=/abs/path/jpetstore.war docker compose -f docker-compose.valve.yml up tomcat-valve
+   git clone --depth 1 https://github.com/mybatis/jpetstore-6.git
+   cd jpetstore-6
+   mvn -DskipTests -Denforcer.skip=true -Dmaven.gitcommitid.skip=true package
+   # -> target/jpetstore.war (uses an in-memory HSQLDB; no external DB needed)
    ```
-   JPetStore has no `IterationFilter`, so the valve is the sole boundary — no double-wrap.
-3. **Database.** JPetStore ships with an in-memory HSQLDB by default (no external DB
-   needed for a first run). If you use the MySQL profile, reuse the `mysql` service from
-   the root `docker-compose.yml`.
-4. **Drive it.** Point the HTTP driver target at `http://localhost:8080/...` JPetStore
-   routes (catalog search, cart, order) with a small seed corpus, soft invariants on, and
-   watch `GET /closurejvm/status` plus the `X-ClosureJVM-Invariant-*` response headers.
+2. **Deploy with the valve on Tomcat 9:**
+   ```
+   ./gradlew jar :tomcat-valve:jar
+   WAR_PATH=$PWD/jpetstore-6/target/jpetstore.war docker compose -f docker-compose.valve9.yml up tomcat9-valve
+   ```
+   JPetStore has no `IterationFilter`, so the valve is the sole boundary — no double-wrap
+   (iteration numbers increment 1,2,3,… one per request).
+3. **Drive it** — hit real routes and read findings from the server-side agent log
+   (`[ClosureJVM][Invariant] …`) and the `X-ClosureJVM-Invariant-*` response headers:
+   ```
+   curl -s -D - "http://localhost:8080/actions/Catalog.action?viewCategory=&categoryId=FISH" | grep X-ClosureJVM
+   ```
+
+### Verified findings (2026-07-19, soft invariants latency>5ms / heap>64KB)
+
+Server-side, inside JPetStore's Tomcat 9 JVM via the valve:
+
+| Route                                   | latency | heap delta | invariant |
+|-----------------------------------------|--------:|-----------:|-----------|
+| `/` (index)                             |  11ms   |  +2964KB   | latency, heap |
+| `Catalog.action` (first, cold)          |  531ms  | +44149KB   | latency, heap |
+| `Catalog.action?categoryId=FISH`        |  98ms   |            | latency |
+| `Catalog.action?viewProduct=FI-SW-01`   |  81ms   | +17636KB   | latency, heap |
+
+The cold first-catalog spike (531ms) and per-request multi-MB heap growth are exactly the
+input/state-dependent availability pathologies the harness targets — surfaced in an
+unmodified third-party app with no code changes.
 
 ### Status of this slice
 
-- [x] Reusable valve built and confirmed loading/active in real Tomcat 10.1.
-- [x] Deploy scaffolding (compose + global context.xml) and this recipe.
-- [ ] Live run against an actual JPetStore WAR (needs a jakarta-compatible build) — the
-      next verification step; wire the HTTP driver + seed corpus for its routes.
+- [x] Reusable, namespace-free valve (DD-011): one jar for Tomcat 9 and 10.
+- [x] Deploy scaffolding (`docker-compose.valve.yml`, `docker-compose.valve9.yml`, context.xml).
+- [x] Live run against a real JPetStore WAR on Tomcat 9 with server-side invariants captured.
+- [ ] Next: an HTTP driver target + seed corpus to explore routes automatically (vs. manual curls).

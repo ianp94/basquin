@@ -3,12 +3,12 @@ entries:
   closurejvm-operator:
   - apiVersion: v2
     appVersion: 0.2.0
-    created: "2026-07-20T18:27:09.081760901-04:00"
+    created: "2026-07-20T19:03:32.128236228-04:00"
     description: The ClosureJVM Kubernetes operator — instrument an unmodified app
       with a ClosureJVMTarget and run bounded coverage-guided tests with a ClosureJVMCampaign.
       Namespaced by design (Role/RoleBinding in one namespace; install one release
       per namespace you want to instrument).
-    digest: 4ed177a3ac97a3c8e56e29e475d75cdc66fea7625c59857a3844560c99589f36
+    digest: 224d8eff376b0402351d0bd7ed775b5b52543a0a7024052fd287d74642e6da9f
     home: https://ianp94.github.io/closureJVM/
     keywords:
     - testing
@@ -23,4 +23,4 @@ entries:
     urls:
     - https://ianp94.github.io/closureJVM/charts/closurejvm-operator-0.1.0.tgz
     version: 0.1.0
-generated: "2026-07-20T18:27:09.071963595-04:00"
+generated: "2026-07-20T19:03:32.121370623-04:00"

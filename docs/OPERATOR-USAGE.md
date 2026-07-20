@@ -293,6 +293,61 @@ basename — the same flat convention the `kubectl create configmap --from-file`
 `--duration 10m` bounds by time instead of `--iterations`; `--no-dashboard` / `--external-push host:port`
 control the dashboard. `closurejvm run -h` lists every flag.
 
+### Load / soak mode — hammer the interesting states (`spec.mode: load`)
+
+A campaign runs in one of two modes (`spec.mode`, default `explore`):
+
+- **`explore`** (default) — the coverage-guided fuzz above. On completion it **emits its interesting
+  "replay corpus"** (the inputs that reached new coverage) as a campaign-owned ConfigMap named
+  `<campaign>-corpus-out`, recorded in `status.corpusConfigMap`.
+- **`load`** — replays a saved corpus at a fixed **concurrency** for a **duration**, no mutation and no
+  coverage sampling, watching the same invariant oracles (latency budget) under sustained traffic.
+  *Fuzz to discover the interesting states, then hammer those states under load.*
+
+So the workflow is: run an `explore` campaign, then point a `load` campaign at the corpus it emitted:
+
+```yaml
+apiVersion: closurejvm.dev/v1alpha1
+kind: ClosureJVMCampaign
+metadata: { name: jpetstore-load, namespace: closurejvm-system }
+spec:
+  mode: load
+  targetRef: { name: jpetstore }
+  baseURL: http://jpetstore-app.closurejvm-system.svc.cluster.local:8080
+  driver:
+    duration: 30m                            # load is time-bounded (CEL requires duration, not iterations)
+    concurrency: 50                          # parallel in-flight requests
+    corpusConfigMap: jpetstore-campaign-corpus-out   # the corpus the explore run emitted
+    # warmup: 30s                            # optional: excluded from the reported latency percentiles
+```
+
+Notes:
+- **`load` requires `driver.corpusConfigMap`** and forbids a `grammarConfigMap` (CEL-enforced) — it
+  replays fixed requests, it doesn't explore. It ignores `driver.iterations`; use `driver.duration`.
+- The corpus can be any corpus ConfigMap — the one an explore run emitted (`status.corpusConfigMap`),
+  or one you build yourself (route strings, one per line).
+- A load run's driver Job is **coverage-free** (no JaCoCo, no class extraction).
+
+Read the results from `status.load`:
+
+```bash
+kubectl -n closurejvm-system get closurejvmcampaign jpetstore-load -o jsonpath='{.status.load}'
+# {"requests":1284003,"throughputRps":"713.4","latencyMs":{"p50":8,"p90":22,"p99":61,"max":240},
+#  "heapDriftKb":1840,"threadDrift":0,"violations":{"latency":12,"heap":0,"thread":0}}
+```
+
+First cut: only `violations.latency` is threshold-gated (against `invariants.latencyMaxMs`); heap/thread
+are reported as end-to-end **drift** (`heapDriftKb`/`threadDrift`), measured on the driver.
+
+**Or with the CLI:**
+
+```bash
+closurejvm run -n closurejvm-system --name jpetstore-load --mode load --target jpetstore \
+  --base-url http://jpetstore-app...:8080 \
+  --duration 30m --concurrency 50 --corpus ./saved-corpus --watch
+# Completed ✓  ... load: 1284003 requests, 713.4 rps, p99 61ms, 12 latency violations
+```
+
 ## 5. Grammar & corpus ConfigMaps
 
 The driver's exploration surface is a **grammar** (structure) and a **corpus** (values), each delivered

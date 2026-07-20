@@ -147,8 +147,8 @@ Goal: Make the measurement layer trustworthy and cheap enough to point at real a
 - [x] JDK 17 + 21 CI matrix; bytecode targets 17
 
 ### Concurrency decision (A now, C later — decided)
-- [x] Option A: serialize iterations in the WAR IterationFilter — superseded by v0.6's IterationContext (DD-010), which made begin/end per-thread correct; global-lock serialization is no longer the mechanism
-- [x] Option C: explicit IterationContext API (`ctx = Agent.begin(); Agent.end(ctx)`) — done in v0.6 (DD-010)
+- [x] Option A: serialize iterations in the WAR IterationFilter — DONE and **still the live mechanism by design**. DD-010 deliberately KEPT the DD-005 serialization lock (`IterationFilter`'s `ReentrantLock ITERATION_LOCK`, "iterations are SERIALIZED"), because heap/thread deltas are process-global and would lie under concurrent requests. Option C did not remove it.
+- [x] Option C: explicit IterationContext API (`ctx = Agent.begin(); Agent.end(ctx)`) — done in v0.6 (DD-010); made the code concurrency-safe *without* dropping Option A's lock
 - Rejected: ThreadLocal-only contexts (per-request heap/thread deltas would silently lie under concurrency); external message bus for metrics (capture cost is in-process; bus is for a future multi-node fleet, not single-harness throughput)
 
 ### Real-app targets (after the above)
@@ -338,9 +338,8 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 - [ ] Structured invariant summary line (key=val pairs) in output *(v0.2)*
 - [ ] Reset smoke test: induce a failure, trigger a classloader reset, run another clean iteration *(v0.2)*
 - [ ] Unify JQF coverage-interesting inputs (`-Djqf.ei.DIRECTORY`) with the harness triage format *(v0.3)*
-- [ ] In-process bounded triage handoff queue (ArrayBlockingQueue + one consumer) so triage I/O never stalls the iteration loop; payload designed alongside the IterationContext snapshot *(v0.5)*
-- [ ] Triage handoff payload carries the IterationContext snapshot (DD-006) — result fields are exposed; wiring the payload is the remaining step *(v0.6)*
-- [ ] IterationFilter/valve move to explicit `begin()/end(ctx)` — cleanup only; the ThreadLocal wrapper already makes them per-thread correct *(v0.6)*
+- [ ] Triage handoff payload carries the IterationContext snapshot (DD-006) — the bounded handoff **queue itself is already built** (`runner/util/TriageSink.java`: `ArrayBlockingQueue` + daemon consumer, `-Dclosurejvm.triage.queueCapacity`, synchronous fallback, shutdown flush; wired into FuzzIO/GenericRunner/CorpusRunner/CoverageGuidedRun/JQFIterationHarness). Result fields are exposed on IterationContext; wiring the context *snapshot* into the enqueued payload is the remaining step *(v0.6)*
+- [ ] IterationFilter/valve move to explicit `begin()/end(ctx)` — cleanup only; still serialized (Option A's lock stays), and the ThreadLocal wrapper already makes them per-thread correct *(v0.6)*
 - [ ] Triage bundles: input + route + classification + stack/thread-dump + metrics in one artifact *(v0.4 P3)*
 - [ ] Pool/queue sampling (servlet thread pool size, executor queues) + preset invariants *(v0.4 P3)*
 - [ ] Minimization flow documented for Tomcat/HTTP inputs *(v0.4 P3)*

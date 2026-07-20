@@ -59,7 +59,7 @@ For event-driven thread tracking with no polling and no safepoint stack walks, C
 
 Notes:
 - Runs on JDK 17 and 21+ (JVMTI is ABI-stable across versions).
-- The count-based signals (thread count, thread-delta invariant) use the native counts when active; the non-daemon leak *set* (which threads leaked, with names/stacks) still uses in-process enumeration, captured only when a leak is flagged. Event-driven leak-set tracking (with thread identity) is the next step.
+- Both signal paths are event-driven when the agent is active: the count-based signals (thread count, thread-delta invariant) read the native counters, and the non-daemon leak *set* comes from weak references to the actual Thread objects tracked at ThreadStart/ThreadEnd — no thread enumeration at all. Stacks are still captured lazily, only for threads that leaked. Without the agent, both fall back to `ThreadMXBean`/ThreadGroup enumeration.
 
 ## Directory Structure
 

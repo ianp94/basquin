@@ -217,12 +217,17 @@ public class Agent {
     private static final ThreadMXBean THREAD_MX = ManagementFactory.getThreadMXBean();
 
     private static Map<Long, Thread> snapshotNonDaemonThreads() {
-        // Enumerate via the root ThreadGroup, which returns Thread objects without walking
-        // any stacks. The previous Thread.getAllStackTraces() forced a safepoint stack walk
-        // of every thread on every iteration only to discard the stacks — the enumeration is
-        // all we need here. Stacks are captured lazily below, only for threads that leaked.
+        // Preferred source: the JVMTI native agent's event-maintained leak set — real Thread
+        // objects tracked from ThreadStart/ThreadEnd, so no enumeration happens at all.
+        // Fallback: enumerate via the root ThreadGroup, which returns Thread objects without
+        // walking any stacks (the previous Thread.getAllStackTraces() forced a safepoint stack
+        // walk of every thread per iteration only to discard the stacks). Either way, stacks
+        // are captured lazily below, only for threads that actually leaked.
         Map<Long, Thread> result = new HashMap<>();
-        for (Thread t : enumerateAllThreads()) {
+        Thread[] threads = NativeThreadTracker.isActive()
+                ? NativeThreadTracker.nonDaemonThreads()
+                : enumerateAllThreads();
+        for (Thread t : threads) {
             if (t != null && t.isAlive() && !t.isDaemon()) {
                 result.put(t.getId(), t);
             }

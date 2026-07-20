@@ -16,6 +16,8 @@
 
 #include <jvmti.h>
 #include <jni.h>
+#include <pthread.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* Live-thread counters, maintained incrementally from thread events.
@@ -25,6 +27,52 @@ static volatile long g_non_daemon = 0;
 static volatile int  g_tracking = 0;   /* 1 once seeded and events are enabled */
 
 static jvmtiEnv *g_jvmti = NULL;
+
+/* Leak-set tracking: weak global refs to every live non-daemon Thread object.
+ * Weak refs so tracking never keeps a dead thread's object alive; entries whose
+ * referent has been collected read back as null and are skipped/compacted.
+ * Guarded by a mutex because ThreadStart/ThreadEnd fire on the threads themselves. */
+static pthread_mutex_t g_nd_lock = PTHREAD_MUTEX_INITIALIZER;
+static jweak *g_nd_refs = NULL;
+static int    g_nd_len  = 0;
+static int    g_nd_cap  = 0;
+
+static void nd_add(JNIEnv *jni, jthread thread) {
+    jweak ref = (*jni)->NewWeakGlobalRef(jni, thread);
+    if (ref == NULL) {
+        return;
+    }
+    pthread_mutex_lock(&g_nd_lock);
+    if (g_nd_len == g_nd_cap) {
+        int cap = g_nd_cap == 0 ? 64 : g_nd_cap * 2;
+        jweak *grown = realloc(g_nd_refs, cap * sizeof(jweak));
+        if (grown == NULL) {
+            pthread_mutex_unlock(&g_nd_lock);
+            (*jni)->DeleteWeakGlobalRef(jni, ref);
+            return;
+        }
+        g_nd_refs = grown;
+        g_nd_cap = cap;
+    }
+    g_nd_refs[g_nd_len++] = ref;
+    pthread_mutex_unlock(&g_nd_lock);
+}
+
+static void nd_remove(JNIEnv *jni, jthread thread) {
+    jweak victim = NULL;
+    pthread_mutex_lock(&g_nd_lock);
+    for (int i = 0; i < g_nd_len; i++) {
+        if ((*jni)->IsSameObject(jni, g_nd_refs[i], thread)) {
+            victim = g_nd_refs[i];
+            g_nd_refs[i] = g_nd_refs[--g_nd_len];
+            break;
+        }
+    }
+    pthread_mutex_unlock(&g_nd_lock);
+    if (victim != NULL) {
+        (*jni)->DeleteWeakGlobalRef(jni, victim);
+    }
+}
 
 static int thread_is_daemon(jvmtiEnv *jvmti, jthread thread) {
     jvmtiThreadInfo info;
@@ -42,8 +90,11 @@ static int thread_is_daemon(jvmtiEnv *jvmti, jthread thread) {
 static void JNICALL
 cb_thread_start(jvmtiEnv *jvmti, JNIEnv *jni, jthread thread) {
     __atomic_add_fetch(&g_live, 1, __ATOMIC_RELAXED);
+    /* Daemon status is final once a thread has started (setDaemon throws after start),
+     * so the status observed here cannot flap between the add and the matching remove. */
     if (!thread_is_daemon(jvmti, thread)) {
         __atomic_add_fetch(&g_non_daemon, 1, __ATOMIC_RELAXED);
+        nd_add(jni, thread);
     }
 }
 
@@ -52,6 +103,7 @@ cb_thread_end(jvmtiEnv *jvmti, JNIEnv *jni, jthread thread) {
     __atomic_sub_fetch(&g_live, 1, __ATOMIC_RELAXED);
     if (!thread_is_daemon(jvmti, thread)) {
         __atomic_sub_fetch(&g_non_daemon, 1, __ATOMIC_RELAXED);
+        nd_remove(jni, thread);
     }
 }
 
@@ -69,6 +121,7 @@ cb_vm_init(jvmtiEnv *jvmti, JNIEnv *jni, jthread thread) {
             live++;
             if (!thread_is_daemon(jvmti, threads[i])) {
                 non_daemon++;
+                nd_add(jni, threads[i]);
             }
         }
         if (threads != NULL) {
@@ -134,4 +187,43 @@ JNIEXPORT jint JNICALL
 Java_agent_NativeThreadTracker_nativeNonDaemonThreadCount(JNIEnv *env, jclass cls) {
     (void) env; (void) cls;
     return (jint) __atomic_load_n(&g_non_daemon, __ATOMIC_RELAXED);
+}
+
+/* Returns the live non-daemon Thread objects tracked from thread events.
+ * Local refs are materialized under the lock (a weak ref can be deleted by a
+ * concurrent ThreadEnd the moment the lock is released); referents already
+ * collected read back as null and are skipped. */
+JNIEXPORT jobjectArray JNICALL
+Java_agent_NativeThreadTracker_nativeNonDaemonThreads(JNIEnv *env, jclass cls) {
+    (void) cls;
+    pthread_mutex_lock(&g_nd_lock);
+    int n = g_nd_len;
+    jobject *locals = (n > 0) ? malloc(n * sizeof(jobject)) : NULL;
+    int m = 0;
+    if (locals != NULL) {
+        for (int i = 0; i < n; i++) {
+            jobject o = (*env)->NewLocalRef(env, g_nd_refs[i]);
+            if (o != NULL) {
+                locals[m++] = o;
+            }
+        }
+    }
+    pthread_mutex_unlock(&g_nd_lock);
+
+    jclass threadCls = (*env)->FindClass(env, "java/lang/Thread");
+    if (threadCls == NULL) {
+        free(locals);
+        return NULL;
+    }
+    jobjectArray arr = (*env)->NewObjectArray(env, m, threadCls, NULL);
+    if (arr != NULL) {
+        for (int i = 0; i < m; i++) {
+            (*env)->SetObjectArrayElement(env, arr, i, locals[i]);
+        }
+    }
+    for (int i = 0; i < m; i++) {
+        (*env)->DeleteLocalRef(env, locals[i]);
+    }
+    free(locals);
+    return arr;
 }

@@ -137,3 +137,35 @@ Open items for Phase 2 hardening
 ### Non-goals (keep scope tight)
 - No coverage integration yet (v0.3)
 - No full static rollback; prefer classloader swap fallback
+
+---
+
+## Milestone: v0.5 — "Observability core"
+
+Goal: Make the measurement layer trustworthy and cheap enough to point at real apps.
+(Decisions recorded 2026-07-19; rationale in agents.md Status Snapshot.)
+
+### Measurement quality (done)
+- [x] Latency measured before the end-of-iteration grace sleep (was inflating all readings ~25ms)
+- [x] Opt-in `-Dclosurejvm.heap.gcBeforeMeasure` so heap delta measures retention, not allocation noise
+- [x] Hot path: `ThreadMXBean` + stack-free enumeration instead of `getAllStackTraces()`; stacks captured lazily on violation only
+- [x] Soak validated: 10k/10k clean (latency p50=1ms p99=2ms) — retires v0.1 Definition of Success
+
+### Native agent (JVMTI)
+- [x] Event-driven thread *counts* via ThreadStart/ThreadEnd (`native/closurejvmti.c`), `ThreadMXBean` fallback when not loaded
+- [x] Event-driven leak *set*: weak global refs to non-daemon Thread objects tracked at ThreadStart/ThreadEnd; leak oracle needs no enumeration (verified: leak demo still names leaked threads; proper mode clean)
+- [x] JDK 17 + 21 CI matrix; bytecode targets 17
+
+### Concurrency decision (A now, C later — decided)
+- [ ] Option A: serialize iterations in the WAR IterationFilter (global lock) + doc note that the harness measures iteration cleanliness, not throughput under load
+- [ ] Option C (later): explicit IterationContext API (`ctx = Agent.begin(); Agent.end(ctx)`) as the v0.6 refactor
+- Rejected: ThreadLocal-only contexts (per-request heap/thread deltas would silently lie under concurrency); external message bus for metrics (capture cost is in-process; bus is for a future multi-node fleet, not single-harness throughput)
+
+### Triage decoupling
+- [ ] In-process bounded handoff queue (ArrayBlockingQueue + one consumer thread) so triage I/O (bundles, stacks, saved inputs) never stalls the iteration loop; design the enqueue payload alongside Option C's context object
+
+### Real-app targets (after the above)
+- [ ] JPetStore (MyBatis) as first third-party WAR — reuses the docker-compose MySQL; decide filter-vs-valve injection first
+- [ ] WebGoat / OWASP Benchmark for guaranteed-findings calibration of triage output
+- [ ] JSPWiki as the "real Apache project" target (markup parsing = latency-pathology hunting ground)
+- [ ] Stretch: XWiki or OpenMRS once pool/queue sampling (Phase 3) lands

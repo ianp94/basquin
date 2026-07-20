@@ -49,7 +49,17 @@ public final class NativeThreadTracker {
         return nativeNonDaemonThreadCount();
     }
 
+    /**
+     * Live non-daemon Thread objects tracked from ThreadStart/ThreadEnd events —
+     * the leak-set source, with no thread enumeration. Never null when isActive().
+     */
+    public static Thread[] nonDaemonThreads() {
+        Thread[] threads = nativeNonDaemonThreads();
+        return threads != null ? threads : new Thread[0];
+    }
+
     private static native boolean nativeAvailable();
     private static native int nativeLiveThreadCount();
     private static native int nativeNonDaemonThreadCount();
+    private static native Thread[] nativeNonDaemonThreads();
 }

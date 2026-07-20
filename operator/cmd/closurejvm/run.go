@@ -35,8 +35,11 @@ import (
 
 type runOpts struct {
 	name, namespace, target, baseURL string
+	mode                             string
 	iterations                       int
 	duration                         string
+	concurrency                      int
+	warmup                           string
 	grammarFile, corpusDir           string
 	classesPath                      string
 	dashboard                        bool
@@ -57,12 +60,17 @@ func buildCampaign(o runOpts, grammarCM, grammarKey, corpusCM string) *closurejv
 	} else {
 		d.Iterations = int64(o.iterations)
 	}
+	if o.mode == "load" {
+		d.Concurrency = int32(o.concurrency)
+		d.Warmup = o.warmup
+	}
 	dash := closurejvmv1alpha1.CampaignDashboardSpec{Enabled: &o.dashboard, ExternalPush: o.externalPush}
 	return &closurejvmv1alpha1.ClosureJVMCampaign{
 		ObjectMeta: metav1.ObjectMeta{Name: o.name, Namespace: o.namespace},
 		Spec: closurejvmv1alpha1.ClosureJVMCampaignSpec{
 			TargetRef: closurejvmv1alpha1.TargetReference{Name: o.target},
 			BaseURL:   o.baseURL,
+			Mode:      o.mode, // "" => CRD defaults to explore
 			Driver:    d,
 			Dashboard: dash,
 		},
@@ -78,6 +86,20 @@ func validateRun(o runOpts) error {
 	}
 	if (o.iterations > 0) == (o.duration != "") {
 		return fmt.Errorf("set exactly one of --iterations or --duration")
+	}
+	if o.mode != "" && o.mode != "explore" && o.mode != "load" {
+		return fmt.Errorf("--mode must be explore or load, got %q", o.mode)
+	}
+	if o.mode == "load" {
+		if o.corpusDir == "" {
+			return fmt.Errorf("--mode load replays a corpus; pass --corpus <dir> (e.g. a saved replay corpus)")
+		}
+		if o.grammarFile != "" {
+			return fmt.Errorf("--mode load replays a fixed corpus and ignores a grammar; drop --grammar")
+		}
+		if o.iterations > 0 {
+			return fmt.Errorf("--mode load is duration-bounded; use --duration, not --iterations")
+		}
 	}
 	return nil
 }
@@ -97,6 +119,9 @@ func runRun(args []string) error {
 	fs.StringVar(&o.namespace, "namespace", "", "Namespace (default: the kube context's namespace, else 'default').")
 	fs.StringVar(&o.namespace, "n", "", "Namespace (shorthand).")
 	fs.StringVar(&kubeCtx, "context", "", "Kube context to use (default: current-context).")
+	fs.StringVar(&o.mode, "mode", "", "Run mode: explore (coverage-guided fuzz, default) | load (replay a corpus at volume).")
+	fs.IntVar(&o.concurrency, "concurrency", 10, "Parallel in-flight requests (load mode).")
+	fs.StringVar(&o.warmup, "warmup", "", "Warmup window excluded from load metrics, e.g. 30s (load mode).")
 	fs.IntVar(&o.iterations, "iterations", 0, "Bound the run by iteration count (set this OR --duration).")
 	fs.StringVar(&o.duration, "duration", "", "Bound the run by a Go duration, e.g. 10m (set this OR --iterations).")
 	fs.StringVar(&o.grammarFile, "grammar", "", "Path to a grammar file (creates a ConfigMap from it).")

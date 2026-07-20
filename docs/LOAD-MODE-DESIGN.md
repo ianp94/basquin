@@ -170,8 +170,13 @@ status:
   costly path §3 flagged) and the top-N cap is the right load-replay semantics anyway. Trade-off: the
   emitted corpus is bounded to what fits the ~4 KiB termination message; a larger transport
   (sidecar/PVC) is a future extension if corpora need to be bigger.
-- [ ] **PR 2 — consumer.** `mode: load` + `driver.concurrency`; the load driver; `status.load` metrics
-  + dashboard wiring.
+- [x] **PR 2 — consumer.** `spec.mode: explore|load` + `driver.concurrency`/`driver.warmup` (+ CEL);
+  `runner.coverage.LoadRun` replays the corpus from a fixed worker pool (HttpURLConnection keep-alive,
+  warmup window excluded), reporting throughput + latency percentiles (histogram) + heap/thread drift
+  → `status.load`. Operator: load-mode driver Job is coverage-free (no coverage props / extract-verify
+  initContainers); CLI gains `--mode load --concurrency --warmup`. envtest + in-cluster e2e (replay the
+  emitted corpus → Completed with load metrics). Deferred to a follow-up: periodic (vs start/end) drift
+  sampling; target-side (vs driver-side) heap/thread; a configurable concurrency ramp.
 
 Each is a review-gated PR with envtest + an in-cluster e2e slice (an explore run emits a corpus; a
 follow-on load run replays it and reports throughput/latency/drift).

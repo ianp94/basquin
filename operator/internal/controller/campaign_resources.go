@@ -55,13 +55,27 @@ func driverJobName(c *closurejvmv1alpha1.ClosureJVMCampaign) string { return c.N
 // dashboardPush is the resolved dashboard host:port to push status/findings to ("" = don't push).
 func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverageEndpoint, runnerImage, dashboardPush string) *batchv1.Job {
 	d := &c.Spec.Driver
+	load := c.Spec.Mode == "load"
 
 	props := []string{
 		"-Dexamples.http.baseUrl=" + c.Spec.BaseURL,
-		"-Dclosurejvm.coverage.jacoco=" + coverageEndpoint,
-		"-Dclosurejvm.coverage.classes=" + campaignClassesDir,
 		"-Dclosurejvm.summary.out=/dev/termination-log", // operator reads this back as the pod's termination message
 		"-Dclosurejvm.status=true",
+	}
+	if load {
+		// Load/soak mode (DD-026): replay the corpus at volume; no coverage sampling / classes needed.
+		conc := d.Concurrency
+		if conc == 0 {
+			conc = 10
+		}
+		props = append(props, "-Dclosurejvm.mode=load", fmt.Sprintf("-Dclosurejvm.concurrency=%d", conc))
+		if d.Warmup != "" {
+			props = append(props, "-Dclosurejvm.warmup="+d.Warmup)
+		}
+	} else {
+		props = append(props,
+			"-Dclosurejvm.coverage.jacoco="+coverageEndpoint,
+			"-Dclosurejvm.coverage.classes="+campaignClassesDir)
 	}
 	if d.Duration != "" {
 		props = append(props, "-Dclosurejvm.run.duration="+d.Duration)
@@ -83,10 +97,14 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 			"-Dclosurejvm.dashboard.id="+c.Name)
 	}
 
-	volumes := []corev1.Volume{
-		{Name: campaignClassesVol, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+	// The shared classes volume + extract/verify initContainers are for JaCoCo coverage — explore only.
+	var volumes []corev1.Volume
+	var mounts []corev1.VolumeMount
+	if !load {
+		volumes = append(volumes, corev1.Volume{Name: campaignClassesVol,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}})
+		mounts = append(mounts, corev1.VolumeMount{Name: campaignClassesVol, MountPath: campaignClassesDir})
 	}
-	mounts := []corev1.VolumeMount{{Name: campaignClassesVol, MountPath: campaignClassesDir}}
 	if d.GrammarConfigMap != "" {
 		// d.GrammarKey is resolved to a concrete key by the reconciler before this is called (the
 		// ConfigMap's sole key when the user didn't name one). Always project THAT key to the fixed
@@ -121,6 +139,38 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 		classesPath = "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes"
 	}
 
+	// Coverage initContainers (extract + verify the app's .class files) are explore-only — load mode
+	// doesn't sample coverage.
+	var initContainers []corev1.Container
+	if !load {
+		initContainers = []corev1.Container{{
+			Name:            "extract-classes",
+			Image:           appImage,
+			ImagePullPolicy: corev1.PullIfNotPresent,
+			// exec cp directly, NOT `sh -c "cp ... " + classesPath` — classesPath is a free-form spec
+			// field, and interpolating it into a shell string would let a campaign author inject
+			// commands into the initContainer (review #1). `--` so a classesPath starting with `-` is
+			// treated as a path, not a cp flag.
+			Command:      []string{"cp", "-r", "--", classesPath + "/.", campaignClassesDir + "/"},
+			VolumeMounts: []corev1.VolumeMount{{Name: campaignClassesVol, MountPath: campaignClassesDir}},
+		}, {
+			// Fail loud if the extract produced no .class files, instead of letting the driver run and
+			// report a silent coveragePct=0 (the common cause is a war-only target image). Only the
+			// fixed dest dir is referenced (no user input), so this shell string is injection-safe.
+			Name:            "verify-classes",
+			Image:           runnerImage,
+			ImagePullPolicy: corev1.PullIfNotPresent,
+			Command: []string{"sh", "-c",
+				"if [ -z \"$(find " + campaignClassesDir + " -name '*.class' -print -quit 2>/dev/null)\" ]; then " +
+					"msg='no .class files extracted into " + campaignClassesDir +
+					" — check spec.driver.classesPath (war-only images expose classes only at runtime, not in the image)'; " +
+					"echo \"closurejvm: $msg\"; printf '%s' \"$msg\" > /dev/termination-log; exit 1; fi"},
+			TerminationMessagePath:   "/dev/termination-log",
+			TerminationMessagePolicy: corev1.TerminationMessageReadFile,
+			VolumeMounts:             []corev1.VolumeMount{{Name: campaignClassesVol, MountPath: campaignClassesDir}},
+		}}
+	}
+
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      driverJobName(c),
@@ -140,38 +190,9 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 					"app.kubernetes.io/component": "driver",
 				}},
 				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
-					Volumes:       volumes,
-					InitContainers: []corev1.Container{{
-						Name:            "extract-classes",
-						Image:           appImage,
-						ImagePullPolicy: corev1.PullIfNotPresent,
-						// exec cp directly, NOT `sh -c "cp ... " + classesPath` — classesPath is a
-						// free-form spec field, and interpolating it into a shell string would let a
-						// campaign author inject commands into the initContainer (review #1).
-						// `--` so a classesPath starting with `-` is treated as a path, not a cp flag.
-						Command:      []string{"cp", "-r", "--", classesPath + "/.", campaignClassesDir + "/"},
-						VolumeMounts: []corev1.VolumeMount{{Name: campaignClassesVol, MountPath: campaignClassesDir}},
-					}, {
-						// Fail loud if the extract produced no .class files, instead of letting the driver
-						// run and report a silent coveragePct=0 that's indistinguishable from a genuinely
-						// low run — the common cause is a war-only target image, whose WEB-INF/classes only
-						// exists at runtime, not in the image layers (DD-025 §7b). Only the fixed dest dir
-						// is referenced (no user input), so this shell string is injection-safe.
-						Name:            "verify-classes",
-						Image:           runnerImage,
-						ImagePullPolicy: corev1.PullIfNotPresent,
-						// Write the reason to the termination message too (not just stdout) so the reconciler
-						// can surface it in campaign status — a fail-loud that's only in pod logs is half the win.
-						Command: []string{"sh", "-c",
-							"if [ -z \"$(find " + campaignClassesDir + " -name '*.class' -print -quit 2>/dev/null)\" ]; then " +
-								"msg='no .class files extracted into " + campaignClassesDir +
-								" — check spec.driver.classesPath (war-only images expose classes only at runtime, not in the image)'; " +
-								"echo \"closurejvm: $msg\"; printf '%s' \"$msg\" > /dev/termination-log; exit 1; fi"},
-						TerminationMessagePath:   "/dev/termination-log",
-						TerminationMessagePolicy: corev1.TerminationMessageReadFile,
-						VolumeMounts:             []corev1.VolumeMount{{Name: campaignClassesVol, MountPath: campaignClassesDir}},
-					}},
+					RestartPolicy:  corev1.RestartPolicyNever,
+					Volumes:        volumes,
+					InitContainers: initContainers,
 					Containers: []corev1.Container{{
 						Name:                     "driver",
 						Image:                    runnerImage,

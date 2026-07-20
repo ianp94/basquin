@@ -107,6 +107,9 @@ if [ "${INSTALL:-kustomize}" = "helm" ]; then
       closurejvm-leader-election-role closurejvm-leader-election-rolebinding --ignore-not-found >/dev/null 2>&1 || true
     $K delete clusterrole closurejvm-manager-role --ignore-not-found >/dev/null 2>&1 || true
   fi
+  # Helm installs CRDs from crds/ but NEVER upgrades them (documented caveat). Apply them explicitly so
+  # an iterating e2e picks up CRD changes (new fields like spec.mode) instead of strict-decoding errors.
+  $K apply -f "$ROOT/operator/config/crd/bases/"
   helm --kube-context "kind-${CLUSTER}" upgrade --install closurejvm "$ROOT/deploy/helm/closurejvm-operator" \
     --namespace "$NS" --create-namespace \
     --set fullnameOverride=closurejvm \
@@ -115,7 +118,10 @@ if [ "${INSTALL:-kustomize}" = "helm" ]; then
     --set images.runner="$RUNNER_IMAGE" \
     --set images.dashboard="$DASHBOARD_IMAGE" \
     --wait --timeout=150s
-  $K -n "$NS" rollout status deploy/closurejvm-controller-manager --timeout=120s
+  # Same image tag across runs => the Deployment spec is unchanged => helm won't restart the pod, so a
+  # freshly `kind load`ed image wouldn't be picked up. Force a restart (the kustomize path does too).
+  $K -n "$NS" rollout restart deploy/closurejvm-controller-manager
+  $K -n "$NS" rollout status  deploy/closurejvm-controller-manager --timeout=120s
 else
   say "Install CRDs + deploy operator (kustomize, namespaced RBAC) into '$NS'"
   $K apply -f "$ROOT/operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml"
@@ -153,7 +159,7 @@ say "Clean slate (revert+remove any prior target, then the app) so each run star
 # Without this, re-applying a raw manifest over an already-injected Deployment leaves the operator's
 # annotations + initContainer but resets the env, which reads as 'already injected' and isn't re-fixed.
 # Delete the campaign first so its owned driver Job is GC'd before the target it depends on goes away.
-$K -n "$NS" delete closurejvmcampaign jpetstore-campaign --ignore-not-found --timeout=60s
+$K -n "$NS" delete closurejvmcampaign jpetstore-campaign jpetstore-load --ignore-not-found --timeout=60s
 $K -n "$NS" delete configmap jpetstore-grammar jpetstore-corpus --ignore-not-found
 $K -n "$NS" delete closurejvmtarget jpetstore --ignore-not-found --timeout=60s
 $K -n "$NS" delete deploy jpetstore --ignore-not-found --timeout=90s
@@ -331,6 +337,44 @@ YAML
   check "replay-corpus ConfigMap has route entries"          "[ '${ccount:-0}' -ge 1 ]"
   check "replay-corpus ConfigMap owned by the campaign (GC)" "[ '$cowner2' = 'ClosureJVMCampaign' ]"
   echo "  (corpusConfigMap=${ccorpus:-<none>}; ${ccount} route(s))"
+
+  # --- DD-026 PR 2: replay that corpus as a LOAD campaign, watch invariants under sustained traffic --
+  if [ -n "$ccorpus" ]; then
+    say "Apply a mode:load ClosureJVMCampaign replaying the emitted corpus"
+    $K apply -f - <<YAML
+apiVersion: closurejvm.dev/v1alpha1
+kind: ClosureJVMCampaign
+metadata: { name: jpetstore-load, namespace: ${NS} }
+spec:
+  mode: load
+  targetRef: { name: jpetstore }
+  baseURL: http://jpetstore-app.${NS}.svc.cluster.local:8080
+  driver:
+    duration: 45s
+    concurrency: 20
+    corpusConfigMap: ${ccorpus}
+YAML
+    lphase=""
+    for i in $(seq 1 60); do   # 45s run + build/startup
+      lphase="$($K -n "$NS" get closurejvmcampaign jpetstore-load -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+      case "$lphase" in Completed|Failed) break;; esac
+      sleep 3
+    done
+    lreq="$($K -n "$NS" get closurejvmcampaign jpetstore-load -o jsonpath='{.status.load.requests}' 2>/dev/null || true)"
+    lrps="$($K -n "$NS" get closurejvmcampaign jpetstore-load -o jsonpath='{.status.load.throughputRps}' 2>/dev/null || true)"
+    lp99="$($K -n "$NS" get closurejvmcampaign jpetstore-load -o jsonpath='{.status.load.latencyMs.p99}' 2>/dev/null || true)"
+    ljob="$($K -n "$NS" get closurejvmcampaign jpetstore-load -o jsonpath='{.status.driverJob}' 2>/dev/null || true)"
+    linit="$($K -n "$NS" get job "$ljob" -o jsonpath='{.spec.template.spec.initContainers[*].name}' 2>/dev/null || true)"
+    if [ "$lphase" != "Completed" ]; then
+      echo "  (load phase=$lphase; driver logs:)"; $K -n "$NS" logs "job/$ljob" --tail=30 2>/dev/null | sed 's/^/    /' || true
+    fi
+    check "load campaign reached Completed"                    "[ '$lphase' = 'Completed' ]"
+    check "load run reported requests > 0"                     "[ '${lreq:-0}' -ge 1 ]"
+    check "load run reported throughput + p99 latency"         "[ -n '$lrps' ] && [ -n '$lp99' ]"
+    check "load driver Job has NO coverage initContainers"     "echo ':$linit:' | grep -qv extract-classes"
+    echo "  (load: requests=${lreq:-<none>}, throughputRps=${lrps:-<none>}, p99=${lp99:-<none>}ms)"
+    $K -n "$NS" delete closurejvmcampaign jpetstore-load --ignore-not-found --timeout=60s >/dev/null 2>&1 || true
+  fi
 
   # --- P5b: the operator brought up a per-campaign dashboard and the driver pushed to it ---------
   say "Assert the per-campaign dashboard (P5b)"

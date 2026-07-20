@@ -94,6 +94,13 @@ public final class CoverageGuidedRun {
         StatusReporter.ensureStarted();
         DashboardClient.ensureStarted();
 
+        // Load/soak mode (DD-026): replay a saved corpus at volume instead of coverage-guided
+        // exploration. No grammar, no coverage sampling, no -Dclosurejvm.coverage.classes needed.
+        if ("load".equals(System.getProperty("closurejvm.mode"))) {
+            LoadRun.run();
+            return;
+        }
+
         String baseUrl = System.getProperty("examples.http.baseUrl", "http://localhost:8080");
         int iterations = args.length > 0 ? Integer.parseInt(args[0]) : 500;
         // Time-boxed exit (operator campaigns, DD-025): stop the loop cleanly at the deadline so the

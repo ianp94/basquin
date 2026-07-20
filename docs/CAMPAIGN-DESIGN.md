@@ -50,6 +50,9 @@ spec:
     # Coverage source: default is the target's headless coverage Service (P3 status.coverageEndpoint,
     # DD-023 union-merge across replicas). Override only for special cases.
     coverageFromTarget: true
+    # Where the app's .class files live inside the target's image, so an initContainer can copy them
+    # out for JaCoCo analysis (§7b). Default is the Tomcat WAR layout.
+    classesPath: "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes"
 
   dashboard:
     enabled: true            # operator creates a per-campaign dashboard...
@@ -113,31 +116,87 @@ already reconcile-driven) rather than bolted onto the read-only dashboard, which
 control channel amounting to RCE on the dashboard host. The Jobs run **pinned images with config**, not
 arbitrary user commands.
 
-## 7. Open sub-decisions (please weigh in)
+## 7. Decisions
 
-1. **How status numbers are populated.** The dashboard already exposes `/api/campaign/{id}/{status,
-   findings,clusters}`. Option A: the operator scrapes that HTTP API to fill `coveragePct`/`findings`
-   (couples the operator to the dashboard's API, only works when a dashboard exists). Option B: the
-   driver Job writes a final results summary (a ConfigMap or a terminationMessage) the operator reads
-   (works even with `externalPush`, decouples from the dashboard). **Recommend B** for decoupling, with
-   A as a live-progress nicety later.
+**Resolved (2026-07-20):**
+1. **Status numbers come from the driver, not the dashboard.** The driver Job writes a machine-readable
+   results summary the operator reads (§7a) — so it works even with `externalPush`/no dashboard and the
+   operator isn't coupled to the dashboard's HTTP API. Live-progress scraping can be added later.
+3. **Dashboard is per-campaign by default**, owner-ref'd and GC'd with the campaign (clean lifecycle);
+   `externalPush` fans many campaigns into one long-lived dashboard (the DD-013 fleet view) when you
+   want cross-campaign comparison. Both supported.
+
+**Still open (not blocking P5a):**
 2. **Duration vs iterations.** Support both; `duration` maps to a Job `activeDeadlineSeconds`,
    `iterations` to the runner's existing cap. One-of validation via CEL.
-3. **Dashboard: per-campaign vs shared.** Default **per-campaign** (owner-ref'd, GC'd with the
-   campaign — clean lifecycle). `externalPush` lets many campaigns fan into one long-lived dashboard
-   (the fleet view, DD-013) when you want cross-campaign comparison. Both supported.
-4. **Result persistence.** The Job + dashboard are ephemeral; findings/corpus vanish on teardown.
-   Out of scope for the first cut (results live while the campaign does); a `results:` sink (PVC /
-   object store) is a follow-up.
+4. **Result persistence.** The Job + dashboard are ephemeral; findings/corpus vanish on teardown. Out
+   of scope for the first cut (results live while the campaign does); a `results:` sink (PVC / object
+   store) is a follow-up.
 5. **One target vs many.** Start with a single `targetRef`. A label selector over targets (drive a
    whole fleet from one campaign) is a later extension.
+
+## 7a. The driver results contract (resolved decision #1)
+
+For the operator to fill `status.coveragePct`/`findings` without touching the dashboard, the runner
+must emit a small, machine-readable summary at end of run. Proposed contract:
+
+- The driver, on completion (or on `activeDeadlineSeconds` expiry), writes a one-line JSON summary to a
+  **known path on a shared `emptyDir`** (e.g. `/closurejvm-out/summary.json`): `{"coveragePct": 23.1,
+  "coveredEdges": 549, "totalEdges": 2378, "findings": 19, "crashes": 7, "invariants": 12,
+  "iterations": 41233}`. This reuses the numbers `StatusReporter.snapshotJson()` already computes.
+- A tiny **sidecar** in the driver Job (or a `preStop`/final step) copies that summary into a
+  `ConfigMap` named `<campaign>-results` (or writes it as the pod's `terminationMessage`), which the
+  operator reads. A ConfigMap is simplest and survives the pod; `terminationMessage` is lighter but
+  size-capped at 4 KiB (fine for a one-line summary) — **lean ConfigMap** so a short findings preview
+  can grow into it later.
+- Small runner change required: have `CoverageGuidedRun` write `summary.json` on shutdown (it already
+  has all the numbers in `StatusReporter`). This is the one piece of *harness* code P5 touches; it's
+  additive and behind a flag (`-Dclosurejvm.summary.out=/path`).
+
+## 7b. Coverage classes in-cluster (implementation gap to solve in P5a)
+
+The DD-023 coverage reader (`JacocoCoverageProvider`) needs the app's **`.class` files** to turn the
+JaCoCo execution dump into covered/total probes — `-Dclosurejvm.coverage.classes=<dir>`. On a laptop
+that's an extracted `WEB-INF/classes`; the driver Job needs the same in-cluster, and it's the one
+non-obvious dependency. Options considered:
+
+- **A — initContainer extracts classes from the target's app image (recommended).** The driver Job
+  runs an initContainer using the *target Deployment's own container image* (which the operator already
+  reads), copying `/usr/local/tomcat/webapps/ROOT/WEB-INF/classes` (path configurable) into a shared
+  `emptyDir` the driver mounts at `-Dclosurejvm.coverage.classes`. No extra artifact — the classes come
+  from the exact image under test, so they always match. Needs a configurable in-image path
+  (`spec.driver.classesPath`, default the Tomcat WAR layout).
+- **B — bake classes into a per-target artifact** (ConfigMap/image) at instrument time. Rejected:
+  another build step, and it can drift from the running image.
+- **C — coverage % without a denominator** (covered-count only). Rejected: loses the "% explored"
+  signal that motivated DD-012/DD-016.
+
+Recommend **A**. This is the main thing P5a must get right for coverage to work end-to-end; the e2e
+will assert the driver reports a non-zero coverage % against the raw JPetStore.
+
+## 7c. Reconcile detail — idempotency, phases, completion
+
+- **Idempotency.** Like injection, hash the campaign spec into an annotation on the driver Job; a
+  steady campaign is a no-op. The Job is immutable once created, so a spec change deletes+recreates the
+  Job (a new run), which is the intuitive semantics for "I changed the test."
+- **Phase machine.** `Pending` (target not yet `Injected`) → `Provisioning` (creating dashboard/Job) →
+  `Running` (Job active) → `Completed` (Job succeeded, summary read) | `Failed` (Job backoff-limit hit
+  or deadline with no summary). Requeue on Job/target watch events.
+- **Completion.** Driver Jobs are bounded (`iterations` cap or `activeDeadlineSeconds` from
+  `duration`), so the Job completes naturally; the operator reads the results ConfigMap and moves to
+  `Completed`. `restartPolicy: Never` + a small `backoffLimit` so a genuinely broken run surfaces as
+  `Failed` rather than looping.
+- **Watches.** `Owns(&batchv1.Job{})`, `Owns(&corev1.Service{})`, `Owns(&appsv1.Deployment{})` for the
+  dashboard, plus a watch mapping the referenced `ClosureJVMTarget` back to campaigns (so a campaign
+  created before its target is `Injected` starts as soon as injection completes).
 
 ## 8. Phased delivery within P5 (each its own PR)
 
 - **P5a — CRD + driver Job.** `ClosureJVMCampaign` CRD + reconciler that launches the driver Job
   against the target (using its `status.coverageEndpoint`), status = Job state. No dashboard yet.
-  Needs the `closurejvm/runner` image. Verified by extending `deploy/e2e/e2e.sh` (apply a campaign,
-  assert the driver runs and coverage climbs).
+  Needs the `closurejvm/runner` image, the **coverage-classes initContainer** (§7b, option A), and the
+  **driver summary** write (§7a). Verified by extending `deploy/e2e/e2e.sh` (apply a campaign, assert
+  the driver runs and reports a **non-zero coverage %** against the raw JPetStore).
 - **P5b — dashboard.** Operator brings up the per-campaign dashboard `Deployment` + `Service`, wires
   the driver's push at it, sets `status.dashboardURL`. Needs the `closurejvm/dashboard` image.
 - **P5c — aggregate status + completion.** `coveragePct`/`findings` into status (§7.1), phase

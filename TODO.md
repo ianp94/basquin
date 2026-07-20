@@ -318,7 +318,9 @@ processes is effectively remote code execution on whatever it runs on.
   under review. Chosen model is an **explicit patch controller** (a namespaced `ClosureJVMTarget`
   CR that instruments only the Deployments you name via an initContainer + shared volume, revertible
   by deleting the CR) — deliberately *not* a mutating admission webhook, for a bounded, auditable
-  trust boundary. Delivered in phases P1–P4; becomes DD-024 on approval.
+  trust boundary. Built in **Go / kubebuilder** as its own `operator/` module (the control plane is
+  runtime-agnostic; keeps the door open to non-JVM runtime profiles). Delivered in phases P1–P4;
+  becomes DD-024 on approval.
 - [x] **Web dashboard, decoupled (DD-013)**: `DashboardServer` is a standalone aggregator process
   (own port, no driving logic) that many drivers push to via `DashboardClient`
   (`-Dclosurejvm.dashboard.push=host:port`), keyed by campaign id (defaults to `HOSTNAME` — a pod's

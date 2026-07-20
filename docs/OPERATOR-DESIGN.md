@@ -7,6 +7,14 @@ the implementation lands behind it.
 that instruments only the Deployments you name in a `ClosureJVMTarget` custom resource. No mutating
 admission webhook; nothing is intercepted or rewritten unless you asked for it by name.
 
+**Built in Go with kubebuilder / controller-runtime, as its own module** (decided 2026-07-20). The
+operator is a *control plane*, not JVM code: the CR schema, reconcile loop, injection, and revert
+are runtime-agnostic — only the assembled agent flags and the agents image are JVM-specific today.
+Keeping the operator in the idiomatic operator stack (rather than coupling it to the Gradle build in
+Java) is the deliberate bet that ClosureJVM's availability-testing concepts carry to other runtimes
+later; when they do, a new "runtime profile" supplies different agents/flags and the entire control
+plane is reused unchanged. Cost accepted: a second language and build enter the repo.
+
 ---
 
 ## 1. Problem
@@ -164,29 +172,43 @@ Shipped as a namespaced install by default:
 This is the whole reason to prefer this model: the standing privilege is "patch Deployments in one
 namespace," which is auditable and bounded, versus "mutate any pod at admission time."
 
-## 7. Open decisions to settle before coding
+## 7. Decisions
 
-1. **Language / SDK.** The codebase is Java with a deliberately thin dependency set. Two realistic
-   paths:
-   - **Java, fabric8 `java-operator-sdk`** — stays in-language and in-repo, reuses the existing
-     Gradle build; heavier runtime deps than the rest of the project.
-   - **Go, controller-runtime (kubebuilder)** — the idiomatic operator stack with the best tooling,
-     but introduces a second language and build to the repo.
-   Recommendation: **Java/JOSDK**, to keep one language and let the operator share the agent-version
-   constants with the build. Flagging for your call — this is the kind of core/infra choice
-   agents.md reserves for you.
-2. **Non-Tomcat JVM opts.** `JAVA_TOOL_OPTIONS` works for any JVM but the agent also wants
-   `-Xbootclasspath/a` (as the demo does). Confirm bootclasspath append is needed outside Tomcat,
-   or scope the valve/bootclasspath bits to `jvmOptsVar: CATALINA_OPTS` targets only.
-3. **Dashboard as control plane.** The operator writes status the dashboard could surface (fleet of
-   instrumented targets). That edges toward the dashboard-as-control-plane question still open in
-   TODO.md; this design keeps the operator authoritative and the dashboard read-only for now.
+1. **Language / SDK — RESOLVED: Go + kubebuilder / controller-runtime, as its own module.** Chosen
+   over Java/fabric8-JOSDK because the operator is a runtime-agnostic control plane (see the status
+   note at the top): staying in the idiomatic operator stack keeps the door open to non-JVM runtime
+   profiles later, and it does not want to be welded to the Gradle build. Agent versioning is by the
+   **agents image tag** referenced in the CR/operator config, not by shared source constants — so
+   the Go/Java language split costs nothing here (the operator only ever names an image and writes
+   flags, it never links agent code). The operator lives under `operator/` as a self-contained Go
+   module; the existing Gradle build is untouched.
+
+2. **Non-Tomcat JVM opts — RESOLVED (revisit empirically in P2).** Default: the JVMTI native agent
+   (`-agentpath`) and the Java agent (`-javaagent` on `closurejvm-agent.jar`) are injected for every
+   JVM target via `jvmOptsVar`; the `-Xbootclasspath/a:closurejvm-agent.jar` append travels with the
+   Java agent wherever it goes (it makes the agent's classes visible to bootstrap-loaded code, which
+   is not Tomcat-specific). The **valve** is the only genuinely Tomcat-specific piece and is gated on
+   `agents.valve` + a `CATALINA_OPTS`/Tomcat target. P2 verifies against a stock (non-Tomcat) JVM
+   whether the bootclasspath append is actually required outside Tomcat; if it turns out unnecessary
+   there, it gets scoped to Tomcat targets rather than applied blindly. This is an implementation
+   verification, not a blocking design question.
+
+### Still open (does not block P1)
+
+- **Dashboard as control plane.** The operator writes status the dashboard could surface (fleet of
+  instrumented targets). That edges toward the dashboard-as-control-plane question still open in
+  TODO.md; this design keeps the operator authoritative and the dashboard read-only for now.
+- **Multi-runtime profiles.** The forward-looking reason for Go (§ status note). Out of scope for
+  the JVM operator, but the CRD should avoid JVM-only assumptions at its top level so a future
+  `runtimeProfile: jvm | node | ...` can slot in without a breaking `v1alpha1 → v1alpha2` churn.
 
 ## 8. Phased delivery (each phase its own PR)
 
-- **P0 — this doc.** Agree the model and settle §7.
-- **P1 — CRD + no-op controller.** Install the `ClosureJVMTarget` CRD and a controller that only
-  writes `status` (observes, never patches). Proves the wiring with zero mutation risk.
+- **P0 — this doc.** Agree the model and settle §7. *(Model + Go/kubebuilder settled 2026-07-20.)*
+- **P1 — kubebuilder scaffold + CRD + no-op controller.** `kubebuilder init` a Go module under
+  `operator/`, define the `ClosureJVMTarget` CRD, and a reconciler that only writes `status`
+  (observes, never patches). Ships the namespaced RBAC manifests (§6). Proves the wiring with zero
+  mutation risk.
 - **P2 — injection.** Deployment patch (initContainer + volume + env + port), spec-hash idempotency,
   finalizer revert. Verified against the existing kind/JPetStore setup by instrumenting the
   **stock** JPetStore image instead of the baked one.
@@ -205,3 +227,7 @@ namespace," which is auditable and bounded, versus "mutate any pod at admission 
 - **Sidecar that reads the app from outside** — an external observer still has to stop the JVM to
   read stacks/heap consistently; DD-004 already settled that in-process JVMTI is the right place for
   this signal. The operator's job is to *place* that in-process agent, not replace it.
+- **Java + fabric8 java-operator-sdk** — would keep the repo one language and in one build, but
+  welds the control plane to the JVM/Gradle world exactly when the intent is for it to outlive that
+  scope (multi-runtime, §7.1). The operator only names an image and writes flags, so it shares no
+  code with the agents anyway — the "one language" benefit is smaller than it looks.

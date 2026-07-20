@@ -20,7 +20,7 @@
 
 ### Testing
 - [x] Test with a small servlet/controller example (Javalin leak demo task)
-- [ ] Test 10,000 iterations locally and record metrics
+- [x] Test 10,000 iterations locally and record metrics (2026-07-19: 10k/10k clean, no leaks; latency p50=1ms p99=2ms max=15ms after grace-sleep fix; threads steady at 7)
 - [x] Demonstrate reliable detection of deliberate thread leak (local + test)
 - [x] Add CI workflow: build, test, proper demo; leak demo expected to fail
 
@@ -137,3 +137,91 @@ Open items for Phase 2 hardening
 ### Non-goals (keep scope tight)
 - No coverage integration yet (v0.3)
 - No full static rollback; prefer classloader swap fallback
+
+---
+
+## Milestone: v0.5 — "Observability core"
+
+Goal: Make the measurement layer trustworthy and cheap enough to point at real apps.
+(Decisions recorded 2026-07-19; rationale in agents.md Status Snapshot.)
+
+### Measurement quality (done)
+- [x] Latency measured before the end-of-iteration grace sleep (was inflating all readings ~25ms)
+- [x] Opt-in `-Dclosurejvm.heap.gcBeforeMeasure` so heap delta measures retention, not allocation noise
+- [x] Hot path: `ThreadMXBean` + stack-free enumeration instead of `getAllStackTraces()`; stacks captured lazily on violation only
+- [x] Soak validated: 10k/10k clean (latency p50=1ms p99=2ms) — retires v0.1 Definition of Success
+
+### Native agent (JVMTI)
+- [x] Event-driven thread *counts* via ThreadStart/ThreadEnd (`native/closurejvmti.c`), `ThreadMXBean` fallback when not loaded
+- [x] Event-driven leak *set*: weak global refs to non-daemon Thread objects tracked at ThreadStart/ThreadEnd; leak oracle needs no enumeration (verified: leak demo still names leaked threads; proper mode clean)
+- [x] JDK 17 + 21 CI matrix; bytecode targets 17
+
+### Concurrency decision (A now, C later — decided)
+- [ ] Option A: serialize iterations in the WAR IterationFilter (global lock) + doc note that the harness measures iteration cleanliness, not throughput under load
+- [ ] Option C (later): explicit IterationContext API (`ctx = Agent.begin(); Agent.end(ctx)`) as the v0.6 refactor
+- Rejected: ThreadLocal-only contexts (per-request heap/thread deltas would silently lie under concurrency); external message bus for metrics (capture cost is in-process; bus is for a future multi-node fleet, not single-harness throughput)
+
+### Triage decoupling
+- [ ] In-process bounded handoff queue (ArrayBlockingQueue + one consumer thread) so triage I/O (bundles, stacks, saved inputs) never stalls the iteration loop; design the enqueue payload alongside Option C's context object
+
+### Real-app targets (after the above)
+- [x] Injection mechanism decided + built: Tomcat valve (DD-009), verified loading in real
+      Tomcat 10.1; valve and in-WAR filter are mutually exclusive. Scaffolding:
+      `tomcat-valve/`, `deploy/valve/context.xml`, `docker-compose.valve.yml`, docs/THIRD-PARTY-APPS.md
+- [x] JPetStore (MyBatis) live run DONE (2026-07-19): javax.servlet, deployed on Tomcat 9 with
+      the namespace-free valve; server-side latency (up to 531ms cold) + heap (up to 44MB/req)
+      invariants captured in the unmodified app. See docs/THIRD-PARTY-APPS.md.
+- [ ] HTTP driver target + seed corpus to explore JPetStore routes automatically (vs manual curls)
+- [ ] WebGoat / OWASP Benchmark for guaranteed-findings calibration of triage output
+- [ ] JSPWiki as the "real Apache project" target (markup parsing = latency-pathology hunting ground)
+- [ ] Stretch: XWiki or OpenMRS once pool/queue sampling (Phase 3) lands
+
+---
+
+## Milestone: v0.6 — "Iteration context"
+
+Goal: Replace the static per-iteration Agent state with an explicit context object so
+concurrency correctness stops depending on a serialization lock.
+
+- [x] `IterationContext` API: `ctx = Agent.begin(); ... Agent.end(ctx)` — per-iteration
+  baselines (latency, heap, thread set, sampler) moved onto the context; legacy
+  beginIteration/endIteration kept as ThreadLocal-backed wrappers (all callers unchanged).
+  Contract test in IterationContextTest; full suite + native leak-set verified green. (DD-010)
+- [x] Documented the boundary: latency/leak-set scope cleanly per context; heap/thread deltas
+  remain process-global and are only trustworthy under serialized or single-flight runs
+- [ ] Triage handoff payload (DD-006) carries the context snapshot (result fields now exposed
+  on IterationContext; wiring the payload is the remaining step)
+- [ ] Optional: IterationFilter/valve move to explicit begin()/end(ctx) (still serialized;
+  the ThreadLocal wrapper already makes them per-thread correct, so this is cleanup only)
+
+---
+
+## Milestone: v0.7 — "Operator DX" — DONE
+
+Goal: Make a running harness legible at a glance, AFL-style.
+
+- [x] Live in-place CLI status screen (`-Dclosurejvm.status`): elapsed, iterations, iters/sec,
+  crashes, invariants by kind (latency/heap/thread), leaks, latency last/mean/max, heap delta,
+  threads, resets. `StatusReporter` fed once per iteration from `Agent.end`.
+- [x] TTY-aware: in-place box on a terminal, one-line summaries when piped/CI;
+  `-Dclosurejvm.status.forceTty` to force the box; `renderFinal()` guarantees a final tally.
+- [x] Suppresses per-iteration metrics spam when active.
+- [x] HTTP driver target (`examples.targets.HttpRouteDriveTarget`, task `runHttpDrive`):
+  client-side latency + 5xx-as-crash, harvests server-side `X-ClosureJVM-Invariant-*` headers.
+- [x] Animated demo (`docs/demo.svg`) from real frames, embedded in the rewritten README.
+- [ ] Optional: periodic machine-readable status line (JSON) for tooling
+
+---
+
+## Milestone: v0.8 — "Cross-namespace" — DONE
+
+Goal: Run against `javax.servlet` apps (Tomcat 9), not just `jakarta.servlet` (Tomcat 10+).
+
+- [x] Decision (DD-011): NOT a second module — made the valve bytecode namespace-free so ONE
+  jar runs on both. Narrowed `invoke` to `throws IOException`, headers via Catalina Response,
+  `sneakyThrow` for the checked exception. `javap`-verified: zero servlet-namespace references.
+- [x] `docker-compose.valve9.yml` for the Tomcat 9 path (WAR_PATH-driven).
+- [x] Dropped the servlet-api imports from the valve entirely (not just HttpServletResponse).
+- [x] Verified against a real javax app: JPetStore-6 on Tomcat 9, server-side invariants
+  captured (see docs/THIRD-PARTY-APPS.md); same jar re-verified on Tomcat 10 (no regression).
+- [x] Docs: THIRD-PARTY-APPS namespace-selection table + JPetStore findings.

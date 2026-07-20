@@ -2,6 +2,9 @@
 
 This document explains the “why” and “how” behind ClosureJVM. The root README stays short and points here for details.
 
+Significant design choices (and the alternatives we rejected) are logged in
+[DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) — consult it before revisiting settled questions.
+
 ## Why
 
 Modern JVM web apps often fail due to availability issues rather than crashes:
@@ -51,6 +54,9 @@ Inputs → Harness/Runner → App Entry → Metrics & Coverage → Invariants �
 
 - Runner: executes iterations, manages lifecycle, orchestrates checks
 - Java Agent: instruments/observes runtime, tracks threads/executors
+- Native Agent (optional, JVMTI): event-driven thread lifecycle tracking (ThreadStart/ThreadEnd)
+  for count signals without polling or safepoint stack walks; harness falls back to ThreadMXBean
+  when it is not loaded
 - Reset Engine: enforce cleanliness; fallback to hard reset (ClassLoader swap)
 
 ## Early Usage Pattern (preview)

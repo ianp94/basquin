@@ -3,3 +3,5 @@ agents.md
 build/*
 fuzz-results
 tomcat-war/build
+tomcat-valve/build
+build/native

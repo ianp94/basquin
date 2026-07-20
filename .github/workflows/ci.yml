@@ -7,6 +7,9 @@ on:
       - 'runner/**'
       - 'examples/**'
       - 'test/**'
+      - 'native/**'
+      - 'tomcat-war/**'
+      - 'tomcat-valve/**'
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle/**'
@@ -18,6 +21,9 @@ on:
       - 'runner/**'
       - 'examples/**'
       - 'test/**'
+      - 'native/**'
+      - 'tomcat-war/**'
+      - 'tomcat-valve/**'
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle/**'
@@ -27,6 +33,35 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ['17', '21']
+    name: build-and-test (JDK ${{ matrix.java }})
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+      - name: Set up Java ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - name: Gradle build
+        uses: gradle/gradle-build-action@v3
+      - name: Build
+        run: ./gradlew build --no-daemon --warning-mode all
+      - name: Test
+        run: ./gradlew test --no-daemon --warning-mode all
+      - name: Check (verifications)
+        run: ./gradlew check --no-daemon --warning-mode all
+      - name: Build valve module
+        run: ./gradlew :tomcat-valve:jar --no-daemon --warning-mode all
+
+  native-agent:
+    runs-on: ubuntu-latest
+    needs: build-and-test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,12 +74,20 @@ jobs:
           java-version: '17'
       - name: Gradle build
         uses: gradle/gradle-build-action@v3
-      - name: Build
-        run: ./gradlew build --no-daemon --warning-mode all
-      - name: Test
-        run: ./gradlew test --no-daemon --warning-mode all
-      - name: Check (verifications)
-        run: ./gradlew check --no-daemon --warning-mode all
+      - name: Build native agent (gcc + JDK headers)
+        run: ./gradlew buildNativeAgent --no-daemon --warning-mode all
+      - name: Smoke test — agent loads and tracks thread lifecycle
+        shell: bash
+        run: |
+          set -e
+          LIB="$(pwd)/build/native/libclosurejvmti.so"
+          test -f "$LIB" || { echo "native lib not built" >&2; exit 1; }
+          ./gradlew jar --no-daemon --warning-mode all
+          # Run a short proper-mode loop with the agent injected; must complete cleanly.
+          java -agentpath:"$LIB" -Dclosurejvm.native.lib="$LIB" \
+            -Dclosurejvm.target=examples.targets.ThreadLeakTarget \
+            -Dexamples.mode=proper -Dexamples.sleepMs=1 -Dexamples.threads=2 \
+            -cp build/libs/closurejvm-0.2.0.jar runner.GenericRunner 20 examples.targets.ThreadLeakTarget
 
   leak-demo:
     runs-on: ubuntu-latest

@@ -1,0 +1,25 @@
+# Deploy an unmodified WAR on Tomcat with the ClosureJVM valve attached to every
+# request (see docs/THIRD-PARTY-APPS.md). Defaults to our own demo WAR so the valve
+# path can be verified without a third-party app; point WAR_PATH at any WAR (e.g. a
+# JPetStore build) to run against it.
+#
+#   ./gradlew :tomcat-valve:jar jar :tomcat-war:build   # build valve + agent (+ demo WAR)
+#   docker compose -f docker-compose.valve.yml up tomcat-valve
+#
+services:
+  tomcat-valve:
+    image: tomcat:10.1-jdk17
+    ports:
+      - "${TOMCAT_HOST_PORT:-8080}:8080"
+    environment:
+      # Agent injected into the server JVM so invariants (threads/heap/latency) are server-side.
+      - CATALINA_OPTS=-javaagent:/usr/local/tomcat/closurejvm-agent.jar -Xbootclasspath/a:/usr/local/tomcat/closurejvm-agent.jar -Dclosurejvm.invariant.mode=${INVARIANT_MODE:-soft} -Dclosurejvm.invariant.latency.maxMs=${INVARIANT_LATENCY_MS:-50} -Dclosurejvm.invariant.heapDelta.maxKb=${INVARIANT_HEAP_KB:-128} -Dclosurejvm.invariant.latency.sample=${INVARIANT_LATENCY_SAMPLE:-true} ${CATALINA_OPTS_EXTRA:-}
+    volumes:
+      # The WAR under test (unmodified). Override with WAR_PATH to run a third-party app.
+      - ${WAR_PATH:-./tomcat-war/build/libs/closurejvm-demo-0.1.0.war}:/usr/local/tomcat/webapps/ROOT.war:ro
+      # Agent classes (bootclasspath) — provides agent.Agent referenced by the valve.
+      - ./build/libs/closurejvm-0.2.0.jar:/usr/local/tomcat/closurejvm-agent.jar:ro
+      # Valve classes on Tomcat's own classpath.
+      - ./tomcat-valve/build/libs/closurejvm-valve-0.1.0.jar:/usr/local/tomcat/lib/closurejvm-valve.jar:ro
+      # Global context that registers the valve for every deployed app.
+      - ./deploy/valve/context.xml:/usr/local/tomcat/conf/context.xml:ro

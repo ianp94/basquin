@@ -22,6 +22,7 @@ public final class CorpusRunner {
 
     public static void main(String[] args) throws Exception {
         runner.util.TriageSink.ensureStarted();
+        runner.util.StatusReporter.ensureStarted();
         String targetClass = (args.length > 0) ? args[0] : System.getProperty("closurejvm.target");
         String corpusDir = (args.length > 1) ? args[1] : System.getProperty("closurejvm.corpusDir", "corpus");
         if (targetClass == null || targetClass.isBlank()) {
@@ -51,7 +52,17 @@ public final class CorpusRunner {
                 }
                 target.executeIteration();
             } catch (Throwable t) {
-                failure = t;
+                // A throw from executeIteration is a target crash (a throw from endIteration
+                // below is our own leak/invariant signal, counted separately) — unless the
+                // target declares it an expected rejection of invalid input.
+                if (target instanceof runner.api.CrashClassifier
+                        && ((runner.api.CrashClassifier) target).isExpected(t)) {
+                    // Expected rejection: leave failure null so it is not treated as a crash.
+                    runner.util.StatusReporter.recordRejected();
+                } else {
+                    failure = t;
+                    runner.util.StatusReporter.recordCrash();
+                }
             }
             try {
                 Agent.endIteration();

@@ -40,6 +40,17 @@ public final class StatusReporter {
     private static long lastHeapKb;
     private static long maxHeapKb;
     private static int lastThreads;
+    // Exploration (fuzzing/corpus) counters, fed from the triage layer.
+    private static long corpusSaved;
+    private static long findCrash;
+    private static long findInvariant;
+    private static long rejected;   // expected input rejections (not crashes)
+    private static long lastFindNanos;
+    private static long lastFindIter;
+    // Coverage of the code under test, reported by a coverage source (v0.10 server-side agent
+    // over HTTP, or an in-process JaCoCo/JQF provider). Zero until a source reports.
+    private static long coveredEdges;
+    private static long totalEdges;
 
     private StatusReporter() {}
 
@@ -55,6 +66,9 @@ public final class StatusReporter {
         Thread t = new Thread(StatusReporter::renderLoop, "ClosureJVM-Status");
         t.setDaemon(true);
         t.start();
+        // Guarantee a final frame on exit for any run type (JQF, corpus, generic), not just the
+        // runners that call renderFinal() explicitly.
+        Runtime.getRuntime().addShutdownHook(new Thread(StatusReporter::renderFinal, "ClosureJVM-Status-Final"));
     }
 
     /** Record one completed iteration's metrics and any violations/leak it carried. */
@@ -80,6 +94,36 @@ public final class StatusReporter {
 
     public static synchronized void recordCrash() { if (ENABLED) crashes++; }
     public static synchronized void recordReset() { if (ENABLED) resets++; }
+    /** An expected input rejection (a target's declared "bad input" exception), not a crash. */
+    public static synchronized void recordRejected() { if (ENABLED) rejected++; }
+
+    /**
+     * Record a saved exploration finding (from the triage layer). {@code classification} is the
+     * triage label, e.g. "Crash", "Invariant", "Invariant-Remote". Drives the exploration panel.
+     */
+    public static synchronized void recordSaved(String classification) {
+        if (!ENABLED) return;
+        corpusSaved++;
+        if (classification != null && classification.startsWith("Crash")) {
+            findCrash++;
+        } else if (classification != null && classification.startsWith("Invariant")) {
+            findInvariant++;
+        }
+        lastFindNanos = System.nanoTime();
+        lastFindIter = iterations;
+    }
+
+    /**
+     * Report coverage of the code under test. {@code total} is the instrumentable denominator
+     * (edges/branches) so the panel can show a real percentage. A coverage source — the v0.10
+     * server-side agent reporting per-request coverage over HTTP, or an in-process JaCoCo/JQF
+     * provider — calls this; the coverage row appears once total &gt; 0.
+     */
+    public static synchronized void recordCoverage(long covered, long total) {
+        if (!ENABLED) return;
+        coveredEdges = covered;
+        totalEdges = total;
+    }
 
     /** Render one final status frame — call when the run ends so the final tally always shows. */
     public static void renderFinal() {
@@ -107,13 +151,20 @@ public final class StatusReporter {
         double elapsedSec = elapsedNanos / 1_000_000_000.0;         // fractional, for the rate
         double rate = elapsedSec > 0.05 ? iterations / elapsedSec : 0.0;
         double meanLatency = iterations > 0 ? (double) sumLatencyMs / iterations : 0.0;
+        boolean exploring = corpusSaved > 0 || Boolean.getBoolean("closurejvm.status.explore");
 
         if (!TTY) {
+            String cov = totalEdges > 0
+                ? String.format(" cov=%.1f%%", 100.0 * coveredEdges / totalEdges) : "";
+            String explore = exploring
+                ? String.format(" explore[corpus=%d crash=%d inv=%d rejected=%d%s lastFind=%s]",
+                        corpusSaved, findCrash, findInvariant, rejected, cov, sinceLastFind())
+                : "";
             System.out.printf(
                 "[ClosureJVM] %s iters=%d (%.1f/s) crashes=%d leaks=%d inv[lat=%d heap=%d thr=%d] "
-                + "lat(last/mean/max)=%d/%.0f/%dms heap(last/max)=%d/%dKB threads=%d resets=%d%n",
+                + "lat(last/mean/max)=%d/%.0f/%dms heap(last/max)=%d/%dKB threads=%d resets=%d%s%n",
                 fmt(elapsedS), iterations, rate, crashes, leaks, violLatency, violHeap, violThread,
-                lastLatencyMs, meanLatency, maxLatencyMs, lastHeapKb, maxHeapKb, lastThreads, resets);
+                lastLatencyMs, meanLatency, maxLatencyMs, lastHeapKb, maxHeapKb, lastThreads, resets, explore);
             return;
         }
 
@@ -129,8 +180,28 @@ public final class StatusReporter {
         row(sb, "heap Δ KB", String.format("last=%d  max=%d", lastHeapKb, maxHeapKb));
         row(sb, "threads", String.valueOf(lastThreads));
         row(sb, "resets", String.valueOf(resets));
+        if (exploring) {
+            sb.append("├─ exploration ─────────────────────────────────┤\n");
+            row(sb, "execs", String.format("%d  (%.1f/s)", iterations, rate));
+            if (totalEdges > 0) {
+                row(sb, "coverage", String.format("%.1f%%  (%d/%d edges)",
+                        100.0 * coveredEdges / totalEdges, coveredEdges, totalEdges));
+            }
+            row(sb, "corpus", String.valueOf(corpusSaved));
+            row(sb, "finds", String.format("crash=%d  invariant=%d", findCrash, findInvariant));
+            row(sb, "rejected", String.valueOf(rejected));
+            row(sb, "last find", sinceLastFind());
+        }
         sb.append("└───────────────────────────────────────────────┘");
         System.out.println(sb);
+    }
+
+    private static String sinceLastFind() {
+        if (lastFindNanos == 0L) {
+            return "none yet";
+        }
+        long agoS = Math.max(0L, (System.nanoTime() - lastFindNanos) / 1_000_000_000L);
+        return String.format("%ds ago (@ iter %d)", agoS, lastFindIter);
     }
 
     private static void row(StringBuilder sb, String label, String value) {

@@ -282,6 +282,11 @@ tasks.register('runFuzzCalculatorJQF', JavaExec) {
             jvmArgs "-javaagent:${agentJar.absolutePath}"
         }
         jvmArgs '-Dclosurejvm.target=examples.targets.CalculatorFuzzTarget'
+        // Forward the live-status flags into the fuzz JVM so the exploration panel shows.
+        ['closurejvm.status', 'closurejvm.status.intervalMs', 'closurejvm.status.forceTty',
+         'closurejvm.status.explore'].each { k ->
+            def v = System.getProperty(k); if (v != null) jvmArgs "-D${k}=${v}"
+        }
         // Allow user override of resultsDir; default to fuzz-results
         def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/calculator'
         jvmArgs "-Djqf.ei.DIRECTORY=${results}"

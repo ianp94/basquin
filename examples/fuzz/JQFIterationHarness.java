@@ -23,8 +23,9 @@ public class JQFIterationHarness {
         if (initialized) return;
         synchronized (JQFIterationHarness.class) {
             if (initialized) return;
-            // Start the triage consumer before the first iteration baseline
+            // Start the triage consumer and status reporter before the first iteration baseline
             runner.util.TriageSink.ensureStarted();
+            runner.util.StatusReporter.ensureStarted();
             String cls = System.getProperty("closurejvm.target");
             if (cls == null || cls.isBlank()) {
                 throw new IllegalStateException("closurejvm.target not set for JQF harness");
@@ -54,7 +55,13 @@ public class JQFIterationHarness {
                                     }
                                     target.executeIteration();
                                 } catch (Throwable t) {
-                                    FuzzIO.saveInteresting(data, t);
+                                    if (target instanceof runner.api.CrashClassifier
+                                            && ((runner.api.CrashClassifier) target).isExpected(t)) {
+                                        runner.util.StatusReporter.recordRejected();
+                                    } else {
+                                        runner.util.StatusReporter.recordCrash();
+                                        FuzzIO.saveInteresting(data, t);
+                                    }
                                 } finally {
                                     Agent.endIteration();
                                 }
@@ -81,7 +88,16 @@ public class JQFIterationHarness {
             }
             target.executeIteration();
         } catch (Throwable t) {
-            // Save crashing input then rethrow for JQF to record
+            if (target instanceof runner.api.CrashClassifier
+                    && ((runner.api.CrashClassifier) target).isExpected(t)) {
+                // Expected input rejection: not a crash. Tell JQF the input was invalid so it
+                // discards it (no failure, no minimization) instead of treating it as a bug.
+                runner.util.StatusReporter.recordRejected();
+                org.junit.Assume.assumeNoException(t);
+                return;
+            }
+            // Genuine crash: save the input then rethrow for JQF to record.
+            runner.util.StatusReporter.recordCrash();
             FuzzIO.saveInteresting(data, t);
             if (t instanceof Exception) throw (Exception) t;
             throw new RuntimeException(t);

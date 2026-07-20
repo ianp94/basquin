@@ -58,6 +58,7 @@ public final class FuzzIO {
                 System.err.println("[ClosureJVM][Fuzz] Failed to save input: " + ioe);
             }
         });
+        StatusReporter.recordSaved("Crash");
     }
 
     public static void saveWithMeta(byte[] data, String classification, String details) {
@@ -85,5 +86,6 @@ public final class FuzzIO {
                 System.err.println("[ClosureJVM][Fuzz] Failed to save input: " + ioe);
             }
         });
+        StatusReporter.recordSaved(classification);
     }
 }

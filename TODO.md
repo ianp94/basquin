@@ -225,3 +225,51 @@ Goal: Run against `javax.servlet` apps (Tomcat 9), not just `jakarta.servlet` (T
 - [x] Verified against a real javax app: JPetStore-6 on Tomcat 9, server-side invariants
   captured (see docs/THIRD-PARTY-APPS.md); same jar re-verified on Tomcat 10 (no regression).
 - [x] Docs: THIRD-PARTY-APPS namespace-selection table + JPetStore findings.
+
+---
+
+## Milestone: v0.9 — "Exploration + UI"
+
+Goal: See coverage-guided exploration running, with exploration progress in the live UI.
+
+- [x] Exploration metrics in `StatusReporter`: execs/sec, corpus size, finds by classification
+  (crash / invariant), time-since-last-find — fed from the triage layer (FuzzIO.recordSaved) so
+  they cover both the JQF path and corpus replay. Panel appears when finds arrive.
+- [x] Forward `-Dclosurejvm.status*` through the JQF fuzz task so the panel shows during a run;
+  StatusReporter render started in the JQF harness + a shutdown-hook final frame for all run types.
+- [x] Live demo of a JQF campaign with the exploration panel; captured as `docs/demo-explore.svg`,
+  embedded in the README Exploration section.
+- [x] Honest scoping: in-process JQF coverage guidance stays local; the app-under-test coverage
+  signal (over HTTP) is v0.10 (below).
+
+## Milestone: v0.10.0 — "Deploy & distributed exploration"
+
+Goal: Run ClosureJVM against apps in a cluster, and make exploration coverage-guided by the
+app's own execution over HTTP. Some of this may live in a **separate repo** (the operator/agent
+and the dashboard) — decide once the boundaries are clear.
+
+- [ ] **Coverage % in the exploration panel**: the UI already has the row + `StatusReporter
+  .recordCoverage(covered, total)` plumbing (v0.9); v0.10 supplies the source. A true "% of code
+  explored" needs a covered/total denominator, which requires instrumenting the code under test —
+  hence it belongs with the coverage agent below, not the client-only JQF path.
+- [ ] **Coverage-guided over HTTP**: a server-side coverage agent inside the app JVM (JaCoCo-style
+  or JVMTI-based) tracks per-request edge coverage and reports it back to the client fuzzer
+  (response header or a `/closurejvm/coverage` endpoint). The client feeds it to
+  `StatusReporter.recordCoverage` and uses it as the guidance signal to mutate HTTP request
+  inputs — coverage feedback from the *app under test*, not the harness JVM. The real
+  "coverage-guided via HTTP requests" vision.
+- [ ] Optional in-process coverage %: a JaCoCo provider for the local JQF targets, so the panel
+  shows a real percentage without the server round-trip.
+- [ ] **Kubernetes deploy**: Helm chart / manifests to run the harness + target app; the agent
+  and valve injected into the target pod.
+- [ ] **Auto-injection agent**: a mutating admission webhook (operator) that injects the
+  `-javaagent` + valve into annotated pods automatically — likely its own repo.
+- [ ] **Web UI dashboard**: a browser dashboard over the k8s deployment — campaigns across pods,
+  live findings, coverage growth, corpus, invariant violations, triage bundles. The "product"
+  surface. Candidate separate repo.
+  - [ ] Surface the actual findings in the UI: per-finding crash detail (exception, message,
+    stack), invariant violations (kind, threshold, sampled stack), the saved input, and the
+    route/metrics — i.e. browse the triage bundles, not just counts.
+  - [ ] Optional Claude-API-backed analysis: with a configured API key, let Claude analyze a
+    finding (or a campaign) from the dashboard — cluster/dedupe findings, explain a stack, suggest
+    a root cause / minimized repro. Opt-in; key stays server-side.

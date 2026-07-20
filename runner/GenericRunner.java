@@ -67,9 +67,14 @@ public class GenericRunner {
                     // Ensure endIteration still runs metrics/leak checks if executeIteration failed,
                     // but never re-run it when the failure came from endIteration itself
                     if (!endAttempted) {
-                        // A throw from executeIteration itself is a target crash (a throw from
-                        // endIteration is our own leak/invariant signal, already counted).
-                        runner.util.StatusReporter.recordCrash();
+                        // A throw from executeIteration is a target crash — unless the target
+                        // declares it an expected input rejection (a throw from endIteration is
+                        // our own leak/invariant signal, already counted).
+                        if (isExpectedRejection(handle.target, t)) {
+                            runner.util.StatusReporter.recordRejected();
+                        } else {
+                            runner.util.StatusReporter.recordCrash();
+                        }
                         try { Agent.endIteration(); } catch (Throwable t2) { /* prefer original failure info */ }
                     }
                     if (!(resetViaClassloader && resetOnFailure && resets < maxResets)) {
@@ -101,6 +106,11 @@ public class GenericRunner {
             safeCloseTarget(handle);
             safeCloseLoader(handle);
         }
+    }
+
+    static boolean isExpectedRejection(runner.api.IterationTarget target, Throwable t) {
+        return target instanceof runner.api.CrashClassifier
+                && ((runner.api.CrashClassifier) target).isExpected(t);
     }
 
     private static int parseIterations(String[] args) {

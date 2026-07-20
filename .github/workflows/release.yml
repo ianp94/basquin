@@ -5,7 +5,8 @@ name: Release
 #   - the four container images to GitHub Container Registry (ghcr.io/ianp94/closurejvm-*)
 #   - the closurejvm CLI binaries (linux/darwin, amd64/arm64) as release assets
 #   - the packaged Helm chart as a release asset
-# The GitHub Pages Helm repo (docs/charts/) is maintained separately via deploy/helm/publish.sh.
+#   - the GitHub Pages Helm repo (docs/charts/) — the `pages` job repackages + reindexes + commits to
+#     main automatically (deploy/helm/publish.sh remains for a manual/bootstrap refresh).
 on:
   push:
     tags: ['v*']
@@ -95,6 +96,7 @@ jobs:
 
   chart:
     name: Package + upload Helm chart
+    needs: [cli]   # serialize the two action-gh-release calls (avoid a create race on the same tag)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -115,6 +117,10 @@ jobs:
 
   pages:
     name: Publish chart to the GitHub Pages Helm repo
+    # Only advertise a chart version once its images actually shipped + the chart asset is on the
+    # release — otherwise the Pages repo would offer a version whose ghcr images don't exist.
+    # NOTE: assumes the tag is the tip of main (this job re-packages from main, not the tagged commit).
+    needs: [images, chart]
     runs-on: ubuntu-latest
     steps:
       # Check out main (a tag build is detached HEAD) so we can commit the packaged chart + index back.

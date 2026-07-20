@@ -37,10 +37,13 @@ prefix. The in-cluster e2e (`deploy/e2e/e2e.sh`) exercises this chart end to end
 
 ## Publishing (maintainer)
 
-`git tag v0.2.0 && git push origin v0.2.0` triggers [`release.yml`](../../../.github/workflows/release.yml):
-it builds + pushes the four images to ghcr, and attaches the CLI binaries + packaged chart to the
-GitHub Release. Refresh the Pages Helm repo with [`deploy/helm/publish.sh`](../publish.sh) (packages the
-chart into `docs/charts/` + regenerates `index.yaml`), then commit `docs/charts/`.
+`git tag v0.2.0 && git push origin v0.2.0` triggers [`release.yml`](../../../.github/workflows/release.yml),
+which does it all: builds + pushes the four images to ghcr, attaches the CLI binaries + packaged chart
+to the GitHub Release, and — in the `pages` job — repackages the chart into `docs/charts/`, regenerates
+`index.yaml`, and commits it back to `main` so the Pages Helm repo updates itself. `helm package`
+runs with `--app-version <tag>`, so the single `imageTag` resolves every image to that version — the
+tag is the only version input. [`deploy/helm/publish.sh`](../publish.sh) remains for a manual/bootstrap
+Pages refresh.
 
 Then follow [docs/OPERATOR-USAGE.md](../../../docs/OPERATOR-USAGE.md): apply a `ClosureJVMTarget` to
 instrument an app, then a `ClosureJVMCampaign` to run a coverage-guided test.
@@ -69,4 +72,5 @@ left in place. Keep `crds/` and the RBAC in step with the operator's generated m
 
 - RBAC is **Roles + RoleBindings** (namespaced), not ClusterRoles — matching the operator's
   namespaced design. The rules mirror `operator/config/rbac/role.yaml`.
-- This chart is not yet published to a Helm repository; install from a checkout.
+- One `imageTag` value (default: the chart's `appVersion`) sets all four image tags, so a release is
+  a single version input.

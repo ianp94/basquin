@@ -530,3 +530,48 @@ coverage level, not raw coverage breadth.
 `${}` placeholders covers it, and stays hand-editable); pure random byte mutation of URLs (breaks
 the request shape immediately and never reaches deep handlers); shipping input bytes on every
 status push regardless of size (capped and sampled instead — a campaign can save thousands).
+
+---
+
+## DD-018: Corpus supplies values, grammar supplies structure — and sessions are the real coverage ceiling (2026-07-20)
+
+**Context.** Two limits surfaced while reviewing results. (1) The grammar file conflated two
+different things: concrete values (`FISH`, `EST-1`) and value *structure*. (2) Coverage stalled at
+17.7% even with all 21 handlers reachable — because every request was a stateless GET, so
+JPetStore's authenticated handlers found a null account bean in the session and 500'd instead of
+running their real logic. No amount of grammar tuning fixes that; it's state, not surface.
+
+**Decision — split values from structure.** The **corpus** supplies values
+(`$itemId = @../corpus/jpetstore/values/itemId.txt`, one per line, versioned alongside the app's
+other seeds). The **grammar** supplies structure (`~EST-[0-9]{1,4}`, `~[A-Z]{2}-[A-Z]{2}-[0-9]{2}`)
+— a mini generator over literals, `[a-z]`-style classes and `{n,m}` repetition. A rule mixes both,
+plus the existing `<int>/<string>/<long>/<empty>` generators.
+
+**Why the split matters.** Real values reach happy paths and deep code. *Structurally valid but
+nonexistent* values (`EST-847`) get past parsing and format validation and into the lookup and
+dereference code — where the interesting failures are. Purely random junk usually gets rejected at
+the first validation and never gets that far. Keeping values as corpus data also means adding a new
+product id is editing a text file, not a grammar.
+
+**Decision — sessions.** The driver maintains a `JSESSIONID` cookie and alternates *session
+epochs*: sign on for `-Dclosurejvm.session.epoch` iterations (default 40), then go anonymous, and
+repeat — so both authenticated and unauthenticated paths keep getting probed rather than the run
+committing to one. Disable with `-Dclosurejvm.session=false`.
+
+**Verified (2026-07-20)** on the JPetStore pod. Coverage **17.7% → 22.1%** (1126 → 1409 of 6368),
+still climbing when the run ended. The session mechanism was confirmed directly rather than
+inferred, with a control:
+
+```
+listOrders WITH session:  200
+listOrders WITHOUT:       500      # the NPE from DD-016
+```
+
+Distinct app-code crash sites went 6 → 7; the new one, `CatalogActionBean.viewItem:181`, is
+reachable only via structurally-generated ids (`EST-####` that parse but don't exist) — exactly
+the case the corpus/structure split was meant to buy.
+
+**Rejected.** One cookie jar for the whole run (would explore only the authenticated half);
+logging in before every request (hides all unauthenticated-path bugs, which is where DD-016's
+findings came from); a full cookie-policy/redirect stack (`JSESSIONID` plus follow-redirects is
+all this needs, and it stays dependency-free).

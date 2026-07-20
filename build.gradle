@@ -47,7 +47,8 @@ sourceSets {
             exclude 'fuzz/**', 'server/**', 'coverage/**'
         }
         resources {
-            srcDirs = []
+            // Dashboard UI assets, loaded from the classpath by DashboardServer
+            srcDirs = ['resources']
         }
     }
     test {

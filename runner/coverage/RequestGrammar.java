@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,6 +50,7 @@ public final class RequestGrammar {
 
     public static RequestGrammar load(Path file, Random rnd) throws IOException {
         RequestGrammar g = new RequestGrammar(rnd);
+        Path base = file.toAbsolutePath().getParent();
         for (String raw : new String(Files.readAllBytes(file), StandardCharsets.UTF_8).split("\n")) {
             String line = raw;
             int hash = line.indexOf('#');
@@ -62,7 +64,15 @@ public final class RequestGrammar {
                 List<String> alts = new ArrayList<>();
                 for (String alt : line.substring(eq + 1).split("\\|")) {
                     String a = alt.trim();
-                    if (!a.isEmpty()) alts.add(a);
+                    if (a.isEmpty()) continue;
+                    if (a.startsWith("@")) {
+                        // Values come from the corpus: one per line. This is the corpus/grammar
+                        // split — real values live as data next to the app's other seeds, while
+                        // the grammar file stays a statement about *structure*.
+                        alts.addAll(readValues(base, a.substring(1).trim()));
+                    } else {
+                        alts.add(a);
+                    }
                 }
                 if (!alts.isEmpty()) g.rules.put(name, alts);
             } else if (line.startsWith("/")) {
@@ -70,6 +80,22 @@ public final class RequestGrammar {
             }
         }
         return g;
+    }
+
+    private static List<String> readValues(Path base, String ref) {
+        List<String> out = new ArrayList<>();
+        Path p = Paths.get(ref);
+        if (!p.isAbsolute() && base != null) p = base.resolve(ref);
+        try {
+            for (String line : new String(Files.readAllBytes(p), StandardCharsets.UTF_8).split("\n")) {
+                String v = line.trim();
+                if (v.isEmpty() || v.startsWith("#")) continue;
+                out.add(v);
+            }
+        } catch (IOException e) {
+            System.err.println("[ClosureJVM] grammar: could not read values file " + p + ": " + e);
+        }
+        return out;
     }
 
     public boolean isEmpty() { return routes.isEmpty(); }
@@ -138,7 +164,73 @@ public final class RequestGrammar {
         return generator(alts.get(rnd.nextInt(alts.size())));
     }
 
+    /**
+     * Structural generator: {@code ~EST-[0-9]{1,4}} produces a value that MATCHES THE APP'S ID
+     * SHAPE but need not exist. This is the point of separating corpus from grammar — the corpus
+     * supplies real values (which reach the happy paths and deep code), the grammar supplies the
+     * *structure* of invented ones. A structurally-valid-but-nonexistent id gets past the app's
+     * parsing and format checks and into lookup/deref code, where the interesting failures live;
+     * a purely random {@code <string>} usually gets rejected at the first validation and never
+     * gets that far. Supports literals, {@code [A-Z] [a-z] [0-9] [abc]} classes, and
+     * {@code {n}} / {@code {n,m}} repetition — enough for id/username shapes, deliberately not a
+     * full regex engine.
+     */
+    private String structural(String pattern) {
+        StringBuilder out = new StringBuilder();
+        int i = 0;
+        while (i < pattern.length()) {
+            char c = pattern.charAt(i);
+            String alphabet;
+            if (c == '[') {
+                int close = pattern.indexOf(']', i);
+                if (close < 0) { out.append(c); i++; continue; }
+                alphabet = expandClass(pattern.substring(i + 1, close));
+                i = close + 1;
+            } else {
+                alphabet = String.valueOf(c);
+                i++;
+            }
+            int min = 1, max = 1;
+            if (i < pattern.length() && pattern.charAt(i) == '{') {
+                int close = pattern.indexOf('}', i);
+                if (close > 0) {
+                    String spec = pattern.substring(i + 1, close);
+                    try {
+                        int comma = spec.indexOf(',');
+                        if (comma < 0) { min = max = Integer.parseInt(spec.trim()); }
+                        else {
+                            min = Integer.parseInt(spec.substring(0, comma).trim());
+                            max = Integer.parseInt(spec.substring(comma + 1).trim());
+                        }
+                    } catch (NumberFormatException ignored) { /* treat as literal repeat of 1 */ }
+                    i = close + 1;
+                }
+            }
+            int reps = max > min ? min + rnd.nextInt(max - min + 1) : min;
+            for (int r = 0; r < reps; r++) {
+                out.append(alphabet.isEmpty() ? "" : String.valueOf(alphabet.charAt(rnd.nextInt(alphabet.length()))));
+            }
+        }
+        return out.toString();
+    }
+
+    private static String expandClass(String spec) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < spec.length(); i++) {
+            if (i + 2 < spec.length() && spec.charAt(i + 1) == '-') {
+                for (char c = spec.charAt(i); c <= spec.charAt(i + 2); c++) sb.append(c);
+                i += 2;
+            } else {
+                sb.append(spec.charAt(i));
+            }
+        }
+        return sb.toString();
+    }
+
     private String generator(String token) {
+        if (token.startsWith("~")) {
+            return structural(token.substring(1));
+        }
         switch (token) {
             case "<int>": {
                 int[] boundaries = {0, 1, -1, 2, 127, 128, 255, 256, 65535, Integer.MAX_VALUE, Integer.MIN_VALUE};

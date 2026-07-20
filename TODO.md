@@ -268,9 +268,17 @@ and the dashboard) — decide once the boundaries are clear.
     and distinct crash sites found in the app's own code went 4 -> 6 (DD-017).
   - [x] **Input viewer**: dashboard cluster rows expand to show the concrete inputs behind a
     finding (read from the saved `.bin`), selectable for copy-paste replay.
-  - [ ] "Copy as curl" button + download link for binary inputs.
-  - [ ] Session-aware sequences (signon -> add to cart -> checkout). The remaining ceiling is
-    *state*, not surface: some handlers only do real work after a successful signon.
+  - [x] **Rich input viewer**: cluster rows expand to show, per sample, the input (copyable, with
+    a "curl" button), the exception + message, the invariant detail, the stack trace, and the full
+    raw record on demand. Dashboard UI moved to `resources/dashboard.html` (it outgrew being a
+    Java string literal).
+  - [x] **Corpus/structure split + sessions (DD-018)**: corpus supplies VALUES
+    (`@values/itemId.txt`), grammar supplies STRUCTURE (`~EST-[0-9]{1,4}`); driver maintains a
+    JSESSIONID and alternates authenticated/anonymous session epochs. Coverage 17.7% → **22.1%**;
+    verified with a control (listOrders: 200 with session, 500 without). Crash sites 6 → 7.
+  - [ ] Multi-step sequences (signon → addToCart → checkOut as an ordered transaction) to reach
+    order-placement code that needs a populated cart, not just a session.
+  - [ ] POST support with form bodies — several handlers are POST-only in real usage.
 - [ ] Optional in-process coverage %: a JaCoCo provider for the local JQF targets, so the panel
   shows a real percentage without the server round-trip.
 - [x] **Kubernetes deploy**: `kind` demo environment (`deploy/k8s/`): JPetStore as a pod with

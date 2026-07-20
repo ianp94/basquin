@@ -51,7 +51,7 @@ public final class DashboardServer {
         server.createContext("/api/campaigns", DashboardServer::listCampaigns);
         server.createContext("/api/campaign/", DashboardServer::campaignDetail);
         server.createContext("/api/analyze/", DashboardServer::analyze);
-        server.createContext("/", ex -> respond(ex, "text/html; charset=utf-8", PAGE));
+        server.createContext("/", ex -> respond(ex, "text/html; charset=utf-8", page()));
 
         server.setExecutor(Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "ClosureJVM-DashboardServer");
@@ -226,114 +226,26 @@ public final class DashboardServer {
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    private static final String PAGE = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-        + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>ClosureJVM Dashboard</title><style>"
-        + ":root{color-scheme:dark}body{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;"
-        + "background:#0d1117;color:#c9d1d9}h1{font-size:16px;margin:0;color:#3fb950;font-weight:600}"
-        + "header{display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid #30363d;position:sticky;top:0;background:#0d1117}"
-        + "a{color:#a371f7;text-decoration:none}a:hover{text-decoration:underline}"
-        + ".dot{width:10px;height:10px;border-radius:50%;background:#3fb950;box-shadow:0 0 8px #3fb950}"
-        + ".dot.dead{background:#8b949e;box-shadow:none}"
-        + ".wrap{padding:20px;max-width:1100px;margin:0 auto}"
-        + ".cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}"
-        + ".fleet{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px}"
-        + ".card,.pod{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px}"
-        + ".pod{cursor:pointer}.pod:hover{border-color:#3fb950}"
-        + ".card .k{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.05em}"
-        + ".card .v{font-size:24px;margin-top:6px}.card .s{font-size:12px;color:#8b949e;margin-top:2px}"
-        + ".bar{height:10px;border-radius:6px;background:#21262d;overflow:hidden;margin-top:8px}"
-        + ".bar>div{height:100%;background:linear-gradient(90deg,#a371f7,#3fb950);width:0%}"
-        + "table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12px}"
-        + "th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #21262d;vertical-align:top}"
-        + "th{color:#8b949e;font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.05em}"
-        + ".tag{padding:2px 8px;border-radius:20px;font-size:11px;white-space:nowrap}"
-        + ".Crash{background:#3d1418;color:#ff7b72}.Invariant,.Invariant-Remote{background:#3a2c05;color:#e3b341}"
-        + ".Coverage{background:#26193d;color:#a371f7}pre{margin:0;white-space:pre-wrap;color:#8b949e;font-size:11px}"
-        + "h2{font-size:13px;color:#8b949e;margin:24px 0 0;text-transform:uppercase;letter-spacing:.05em}"
-        + ".pid{font-size:13px}.age{font-size:11px;color:#8b949e}"
-        + ".sample{display:flex;align-items:baseline;gap:10px;padding:5px 8px;border-radius:6px;background:#161b22;margin-bottom:4px}"
-        + ".sample code{color:#7ee787;font-size:11px;word-break:break-all;flex:1;white-space:pre-wrap;user-select:all}"
-        + ".stime{color:#8b949e;font-size:10px;white-space:nowrap}.ssize{color:#8b949e;font-size:10px;white-space:nowrap}"
-        + "</style></head><body>"
-        + "<header><span class=\"dot\"></span><h1>ClosureJVM Dashboard</h1>"
-        + "<span id=\"sub\" style=\"color:#8b949e;font-size:12px\">fleet view — no campaign selected</span>"
-        + "<span style=\"flex:1\"></span><a href=\"#\" id=\"back\" style=\"display:none\">&larr; all campaigns</a></header>"
-        + "<div class=\"wrap\">"
-        + "<div id=\"fleetView\"><div class=\"fleet\" id=\"fleet\"></div></div>"
-        + "<div id=\"campaignView\" style=\"display:none\">"
-        + "<div class=\"cards\" id=\"cards\"></div>"
-        + "<div class=\"card\" style=\"margin-top:12px\"><div class=\"k\">coverage of app under test</div>"
-        + "<div class=\"v\" id=\"covv\">—</div><div class=\"bar\"><div id=\"covbar\"></div></div></div>"
-        + "<div style=\"display:flex;align-items:center;justify-content:space-between\">"
-        + "<h2 style=\"margin-top:24px\">Findings <span id=\"findsSub\" style=\"text-transform:none;letter-spacing:0\"></span></h2>"
-        + "<button id=\"analyzeBtn\" style=\"margin-top:18px;background:#21262d;color:#c9d1d9;border:1px solid #30363d;"
-        + "border-radius:6px;padding:6px 12px;font:inherit;cursor:pointer\">Analyze with Claude</button></div>"
-        + "<div id=\"analysisPanel\" style=\"display:none;background:#161b22;border:1px solid #30363d;border-radius:10px;"
-        + "padding:14px;margin-top:8px;font-size:12px;white-space:pre-wrap;color:#c9d1d9\"></div>"
-        + "<table><thead><tr><th>Type</th><th>Kind / route</th><th>Count</th><th>Magnitude</th><th>Last seen</th></tr></thead>"
-        + "<tbody id=\"finds\"></tbody></table></div>"
-        + "</div><script>"
-        + "let current=null;"
-        + "function card(k,v,s){return '<div class=\"card\"><div class=\"k\">'+k+'</div><div class=\"v\">'+v+'</div><div class=\"s\">'+(s||'')+'</div></div>'}"
-        + "function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}"
-        + "function selectCampaign(id){current=id;document.getElementById('fleetView').style.display='none';"
-        + "document.getElementById('campaignView').style.display='block';document.getElementById('back').style.display='inline';"
-        + "document.getElementById('sub').textContent='campaign: '+id;tick();}"
-        + "function showFleet(){current=null;document.getElementById('fleetView').style.display='block';"
-        + "document.getElementById('campaignView').style.display='none';document.getElementById('back').style.display='none';"
-        + "document.getElementById('sub').textContent='fleet view — '+Object.keys(lastFleet||{}).length+' campaign(s)';tickFleet();}"
-        + "document.getElementById('back').onclick=function(e){e.preventDefault();showFleet();};"
-        + "var lastFleet={};"
-        + "async function tickFleet(){try{const list=await (await fetch('/api/campaigns')).json();"
-        + "lastFleet={};list.forEach(c=>lastFleet[c.id]=c);"
-        + "document.getElementById('fleet').innerHTML=list.length?list.map(c=>"
-        + "'<div class=\"pod\" onclick=\"selectCampaign(\\''+c.id+'\\')\">"
-        + "<div style=\"display:flex;align-items:center;gap:8px\"><span class=\"dot'+(c.alive?'':' dead')+'\"></span>"
-        + "<span class=\"pid\">'+esc(c.id)+'</span></div>"
-        + "<div class=\"s\" style=\"margin-top:8px\">iters '+c.iterations+' · crashes '+c.crashes+' · cov '+(c.coveragePct>=0?c.coveragePct+'%':'—')+'</div>"
-        + "<div class=\"age\">last seen '+c.ageSec+'s ago</div></div>').join('')"
-        + ":'<div class=\"s\">No campaigns have reported yet. Start a driver with -Dclosurejvm.dashboard.push=host:'+location.port+'</div>';"
-        + "}catch(e){}}"
-        + "async function tick(){if(!current)return;try{"
-        + "const st=await (await fetch('/api/campaign/'+current+'/status')).json();"
-        + "document.getElementById('cards').innerHTML="
-        + "card('iterations',st.iterations||0,(st.rate||0).toFixed(1)+'/s')+"
-        + "card('crashes',st.crashes||0)+card('leaks',st.leaks||0)+"
-        + "card('invariants',(st.invariants?(st.invariants.latency+st.invariants.heap+st.invariants.thread):0))+"
-        + "card('latency ms',st.latencyMs?st.latencyMs.last:0,st.latencyMs?('mean '+st.latencyMs.mean+' · max '+st.latencyMs.max):'')+"
-        + "card('corpus',st.exploration?st.exploration.corpus:0,st.exploration?(st.exploration.rejected+' rejected'):'');"
-        + "const cv=(st.exploration||{}).coverage||{total:0};var pct=cv.total>0?cv.pct:0;"
-        + "document.getElementById('covv').textContent=cv.total>0?(pct.toFixed(1)+'%  ('+cv.covered+'/'+cv.total+' edges)'):'no coverage source';"
-        + "document.getElementById('covbar').style.width=pct+'%';"
-        + "const cl=await (await fetch('/api/campaign/'+current+'/clusters')).json();"
-        + "lastClusters=cl;"
-        + "const total=cl.reduce((a,c)=>a+c.count,0);"
-        + "document.getElementById('findsSub').textContent=cl.length+' unique / '+total+' total';"
-        + "document.getElementById('finds').innerHTML=cl.length?cl.map((c,i)=>{"
-        + "const open=expanded.has(c.fingerprint);"
-        + "let row='<tr onclick=\"toggle(\\''+c.fingerprint.replace(/\\\\/g,'\\\\\\\\').replace(/'/g,\"\\\\'\")+'\\')\" style=\"cursor:pointer\">"
-        + "<td><span class=\"tag '+c.classification+'\">'+(c.classification||'?')+'</span></td>"
-        + "<td>'+(open?'▾ ':'▸ ')+esc(c.kind)+(c.routePattern?'<br><span style=\"color:#8b949e\">'+esc(c.routePattern)+'</span>':'')+'</td>"
-        + "<td>'+c.count+'x'+(c.distinctRoutes>1?' / '+c.distinctRoutes+' routes':'')+'</td>"
-        + "<td>'+(c.maxMagnitude>=0?(c.minMagnitude+'–'+c.maxMagnitude):'—')+'</td>"
-        + "<td>'+new Date(c.lastSeenMs).toLocaleTimeString()+'</td></tr>';"
-        + "if(open){row+='<tr><td colspan=5 style=\"background:#0d1117\"><div style=\"font-size:10px;color:#8b949e;"
-        + "text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px\">Inputs that produced this ('+c.samples.length+' of '+c.count+')</div>'"
-        + "+(c.samples.length?c.samples.map(s=>'<div class=\"sample\"><span class=\"stime\">'+new Date(s.timestamp).toLocaleTimeString()+"
-        + "'</span><code>'+esc(s.input)+'</code><span class=\"ssize\">'+s.inputSize+'B'+(s.inputBinary?' hex':'')+'</span></div>').join('')"
-        + ":'<div class=\"s\">No input bytes recorded for this cluster.</div>')+'</div></td></tr>';}"
-        + "return row;}).join('')"
-        + ":'<tr><td colspan=5 style=\"color:#8b949e\">No findings yet.</td></tr>';"
-        + "}catch(e){}}"
-        + "var lastClusters=[],expanded=new Set();"
-        + "function toggle(fp){if(expanded.has(fp))expanded.delete(fp);else expanded.add(fp);tick();}"
-        + "document.getElementById('analyzeBtn').onclick=async function(){"
-        + "if(!current)return;const btn=this,panel=document.getElementById('analysisPanel');"
-        + "btn.disabled=true;btn.textContent='Analyzing…';panel.style.display='block';panel.textContent='Asking Claude about this campaign\\u2019s clusters…';"
-        + "try{const r=await (await fetch('/api/analyze/'+current,{method:'POST'})).json();"
-        + "panel.textContent=r.analysis||('Not available: '+(r.error||'unknown error'));"
-        + "}catch(e){panel.textContent='Request failed: '+e;}"
-        + "btn.disabled=false;btn.textContent='Analyze with Claude';};"
-        + "showFleet();setInterval(()=>current?tick():tickFleet(),1500);"
-        + "</script></body></html>";
+    /**
+     * The dashboard page, loaded from the classpath (resources/dashboard.html). Kept as a real
+     * file rather than a Java string literal: the UI outgrew being maintainable as escaped
+     * concatenation (it caused several escaping bugs), and this way it can be edited and diffed
+     * like the HTML it is.
+     */
+    private static String page() {
+        try (InputStream in = DashboardServer.class.getResourceAsStream("/dashboard.html")) {
+            if (in == null) {
+                return "<!doctype html><meta charset=utf-8><body style=\"font-family:monospace\">"
+                     + "dashboard.html not found on the classpath. APIs still work: "
+                     + "<a href=/api/campaigns>/api/campaigns</a></body>";
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) >= 0) out.write(buf, 0, n);
+            return out.toString(StandardCharsets.UTF_8.name());
+        } catch (IOException e) {
+            return "<!doctype html><meta charset=utf-8><body>failed to load dashboard.html: " + e + "</body>";
+        }
+    }
 }

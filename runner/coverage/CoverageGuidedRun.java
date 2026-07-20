@@ -116,7 +116,16 @@ public final class CoverageGuidedRun {
         List<String> corpus = new ArrayList<>(seeds);
         long best = 0, total = 0;
 
+        // Alternate session epochs: sign on for a stretch (so account/cart/order handlers run
+        // their real logic), then go anonymous (so the unauthenticated paths still get probed).
+        int epochLength = Integer.getInteger("closurejvm.session.epoch", 40);
+        boolean sessionsEnabled = !"false".equals(System.getProperty("closurejvm.session", "true"));
+
         for (int i = 0; i < iterations; i++) {
+            if (sessionsEnabled && i % epochLength == 0) {
+                boolean authenticated = (i / epochLength) % 2 == 0;
+                if (authenticated) login(baseUrl); else resetSession();
+            }
             String input;
             if (i < seeds.size()) {
                 // Deterministic first pass: hit every seed once so no endpoint is left to chance.
@@ -162,12 +171,48 @@ public final class CoverageGuidedRun {
         System.out.printf("CoverageGuidedRun done: corpus=%d coverage=%d/%d%n", corpus.size(), best, total);
     }
 
+    /**
+     * Cookie jar for the current session "epoch". JPetStore keeps the signed-on account in the
+     * HTTP session, so without carrying JSESSIONID every authenticated handler sees a null account
+     * bean and 500s instead of doing real work — which caps coverage no matter how good the
+     * request grammar is. Periodically reset so both anonymous and authenticated states get
+     * explored (DD-018).
+     */
+    private static volatile String sessionCookie = null;
+
+    private static void resetSession() { sessionCookie = null; }
+
+    /** Establish a signed-on session so authenticated handlers run their real logic. */
+    private static void login(String base) {
+        resetSession();
+        try {
+            request(base, "/actions/Account.action?signonForm=");
+            request(base, "/actions/Account.action?signon=&username=j2ee&password=j2ee");
+        } catch (Throwable ignored) {
+            // A failed login just means this epoch explores as an anonymous user.
+        }
+    }
+
     private static void request(String base, String path) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(base + path).openConnection();
         c.setConnectTimeout(2000);
         c.setReadTimeout(10000);
         c.setRequestMethod("GET");
+        c.setInstanceFollowRedirects(true);
+        if (sessionCookie != null) {
+            c.setRequestProperty("Cookie", sessionCookie);
+        }
         int code = c.getResponseCode();
+        // Capture/refresh JSESSIONID so subsequent requests stay in the same session.
+        for (int i = 0; ; i++) {
+            String key = c.getHeaderFieldKey(i);
+            String val = c.getHeaderField(i);
+            if (key == null && val == null) break;
+            if (key != null && key.equalsIgnoreCase("Set-Cookie") && val != null
+                    && val.startsWith("JSESSIONID=")) {
+                sessionCookie = val.split(";", 2)[0];
+            }
+        }
         String inv = c.getHeaderField("X-ClosureJVM-Invariant-Count");
         if (inv != null) {
             String detail = c.getHeaderField("X-ClosureJVM-Invariant-Detail");

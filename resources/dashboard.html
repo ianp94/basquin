@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ClosureJVM Dashboard</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#0d1117;color:#c9d1d9}
+h1{font-size:16px;margin:0;color:#3fb950;font-weight:600}
+h2{font-size:13px;color:#8b949e;margin:24px 0 0;text-transform:uppercase;letter-spacing:.05em}
+header{display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid #30363d;position:sticky;top:0;background:#0d1117;z-index:5}
+a{color:#a371f7;text-decoration:none;cursor:pointer}a:hover{text-decoration:underline}
+.dot{width:10px;height:10px;border-radius:50%;background:#3fb950;box-shadow:0 0 8px #3fb950;flex:none}
+.dot.dead{background:#8b949e;box-shadow:none}
+.wrap{padding:20px;max-width:1180px;margin:0 auto}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.fleet{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:14px}
+.card,.pod{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px}
+.pod{cursor:pointer}.pod:hover{border-color:#3fb950}
+.k{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.05em}
+.v{font-size:24px;margin-top:6px}.s{font-size:12px;color:#8b949e;margin-top:2px}
+.bar{height:10px;border-radius:6px;background:#21262d;overflow:hidden;margin-top:8px}
+.bar>div{height:100%;background:linear-gradient(90deg,#a371f7,#3fb950);width:0%;transition:width .4s}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #21262d;vertical-align:top}
+th{color:#8b949e;font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.05em}
+tr.clusterRow{cursor:pointer}tr.clusterRow:hover{background:#161b22}
+.tag{padding:2px 8px;border-radius:20px;font-size:11px;white-space:nowrap;display:inline-block}
+.Crash{background:#3d1418;color:#ff7b72}
+.Invariant,.Invariant-Remote{background:#3a2c05;color:#e3b341}
+.Coverage{background:#26193d;color:#a371f7}
+.detail{background:#0b0f14;padding:12px;border-radius:8px}
+.sample{border:1px solid #21262d;border-radius:8px;padding:10px;margin-bottom:10px;background:#10151c}
+.sampleHead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.stime{color:#8b949e;font-size:10px;white-space:nowrap}
+.chip{font-size:10px;color:#8b949e;border:1px solid #30363d;border-radius:20px;padding:1px 8px}
+.inputBox{display:flex;align-items:flex-start;gap:8px;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;margin-bottom:8px}
+.inputBox code{color:#7ee787;font-size:12px;word-break:break-all;white-space:pre-wrap;flex:1;user-select:all}
+button{background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:4px 10px;font:inherit;font-size:11px;cursor:pointer}
+button:hover{border-color:#8b949e}
+button:disabled{opacity:.5;cursor:default}
+.errLine{color:#ff7b72;font-size:12px;margin-bottom:4px;word-break:break-word}
+.detLine{color:#e3b341;font-size:12px;margin-bottom:4px}
+pre.stack{margin:6px 0 0;white-space:pre;overflow-x:auto;color:#8b949e;font-size:11px;background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px;max-height:260px}
+pre.raw{margin:6px 0 0;white-space:pre-wrap;color:#8b949e;font-size:11px;background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px;max-height:300px;overflow:auto}
+.muted{color:#8b949e;font-size:12px}
+.toggleLink{font-size:11px}
+#analysisPanel{display:none;background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin-top:8px;font-size:12px;white-space:pre-wrap}
+.rowFlex{display:flex;align-items:center;justify-content:space-between;gap:10px}
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="hdot"></span><h1>ClosureJVM</h1>
+  <span id="sub" class="muted"></span>
+  <span style="flex:1"></span>
+  <a id="back" style="display:none">&larr; all campaigns</a>
+</header>
+
+<div class="wrap">
+  <div id="fleetView"><div class="fleet" id="fleet"></div></div>
+
+  <div id="campaignView" style="display:none">
+    <div class="cards" id="cards"></div>
+    <div class="card" style="margin-top:12px">
+      <div class="k">coverage of app under test</div>
+      <div class="v" id="covv">&mdash;</div>
+      <div class="bar"><div id="covbar"></div></div>
+    </div>
+
+    <div class="rowFlex">
+      <h2>Findings <span id="findsSub" style="text-transform:none;letter-spacing:0"></span></h2>
+      <button id="analyzeBtn" style="margin-top:18px">Analyze with Claude</button>
+    </div>
+    <div id="analysisPanel"></div>
+
+    <table>
+      <thead><tr><th>Type</th><th>Kind / route</th><th>Count</th><th>Magnitude</th><th>Last seen</th></tr></thead>
+      <tbody id="finds"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let current = null, expanded = new Set(), expandedRaw = new Set(), lastFleet = [];
+
+const esc = s => (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const fmtTime = ms => ms ? new Date(+ms).toLocaleTimeString() : '—';
+function fmtDur(s){s=s|0;const p=n=>String(n).padStart(2,'0');return p(s/3600|0)+':'+p(s%3600/60|0)+':'+p(s%60);}
+
+function card(k,v,sub){
+  return '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="s">'+(sub||'')+'</div></div>';
+}
+
+// Split a saved finding record into its parts so the viewer can show the error, the
+// invariant detail and the stack separately instead of one undifferentiated blob.
+function parseRecord(text){
+  const out = {exception:'', message:'', detail:'', stack:'', route:''};
+  if(!text) return out;
+  const lines = text.split('\n');
+  let inStack = false, stack = [];
+  for(const line of lines){
+    if(inStack){ stack.push(line); continue; }
+    if(line.startsWith('exception=')) out.exception = line.slice(10);
+    else if(line.startsWith('message=')) out.message = line.slice(8);
+    else if(line.startsWith('route=')) out.route = line.slice(6);
+    else if(line.startsWith('detail=')) out.detail = line.slice(7);
+    else if(line.startsWith('stack=')) { inStack = true; }
+    else if(!out.detail && /^[A-Za-z]+:\s/.test(line)) out.detail = line.trim();
+  }
+  out.stack = stack.join('\n').trim();
+  return out;
+}
+
+// An HTTP input is the request path, so it can be replayed verbatim.
+function curlFor(campaign, input){
+  if(!input || !input.startsWith('/')) return null;
+  const base = (lastStatus && lastStatus.baseUrl) ? lastStatus.baseUrl : 'http://<app-host>';
+  return "curl -i '" + base + input.replace(/'/g,"'\\''") + "'";
+}
+
+function copyText(btn, text){
+  navigator.clipboard.writeText(text).then(()=>{
+    const old = btn.textContent; btn.textContent='copied'; setTimeout(()=>btn.textContent=old, 1200);
+  }).catch(()=>{ btn.textContent='copy failed'; });
+}
+
+function renderSample(c, s, idx){
+  const r = parseRecord(s.text);
+  const rawKey = c.fingerprint + '#' + idx;
+  const showRaw = expandedRaw.has(rawKey);
+  let h = '<div class="sample">';
+
+  h += '<div class="sampleHead"><span class="stime">'+fmtTime(s.timestamp)+'</span>';
+  h += '<span class="chip">'+s.inputSize+' B'+(s.inputBinary?' · hex':'')+'</span>';
+  if(r.route && r.route !== s.input) h += '<span class="chip">'+esc(r.route)+'</span>';
+  h += '</div>';
+
+  // The input itself — the thing you replay.
+  h += '<div class="inputBox"><code id="in-'+rawKey.replace(/[^a-zA-Z0-9]/g,'_')+'">'+esc(s.input || '(no input recorded)')+'</code>';
+  if(s.input){
+    h += '<button data-copy="'+encodeURIComponent(s.input)+'">copy</button>';
+    const cu = curlFor(current, s.input);
+    if(cu) h += '<button data-copy="'+encodeURIComponent(cu)+'">curl</button>';
+  }
+  h += '</div>';
+
+  if(r.exception) h += '<div class="errLine"><b>'+esc(r.exception)+'</b>'+(r.message?': '+esc(r.message):'')+'</div>';
+  else if(r.message) h += '<div class="errLine">'+esc(r.message)+'</div>';
+  if(r.detail) h += '<div class="detLine">'+esc(r.detail)+'</div>';
+
+  if(r.stack) h += '<pre class="stack">'+esc(r.stack)+'</pre>';
+
+  h += '<a class="toggleLink" data-raw="'+rawKey+'">'+(showRaw?'▾ hide full record':'▸ full record')+'</a>';
+  if(showRaw) h += '<pre class="raw">'+esc(s.text)+'</pre>';
+  h += '</div>';
+  return h;
+}
+
+let lastStatus = null;
+
+async function tickFleet(){
+  try{
+    const list = await (await fetch('/api/campaigns')).json();
+    lastFleet = list;
+    document.getElementById('sub').textContent = 'fleet view — '+list.length+' campaign(s)';
+    document.getElementById('fleet').innerHTML = list.length ? list.map(c =>
+      '<div class="pod" data-open="'+encodeURIComponent(c.id)+'">'+
+        '<div style="display:flex;align-items:center;gap:8px"><span class="dot'+(c.alive?'':' dead')+'"></span>'+
+        '<span>'+esc(c.id)+'</span></div>'+
+        '<div class="s" style="margin-top:8px">iters '+c.iterations+' · crashes '+c.crashes+
+        ' · cov '+(c.coveragePct>=0?c.coveragePct+'%':'—')+'</div>'+
+        '<div class="s">last seen '+c.ageSec+'s ago</div>'+
+      '</div>').join('')
+      : '<div class="muted">No campaigns reporting yet. Start a driver with '+
+        '<code>-Dclosurejvm.dashboard.push=localhost:'+location.port+'</code></div>';
+  }catch(e){}
+}
+
+async function tick(){
+  if(!current) return;
+  try{
+    const st = await (await fetch('/api/campaign/'+encodeURIComponent(current)+'/status')).json();
+    lastStatus = st;
+    document.getElementById('sub').textContent = 'campaign: '+current+' — '+fmtDur(st.elapsedSec||0)+' · '+((st.rate||0).toFixed(1))+'/s';
+    const inv = st.invariants||{latency:0,heap:0,thread:0};
+    const ex = st.exploration||{};
+    document.getElementById('cards').innerHTML =
+      card('iterations', st.iterations||0, ((st.rate||0).toFixed(1))+'/s') +
+      card('crashes', st.crashes||0) +
+      card('leaks', st.leaks||0) +
+      card('invariants', (inv.latency+inv.heap+inv.thread), 'lat '+inv.latency+' · heap '+inv.heap+' · thr '+inv.thread) +
+      card('latency ms', st.latencyMs?st.latencyMs.last:0, st.latencyMs?('mean '+st.latencyMs.mean+' · max '+st.latencyMs.max):'') +
+      card('corpus', ex.corpus||0, (ex.rejected||0)+' rejected');
+    const cv = ex.coverage||{total:0};
+    const pct = cv.total>0?cv.pct:0;
+    document.getElementById('covv').textContent = cv.total>0 ? (pct.toFixed(1)+'%  ('+cv.covered+'/'+cv.total+' edges)') : 'no coverage source';
+    document.getElementById('covbar').style.width = pct+'%';
+
+    const cl = await (await fetch('/api/campaign/'+encodeURIComponent(current)+'/clusters')).json();
+    const total = cl.reduce((a,c)=>a+c.count,0);
+    document.getElementById('findsSub').textContent = cl.length+' unique / '+total+' total';
+    document.getElementById('finds').innerHTML = cl.length ? cl.map(c => {
+      const open = expanded.has(c.fingerprint);
+      let row = '<tr class="clusterRow" data-fp="'+encodeURIComponent(c.fingerprint)+'">'+
+        '<td><span class="tag '+c.classification+'">'+(c.classification||'?')+'</span></td>'+
+        '<td>'+(open?'▾ ':'▸ ')+esc(c.kind)+
+          (c.routePattern?'<br><span class="muted">'+esc(c.routePattern)+'</span>':'')+'</td>'+
+        '<td>'+c.count+'&times;'+(c.distinctRoutes>1?'<br><span class="muted">'+c.distinctRoutes+' routes</span>':'')+'</td>'+
+        '<td>'+(c.maxMagnitude>=0?(c.minMagnitude+'–'+c.maxMagnitude):'—')+'</td>'+
+        '<td>'+fmtTime(c.lastSeenMs)+'</td></tr>';
+      if(open){
+        row += '<tr><td colspan="5" class="detail"><div class="k" style="margin-bottom:8px">'+
+          'Inputs that produced this ('+c.samples.length+' of '+c.count+' shown)</div>'+
+          (c.samples.length ? c.samples.map((s,i)=>renderSample(c,s,i)).join('')
+                            : '<div class="muted">No input bytes recorded for this cluster.</div>')+
+          '</td></tr>';
+      }
+      return row;
+    }).join('') : '<tr><td colspan="5" class="muted">No findings yet.</td></tr>';
+  }catch(e){}
+}
+
+// Event delegation so re-rendering never loses handlers.
+document.addEventListener('click', e => {
+  const pod = e.target.closest('[data-open]');
+  if(pod){ current = decodeURIComponent(pod.getAttribute('data-open'));
+    document.getElementById('fleetView').style.display='none';
+    document.getElementById('campaignView').style.display='block';
+    document.getElementById('back').style.display='inline';
+    tick(); return; }
+
+  const cp = e.target.closest('[data-copy]');
+  if(cp){ copyText(cp, decodeURIComponent(cp.getAttribute('data-copy'))); e.stopPropagation(); return; }
+
+  const raw = e.target.closest('[data-raw]');
+  if(raw){ const k = raw.getAttribute('data-raw');
+    if(expandedRaw.has(k)) expandedRaw.delete(k); else expandedRaw.add(k);
+    tick(); e.stopPropagation(); return; }
+
+  const row = e.target.closest('[data-fp]');
+  if(row){ const fp = decodeURIComponent(row.getAttribute('data-fp'));
+    if(expanded.has(fp)) expanded.delete(fp); else expanded.add(fp);
+    tick(); return; }
+});
+
+document.getElementById('back').onclick = () => {
+  current = null;
+  document.getElementById('fleetView').style.display='block';
+  document.getElementById('campaignView').style.display='none';
+  document.getElementById('back').style.display='none';
+  tickFleet();
+};
+
+document.getElementById('analyzeBtn').onclick = async function(){
+  if(!current) return;
+  const btn=this, panel=document.getElementById('analysisPanel');
+  btn.disabled=true; btn.textContent='Analyzing…';
+  panel.style.display='block'; panel.textContent='Asking Claude about this campaign’s clusters…';
+  try{
+    const r = await (await fetch('/api/analyze/'+encodeURIComponent(current),{method:'POST'})).json();
+    panel.textContent = r.analysis || ('Not available: '+(r.error||'unknown error'));
+  }catch(e){ panel.textContent='Request failed: '+e; }
+  btn.disabled=false; btn.textContent='Analyze with Claude';
+};
+
+tickFleet();
+setInterval(()=> current ? tick() : tickFleet(), 1500);
+</script>
+</body>
+</html>

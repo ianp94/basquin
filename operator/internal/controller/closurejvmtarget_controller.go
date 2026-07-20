@@ -130,7 +130,7 @@ func (r *ClosureJVMTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 	// --- inject if drifted ----------------------------------------------------------------------
 	wantHash := specHash(&target.Spec, agentsImage)
-	if !injectionApplied(&deploy, wantHash) {
+	if !injectionApplied(&deploy, &target.Spec, wantHash) {
 		// If a previous injection exists (spec changed, or out-of-band content drift), revert it
 		// first so applyInjection re-derives from a clean original — this also un-instruments the
 		// old container when spec.Container is retargeted, rather than leaving it instrumented.

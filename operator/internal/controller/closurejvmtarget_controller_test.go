@@ -333,6 +333,28 @@ var _ = Describe("ClosureJVMTarget Controller (P2: injection)", func() {
 		Expect(getDeploy().Spec.Template.Spec.InitContainers).To(HaveLen(1))
 	})
 
+	It("re-heals when the agent flags are stripped from the env but the initContainer remains", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{
+			Name: container, Image: "busybox",
+			Env: []corev1.EnvVar{{Name: "CATALINA_OPTS", Value: origOpts}},
+		}))).To(Succeed())
+		Expect(k8sClient.Create(ctx, newTarget())).To(Succeed())
+		reconcileN(2)
+		injected := getDeploy().Spec.Template.Spec.Containers[0]
+		Expect(envValue(injected.Env, "CATALINA_OPTS")).To(ContainSubstring("closurejvm-agent.jar"))
+
+		// The worst drift: someone resets the env var to its original value (agents silently stop
+		// loading) while the annotation AND initContainer remain — previously read as steady Injected.
+		d := getDeploy()
+		setEnv(&d.Spec.Template.Spec.Containers[0], "CATALINA_OPTS", origOpts)
+		Expect(k8sClient.Update(ctx, d)).To(Succeed())
+
+		reconcileN(1) // must notice the env drift and re-append the flags
+		healed := getDeploy().Spec.Template.Spec.Containers[0]
+		Expect(envValue(healed.Env, "CATALINA_OPTS")).To(ContainSubstring("closurejvm-agent.jar"))
+		Expect(envValue(healed.Env, "CATALINA_OPTS")).To(HavePrefix(origOpts + " "))
+	})
+
 	It("reports DeploymentNotFound and requeues when the Deployment is absent", func() {
 		Expect(k8sClient.Create(ctx, newTarget())).To(Succeed())
 		reconcileN(2)

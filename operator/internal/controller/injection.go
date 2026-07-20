@@ -143,16 +143,39 @@ func specHash(spec *closurejvmv1alpha1.ClosureJVMTargetSpec, agentsImage string)
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
-// injectionApplied reports whether the Deployment already carries this exact injection. It checks
-// both the spec-hash annotation AND that the initContainer is actually still present, so out-of-band
-// content drift (a human `kubectl edit`, another webhook stripping the fields) is re-healed rather
-// than reported as steady-state Injected forever.
-func injectionApplied(deploy *appsv1.Deployment, wantHash string) bool {
+// injectionApplied reports whether the Deployment already carries this exact injection. Beyond the
+// spec-hash annotation, it verifies the actual injected content is still in place — the initContainer,
+// the agent flags in the target container's jvmOptsVar, and the shared agents volume mount — so
+// out-of-band content drift (a human `kubectl edit`, another webhook stripping the fields) is re-healed
+// rather than reported as steady-state Injected forever. Checking only the annotation + initContainer
+// would miss the worst drift: the env flags being stripped, which silently stops the agents loading
+// while everything else still looks injected (P2 review).
+func injectionApplied(deploy *appsv1.Deployment, spec *closurejvmv1alpha1.ClosureJVMTargetSpec, wantHash string) bool {
 	if deploy.Annotations[annInjectedHash] != wantHash {
 		return false
 	}
-	for _, ic := range deploy.Spec.Template.Spec.InitContainers {
+	tmpl := &deploy.Spec.Template.Spec
+	hasInit := false
+	for _, ic := range tmpl.InitContainers {
 		if ic.Name == agentsInitName {
+			hasInit = true
+			break
+		}
+	}
+	if !hasInit {
+		return false
+	}
+	// The target container must still carry the agent flags and the shared volume mount.
+	ci, err := resolveContainer(spec, tmpl)
+	if err != nil {
+		return false // the target container drifted away — re-derive
+	}
+	c := &tmpl.Containers[ci]
+	if ev := findEnv(c.Env, jvmOptsVarName(spec)); ev == nil || !strings.Contains(ev.Value, buildAgentArgs(spec)) {
+		return false
+	}
+	for _, vm := range c.VolumeMounts {
+		if vm.Name == agentsVolumeName {
 			return true
 		}
 	}

@@ -59,6 +59,12 @@ jobs:
           curl -fsSLo ./kind https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
           chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
           kind version
+      - name: Set up Maven 3.9 (JPetStore-6 needs 3.9+)
+        run: |
+          set -e
+          curl -fsSL https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz \
+            | tar xz -C /opt
+          echo "/opt/apache-maven-3.9.9/bin" >> "$GITHUB_PATH"
       - name: Cache Maven (for the JPetStore WAR build)
         uses: actions/cache@v4
         with:
@@ -67,6 +73,7 @@ jobs:
       - name: Build the JPetStore WAR (the un-instrumented target app under test)
         run: |
           set -e
+          mvn -version
           git clone --depth 1 https://github.com/mybatis/jpetstore-6.git /tmp/jpetstore-6
           # JPetStore-6's build plugins gate on newer tooling; skip the gates (see docs/THIRD-PARTY-APPS.md).
           mvn -q -f /tmp/jpetstore-6/pom.xml -DskipTests -Denforcer.skip=true -Dmaven.gitcommitid.skip=true package

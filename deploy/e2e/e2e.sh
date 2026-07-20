@@ -79,9 +79,14 @@ $K create namespace "$NS" --dry-run=client -o yaml | $K apply -f -
 install="$(mktemp)"
 $K kustomize "$ROOT/operator/config/default" | sed "s#image: controller:latest#image: ${OPERATOR_IMAGE}#" > "$install"
 $K apply -f "$install"; rm -f "$install"
-# Tell the operator which agents image to inject (fixed tag => initContainer uses the kind-loaded one).
-$K -n "$NS" patch deploy closurejvm-controller-manager --type=json \
-  -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--agents-image=${AGENTS_IMAGE}\"}]" || true
+# Tell the operator which agents image to inject (fixed tag => initContainer uses the kind-loaded
+# one). Idempotent: only append the flag if it isn't already there, so repeated runs (without
+# --teardown) don't accumulate duplicate --agents-image args.
+if ! $K -n "$NS" get deploy closurejvm-controller-manager \
+      -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--agents-image'; then
+  $K -n "$NS" patch deploy closurejvm-controller-manager --type=json \
+    -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--agents-image=${AGENTS_IMAGE}\"}]"
+fi
 $K -n "$NS" rollout restart deploy/closurejvm-controller-manager
 $K -n "$NS" rollout status  deploy/closurejvm-controller-manager --timeout=120s
 
@@ -145,7 +150,10 @@ check() { if eval "$2"; then printf '  \033[1;32mPASS\033[0m %s\n' "$1"; else pr
 phase="$($K -n "$NS" get closurejvmtarget jpetstore -o jsonpath='{.status.phase}')"
 initc="$($K -n "$NS" get deploy jpetstore -o jsonpath='{.spec.template.spec.initContainers[0].image}')"
 opts="$($K -n "$NS" get deploy jpetstore -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="CATALINA_OPTS")].value}')"
-opod="$($K -n "$NS" get pod -l control-plane=controller-manager -o jsonpath='{.items[0].metadata.name}')"
+# Newest Running operator pod — a rollout-restart can leave the previous one briefly Terminating,
+# and label list order isn't creation-ordered.
+opod="$($K -n "$NS" get pod -l control-plane=controller-manager --field-selector=status.phase=Running \
+        --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}')"
 forbidden="$($K -n "$NS" logs "$opod" 2>/dev/null | grep -c forbidden || true)"
 
 # Live-pod checks: pick the NEWEST Running pod (the injected one; an old raw pod may still be

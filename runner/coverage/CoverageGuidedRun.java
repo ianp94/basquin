@@ -96,6 +96,31 @@ public final class CoverageGuidedRun {
 
         String baseUrl = System.getProperty("examples.http.baseUrl", "http://localhost:8080");
         int iterations = args.length > 0 ? Integer.parseInt(args[0]) : 500;
+        // Time-boxed exit (operator campaigns, DD-025): stop the loop cleanly at the deadline so the
+        // summary still gets written — a Job activeDeadlineSeconds SIGKILL would skip it. When a
+        // duration is set without an explicit iteration count, the deadline governs.
+        String durationStr = System.getProperty("closurejvm.run.duration");
+        long deadlineNanos = 0L;
+        if (durationStr != null && !durationStr.isEmpty()) {
+            deadlineNanos = System.nanoTime() + parseDurationMillis(durationStr) * 1_000_000L;
+            if (args.length == 0) iterations = Integer.MAX_VALUE;
+        }
+        // Machine-readable end-of-run summary for the operator to read (DD-025 §7a). Written via a
+        // shutdown hook so it lands on a normal exit and a deadline-triggered one alike.
+        String summaryOut = System.getProperty("closurejvm.summary.out");
+        if (summaryOut != null && !summaryOut.isEmpty()) {
+            // The summary reuses StatusReporter's counters, which are all no-ops unless the status
+            // layer is enabled. Without it the summary would be valid JSON full of zeros — a silently
+            // wrong "clean run", worse than an error. Warn loudly (the operator campaign always sets
+            // -Dclosurejvm.status=true; this catches a hand-run misconfiguration).
+            if (!StatusReporter.isEnabled()) {
+                System.err.println("[ClosureJVM] WARNING: -Dclosurejvm.summary.out is set but "
+                        + "-Dclosurejvm.status is not — the summary will report ALL ZEROS. "
+                        + "Add -Dclosurejvm.status=true.");
+            }
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> writeSummary(summaryOut),
+                    "ClosureJVM-Summary"));
+        }
         String jacoco = System.getProperty("closurejvm.coverage.jacoco", "localhost:6300");
         String classes = System.getProperty("closurejvm.coverage.classes");
         if (classes == null) { throw new IllegalArgumentException("set -Dclosurejvm.coverage.classes"); }
@@ -129,6 +154,7 @@ public final class CoverageGuidedRun {
         int sequencePercent = Integer.getInteger("closurejvm.sequencePercent", 25);
 
         for (int i = 0; i < iterations; i++) {
+            if (deadlineNanos != 0L && System.nanoTime() >= deadlineNanos) break;  // clean time-box exit
             if (sessionsEnabled && i % epochLength == 0) {
                 boolean authenticated = (i / epochLength) % 2 == 0;
                 if (authenticated) login(baseUrl); else resetSession();
@@ -192,6 +218,32 @@ public final class CoverageGuidedRun {
         }
         StatusReporter.renderFinal();
         System.out.printf("CoverageGuidedRun done: corpus=%d coverage=%d/%d%n", corpus.size(), best, total);
+    }
+
+    /**
+     * Parse a duration like {@code 10m}, {@code 30s}, {@code 500ms}, {@code 2h}, or a bare number
+     * (seconds) into milliseconds. Package-private for testing.
+     */
+    static long parseDurationMillis(String s) {
+        s = s.trim().toLowerCase();
+        long mult;
+        String num;
+        if (s.endsWith("ms"))      { mult = 1L;         num = s.substring(0, s.length() - 2); }
+        else if (s.endsWith("h"))  { mult = 3_600_000L; num = s.substring(0, s.length() - 1); }
+        else if (s.endsWith("m"))  { mult = 60_000L;    num = s.substring(0, s.length() - 1); }
+        else if (s.endsWith("s"))  { mult = 1_000L;     num = s.substring(0, s.length() - 1); }
+        else                       { mult = 1_000L;     num = s; }   // bare number = seconds
+        return (long) (Double.parseDouble(num.trim()) * mult);
+    }
+
+    /** Write the end-of-run metrics (StatusReporter's snapshot JSON) to {@code path} for the operator. */
+    private static void writeSummary(String path) {
+        try {
+            java.nio.file.Files.write(Paths.get(path),
+                    StatusReporter.snapshotJson().getBytes(StandardCharsets.UTF_8));
+        } catch (Exception ignored) {
+            // never let summary-writing break the run's exit
+        }
     }
 
     /**

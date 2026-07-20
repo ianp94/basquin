@@ -196,6 +196,29 @@ public final class StatusReporter {
         System.out.println(sb);
     }
 
+    /** Current metrics as a JSON object, for the dashboard API. */
+    public static synchronized String snapshotJson() {
+        long elapsedNanos = Math.max(0L, System.nanoTime() - START_NANOS);
+        long elapsedS = elapsedNanos / 1_000_000_000L;
+        double elapsedSec = elapsedNanos / 1_000_000_000.0;
+        double rate = elapsedSec > 0.05 ? iterations / elapsedSec : 0.0;
+        double meanLatency = iterations > 0 ? (double) sumLatencyMs / iterations : 0.0;
+        double coveragePct = totalEdges > 0 ? 100.0 * coveredEdges / totalEdges : 0.0;
+        return String.format(java.util.Locale.ROOT,
+            "{\"elapsedSec\":%d,\"iterations\":%d,\"rate\":%.2f,\"crashes\":%d,\"leaks\":%d,\"resets\":%d,"
+            + "\"invariants\":{\"latency\":%d,\"heap\":%d,\"thread\":%d},"
+            + "\"latencyMs\":{\"last\":%d,\"mean\":%.0f,\"max\":%d},"
+            + "\"heapKb\":{\"last\":%d,\"max\":%d},\"threads\":%d,"
+            + "\"exploration\":{\"corpus\":%d,\"findCrash\":%d,\"findInvariant\":%d,\"rejected\":%d,"
+            + "\"coverage\":{\"covered\":%d,\"total\":%d,\"pct\":%.1f}}}",
+            elapsedS, iterations, rate, crashes, leaks, resets,
+            violLatency, violHeap, violThread,
+            lastLatencyMs, meanLatency, maxLatencyMs,
+            lastHeapKb, maxHeapKb, lastThreads,
+            corpusSaved, findCrash, findInvariant, rejected,
+            coveredEdges, totalEdges, coveragePct);
+    }
+
     private static String sinceLastFind() {
         if (lastFindNanos == 0L) {
             return "none yet";

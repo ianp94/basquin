@@ -3,6 +3,7 @@ package runner.coverage;
 import agent.Agent;
 import runner.util.FuzzIO;
 import runner.util.StatusReporter;
+import runner.util.StatusServer;
 import runner.util.TriageSink;
 
 import java.io.BufferedReader;
@@ -40,6 +41,7 @@ public final class CoverageGuidedRun {
     public static void main(String[] args) throws Exception {
         TriageSink.ensureStarted();
         StatusReporter.ensureStarted();
+        StatusServer.startIfEnabled();
 
         String baseUrl = System.getProperty("examples.http.baseUrl", "http://localhost:8080");
         int iterations = args.length > 0 ? Integer.parseInt(args[0]) : 500;

@@ -55,6 +55,7 @@ public class JQFIterationHarness {
                                     }
                                     target.executeIteration();
                                 } catch (Throwable t) {
+                                    runner.util.StatusReporter.recordCrash();
                                     FuzzIO.saveInteresting(data, t);
                                 } finally {
                                     Agent.endIteration();
@@ -83,6 +84,7 @@ public class JQFIterationHarness {
             target.executeIteration();
         } catch (Throwable t) {
             // Save crashing input then rethrow for JQF to record
+            runner.util.StatusReporter.recordCrash();
             FuzzIO.saveInteresting(data, t);
             if (t instanceof Exception) throw (Exception) t;
             throw new RuntimeException(t);

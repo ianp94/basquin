@@ -46,6 +46,10 @@ public final class StatusReporter {
     private static long findInvariant;
     private static long lastFindNanos;
     private static long lastFindIter;
+    // Coverage of the code under test, reported by a coverage source (v0.10 server-side agent
+    // over HTTP, or an in-process JaCoCo/JQF provider). Zero until a source reports.
+    private static long coveredEdges;
+    private static long totalEdges;
 
     private StatusReporter() {}
 
@@ -106,6 +110,18 @@ public final class StatusReporter {
         lastFindIter = iterations;
     }
 
+    /**
+     * Report coverage of the code under test. {@code total} is the instrumentable denominator
+     * (edges/branches) so the panel can show a real percentage. A coverage source — the v0.10
+     * server-side agent reporting per-request coverage over HTTP, or an in-process JaCoCo/JQF
+     * provider — calls this; the coverage row appears once total &gt; 0.
+     */
+    public static synchronized void recordCoverage(long covered, long total) {
+        if (!ENABLED) return;
+        coveredEdges = covered;
+        totalEdges = total;
+    }
+
     /** Render one final status frame — call when the run ends so the final tally always shows. */
     public static void renderFinal() {
         if (ENABLED) {
@@ -135,9 +151,11 @@ public final class StatusReporter {
         boolean exploring = corpusSaved > 0 || Boolean.getBoolean("closurejvm.status.explore");
 
         if (!TTY) {
+            String cov = totalEdges > 0
+                ? String.format(" cov=%.1f%%", 100.0 * coveredEdges / totalEdges) : "";
             String explore = exploring
-                ? String.format(" explore[corpus=%d crash=%d inv=%d lastFind=%s]",
-                        corpusSaved, findCrash, findInvariant, sinceLastFind())
+                ? String.format(" explore[corpus=%d crash=%d inv=%d%s lastFind=%s]",
+                        corpusSaved, findCrash, findInvariant, cov, sinceLastFind())
                 : "";
             System.out.printf(
                 "[ClosureJVM] %s iters=%d (%.1f/s) crashes=%d leaks=%d inv[lat=%d heap=%d thr=%d] "
@@ -162,6 +180,10 @@ public final class StatusReporter {
         if (exploring) {
             sb.append("├─ exploration ─────────────────────────────────┤\n");
             row(sb, "execs", String.format("%d  (%.1f/s)", iterations, rate));
+            if (totalEdges > 0) {
+                row(sb, "coverage", String.format("%.1f%%  (%d/%d edges)",
+                        100.0 * coveredEdges / totalEdges, coveredEdges, totalEdges));
+            }
             row(sb, "corpus", String.valueOf(corpusSaved));
             row(sb, "finds", String.format("crash=%d  invariant=%d", findCrash, findInvariant));
             row(sb, "last find", sinceLastFind());

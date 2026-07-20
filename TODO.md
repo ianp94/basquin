@@ -248,11 +248,18 @@ Goal: Run ClosureJVM against apps in a cluster, and make exploration coverage-gu
 app's own execution over HTTP. Some of this may live in a **separate repo** (the operator/agent
 and the dashboard) — decide once the boundaries are clear.
 
+- [ ] **Coverage % in the exploration panel**: the UI already has the row + `StatusReporter
+  .recordCoverage(covered, total)` plumbing (v0.9); v0.10 supplies the source. A true "% of code
+  explored" needs a covered/total denominator, which requires instrumenting the code under test —
+  hence it belongs with the coverage agent below, not the client-only JQF path.
 - [ ] **Coverage-guided over HTTP**: a server-side coverage agent inside the app JVM (JaCoCo-style
   or JVMTI-based) tracks per-request edge coverage and reports it back to the client fuzzer
-  (response header or a `/closurejvm/coverage` endpoint). The client uses that as the guidance
-  signal to mutate HTTP request inputs — coverage feedback from the *app under test*, not the
-  harness JVM. This is the real "coverage-guided via HTTP requests" vision.
+  (response header or a `/closurejvm/coverage` endpoint). The client feeds it to
+  `StatusReporter.recordCoverage` and uses it as the guidance signal to mutate HTTP request
+  inputs — coverage feedback from the *app under test*, not the harness JVM. The real
+  "coverage-guided via HTTP requests" vision.
+- [ ] Optional in-process coverage %: a JaCoCo provider for the local JQF targets, so the panel
+  shows a real percentage without the server round-trip.
 - [ ] **Kubernetes deploy**: Helm chart / manifests to run the harness + target app; the agent
   and valve injected into the target pod.
 - [ ] **Auto-injection agent**: a mutating admission webhook (operator) that injects the

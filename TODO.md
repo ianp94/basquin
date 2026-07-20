@@ -288,9 +288,12 @@ and the dashboard) — decide once the boundaries are clear.
   - [ ] POST support with form bodies — several handlers are POST-only in real usage.
 
 ### Multi-instance targets (one driver, N replicas behind a Service) — DD-020 known limits
-- [ ] **Coverage merge across replicas.** JaCoCo's tcpserver connection lands on one pod while
+- [x] **Coverage merge across replicas.** JaCoCo's tcpserver connection lands on one pod while
   requests load-balance across all of them, so coverage reflects ~1/N of what ran. Poll every
-  replica and merge `ExecutionDataStore`s.
+  replica and merge `ExecutionDataStore`s. *(DD-023: `-Dclosurejvm.coverage.jacoco` takes a
+  comma-separated endpoint list; a headless Service name expands to all pod IPs via
+  `getAllByName`; every responder OR-merges into one store for true union coverage; the panel
+  shows `[N/M pods]` when a replica is missing.)*
 - [ ] **Session affinity.** `JSESSIONID` is pinned to one pod; a round-robin Service breaks
   multi-step sequences. Needs `sessionAffinity: ClientIP` or per-pod addressing.
 - [ ] **Per-instance attribution.** Findings don't record which replica served the request, so

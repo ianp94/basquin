@@ -96,6 +96,9 @@ dependencies {
     // Let unit tests reach the coverage source set (RequestGrammar et al). Without this the
     // grammar/sequence logic would stay untestable purely because of where it lives.
     testImplementation sourceSets.coverage.output
+    // JacocoCoverageProvider references org.jacoco types; the test compiler needs them on the
+    // classpath to resolve the class even when a test only touches its endpoint parsing.
+    testImplementation "org.jacoco:org.jacoco.core:${jacocoVersion}"
     serverImplementation 'org.apache.tomcat.embed:tomcat-embed-core:10.1.24'
     serverImplementation 'jakarta.servlet:jakarta.servlet-api:6.0.0'
 }

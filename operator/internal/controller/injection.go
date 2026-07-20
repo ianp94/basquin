@@ -165,21 +165,45 @@ func injectionApplied(deploy *appsv1.Deployment, spec *closurejvmv1alpha1.Closur
 	if !hasInit {
 		return false
 	}
-	// The target container must still carry the agent flags and the shared volume mount.
-	ci, err := resolveContainer(spec, tmpl)
-	if err != nil {
-		return false // the target container drifted away — re-derive
+	// Resolve the container we instrumented by its STASHED name (recorded at inject time), not
+	// resolveContainer — whose "sole container" default would flip to ambiguous if an unrelated sidecar
+	// (istio-proxy, vault-agent, …) is injected out-of-band later, wrongly tearing down a healthy
+	// injection (review #26). The hash already matched, so the stash reflects the current spec.
+	cname := deploy.Annotations[annOptsContainer]
+	var c *corev1.Container
+	for i := range tmpl.Containers {
+		if tmpl.Containers[i].Name == cname {
+			c = &tmpl.Containers[i]
+			break
+		}
 	}
-	c := &tmpl.Containers[ci]
+	if c == nil {
+		return false // the instrumented container is gone — re-derive
+	}
+	// The target container must still carry the agent flags, the shared volume mount, and (when
+	// coverage is on) the coverage port — any stripped piece re-heals.
 	if ev := findEnv(c.Env, jvmOptsVarName(spec)); ev == nil || !strings.Contains(ev.Value, buildAgentArgs(spec)) {
 		return false
 	}
+	mounted := false
 	for _, vm := range c.VolumeMounts {
 		if vm.Name == agentsVolumeName {
-			return true
+			mounted = true
+			break
 		}
 	}
-	return false
+	if !mounted {
+		return false
+	}
+	if spec.Agents.Coverage.Enabled {
+		for _, p := range c.Ports {
+			if p.Name == coveragePortName {
+				return true
+			}
+		}
+		return false
+	}
+	return true
 }
 
 // wasInjected reports whether we have injected this Deployment before (so a re-derive should revert

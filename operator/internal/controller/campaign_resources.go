@@ -83,22 +83,17 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 	}
 	mounts := []corev1.VolumeMount{{Name: campaignClassesVol, MountPath: campaignClassesDir}}
 	if d.GrammarConfigMap != "" {
-		key := d.GrammarKey
-		items := []corev1.KeyToPath{}
-		if key != "" {
-			items = append(items, corev1.KeyToPath{Key: key, Path: campaignGrammarKey})
-		}
+		// d.GrammarKey is resolved to a concrete key by the reconciler before this is called (the
+		// ConfigMap's sole key when the user didn't name one). Always project THAT key to the fixed
+		// filename and point the flag at it — projecting under original names would leave the flag
+		// pointing at a directory and the grammar would silently never load (review #2).
 		volumes = append(volumes, corev1.Volume{Name: campaignGrammarVol, VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{
 				LocalObjectReference: corev1.LocalObjectReference{Name: d.GrammarConfigMap},
-				Items:                items, // empty => project all keys under their own names
+				Items:                []corev1.KeyToPath{{Key: d.GrammarKey, Path: campaignGrammarKey}},
 			}}})
 		mounts = append(mounts, corev1.VolumeMount{Name: campaignGrammarVol, MountPath: campaignGrammarDir})
-		grammarFile := campaignGrammarKey
-		if key == "" {
-			grammarFile = "" // caller resolved a single key into GrammarKey; empty means "the sole file"
-		}
-		props = append(props, "-Dclosurejvm.grammar="+campaignGrammarDir+"/"+grammarFile)
+		props = append(props, "-Dclosurejvm.grammar="+campaignGrammarDir+"/"+campaignGrammarKey)
 	}
 
 	var args []string
@@ -131,8 +126,11 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 						Name:            "extract-classes",
 						Image:           appImage,
 						ImagePullPolicy: corev1.PullIfNotPresent,
-						Command:         []string{"sh", "-c", "cp -r " + classesPath + "/. " + campaignClassesDir + "/"},
-						VolumeMounts:    []corev1.VolumeMount{{Name: campaignClassesVol, MountPath: campaignClassesDir}},
+						// exec cp directly, NOT `sh -c "cp ... " + classesPath` — classesPath is a
+						// free-form spec field, and interpolating it into a shell string would let a
+						// campaign author inject commands into the initContainer (review #1).
+						Command:      []string{"cp", "-r", classesPath + "/.", campaignClassesDir + "/"},
+						VolumeMounts: []corev1.VolumeMount{{Name: campaignClassesVol, MountPath: campaignClassesDir}},
 					}},
 					Containers: []corev1.Container{{
 						Name:                     "driver",

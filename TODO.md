@@ -385,7 +385,12 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 The operator owns the whole test, not just injection. Two-CRD shape confirmed; built as **P5** after
 the P1–P4 injection work (a campaign needs a working instrumented target). Design in full first
 (likely DD-025). See §10 of [`docs/OPERATOR-DESIGN.md`](OPERATOR-DESIGN.md).
-- [ ] **`ClosureJVMCampaign` (test) CRD** — a second CRD that fires off a complete test run: reference a `ClosureJVMTarget`, spec the driver (grammar/corpus/duration/invariants) and the dashboard, and the operator reconciles it into a running campaign. **Design drafted:** [`docs/CAMPAIGN-DESIGN.md`](CAMPAIGN-DESIGN.md) (DD-025 proposal, under review) — CRD schema, reconcile (dashboard + driver Job), RBAC, phased P5a–P5d, open decisions.
+- [ ] **`ClosureJVMCampaign` (test) CRD** — a second CRD that fires off a complete test run (DD-025, [`docs/CAMPAIGN-DESIGN.md`](CAMPAIGN-DESIGN.md)). Phased P5a–P5d.
+  - [x] **P5a — runner flags** (`-Dclosurejvm.run.duration`, `-Dclosurejvm.summary.out`) — merged (#18).
+  - [x] **P5a — CRD + driver-Job reconciler** — gate on Injected target, launch driver Job (coverage-classes initContainer from the target's image, coverage endpoint, summary via terminationMessage), phase machine + TargetGone. envtest 22/22.
+  - [ ] **P5a — runner image + in-cluster campaign e2e** — build `closurejvm/runner`, extend `deploy/e2e/e2e.sh` to apply a `ClosureJVMCampaign` and assert a **non-zero coverage %** end to end.
+  - [ ] Campaign driver-Job **spec-hash idempotency** — a spec edit mid-`Running` is currently a silent no-op (Job is create-if-missing); hash the spec so an edit deletes+recreates the Job (a new run), per DD-025 §7c. *(surfaced in the #19 review)*
+  - [ ] **P5b — per-campaign dashboard** (Deployment+Service, `status.dashboardURL`, wire the driver push).
 - [ ] Operator launches the **driver** as a Job (the coverage-guided runner) pointed at the target Service + JaCoCo endpoints + dashboard push
 - [ ] Operator launches/ensures the **dashboard** (aggregator Deployment + Service) and wires the driver's push at it
 - [ ] Campaign lifecycle: owner refs + finalizer tear the driver/dashboard down on delete; status aggregates run state, finds, and coverage onto the Campaign

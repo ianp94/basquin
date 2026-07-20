@@ -33,7 +33,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	closurejvmv1alpha1 "github.com/ianp94/closureJVM/operator/api/v1alpha1"
 )
@@ -92,6 +94,13 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, err
 	}
 	if target.Status.Phase != closurejvmv1alpha1.PhaseInjected {
+		// A target that drops out of Injected mid-run is the same class of event as it being deleted
+		// (§7c): a Running campaign fails terminally rather than silently regressing to Pending and
+		// never inspecting the driver Job again.
+		if campaign.Status.Phase == closurejvmv1alpha1.CampaignRunning {
+			return r.fail(ctx, &campaign, "TargetGone",
+				fmt.Sprintf("target %q dropped out of Injected (now %q) mid-run", target.Name, target.Status.Phase))
+		}
 		return r.pending(ctx, &campaign, "TargetNotInjected",
 			fmt.Sprintf("target %q is %q, waiting for Injected", target.Name, target.Status.Phase))
 	}
@@ -111,6 +120,15 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 	jkey := types.NamespacedName{Namespace: campaign.Namespace, Name: driverJobName(&campaign)}
 	switch err := r.Get(ctx, jkey, &job); {
 	case apierrors.IsNotFound(err):
+		// Resolve the grammar ConfigMap's sole key when the user didn't name one, so the driver's
+		// -Dclosurejvm.grammar points at a real file rather than a directory.
+		if campaign.Spec.Driver.GrammarConfigMap != "" && campaign.Spec.Driver.GrammarKey == "" {
+			key, kerr := r.resolveGrammarKey(ctx, campaign.Namespace, campaign.Spec.Driver.GrammarConfigMap)
+			if kerr != nil {
+				return r.pending(ctx, &campaign, "GrammarUnresolved", kerr.Error())
+			}
+			campaign.Spec.Driver.GrammarKey = key // in-memory, consumed by buildDriverJob
+		}
 		desired := buildDriverJob(&campaign, appImage, target.Status.CoverageEndpoint, runnerImage)
 		if serr := controllerutil.SetControllerReference(&campaign, desired, r.Scheme); serr != nil {
 			return ctrl.Result{}, serr
@@ -212,6 +230,38 @@ func (r *ClosureJVMCampaignReconciler) targetAppImage(ctx context.Context, targe
 	return "", fmt.Errorf("target Deployment has %d containers; its spec.container must name one", len(cs))
 }
 
+// resolveGrammarKey returns the grammar ConfigMap's sole key (used when the campaign didn't name one),
+// erroring if the ConfigMap is unreadable or ambiguous (more than one key).
+func (r *ClosureJVMCampaignReconciler) resolveGrammarKey(ctx context.Context, ns, name string) (string, error) {
+	var cm corev1.ConfigMap
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &cm); err != nil {
+		return "", fmt.Errorf("grammar ConfigMap %q not readable: %w", name, err)
+	}
+	if len(cm.Data) == 1 {
+		for k := range cm.Data {
+			return k, nil
+		}
+	}
+	return "", fmt.Errorf("grammar ConfigMap %q has %d keys; set spec.driver.grammarKey to pick one", name, len(cm.Data))
+}
+
+// campaignsForTarget maps a ClosureJVMTarget event to the campaigns that reference it, so a Pending
+// campaign starts the moment its target becomes Injected (rather than only on the 15s poll).
+func (r *ClosureJVMCampaignReconciler) campaignsForTarget(ctx context.Context, obj client.Object) []reconcile.Request {
+	var campaigns closurejvmv1alpha1.ClosureJVMCampaignList
+	if err := r.List(ctx, &campaigns, client.InNamespace(obj.GetNamespace())); err != nil {
+		return nil
+	}
+	var reqs []reconcile.Request
+	for i := range campaigns.Items {
+		if campaigns.Items[i].Spec.TargetRef.Name == obj.GetName() {
+			reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
+				Namespace: campaigns.Items[i].Namespace, Name: campaigns.Items[i].Name}})
+		}
+	}
+	return reqs
+}
+
 func jobBackoffExhausted(job *batchv1.Job) bool {
 	limit := int32(0)
 	if job.Spec.BackoffLimit != nil {
@@ -244,5 +294,8 @@ func (r *ClosureJVMCampaignReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&closurejvmv1alpha1.ClosureJVMCampaign{}).
 		Owns(&batchv1.Job{}).
+		// Re-reconcile a campaign when its referenced target changes (e.g. becomes Injected), so a
+		// Pending campaign starts promptly instead of waiting for the poll.
+		Watches(&closurejvmv1alpha1.ClosureJVMTarget{}, handler.EnqueueRequestsFromMapFunc(r.campaignsForTarget)).
 		Complete(r)
 }

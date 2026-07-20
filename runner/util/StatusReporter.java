@@ -44,6 +44,7 @@ public final class StatusReporter {
     private static long corpusSaved;
     private static long findCrash;
     private static long findInvariant;
+    private static long rejected;   // expected input rejections (not crashes)
     private static long lastFindNanos;
     private static long lastFindIter;
     // Coverage of the code under test, reported by a coverage source (v0.10 server-side agent
@@ -93,6 +94,8 @@ public final class StatusReporter {
 
     public static synchronized void recordCrash() { if (ENABLED) crashes++; }
     public static synchronized void recordReset() { if (ENABLED) resets++; }
+    /** An expected input rejection (a target's declared "bad input" exception), not a crash. */
+    public static synchronized void recordRejected() { if (ENABLED) rejected++; }
 
     /**
      * Record a saved exploration finding (from the triage layer). {@code classification} is the
@@ -154,8 +157,8 @@ public final class StatusReporter {
             String cov = totalEdges > 0
                 ? String.format(" cov=%.1f%%", 100.0 * coveredEdges / totalEdges) : "";
             String explore = exploring
-                ? String.format(" explore[corpus=%d crash=%d inv=%d%s lastFind=%s]",
-                        corpusSaved, findCrash, findInvariant, cov, sinceLastFind())
+                ? String.format(" explore[corpus=%d crash=%d inv=%d rejected=%d%s lastFind=%s]",
+                        corpusSaved, findCrash, findInvariant, rejected, cov, sinceLastFind())
                 : "";
             System.out.printf(
                 "[ClosureJVM] %s iters=%d (%.1f/s) crashes=%d leaks=%d inv[lat=%d heap=%d thr=%d] "
@@ -186,6 +189,7 @@ public final class StatusReporter {
             }
             row(sb, "corpus", String.valueOf(corpusSaved));
             row(sb, "finds", String.format("crash=%d  invariant=%d", findCrash, findInvariant));
+            row(sb, "rejected", String.valueOf(rejected));
             row(sb, "last find", sinceLastFind());
         }
         sb.append("└───────────────────────────────────────────────┘");

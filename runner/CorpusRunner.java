@@ -53,9 +53,16 @@ public final class CorpusRunner {
                 target.executeIteration();
             } catch (Throwable t) {
                 // A throw from executeIteration is a target crash (a throw from endIteration
-                // below is our own leak/invariant signal, counted separately).
-                failure = t;
-                runner.util.StatusReporter.recordCrash();
+                // below is our own leak/invariant signal, counted separately) — unless the
+                // target declares it an expected rejection of invalid input.
+                if (target instanceof runner.api.CrashClassifier
+                        && ((runner.api.CrashClassifier) target).isExpected(t)) {
+                    // Expected rejection: leave failure null so it is not treated as a crash.
+                    runner.util.StatusReporter.recordRejected();
+                } else {
+                    failure = t;
+                    runner.util.StatusReporter.recordCrash();
+                }
             }
             try {
                 Agent.endIteration();

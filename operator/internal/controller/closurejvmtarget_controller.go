@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -78,7 +79,14 @@ func (r *ClosureJVMTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 					target.Spec.DeploymentRef.Name, target.Namespace),
 			})
 			l.Info("target references a missing Deployment", "deployment", depKey.Name)
-			return ctrl.Result{}, r.Status().Update(ctx, &target)
+			// P1 doesn't watch Deployments (no owner refs to map back yet — see SetupWithManager),
+			// so without this a target created before its Deployment would sit DeploymentNotFound
+			// until the informer's default resync (hours). A short requeue re-observes soon after
+			// the Deployment appears; it touches nothing, so the zero-mutation boundary holds.
+			if uerr := r.Status().Update(ctx, &target); uerr != nil {
+				return ctrl.Result{}, uerr
+			}
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 		return ctrl.Result{}, err
 	}

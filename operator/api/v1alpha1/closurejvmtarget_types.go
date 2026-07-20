@@ -33,6 +33,12 @@ type DeploymentReference struct {
 }
 
 // CoverageSpec configures the JaCoCo tcpserver for coverage-guided-over-HTTP (v0.10 / DD-023).
+//
+// The XValidation rule enforces "includes is required when enabled" at the CRD (CEL) level — no
+// admission webhook needed. DD-022 showed a "*" (or omitted, defaulting to "*") filter silently
+// instruments Tomcat/MyBatis, inflating the coverage denominator and faking latency violations; this
+// makes the API server reject that shape at apply time so the operator path can never reintroduce it.
+// +kubebuilder:validation:XValidation:rule="!self.enabled || (has(self.includes) && size(self.includes) > 0)",message="agents.coverage.includes is required when coverage is enabled and must not be empty (DD-022; never default to a wildcard)"
 type CoverageSpec struct {
 	// Enabled turns on the JaCoCo agent + coverage port.
 	Enabled bool `json:"enabled"`
@@ -43,11 +49,9 @@ type CoverageSpec struct {
 	// +kubebuilder:default=6300
 	Port int32 `json:"port,omitempty"`
 
-	// Includes is the JaCoCo class-include filter (e.g. "org.mybatis.jpetstore.*"). It is REQUIRED
-	// when coverage is enabled and must never default to "*": DD-022 showed a "*" filter silently
-	// instruments Tomcat/MyBatis, inflating the coverage denominator and adding enough overhead to
-	// fake latency violations. A validating webhook (P2) rejects enabled-without-includes; there is
-	// deliberately no default to fall back to.
+	// Includes is the JaCoCo class-include filter (e.g. "org.mybatis.jpetstore.*"). REQUIRED when
+	// coverage is enabled (enforced by the XValidation rule on this struct) and deliberately has no
+	// default, so it can never fall back to "*" (DD-022).
 	// +optional
 	Includes string `json:"includes,omitempty"`
 }

@@ -64,11 +64,9 @@ spec:
                         type: boolean
                       includes:
                         description: |-
-                          Includes is the JaCoCo class-include filter (e.g. "org.mybatis.jpetstore.*"). It is REQUIRED
-                          when coverage is enabled and must never default to "*": DD-022 showed a "*" filter silently
-                          instruments Tomcat/MyBatis, inflating the coverage denominator and adding enough overhead to
-                          fake latency violations. A validating webhook (P2) rejects enabled-without-includes; there is
-                          deliberately no default to fall back to.
+                          Includes is the JaCoCo class-include filter (e.g. "org.mybatis.jpetstore.*"). REQUIRED when
+                          coverage is enabled (enforced by the XValidation rule on this struct) and deliberately has no
+                          default, so it can never fall back to "*" (DD-022).
                         type: string
                       port:
                         default: 6300
@@ -81,6 +79,12 @@ spec:
                     required:
                     - enabled
                     type: object
+                    x-kubernetes-validations:
+                    - message: agents.coverage.includes is required when coverage
+                        is enabled and must not be empty (DD-022; never default to
+                        a wildcard)
+                      rule: '!self.enabled || (has(self.includes) && size(self.includes)
+                        > 0)'
                   threadTracker:
                     default: true
                     description: ThreadTracker injects the native JVMTI agent (-agentpath)

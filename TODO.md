@@ -20,7 +20,7 @@
 
 ### Testing
 - [x] Test with a small servlet/controller example (Javalin leak demo task)
-- [ ] Test 10,000 iterations locally and record metrics
+- [x] Test 10,000 iterations locally and record metrics (2026-07-19: 10k/10k clean, no leaks; latency p50=1ms p99=2ms max=15ms after grace-sleep fix; threads steady at 7)
 - [x] Demonstrate reliable detection of deliberate thread leak (local + test)
 - [x] Add CI workflow: build, test, proper demo; leak demo expected to fail
 

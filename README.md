@@ -2,7 +2,6 @@
 
 A persistent execution harness for JVM web applications that uses coverage-guided exploration to discover availability, performance, and correctness failures — not just crashes.
 
-<!-- Replace OWNER/REPO with your GitHub repo to enable the badge -->
 [![CI](https://github.com/ianp94/closureJVM/actions/workflows/ci.yml/badge.svg)](https://github.com/ianp94/closureJVM/actions/workflows/ci.yml)
 
 ## Quick Start
@@ -46,6 +45,7 @@ Reset (how it works):
 - `-Dexamples.sleepMs=<n>` — simulate work duration in ms (examples).
 - `-Dexamples.threads=<n>` — number of example worker threads.
 - `-Dexamples.javalin.port=<n>` — port for Javalin demo server.
+- `-Dclosurejvm.heap.gcBeforeMeasure=true` — run `System.gc()` before heap baseline and end-of-iteration measurement so heap delta reflects retention rather than allocation noise (slower; off by default).
 
 ## Directory Structure
 

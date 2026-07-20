@@ -55,6 +55,11 @@ public class Agent {
         iteration++;
         System.out.println("Beginning iteration");
         // Metrics baseline
+        // Keep baseline and end-of-iteration heap readings symmetric (see endIteration);
+        // GC runs before the latency clock starts so it never counts against the iteration
+        if (Boolean.getBoolean("closurejvm.heap.gcBeforeMeasure")) {
+            System.gc();
+        }
         iterationStartNanos = System.nanoTime();
         baselineHeapUsedBytes = usedHeapBytes();
         baselineThreadCount = snapshotTotalThreadCount();
@@ -73,7 +78,11 @@ public class Agent {
      * This method should be called at the end of each iteration
      */
     public static void endIteration() {
-        // Small grace period: allow short-lived tasks to finish
+        // Latency is measured at entry, before the grace sleep below, so the
+        // grace period never counts against the iteration's latency invariant.
+        final long elapsedMs = Math.max(0L, (System.nanoTime() - iterationStartNanos) / 1_000_000L);
+
+        // Small grace period: allow short-lived tasks to finish before the leak snapshot
         try {
             Thread.sleep(25);
         } catch (InterruptedException e) {
@@ -81,7 +90,11 @@ public class Agent {
         }
 
         // Simple metrics snapshot and print-only signal
-        final long elapsedMs = Math.max(0L, (System.nanoTime() - iterationStartNanos) / 1_000_000L);
+        // Opt-in GC so heap delta reflects retention rather than allocation noise.
+        // Off by default: System.gc() is slow and distorts iteration throughput.
+        if (Boolean.getBoolean("closurejvm.heap.gcBeforeMeasure")) {
+            System.gc();
+        }
         final long heapNow = usedHeapBytes();
         final long heapDeltaBytes = heapNow - baselineHeapUsedBytes;
         final int threadsNow = snapshotTotalThreadCount();
@@ -177,7 +190,7 @@ public class Agent {
         if (!newActiveTimers.isEmpty()) {
             System.err.println("[ClosureJVM] Timer leak (best-effort) after iteration " + iteration + ": " + newActiveTimers.size() + " timer(s) may be active");
             for (Timer t : newActiveTimers) {
-                System.err.println("  - Timer " + t.getClass().getName() + "@" + Integer.toHexString(System.identityHashCode(t)) + " (daemon=" + isTimerDaemon(t) + ")");
+                System.err.println("  - Timer " + t.getClass().getName() + "@" + Integer.toHexString(System.identityHashCode(t)) + " (daemon=" + timerDaemonStatus(t) + ")");
             }
             leakDetected = true;
         }
@@ -250,15 +263,17 @@ public class Agent {
         return ids;
     }
 
-    private static boolean isTimerDaemon(Timer t) {
-        // Timer has a private thread; exposing daemon status would require reflection. Best-effort: infer from name scan.
-        for (Map.Entry<Thread, StackTraceElement[]> e : Thread.getAllStackTraces().entrySet()) {
-            Thread th = e.getKey();
-            if (th != null && th.isAlive() && th.getName() != null && th.getName().startsWith("Timer-")) {
-                return th.isDaemon();
-            }
+    private static String timerDaemonStatus(Timer t) {
+        // Timer's thread is private; reflection only works with --add-opens java.base/java.util.
+        // Report "unknown" rather than guessing from an unrelated Timer-* thread.
+        try {
+            java.lang.reflect.Field f = Timer.class.getDeclaredField("thread");
+            f.setAccessible(true);
+            Thread th = (Thread) f.get(t);
+            return th != null ? String.valueOf(th.isDaemon()) : "unknown";
+        } catch (Throwable ignored) {
+            return "unknown";
         }
-        return false;
     }
 
     private static long usedHeapBytes() {

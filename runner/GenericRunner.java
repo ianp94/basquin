@@ -50,14 +50,19 @@ public class GenericRunner {
             for (int i = 0; i < iterations; i++) {
                 System.out.println("Iteration " + (i + 1));
                 boolean failed = false;
+                boolean endAttempted = false;
                 Agent.beginIteration();
                 try {
                     handle.target.executeIteration();
+                    endAttempted = true;
                     Agent.endIteration();
                 } catch (Throwable t) {
                     failed = true;
-                    // Ensure endIteration still runs metrics/leak checks if executeIteration failed earlier
-                    try { Agent.endIteration(); } catch (Throwable t2) { /* prefer original failure info */ }
+                    // Ensure endIteration still runs metrics/leak checks if executeIteration failed,
+                    // but never re-run it when the failure came from endIteration itself
+                    if (!endAttempted) {
+                        try { Agent.endIteration(); } catch (Throwable t2) { /* prefer original failure info */ }
+                    }
                     if (!(resetViaClassloader && resetOnFailure && resets < maxResets)) {
                         // Bubble up if not resetting
                         if (t instanceof RuntimeException) throw (RuntimeException) t;

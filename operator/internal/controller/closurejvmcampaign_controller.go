@@ -250,12 +250,21 @@ func (r *ClosureJVMCampaignReconciler) targetAppImage(ctx context.Context, targe
 //   - externalPush set        → push to that shared dashboard; the operator creates nothing
 //   - enabled, no externalPush → create/own a per-campaign dashboard and push to it
 func (r *ClosureJVMCampaignReconciler) ensureDashboard(ctx context.Context, c *closurejvmv1alpha1.ClosureJVMCampaign) (string, error) {
-	// Default (nil) is enabled; only an explicit false disables it.
+	// Default (nil) is enabled; only an explicit false disables it. If a per-campaign dashboard was
+	// created earlier and the spec later flips to disabled / externalPush, tear it down now (it's
+	// otherwise orphaned until the whole CR is deleted) — spec.dashboard isn't immutable, so a
+	// `kubectl apply` edit reaches these branches on the next reconcile.
 	if c.Spec.Dashboard.Enabled != nil && !*c.Spec.Dashboard.Enabled {
+		if err := r.deleteDashboard(ctx, c); err != nil {
+			return "", err
+		}
 		c.Status.DashboardURL = ""
 		return "", nil
 	}
 	if push := c.Spec.Dashboard.ExternalPush; push != "" {
+		if err := r.deleteDashboard(ctx, c); err != nil {
+			return "", err
+		}
 		c.Status.DashboardURL = "http://" + push
 		return push, nil
 	}
@@ -298,6 +307,19 @@ func (r *ClosureJVMCampaignReconciler) ensureDashboard(ctx context.Context, c *c
 	push := fmt.Sprintf("%s.%s.svc.cluster.local:%d", dashboardName(c), c.Namespace, dashboardPort)
 	c.Status.DashboardURL = "http://" + push
 	return push, nil
+}
+
+// deleteDashboard removes a per-campaign dashboard Deployment + Service if present (idempotent). Used
+// when a campaign's dashboard config flips away from "own a dashboard" after one was already created.
+func (r *ClosureJVMCampaignReconciler) deleteDashboard(ctx context.Context, c *closurejvmv1alpha1.ClosureJVMCampaign) error {
+	name := types.NamespacedName{Namespace: c.Namespace, Name: dashboardName(c)}
+	if err := r.Delete(ctx, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: name.Name, Namespace: name.Namespace}}); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if err := r.Delete(ctx, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: name.Name, Namespace: name.Namespace}}); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	return nil
 }
 
 // resolveGrammarKey returns the grammar ConfigMap's sole key (used when the campaign didn't name one),

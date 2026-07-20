@@ -386,6 +386,32 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
 		Expect(got.Status.DashboardURL).To(BeEmpty())
 	})
+
+	It("tears down a per-campaign dashboard when it is later disabled (review #21)", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		Expect(k8sClient.Create(ctx, newCampaign())).To(Succeed()) // default: dashboard on
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient.Get(ctx, dashKey(), &appsv1.Deployment{})).To(Succeed()) // created
+
+		// Flip dashboard off on the existing campaign (spec.dashboard isn't immutable).
+		c := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, c)).To(Succeed())
+		c.Spec.Dashboard.Enabled = boolPtr(false)
+		Expect(k8sClient.Update(ctx, c)).To(Succeed())
+		_, err = reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		// The orphaned Deployment + Service are removed, not left running until CR deletion.
+		Eventually(func() bool {
+			return k8sClient.Get(ctx, dashKey(), &appsv1.Deployment{}) != nil &&
+				k8sClient.Get(ctx, dashKey(), &corev1.Service{}) != nil
+		}).Should(BeTrue())
+		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.DashboardURL).To(BeEmpty())
+	})
 })
 
 func getJob(key types.NamespacedName) *batchv1.Job {

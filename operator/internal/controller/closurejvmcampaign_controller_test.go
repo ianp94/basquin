@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -153,9 +154,17 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 		job := &batchv1.Job{}
 		Expect(k8sClient.Get(ctx, jobKey, job)).To(Succeed())
 		tmpl := job.Spec.Template.Spec
-		// initContainer extracts classes from the TARGET's app image.
-		Expect(tmpl.InitContainers).To(HaveLen(1))
+		// initContainers: extract classes from the TARGET's app image, then verify they're non-empty.
+		Expect(tmpl.InitContainers).To(HaveLen(2))
+		Expect(tmpl.InitContainers[0].Name).To(Equal("extract-classes"))
 		Expect(tmpl.InitContainers[0].Image).To(Equal(appImage))
+		// verify-classes fails loud on an empty extract (war-only images) rather than silent 0% coverage.
+		verify := tmpl.InitContainers[1]
+		Expect(verify.Name).To(Equal("verify-classes"))
+		Expect(verify.Image).To(Equal(runnerImg))
+		Expect(verify.Command[0]).To(Equal("sh"))
+		Expect(strings.Join(verify.Command, " ")).To(ContainSubstring(campaignClassesDir))
+		Expect(strings.Join(verify.Command, " ")).To(ContainSubstring(".class"))
 		// driver runs the runner image, wired via JAVA_TOOL_OPTIONS.
 		Expect(tmpl.Containers[0].Image).To(Equal(runnerImg))
 		jto := envValue(tmpl.Containers[0].Env, "JAVA_TOOL_OPTIONS")

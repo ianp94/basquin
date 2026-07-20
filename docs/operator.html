@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kubernetes operator — ClosureJVM</title>
+<meta name="description" content="Instrument an unmodified app with a ClosureJVMTarget, run a bounded coverage-guided test with a ClosureJVMCampaign, and read the result — all namespaced, all reversible.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html">
+      <svg class="logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="8" fill="#5b3df5"/>
+        <path d="M12 9c-3 0-4 2-4 4v2.2c0 1-.4 1.6-1.4 1.8 1 .2 1.4.8 1.4 1.8V23c0 2 1 4 4 4" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+        <path d="M20 9c3 0 4 2 4 4v2.2c0 1 .4 1.6 1.4 1.8-1 .2-1.4.8-1.4 1.8V23c0 2-1 4-4 4" stroke="#c4b3ff" stroke-width="2" stroke-linecap="round" fill="none"/>
+      </svg>
+      ClosureJVM
+    </a>
+    <nav class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="getting-started.html">Get started</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
+      <a href="operator.html" class="active">Operator</a>
+      <a class="gh" href="https://github.com/ianp94/closureJVM">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <div class="breadcrumb">docs / operator</div>
+    <h1>Kubernetes operator</h1>
+    <p class="lead">Instrument an <em>unmodified</em> app image at deploy time and run bounded,
+      coverage-guided tests against it — no rebuild, no baked-in agents. Two custom resources:
+      <code>ClosureJVMTarget</code> instruments a Deployment, <code>ClosureJVMCampaign</code> runs a
+      test against it. Everything is namespaced and reversible.</p>
+    <div class="tag-list">
+      <span class="pill">group closurejvm.dev/v1alpha1</span>
+      <span class="pill">namespaced by design</span>
+      <span class="pill">kubectl · kustomize · kind</span>
+    </div>
+    <div class="btn-row" style="justify-content:flex-start; margin-top:8px;">
+      <a class="btn btn-primary" href="https://github.com/ianp94/closureJVM/blob/main/docs/OPERATOR-USAGE.md">Full usage guide →</a>
+      <a class="btn btn-secondary" href="https://github.com/ianp94/closureJVM/blob/main/deploy/e2e/e2e.sh">Canonical e2e.sh</a>
+    </div>
+  </div>
+
+  <p>This page is a web-friendly tour of the
+    <a href="https://github.com/ianp94/closureJVM/blob/main/docs/OPERATOR-USAGE.md">operator usage guide</a>.
+    Every YAML and command below is adapted from the always-working reference,
+    <a href="https://github.com/ianp94/closureJVM/blob/main/deploy/e2e/e2e.sh"><code>deploy/e2e/e2e.sh</code></a>,
+    which builds every image, deploys the operator, instruments a raw JPetStore, runs a campaign, and
+    asserts the result in a kind cluster.</p>
+
+  <h2>The two-CRD model</h2>
+  <p>You <strong>instrument once</strong> (a target), then <strong>run tests against it</strong>
+    (campaigns). One target can be driven by many campaigns over time.</p>
+  <div class="cards">
+    <div class="card">
+      <span class="ico">// long-lived</span>
+      <h3>ClosureJVMTarget — instrument</h3>
+      <p>Patches an unmodified app Deployment to load the ClosureJVM agents (thread tracker, JaCoCo
+        coverage) via an initContainer + shared volume, and optionally stands up a headless coverage
+        Service. Reversible — deleting it restores the app exactly. "This app carries the agents."</p>
+    </div>
+    <div class="card">
+      <span class="ico">// ephemeral</span>
+      <h3>ClosureJVMCampaign — run a test</h3>
+      <p>References an already-instrumented target, launches the coverage-guided driver as a
+        <code>Job</code>, and (by default) a per-campaign dashboard, then aggregates the result into
+        status. Bounded by an iteration count or a duration.</p>
+    </div>
+  </div>
+
+  <div class="note">
+    <span class="tag">namespaced by design</span>
+    <p>The operator watches and mutates only its own namespace — <code>WATCH_NAMESPACE</code> comes
+      from the pod's namespace via the downward API, and the operator <strong>refuses to start</strong>
+      if it's empty rather than defaulting to cluster-wide. The standing privilege is a
+      <code>Role</code>/<code>RoleBinding</code> in one namespace, never a <code>ClusterRole</code>. To
+      instrument another namespace, install another instance.</p>
+  </div>
+
+  <hr class="rule">
+
+  <h2>Install</h2>
+  <p>The install is three things: the <strong>two CRDs</strong>, the <strong>namespaced RBAC</strong>
+    (ServiceAccount + Role + RoleBinding), and the <strong>controller Deployment</strong>. It also
+    needs three images it launches or injects, each supplied via a flag:</p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Image</th><th>Flag</th><th>Used for</th></tr></thead>
+      <tbody>
+        <tr><td><code>closurejvm/agents</code></td><td><code>--agents-image</code></td><td>initContainer the target injection copies agents from</td></tr>
+        <tr><td><code>closurejvm/runner</code></td><td><code>--runner-image</code></td><td>the campaign driver <code>Job</code> (coverage-guided runner)</td></tr>
+        <tr><td><code>closurejvm/dashboard</code></td><td><code>--dashboard-image</code></td><td>the per-campaign dashboard Deployment</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Each flag empty falls back to a built-in default; in practice you pin them to a fixed tag you
+    built and loaded, so the cluster uses your image instead of pulling.</p>
+
+  <div class="note soon">
+    <span class="tag">Roadmap</span>
+    <p><strong>No Helm chart yet.</strong> Installation today is kustomize (<code>config/default</code>)
+      plus wiring the three image flags onto the controller Deployment, exactly as below.</p>
+  </div>
+
+  <p>Build the three images (each <code>build.sh</code> takes <code>[TAG] [KIND_CLUSTER]</code>; with a
+    cluster name it also <code>kind load</code>s the image), then apply the CRDs and operator with
+    kustomize, pinning the operator image:</p>
+  <pre><code><span class="c"># build + kind-load the three images the operator uses</span>
+deploy/agents-image/build.sh    0.2.0 &lt;kind-cluster&gt;
+deploy/runner-image/build.sh    0.2.0 &lt;kind-cluster&gt;
+deploy/dashboard-image/build.sh 0.2.0 &lt;kind-cluster&gt;
+
+<span class="c"># CRDs + namespace</span>
+kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml
+kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmcampaigns.yaml
+kubectl create namespace closurejvm-system
+
+<span class="c"># controller Deployment + ServiceAccount/Role/RoleBinding, pinning the operator image</span>
+kubectl kustomize operator/config/default \
+  | sed 's#image: controller:latest#image: closurejvm/operator:0.2.0#' \
+  | kubectl apply -f -</code></pre>
+  <p>Then wire the three image flags onto the controller (append to its container args) and restart:</p>
+  <pre><code>for arg in \
+  <span class="f">--agents-image</span>=<span class="s">closurejvm/agents:0.2.0</span> \
+  <span class="f">--runner-image</span>=<span class="s">closurejvm/runner:0.2.0</span> \
+  <span class="f">--dashboard-image</span>=<span class="s">closurejvm/dashboard:0.2.0</span> ; do
+  kubectl -n closurejvm-system patch deploy closurejvm-controller-manager --type=json \
+    -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"$arg\"}]"
+done
+
+kubectl -n closurejvm-system rollout status deploy/closurejvm-controller-manager --timeout=120s</code></pre>
+
+  <hr class="rule">
+
+  <h2>Instrument an app — <code>ClosureJVMTarget</code></h2>
+  <p>Point a <code>ClosureJVMTarget</code> at a Deployment in the same namespace. The operator patches
+    its pod template: an initContainer copies the agents into a shared <code>emptyDir</code>, the agent
+    flags are <strong>appended</strong> to the container's JVM opts env var (never replacing your
+    heap/GC flags), the coverage port is exposed — then rolls it out.</p>
+  <div class="codewrap"><div class="label">target.yaml</div></div>
+  <pre><code>apiVersion: closurejvm.dev/v1alpha1
+kind: ClosureJVMTarget
+metadata:
+  name: jpetstore
+  namespace: closurejvm-system
+spec:
+  deploymentRef:
+    name: jpetstore
+  container: jpetstore          <span class="c"># REQUIRED when the pod has &gt;1 container</span>
+
+  <span class="c"># CATALINA_OPTS (Tomcat) | JAVA_TOOL_OPTIONS (everything else, the default). Flags are APPENDED.</span>
+  jvmOptsVar: CATALINA_OPTS
+
+  agents:
+    threadTracker: true          <span class="c"># native JVMTI leak/thread oracle (default true)</span>
+    coverage:
+      enabled: true              <span class="c"># JaCoCo tcpserver for coverage-guided-over-HTTP</span>
+      port: 6300                 <span class="c"># coverage port inside the pod (default 6300)</span>
+      includes: "org.mybatis.jpetstore.*"   <span class="c"># REQUIRED when enabled — no wildcard default</span>
+
+  invariants:
+    mode: soft                   <span class="c"># soft (record + continue) | hard (fail the iteration)</span>
+    latencyMaxMs: 25
+    heapDeltaMaxKb: 256
+
+  coverageService: true          <span class="c"># headless Service so one driver reaches every replica by DNS</span></code></pre>
+  <div class="note">
+    <span class="tag">important</span>
+    <p><code>agents.coverage.includes</code> is <strong>mandatory when coverage is enabled</strong> and
+      has no default. A <code>"*"</code> filter silently instruments Tomcat/MyBatis, inflating the
+      coverage denominator and faking latency violations; the CRD's CEL rule rejects an empty/omitted
+      <code>includes</code> at apply time.</p>
+  </div>
+  <p>Wait for <code>status.phase</code> to reach <code>Injected</code>, then grab the coverage endpoint
+    the campaign will consume:</p>
+  <pre><code>kubectl -n closurejvm-system get closurejvmtargets
+<span class="c"># NAME        DEPLOYMENT   PHASE      INSTRUMENTED   AGE</span>
+<span class="c"># jpetstore   jpetstore    Injected   1              30s</span>
+
+kubectl -n closurejvm-system get closurejvmtarget jpetstore -o jsonpath='{.status.coverageEndpoint}'
+<span class="c"># jpetstore-cjvm-jacoco.closurejvm-system.svc.cluster.local:6300</span></code></pre>
+  <p>Target phases: <code>Pending → Injecting → Injected</code> (or <code>Reverting</code> /
+    <code>Error</code>). With <code>coverageService: true</code> the operator creates a headless
+    Service named <code>&lt;target&gt;-cjvm-jacoco</code> and writes its DNS name to
+    <code>status.coverageEndpoint</code>.</p>
+
+  <hr class="rule">
+
+  <h2>Run a test — <code>ClosureJVMCampaign</code></h2>
+  <p>Once the target is <code>Injected</code>, a <code>ClosureJVMCampaign</code> drives it. The
+    operator gates on the target being <code>Injected</code>, reads its
+    <code>status.coverageEndpoint</code>, launches the driver <code>Job</code>, and aggregates status.</p>
+  <div class="codewrap"><div class="label">campaign.yaml</div></div>
+  <pre><code>apiVersion: closurejvm.dev/v1alpha1
+kind: ClosureJVMCampaign
+metadata:
+  name: jpetstore-campaign
+  namespace: closurejvm-system
+spec:
+  targetRef:
+    name: jpetstore
+
+  <span class="c"># REQUIRED — the app's in-cluster HTTP entrypoint (you create the app Service yourself).</span>
+  baseURL: http://jpetstore-app.closurejvm-system.svc.cluster.local:8080
+
+  driver:
+    <span class="c"># Bound the run — set EXACTLY ONE of iterations / duration (CEL-enforced).</span>
+    iterations: 200
+    <span class="c"># duration: "10m"          # ...or a Go-style duration; runner exits cleanly at the deadline</span>
+
+    grammarConfigMap: jpetstore-grammar
+    corpusConfigMap: jpetstore-corpus
+
+    <span class="c"># Where the app's .class files live INSIDE the target image (for JaCoCo covered/total).</span>
+    classesPath: /usr/local/tomcat/webapps/ROOT/WEB-INF/classes
+
+  <span class="c"># dashboard: {}              # per-campaign dashboard on by default — see below</span></code></pre>
+  <p><code>baseURL</code> is required — there's no default; the operator does <em>not</em> front the app
+    with a Service of its own. Set exactly one of <code>driver.iterations</code> or
+    <code>driver.duration</code>. <code>classesPath</code> must point at real <code>.class</code> files
+    in the target image — a war-only image (no exploded <code>WEB-INF/classes</code>) has nothing to
+    copy and the run fails loudly rather than reporting a misleading 0% coverage.</p>
+
+  <h3>Grammar &amp; corpus ConfigMaps</h3>
+  <p>The driver's exploration surface is a <strong>grammar</strong> (structure) and a
+    <strong>corpus</strong> (values), each delivered as a ConfigMap. The grammar ConfigMap has one key
+    — the grammar file; <code>grammarKey</code> defaults to the sole key:</p>
+  <pre><code>kubectl -n closurejvm-system create configmap jpetstore-grammar \
+  --from-file=jpetstore.grammar=examples/grammar/jpetstore.grammar \
+  --dry-run=client -o yaml | kubectl apply -f -</code></pre>
+  <p>The corpus ConfigMap is a <em>flat</em> map of files keyed by basename. Because
+    <code>--from-file</code> on a directory is <strong>non-recursive</strong>, pass both the top-level
+    route-seed files and the nested <code>values/</code> files explicitly:</p>
+  <pre><code>kubectl -n closurejvm-system create configmap jpetstore-corpus \
+  --from-file=examples/corpus/jpetstore/ \
+  --from-file=examples/corpus/jpetstore/values/ \
+  --dry-run=client -o yaml | kubectl apply -f -</code></pre>
+  <p>The grammar's <code>@</code>-value-file basenames (e.g. <code>itemId.txt</code>) must line up with
+    ConfigMap keys — that's why the flat basename convention matters.</p>
+
+  <hr class="rule">
+
+  <h2>Dashboard</h2>
+  <p>By default every campaign gets its <strong>own</strong> dashboard — the operator creates a
+    Deployment + Service (<code>&lt;campaign&gt;-dashboard</code>, ClusterIP on port <strong>7070</strong>),
+    owner-referenced to the campaign so it's garbage-collected when the campaign is deleted. It's a
+    ClusterIP with <strong>no auth</strong>, so reach it with a port-forward:</p>
+  <pre><code>kubectl -n closurejvm-system get closurejvmcampaign jpetstore-campaign -o jsonpath='{.status.dashboardURL}'
+<span class="c"># http://jpetstore-campaign-dashboard.closurejvm-system.svc.cluster.local:7070</span>
+
+kubectl -n closurejvm-system port-forward svc/jpetstore-campaign-dashboard 7070:7070
+<span class="c"># then open http://localhost:7070</span></code></pre>
+  <p>The dashboard <strong>outlives the run</strong> — it's GC'd with the campaign, not with the driver
+    Job, so results stay viewable after the driver completes. On <code>spec.dashboard</code> you can set
+    <code>enabled: false</code> to create none, or <code>externalPush: "host:port"</code> to fan many
+    campaigns into one shared, long-lived dashboard for cross-campaign comparison.</p>
+
+  <h2>Reading results</h2>
+  <p>The driver writes a machine-readable summary the operator surfaces in campaign status — no
+    dashboard scraping needed:</p>
+  <pre><code>kubectl -n closurejvm-system get closurejvmcampaign
+<span class="c"># NAME                 TARGET      PHASE       COVERAGE   FINDINGS   AGE</span>
+<span class="c"># jpetstore-campaign   jpetstore   Completed   23.1       19         5m</span>
+
+kubectl -n closurejvm-system get closurejvmcampaign jpetstore-campaign -o yaml | less
+<span class="c"># status.phase / coveragePct / findings / dashboardURL / driverJob / startTime / completionTime</span></code></pre>
+  <p>Campaign phase machine: <code>Pending</code> (target not yet <code>Injected</code>) →
+    <code>Provisioning</code> (creating dashboard / driver Job) → <code>Running</code> (driver Job
+    active) → <code>Completed</code> (Job succeeded, summary read) or <code>Failed</code> (driver
+    failed, or the target went away mid-run). <code>status.driverJob</code> names the <code>Job</code>
+    — tail its logs to triage a run.</p>
+
+  <h2>Editing a running campaign</h2>
+  <p>The campaign spec is hashed onto the driver <code>Job</code>. Jobs are immutable, so
+    <strong>editing the spec triggers a fresh run</strong> — the operator deletes and recreates the
+    driver Job with the new config. That's the intended "I changed the test" semantics: change
+    <code>iterations</code>, the grammar ConfigMap ref, or an invariant, re-apply, and a new run starts.
+    A steady, unchanged campaign is a no-op reconcile.</p>
+
+  <div class="note">
+    <span class="tag">cleanup</span>
+    <p>Delete the <strong>campaign first</strong> (owner refs GC its driver Job + dashboard), then the
+      <strong>target</strong> — a finalizer reverts the Deployment to its exact pre-injection state and
+      GCs the coverage Service. Deleting a campaign never un-instruments the app; targets are shared and
+      outlive campaigns.</p>
+  </div>
+
+  <hr class="rule">
+
+  <section class="section" style="text-align:center;">
+    <h2 style="margin-top:0;">Read the full guide</h2>
+    <p class="lead" style="max-width:640px; margin:0 auto 24px;">This page covers the workflow; the full
+      usage guide adds troubleshooting, field-by-field notes, and the design rationale. The canonical
+      end-to-end script runs the whole thing in a kind cluster.</p>
+    <div class="btn-row">
+      <a class="btn btn-primary" href="https://github.com/ianp94/closureJVM/blob/main/docs/OPERATOR-USAGE.md">OPERATOR-USAGE.md →</a>
+      <a class="btn btn-secondary" href="https://github.com/ianp94/closureJVM/blob/main/deploy/e2e/e2e.sh">deploy/e2e/e2e.sh</a>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap-wide footer-inner">
+    <div>ClosureJVM — availability-first testing for JVM web apps.</div>
+    <div class="links">
+      <a href="index.html">Home</a>
+      <a href="getting-started.html">Get started</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
+      <a href="https://github.com/ianp94/closureJVM">GitHub</a>
+    </div>
+    <div class="ai-note">Built with AI assistance (Anthropic's Claude / Claude Code), directed and reviewed by the author.</div>
+  </div>
+</footer>
+
+</body>
+</html>

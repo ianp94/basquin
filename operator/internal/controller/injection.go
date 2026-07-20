@@ -143,20 +143,67 @@ func specHash(spec *closurejvmv1alpha1.ClosureJVMTargetSpec, agentsImage string)
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
-// injectionApplied reports whether the Deployment already carries this exact injection. It checks
-// both the spec-hash annotation AND that the initContainer is actually still present, so out-of-band
-// content drift (a human `kubectl edit`, another webhook stripping the fields) is re-healed rather
-// than reported as steady-state Injected forever.
-func injectionApplied(deploy *appsv1.Deployment, wantHash string) bool {
+// injectionApplied reports whether the Deployment already carries this exact injection. Beyond the
+// spec-hash annotation, it verifies the actual injected content is still in place — the initContainer,
+// the agent flags in the target container's jvmOptsVar, and the shared agents volume mount — so
+// out-of-band content drift (a human `kubectl edit`, another webhook stripping the fields) is re-healed
+// rather than reported as steady-state Injected forever. Checking only the annotation + initContainer
+// would miss the worst drift: the env flags being stripped, which silently stops the agents loading
+// while everything else still looks injected (P2 review).
+func injectionApplied(deploy *appsv1.Deployment, spec *closurejvmv1alpha1.ClosureJVMTargetSpec, wantHash string) bool {
 	if deploy.Annotations[annInjectedHash] != wantHash {
 		return false
 	}
-	for _, ic := range deploy.Spec.Template.Spec.InitContainers {
+	tmpl := &deploy.Spec.Template.Spec
+	hasInit := false
+	for _, ic := range tmpl.InitContainers {
 		if ic.Name == agentsInitName {
-			return true
+			hasInit = true
+			break
 		}
 	}
-	return false
+	if !hasInit {
+		return false
+	}
+	// Resolve the container we instrumented by its STASHED name (recorded at inject time), not
+	// resolveContainer — whose "sole container" default would flip to ambiguous if an unrelated sidecar
+	// (istio-proxy, vault-agent, …) is injected out-of-band later, wrongly tearing down a healthy
+	// injection (review #26). The hash already matched, so the stash reflects the current spec.
+	cname := deploy.Annotations[annOptsContainer]
+	var c *corev1.Container
+	for i := range tmpl.Containers {
+		if tmpl.Containers[i].Name == cname {
+			c = &tmpl.Containers[i]
+			break
+		}
+	}
+	if c == nil {
+		return false // the instrumented container is gone — re-derive
+	}
+	// The target container must still carry the agent flags, the shared volume mount, and (when
+	// coverage is on) the coverage port — any stripped piece re-heals.
+	if ev := findEnv(c.Env, jvmOptsVarName(spec)); ev == nil || !strings.Contains(ev.Value, buildAgentArgs(spec)) {
+		return false
+	}
+	mounted := false
+	for _, vm := range c.VolumeMounts {
+		if vm.Name == agentsVolumeName {
+			mounted = true
+			break
+		}
+	}
+	if !mounted {
+		return false
+	}
+	if spec.Agents.Coverage.Enabled {
+		for _, p := range c.Ports {
+			if p.Name == coveragePortName {
+				return true
+			}
+		}
+		return false
+	}
+	return true
 }
 
 // wasInjected reports whether we have injected this Deployment before (so a re-derive should revert

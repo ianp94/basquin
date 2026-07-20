@@ -333,6 +333,82 @@ var _ = Describe("ClosureJVMTarget Controller (P2: injection)", func() {
 		Expect(getDeploy().Spec.Template.Spec.InitContainers).To(HaveLen(1))
 	})
 
+	It("re-heals when the agent flags are stripped from the env but the initContainer remains", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{
+			Name: container, Image: "busybox",
+			Env: []corev1.EnvVar{{Name: "CATALINA_OPTS", Value: origOpts}},
+		}))).To(Succeed())
+		Expect(k8sClient.Create(ctx, newTarget())).To(Succeed())
+		reconcileN(2)
+		injected := getDeploy().Spec.Template.Spec.Containers[0]
+		Expect(envValue(injected.Env, "CATALINA_OPTS")).To(ContainSubstring("closurejvm-agent.jar"))
+
+		// The worst drift: someone resets the env var to its original value (agents silently stop
+		// loading) while the annotation AND initContainer remain — previously read as steady Injected.
+		d := getDeploy()
+		setEnv(&d.Spec.Template.Spec.Containers[0], "CATALINA_OPTS", origOpts)
+		Expect(k8sClient.Update(ctx, d)).To(Succeed())
+
+		reconcileN(1) // must notice the env drift and re-append the flags
+		healed := getDeploy().Spec.Template.Spec.Containers[0]
+		Expect(envValue(healed.Env, "CATALINA_OPTS")).To(ContainSubstring("closurejvm-agent.jar"))
+		Expect(envValue(healed.Env, "CATALINA_OPTS")).To(HavePrefix(origOpts + " "))
+	})
+
+	It("keeps a sole-container injection intact when an unrelated sidecar is added (review #26)", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{
+			Name: container, Image: "busybox",
+			Env: []corev1.EnvVar{{Name: "CATALINA_OPTS", Value: origOpts}},
+		}))).To(Succeed())
+		t := newTarget()
+		t.Spec.Container = "" // rely on the sole-container default
+		Expect(k8sClient.Create(ctx, t)).To(Succeed())
+		reconcileN(2)
+		Expect(envValue(getDeploy().Spec.Template.Spec.Containers[0].Env, "CATALINA_OPTS")).To(ContainSubstring("closurejvm-agent.jar"))
+
+		// A sidecar injected out-of-band makes the pod multi-container. resolveContainer's sole-container
+		// default would now be ambiguous — but resolving the instrumented container by its stashed name
+		// must keep the healthy injection intact (not tear it down into PhaseError).
+		d := getDeploy()
+		d.Spec.Template.Spec.Containers = append(d.Spec.Template.Spec.Containers,
+			corev1.Container{Name: "istio-proxy", Image: "proxy"})
+		Expect(k8sClient.Update(ctx, d)).To(Succeed())
+
+		reconcileN(1)
+		// The injection must NOT be torn down: a broken check would revert (strip the flags), then
+		// fail to re-apply on the now-ambiguous sole-container default, ending in PhaseError with the
+		// flags gone. (Phase itself reads Injecting here only because the manual sidecar edit bumps the
+		// Deployment generation and envtest has no rollout controller to complete it — an artifact.)
+		got := &closurejvmv1alpha1.ClosureJVMTarget{}
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(got.Status.Phase).NotTo(Equal(closurejvmv1alpha1.PhaseError))
+		Expect(envValue(getDeploy().Spec.Template.Spec.Containers[0].Env, "CATALINA_OPTS")).To(ContainSubstring("closurejvm-agent.jar"))
+	})
+
+	It("re-heals when the coverage containerPort is stripped", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{
+			Name: container, Image: "busybox",
+			Env: []corev1.EnvVar{{Name: "CATALINA_OPTS", Value: origOpts}},
+		}))).To(Succeed())
+		Expect(k8sClient.Create(ctx, newTarget())).To(Succeed()) // coverage enabled
+		reconcileN(2)
+		Expect(getDeploy().Spec.Template.Spec.Containers[0].Ports).To(ContainElement(HaveField("Name", coveragePortName)))
+
+		// Strip only the coverage port, leaving everything else injected.
+		d := getDeploy()
+		var kept []corev1.ContainerPort
+		for _, p := range d.Spec.Template.Spec.Containers[0].Ports {
+			if p.Name != coveragePortName {
+				kept = append(kept, p)
+			}
+		}
+		d.Spec.Template.Spec.Containers[0].Ports = kept
+		Expect(k8sClient.Update(ctx, d)).To(Succeed())
+
+		reconcileN(1)
+		Expect(getDeploy().Spec.Template.Spec.Containers[0].Ports).To(ContainElement(HaveField("Name", coveragePortName)))
+	})
+
 	It("reports DeploymentNotFound and requeues when the Deployment is absent", func() {
 		Expect(k8sClient.Create(ctx, newTarget())).To(Succeed())
 		reconcileN(2)

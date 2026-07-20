@@ -10,6 +10,7 @@ import org.jacoco.core.runtime.RemoteControlWriter;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -124,13 +125,27 @@ public final class JacocoCoverageProvider {
         int total = 0, responded = 0;
         IOException lastError = null;
         for (Endpoint ep : endpoints) {
-            InetAddress[] addrs;
+            InetAddress[] resolved;
             try {
-                addrs = InetAddress.getAllByName(ep.host);
+                resolved = InetAddress.getAllByName(ep.host);
             } catch (IOException e) {
                 lastError = e;
                 total++;   // count the endpoint even though we couldn't resolve it
                 continue;
+            }
+            // Collapse the loopback set to a single address. "localhost" resolves to BOTH
+            // 127.0.0.1 and ::1 on a dual-stack host, which on a healthy single-target run would
+            // otherwise show [1/2 pods] (the family the agent isn't bound to fails) or dump the
+            // same agent twice ([2/2 pods]) -- either way implying replicas that don't exist. A
+            // distinct-pod headless Service never returns loopbacks, so the fleet case is untouched.
+            List<InetAddress> addrs = new ArrayList<>();
+            boolean loopbackKept = false;
+            for (InetAddress a : resolved) {
+                if (a.isLoopbackAddress()) {
+                    if (loopbackKept) continue;
+                    loopbackKept = true;
+                }
+                addrs.add(a);
             }
             for (InetAddress addr : addrs) {
                 total++;
@@ -167,7 +182,15 @@ public final class JacocoCoverageProvider {
     /** Dump one agent's accumulated data into the shared store (JaCoCo OR-merges by class id). */
     private static void dumpInto(InetAddress addr, int port,
                                  ExecutionDataStore execStore, SessionInfoStore sessionStore) throws IOException {
-        try (Socket socket = new Socket(addr, port)) {
+        // Explicit timeouts, NOT the OS defaults. In Kubernetes a deleted pod's IP black-holes
+        // (drops SYNs), and the stale-DNS window on a headless Service hands getAllByName exactly
+        // those IPs. A default-timeout connect to one dead IP would stall the whole sample() for
+        // ~2 minutes -- and CoverageGuidedRun calls sample() synchronously in its loop, so the
+        // campaign would freeze. Fail fast instead: a dead pod is skipped, the live ones still
+        // merge. (These could become system properties later; conservative fixed values for now.)
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(addr, port), 2_000);
+            socket.setSoTimeout(5_000);
             RemoteControlWriter writer = new RemoteControlWriter(socket.getOutputStream());
             RemoteControlReader reader = new RemoteControlReader(socket.getInputStream());
             reader.setSessionInfoVisitor(sessionStore);

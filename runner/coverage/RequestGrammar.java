@@ -113,13 +113,17 @@ public final class RequestGrammar {
         List<String> out = new ArrayList<>();
         Path p = Paths.get(ref);
         if (!p.isAbsolute() && base != null) p = base.resolve(ref);
-        if (readInto(p, out)) return out;
+        // Only treat the primary path as authoritative if it actually yielded values — a present-but-
+        // empty (or all-comment) file must NOT mask the corpusDir fallback (review #22).
+        if (readInto(p, out) && !out.isEmpty()) return out;
+        out.clear();
 
         // Fallback: resolve the ref's basename against a flat corpus dir. A grammar authored with
         // laptop-relative @refs (e.g. @../corpus/jpetstore/values/categoryId.txt, which resolves next
         // to the grammar file on disk) then works unchanged in a container where the operator mounts a
         // flat corpus ConfigMap and sets -Dclosurejvm.corpusDir — the tree can't survive a flat
-        // ConfigMap, but the basename can.
+        // ConfigMap, but the basename can. (Corpus basenames must be globally unique across the tree
+        // for this to be unambiguous — the accepted tradeoff of basename-fallback over key→path, DD-018.)
         String corpusDir = System.getProperty("closurejvm.corpusDir", "");
         if (!corpusDir.isEmpty()) {
             Path alt = Paths.get(corpusDir).resolve(p.getFileName().toString());

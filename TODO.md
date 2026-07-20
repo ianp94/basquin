@@ -165,7 +165,10 @@ Goal: Make the measurement layer trustworthy and cheap enough to point at real a
 - [ ] In-process bounded handoff queue (ArrayBlockingQueue + one consumer thread) so triage I/O (bundles, stacks, saved inputs) never stalls the iteration loop; design the enqueue payload alongside Option C's context object
 
 ### Real-app targets (after the above)
-- [ ] JPetStore (MyBatis) as first third-party WAR — reuses the docker-compose MySQL; decide filter-vs-valve injection first
+- [x] Injection mechanism decided + built: Tomcat valve (DD-009), verified loading in real
+      Tomcat 10.1; valve and in-WAR filter are mutually exclusive. Scaffolding:
+      `tomcat-valve/`, `deploy/valve/context.xml`, `docker-compose.valve.yml`, docs/THIRD-PARTY-APPS.md
+- [ ] JPetStore (MyBatis) live run — needs a jakarta-compatible WAR build; wire HTTP driver + seed corpus for its routes
 - [ ] WebGoat / OWASP Benchmark for guaranteed-findings calibration of triage output
 - [ ] JSPWiki as the "real Apache project" target (markup parsing = latency-pathology hunting ground)
 - [ ] Stretch: XWiki or OpenMRS once pool/queue sampling (Phase 3) lands

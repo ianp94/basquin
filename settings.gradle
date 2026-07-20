@@ -1,2 +1,3 @@
 rootProject.name = 'closurejvm'
 include 'tomcat-war'
+include 'tomcat-valve'

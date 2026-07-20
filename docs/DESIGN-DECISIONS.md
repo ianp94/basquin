@@ -214,3 +214,13 @@ the system under test — bad for reproducibility claims); servlet-container
 initializers via extra classpath JARs (still WAR-scoped and more magic than a
 valve); giving up on server-side boundaries and driving purely from the client
 (loses in-JVM invariants, the whole point).
+
+**Follow-up (verified 2026-07-19).** Valve confirmed loading and active in real
+Tomcat 10.1 (agent premain ran; WAR deployed clean; routes served; server-side
+`status` counters advanced). The valve and the in-WAR `IterationFilter` are
+**mutually exclusive** — with both active, each request is wrapped twice (observed
+6 `beginIteration` for 3 requests), nesting iteration boundaries meaninglessly.
+Use the filter for our demo WAR, the valve for third-party WARs; never both.
+Also: match the servlet namespace — a `jakarta` valve requires Tomcat 10+, a
+`javax` app requires Tomcat 9 and a `javax`-compiled valve. See
+docs/THIRD-PARTY-APPS.md.

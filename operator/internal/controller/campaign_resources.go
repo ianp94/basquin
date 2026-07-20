@@ -133,7 +133,12 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoff,
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"closurejvm.dev/campaign": c.Name}},
+				// component=driver distinguishes these from the per-campaign dashboard pod, which shares
+				// the closurejvm.dev/campaign label — so the rerun pod-cleanup can target driver pods only.
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
+					"closurejvm.dev/campaign":     c.Name,
+					"app.kubernetes.io/component": "driver",
+				}},
 				Spec: corev1.PodSpec{
 					RestartPolicy: corev1.RestartPolicyNever,
 					Volumes:       volumes,

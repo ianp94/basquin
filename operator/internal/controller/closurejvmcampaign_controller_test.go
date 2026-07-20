@@ -165,6 +165,9 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 		Expect(jto).To(ContainSubstring("-Dclosurejvm.summary.out=/dev/termination-log"))
 		Expect(tmpl.Containers[0].Args).To(Equal([]string{"500"}))
 		Expect(job.OwnerReferences).To(ContainElement(HaveField("Name", campaignName)))
+		// Driver pods carry component=driver so the rerun cleanup can target them without hitting the
+		// dashboard pod (which shares the closurejvm.dev/campaign label).
+		Expect(job.Spec.Template.Labels).To(HaveKeyWithValue("app.kubernetes.io/component", "driver"))
 
 		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
 		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
@@ -340,6 +343,61 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
 		Expect(got.Status.Phase).To(Equal(closurejvmv1alpha1.CampaignFailed))
 		Expect(meta.FindStatusCondition(got.Status.Conditions, "Ready").Reason).To(Equal("TargetGone"))
+	})
+
+	// --- spec-hash idempotency (§7c) ------------------------------------------------------------
+	It("reruns the driver Job when the run-defining spec changes", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		Expect(k8sClient.Create(ctx, newCampaign())).To(Succeed())
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+		h1 := getJob(jobKey).Annotations[specHashAnnotation]
+		Expect(h1).NotTo(BeEmpty())
+
+		// Edit the run-defining spec (iterations 500 → 999).
+		c := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, c)).To(Succeed())
+		c.Spec.Driver.Iterations = 999
+		Expect(k8sClient.Update(ctx, c)).To(Succeed())
+
+		// First reconcile after the edit: hash mismatch → delete the stale Job, go Provisioning.
+		_, err = reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() bool { return k8sClient.Get(ctx, jobKey, &batchv1.Job{}) != nil }).Should(BeTrue())
+		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(closurejvmv1alpha1.CampaignProvisioning))
+
+		// Next reconcile: recreate with the new hash + new args.
+		_, err = reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+		job2 := getJob(jobKey)
+		Expect(job2.Annotations[specHashAnnotation]).NotTo(Equal(h1))
+		Expect(job2.Spec.Template.Spec.Containers[0].Args).To(Equal([]string{"999"}))
+	})
+
+	It("does not rerun on resync when the spec is unchanged (grammar-key resolution is not a diff)", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		Expect(k8sClient.Create(ctx, &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "sh-gram-" + fmt.Sprint(runID), Namespace: namespace},
+			Data:       map[string]string{"only.grammar": "/x\n"}})).To(Succeed())
+		c := newCampaign()
+		c.Spec.Driver.GrammarConfigMap = "sh-gram-" + fmt.Sprint(runID) // no key → resolved in-memory
+		Expect(k8sClient.Create(ctx, c)).To(Succeed())
+		_, err := reconcileOnce() // creates the Job
+		Expect(err).NotTo(HaveOccurred())
+		h1 := getJob(jobKey).Annotations[specHashAnnotation]
+
+		// Resync with no spec change must NOT delete/recreate (the in-memory GrammarKey resolution
+		// mutates the spec object but isn't persisted, so it must not read as a hash diff).
+		_, err = reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(closurejvmv1alpha1.CampaignRunning)) // not Provisioning
+		Expect(getJob(jobKey).Annotations[specHashAnnotation]).To(Equal(h1))   // same Job, same hash
 	})
 
 	// --- P5b: per-campaign dashboard ------------------------------------------------------------

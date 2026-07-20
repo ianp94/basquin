@@ -268,8 +268,9 @@ privilege is bounded and inspectable, versus "mutate any pod at admission time."
 ## 10. Operator-orchestrated test — `ClosureJVMCampaign` (P5)
 
 **Status (2026-07-20):** direction and CRD shape **confirmed** — two CRDs, campaign built as **P5**
-after the P1–P4 injection work (a campaign needs a working instrumented target to drive). Full CRD
-schema + reconcile design still to be written before implementation (likely its own **DD-025**).
+after the P1–P4 injection work (now complete). The full design is written up in
+[CAMPAIGN-DESIGN.md](CAMPAIGN-DESIGN.md) (the **DD-025** proposal, under review); the summary below is
+the sketch it expands.
 
 **The ask.** The operator shouldn't only *instrument* a target — it should orchestrate the **whole
 test**: bring up the target's instrumentation, launch the **runner** (the coverage-guided HTTP

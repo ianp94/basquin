@@ -385,7 +385,7 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 The operator owns the whole test, not just injection. Two-CRD shape confirmed; built as **P5** after
 the P1–P4 injection work (a campaign needs a working instrumented target). Design in full first
 (likely DD-025). See §10 of [`docs/OPERATOR-DESIGN.md`](OPERATOR-DESIGN.md).
-- [ ] **`ClosureJVMCampaign` (test) CRD** — a second CRD that fires off a complete test run: reference a `ClosureJVMTarget`, spec the driver (grammar/corpus/duration/invariants) and the dashboard, and the operator reconciles it into a running campaign
+- [ ] **`ClosureJVMCampaign` (test) CRD** — a second CRD that fires off a complete test run: reference a `ClosureJVMTarget`, spec the driver (grammar/corpus/duration/invariants) and the dashboard, and the operator reconciles it into a running campaign. **Design drafted:** [`docs/CAMPAIGN-DESIGN.md`](CAMPAIGN-DESIGN.md) (DD-025 proposal, under review) — CRD schema, reconcile (dashboard + driver Job), RBAC, phased P5a–P5d, open decisions.
 - [ ] Operator launches the **driver** as a Job (the coverage-guided runner) pointed at the target Service + JaCoCo endpoints + dashboard push
 - [ ] Operator launches/ensures the **dashboard** (aggregator Deployment + Service) and wires the driver's push at it
 - [ ] Campaign lifecycle: owner refs + finalizer tear the driver/dashboard down on delete; status aggregates run state, finds, and coverage onto the Campaign

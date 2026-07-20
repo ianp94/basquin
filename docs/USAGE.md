@@ -42,6 +42,8 @@ The command catalog and flag reference. For what the tool is and why, see the
 | `-Dclosurejvm.coverage.jacoco=host:port[,host:port...]` | The target's JaCoCo tcpserver(s), default `localhost:6300`. Accepts a comma-separated list; a host that resolves to several addresses (a headless Service name → all pod IPs) is expanded automatically. Coverage is union-merged across every replica that responds (DD-023). |
 | `-Dclosurejvm.coverage.classes=<dir>` | Directory of the app's `.class` files, for computing covered/total |
 | `-Dclosurejvm.coverage.intervalMs=<n>` | Poll interval for the non-guided coverage driver (default 1000) |
+| `-Dclosurejvm.run.duration=<10m\|30s\|500ms\|45>` | Time-box the coverage-guided run: stop the loop and exit cleanly at the deadline (bare number = seconds). When set without an iteration count, the deadline governs. Used by operator campaigns (DD-025) so a run ends cleanly instead of being SIGKILLed. |
+| `-Dclosurejvm.summary.out=<path>` | Write an end-of-run metrics summary (the `StatusReporter` snapshot JSON) to this path on shutdown, for a supervisor (the operator) to read. |
 
 ### Dashboard (v0.10)
 

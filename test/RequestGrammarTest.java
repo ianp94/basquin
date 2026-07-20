@@ -97,6 +97,69 @@ public class RequestGrammarTest {
         }
     }
 
+    /**
+     * A grammar authored with laptop-relative @refs (grammar and corpus as sibling dirs) must still
+     * find its values in a container, where the operator flattens the corpus into one dir and sets
+     * -Dclosurejvm.corpusDir. When the ref misses relative to the grammar file, resolution falls back
+     * to corpusDir/<basename>. Without this, campaigns silently run on structure only (DD-018).
+     */
+    @Test
+    public void resolvesValueFileByBasenameFromCorpusDirWhenRelativeRefMisses() throws IOException {
+        Path corpusDir = Files.createTempDirectory("corpus");
+        corpusDir.toFile().deleteOnExit();
+        Path vf = corpusDir.resolve("categoryId.txt");
+        Files.write(vf, "FISH\nDOGS\n".getBytes(StandardCharsets.UTF_8));
+        vf.toFile().deleteOnExit();
+
+        String prev = System.getProperty("closurejvm.corpusDir");
+        System.setProperty("closurejvm.corpusDir", corpusDir.toString());
+        try {
+            // "nope/categoryId.txt" does not exist next to the temp grammar file → basename fallback.
+            RequestGrammar g = load("$c = @nope/categoryId.txt\n/x?c=${c}\n");
+            for (int i = 0; i < 20; i++) {
+                String out = g.randomRequest();
+                assertTrue("must resolve corpus values via corpusDir fallback: " + out,
+                        out.equals("/x?c=FISH") || out.equals("/x?c=DOGS"));
+            }
+        } finally {
+            if (prev == null) System.clearProperty("closurejvm.corpusDir");
+            else System.setProperty("closurejvm.corpusDir", prev);
+        }
+    }
+
+    /**
+     * A present-but-empty value file at the laptop-relative path must not silently mask the corpusDir
+     * fallback (review #22): an empty primary read is not "authoritative", so resolution still falls
+     * through to corpusDir/<basename>.
+     */
+    @Test
+    public void emptyPrimaryValueFileStillFallsBackToCorpusDir() throws IOException {
+        Path grammarDir = Files.createTempDirectory("gram");
+        grammarDir.toFile().deleteOnExit();
+        Path emptyPrimary = grammarDir.resolve("categoryId.txt"); // exists but empty
+        Files.write(emptyPrimary, new byte[0]);
+        emptyPrimary.toFile().deleteOnExit();
+        Path grammarFile = grammarDir.resolve("g.grammar");
+        Files.write(grammarFile, "$c = @categoryId.txt\n/x?c=${c}\n".getBytes(StandardCharsets.UTF_8));
+        grammarFile.toFile().deleteOnExit();
+
+        Path corpusDir = Files.createTempDirectory("corpus");
+        corpusDir.toFile().deleteOnExit();
+        Path good = corpusDir.resolve("categoryId.txt");
+        Files.write(good, "FISH\n".getBytes(StandardCharsets.UTF_8));
+        good.toFile().deleteOnExit();
+
+        String prev = System.getProperty("closurejvm.corpusDir");
+        System.setProperty("closurejvm.corpusDir", corpusDir.toString());
+        try {
+            RequestGrammar g = RequestGrammar.load(grammarFile, new Random(7));
+            assertEquals("empty primary must not defeat the corpusDir fallback", "/x?c=FISH", g.randomRequest());
+        } finally {
+            if (prev == null) System.clearProperty("closurejvm.corpusDir");
+            else System.setProperty("closurejvm.corpusDir", prev);
+        }
+    }
+
     @Test
     public void emptyGrammarIsReportedRatherThanSilentlyExploringNothing() throws IOException {
         assertTrue(load("# nothing but a comment\n").isEmpty());

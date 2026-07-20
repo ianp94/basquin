@@ -295,6 +295,32 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 		Expect(k8sClient.Get(ctx, jobKey, &batchv1.Job{})).NotTo(Succeed()) // no Job
 	})
 
+	It("mounts a flat corpus ConfigMap and points -Dclosurejvm.corpusDir at it", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		Expect(k8sClient.Create(ctx, &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "corp-" + fmt.Sprint(runID), Namespace: namespace},
+			Data:       map[string]string{"catalog_item.txt": "/actions/Catalog.action\n", "categoryId.txt": "FISH\n"}})).To(Succeed())
+		c := newCampaign()
+		c.Spec.Driver.CorpusConfigMap = "corp-" + fmt.Sprint(runID)
+		Expect(k8sClient.Create(ctx, c)).To(Succeed())
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		job := getJob(jobKey)
+		var cvol *corev1.Volume
+		for i := range job.Spec.Template.Spec.Volumes {
+			if job.Spec.Template.Spec.Volumes[i].Name == campaignCorpusVol {
+				cvol = &job.Spec.Template.Spec.Volumes[i]
+			}
+		}
+		Expect(cvol).NotTo(BeNil())
+		Expect(cvol.ConfigMap.Name).To(Equal("corp-" + fmt.Sprint(runID)))
+		Expect(cvol.ConfigMap.Items).To(BeEmpty()) // flat: all keys projected as-is
+		Expect(envValue(job.Spec.Template.Spec.Containers[0].Env, "JAVA_TOOL_OPTIONS")).
+			To(ContainSubstring("-Dclosurejvm.corpusDir=" + campaignCorpusDir))
+	})
+
 	It("fails with TargetGone if the target drops out of Injected mid-run (review #3)", func() {
 		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
 		makeInjectedTarget()

@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -153,9 +154,17 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 		job := &batchv1.Job{}
 		Expect(k8sClient.Get(ctx, jobKey, job)).To(Succeed())
 		tmpl := job.Spec.Template.Spec
-		// initContainer extracts classes from the TARGET's app image.
-		Expect(tmpl.InitContainers).To(HaveLen(1))
+		// initContainers: extract classes from the TARGET's app image, then verify they're non-empty.
+		Expect(tmpl.InitContainers).To(HaveLen(2))
+		Expect(tmpl.InitContainers[0].Name).To(Equal("extract-classes"))
 		Expect(tmpl.InitContainers[0].Image).To(Equal(appImage))
+		// verify-classes fails loud on an empty extract (war-only images) rather than silent 0% coverage.
+		verify := tmpl.InitContainers[1]
+		Expect(verify.Name).To(Equal("verify-classes"))
+		Expect(verify.Image).To(Equal(runnerImg))
+		Expect(verify.Command[0]).To(Equal("sh"))
+		Expect(strings.Join(verify.Command, " ")).To(ContainSubstring(campaignClassesDir))
+		Expect(strings.Join(verify.Command, " ")).To(ContainSubstring(".class"))
 		// driver runs the runner image, wired via JAVA_TOOL_OPTIONS.
 		Expect(tmpl.Containers[0].Image).To(Equal(runnerImg))
 		jto := envValue(tmpl.Containers[0].Env, "JAVA_TOOL_OPTIONS")
@@ -209,6 +218,45 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 		Expect(got.Status.CoveragePct).To(Equal("23.1"))
 		Expect(got.Status.Findings).To(Equal(int32(19)))
 		Expect(got.Status.CompletionTime).NotTo(BeNil())
+	})
+
+	It("surfaces a failed initContainer's reason in campaign status (review #24)", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		Expect(k8sClient.Create(ctx, newCampaign())).To(Succeed())
+		_, err := reconcileOnce() // Job created, Running
+		Expect(err).NotTo(HaveOccurred())
+
+		// Simulate the Job failing (backoff exhausted) due to a verify-classes init failure.
+		job := &batchv1.Job{}
+		Expect(k8sClient.Get(ctx, jobKey, job)).To(Succeed())
+		job.Status.Failed = 3 // > BackoffLimit(2)
+		Expect(k8sClient.Status().Update(ctx, job)).To(Succeed())
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: campaignName + "-driver-xyz", Namespace: namespace,
+				Labels: map[string]string{"closurejvm.dev/campaign": campaignName, "app.kubernetes.io/component": "driver"}},
+			Spec: corev1.PodSpec{
+				InitContainers: []corev1.Container{{Name: "verify-classes", Image: runnerImg}},
+				Containers:     []corev1.Container{{Name: "driver", Image: runnerImg}}},
+		}
+		Expect(k8sClient.Create(ctx, pod)).To(Succeed())
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: namespace}, pod)).To(Succeed())
+		pod.Status.InitContainerStatuses = []corev1.ContainerStatus{{
+			Name: "verify-classes",
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+				ExitCode: 1, Message: "no .class files extracted into /closurejvm-classes — check spec.driver.classesPath"}},
+		}}
+		Expect(k8sClient.Status().Update(ctx, pod)).To(Succeed())
+
+		_, err = reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(closurejvmv1alpha1.CampaignFailed))
+		cond := meta.FindStatusCondition(got.Status.Conditions, "Ready")
+		Expect(cond.Reason).To(Equal("InitContainerFailed"))
+		Expect(cond.Message).To(ContainSubstring("verify-classes"))
+		Expect(cond.Message).To(ContainSubstring("no .class files"))
 	})
 
 	It("fails with TargetGone if the target is deleted mid-run", func() {

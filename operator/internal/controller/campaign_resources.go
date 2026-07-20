@@ -152,6 +152,25 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 						// `--` so a classesPath starting with `-` is treated as a path, not a cp flag.
 						Command:      []string{"cp", "-r", "--", classesPath + "/.", campaignClassesDir + "/"},
 						VolumeMounts: []corev1.VolumeMount{{Name: campaignClassesVol, MountPath: campaignClassesDir}},
+					}, {
+						// Fail loud if the extract produced no .class files, instead of letting the driver
+						// run and report a silent coveragePct=0 that's indistinguishable from a genuinely
+						// low run — the common cause is a war-only target image, whose WEB-INF/classes only
+						// exists at runtime, not in the image layers (DD-025 §7b). Only the fixed dest dir
+						// is referenced (no user input), so this shell string is injection-safe.
+						Name:            "verify-classes",
+						Image:           runnerImage,
+						ImagePullPolicy: corev1.PullIfNotPresent,
+						// Write the reason to the termination message too (not just stdout) so the reconciler
+						// can surface it in campaign status — a fail-loud that's only in pod logs is half the win.
+						Command: []string{"sh", "-c",
+							"if [ -z \"$(find " + campaignClassesDir + " -name '*.class' -print -quit 2>/dev/null)\" ]; then " +
+								"msg='no .class files extracted into " + campaignClassesDir +
+								" — check spec.driver.classesPath (war-only images expose classes only at runtime, not in the image)'; " +
+								"echo \"closurejvm: $msg\"; printf '%s' \"$msg\" > /dev/termination-log; exit 1; fi"},
+						TerminationMessagePath:   "/dev/termination-log",
+						TerminationMessagePolicy: corev1.TerminationMessageReadFile,
+						VolumeMounts:             []corev1.VolumeMount{{Name: campaignClassesVol, MountPath: campaignClassesDir}},
 					}},
 					Containers: []corev1.Container{{
 						Name:                     "driver",

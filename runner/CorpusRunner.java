@@ -21,6 +21,7 @@ import java.util.List;
 public final class CorpusRunner {
 
     public static void main(String[] args) throws Exception {
+        runner.util.TriageSink.ensureStarted();
         String targetClass = (args.length > 0) ? args[0] : System.getProperty("closurejvm.target");
         String corpusDir = (args.length > 1) ? args[1] : System.getProperty("closurejvm.corpusDir", "corpus");
         if (targetClass == null || targetClass.isBlank()) {

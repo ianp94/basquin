@@ -28,6 +28,9 @@ public class GenericRunner {
 
     public static void main(String[] args) {
         System.out.println("Starting ClosureJVM GenericRunner");
+        // Start the triage consumer thread before any iteration baseline is captured,
+        // so it never appears as a mid-iteration thread delta.
+        runner.util.TriageSink.ensureStarted();
 
         int iterations = parseIterations(args);
         String targetClass = parseTargetClass(args);

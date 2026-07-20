@@ -106,6 +106,24 @@ signal, so they always agree.
 app-under-test's per-request coverage back to the client fuzzer over HTTP — a real
 "% of code explored." See [TODO](TODO.md).*
 
+## Kubernetes demo (kind)
+
+One command runs the whole stack in a local Kubernetes cluster: JPetStore as a **pod** with the
+valve, the ClosureJVM agent, and the JaCoCo coverage agent baked in — then drive it from outside
+and watch every feature work in-cluster.
+
+![ClosureJVM full stack in a kind cluster](docs/demo-k8s.svg)
+
+*Above: 250 requests against the JPetStore pod — live **coverage %** (281/6368 edges of the pod's
+own code, pulled from its JaCoCo agent), **96 invariant finds** harvested server-side through the
+valve, 0 crashes.*
+
+```bash
+JPETSTORE_WAR=/abs/jpetstore.war deploy/k8s/up.sh
+```
+
+Details: [deploy/k8s/README.md](deploy/k8s/README.md).
+
 ## Features
 
 - Availability invariants (latency / heap / thread-delta) with hard-fail or soft-signal modes

@@ -1,0 +1,42 @@
+# JPetStore demo pod with ClosureJVM agents (valve + ClosureJVM agent + JaCoCo), plus a Service
+# exposing the app (8080) and the JaCoCo coverage tcpserver (6300). Access from the host via:
+#   kubectl port-forward svc/jpetstore 8080:8080 6300:6300
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jpetstore
+  labels: { app: jpetstore, part-of: closurejvm-demo }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: jpetstore }
+  template:
+    metadata:
+      labels: { app: jpetstore, part-of: closurejvm-demo }
+    spec:
+      containers:
+        - name: jpetstore
+          image: closurejvm/jpetstore-demo:latest
+          imagePullPolicy: IfNotPresent   # image is loaded into kind, not pulled
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: jacoco, containerPort: 6300 }
+          readinessProbe:
+            httpGet: { path: /actions/Catalog.action, port: 8080 }
+            initialDelaySeconds: 8
+            periodSeconds: 5
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits: { cpu: "1", memory: "1Gi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jpetstore
+  labels: { app: jpetstore, part-of: closurejvm-demo }
+spec:
+  type: NodePort
+  selector: { app: jpetstore }
+  ports:
+    - { name: http, port: 8080, targetPort: 8080, nodePort: 30080 }
+    - { name: jacoco, port: 6300, targetPort: 6300, nodePort: 30063 }

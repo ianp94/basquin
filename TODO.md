@@ -260,10 +260,10 @@ and the dashboard) — decide once the boundaries are clear.
   inputs toward new edges (the measurement above is the foundation it needs).
 - [ ] Optional in-process coverage %: a JaCoCo provider for the local JQF targets, so the panel
   shows a real percentage without the server round-trip.
-- [ ] **Kubernetes deploy**: a `kind` (Kubernetes-in-Docker) demo environment running the whole
-  stack — JPetStore as a pod (Tomcat 9 + valve + JaCoCo + ClosureJVM agent), a Service, and a
-  driver/harness. Manifests under `deploy/k8s/`, one-command bring-up. Then verify every feature
-  (invariants, valve, coverage %, exploration) works in-cluster.
+- [x] **Kubernetes deploy**: `kind` demo environment (`deploy/k8s/`): JPetStore as a pod with
+  valve + JaCoCo + ClosureJVM agent baked into a self-contained image, NodePort Service,
+  one-command `up.sh`. Verified in-cluster: valve invariant headers, 96 server-side invariant
+  finds, and live coverage % (281/6368 edges) all working against the pod. Demo `docs/demo-k8s.svg`.
 - [ ] **Auto-injection agent**: a mutating admission webhook (operator) that injects the
   `-javaagent` + valve into annotated pods automatically — likely its own repo.
 - [ ] **Web UI dashboard**: a browser dashboard over the k8s deployment — campaigns across pods,

@@ -90,7 +90,10 @@ public final class LoadRun {
         }
 
         long total = requests.get();
-        double measuredSec = Math.max(0.001, durationMs / 1000.0);
+        // Actual measured window (warmup-end → now), not the configured duration — a worker's in-flight
+        // request can finish past the deadline, so the real window is slightly longer; using it keeps
+        // throughput honest (esp. when the app is slow, which is exactly when it matters).
+        double measuredSec = Math.max(0.001, (System.nanoTime() - measureFromNanos) / 1e9);
         long heapDrift = usedHeapKb() - (baselined[0] ? baselineHeapKb[0] : usedHeapKb());
         int threadDrift = Thread.activeCount() - (baselined[0] ? baselineThreads[0] : Thread.activeCount());
 
@@ -98,6 +101,8 @@ public final class LoadRun {
                 "{\"load\":{\"requests\":%d,\"throughputRps\":\"%.1f\","
               + "\"latencyMs\":{\"p50\":%d,\"p90\":%d,\"p99\":%d,\"max\":%d},"
               + "\"heapDriftKb\":%d,\"threadDrift\":%d,"
+              // Only latency is threshold-gated in this first cut; heap/thread are reported as drift
+              // above, not as violation counts (see LoadViolations godoc / DD-026 deferred items).
               + "\"violations\":{\"latency\":%d,\"heap\":0,\"thread\":0}}}",
                 total, total / measuredSec,
                 percentile(hist, total, 0.50), percentile(hist, total, 0.90),

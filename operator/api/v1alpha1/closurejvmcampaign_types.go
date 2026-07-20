@@ -92,6 +92,9 @@ type CampaignDashboardSpec struct {
 // grammar / an iteration count (it is duration-bounded). DD-026.
 // +kubebuilder:validation:XValidation:rule="self.mode != 'load' || (has(self.driver.corpusConfigMap) && size(self.driver.corpusConfigMap) > 0)",message="mode: load requires driver.corpusConfigMap (the corpus to replay)"
 // +kubebuilder:validation:XValidation:rule="self.mode != 'load' || !(has(self.driver.grammarConfigMap) && size(self.driver.grammarConfigMap) > 0)",message="mode: load replays a fixed corpus and ignores a grammar; remove driver.grammarConfigMap"
+// load is duration-bounded; iterations is ignored by the load driver, so require duration explicitly
+// (the duration-XOR-iterations rule alone would let an iterations-only load run silently default to 60s).
+// +kubebuilder:validation:XValidation:rule="self.mode != 'load' || (has(self.driver.duration) && size(self.driver.duration) > 0)",message="mode: load is duration-bounded; set driver.duration (driver.iterations is ignored)"
 type ClosureJVMCampaignSpec struct {
 	// TargetRef is the ClosureJVMTarget to drive (must be Injected before the run starts).
 	TargetRef TargetReference `json:"targetRef"`
@@ -183,7 +186,10 @@ type LoadLatency struct {
 	Max int32 `json:"max,omitempty"`
 }
 
-// LoadViolations counts invariant breaches during the load run.
+// LoadViolations counts invariant breaches during the load run. First cut: only Latency is evaluated
+// (per-request, against invariants.latencyMaxMs). Heap/Thread are reported as end-to-end drift
+// (HeapDriftKb/ThreadDrift) rather than a threshold-gated count, so they stay 0 here for now — do NOT
+// read them as an active heap/thread gate (DD-026 deferred item).
 type LoadViolations struct {
 	Latency int32 `json:"latency,omitempty"`
 	Heap    int32 `json:"heap,omitempty"`

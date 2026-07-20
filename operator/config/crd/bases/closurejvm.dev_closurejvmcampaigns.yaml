@@ -59,6 +59,8 @@ spec:
               Exactly one of driver.duration / driver.iterations must be set.
               load mode replays a saved corpus at volume — it requires driver.corpusConfigMap, and ignores a
               grammar / an iteration count (it is duration-bounded). DD-026.
+              load is duration-bounded; iterations is ignored by the load driver, so require duration explicitly
+              (the duration-XOR-iterations rule alone would let an iterations-only load run silently default to 60s).
             properties:
               baseURL:
                 description: |-
@@ -182,6 +184,10 @@ spec:
                 driver.grammarConfigMap'
               rule: self.mode != 'load' || !(has(self.driver.grammarConfigMap) &&
                 size(self.driver.grammarConfigMap) > 0)
+            - message: 'mode: load is duration-bounded; set driver.duration (driver.iterations
+                is ignored)'
+              rule: self.mode != 'load' || (has(self.driver.duration) && size(self.driver.duration)
+                > 0)
           status:
             description: ClosureJVMCampaignStatus defines the observed state of ClosureJVMCampaign.
             properties:

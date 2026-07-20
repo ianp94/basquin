@@ -233,10 +233,14 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 		campaign.Status.Phase = closurejvmv1alpha1.CampaignCompleted
 		now := metav1.Now()
 		campaign.Status.CompletionTime = &now
+		msg := fmt.Sprintf("run complete: coverage %s%%, %d findings", campaign.Status.CoveragePct, campaign.Status.Findings)
+		if campaign.Spec.Mode == "load" && campaign.Status.Load != nil {
+			ld := campaign.Status.Load
+			msg = fmt.Sprintf("load complete: %d requests, %s rps, p99 %dms, %d latency violations",
+				ld.Requests, ld.ThroughputRps, ld.LatencyMs.P99, ld.Violations.Latency)
+		}
 		meta.SetStatusCondition(&campaign.Status.Conditions, metav1.Condition{
-			Type: "Ready", Status: metav1.ConditionTrue, Reason: "Completed",
-			Message: fmt.Sprintf("run complete: coverage %s%%, %d findings",
-				campaign.Status.CoveragePct, campaign.Status.Findings)})
+			Type: "Ready", Status: metav1.ConditionTrue, Reason: "Completed", Message: msg})
 		return ctrl.Result{}, r.Status().Update(ctx, &campaign)
 	}
 	if job.Status.Failed > 0 && jobBackoffExhausted(&job) {

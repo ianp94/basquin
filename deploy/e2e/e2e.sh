@@ -320,6 +320,18 @@ YAML
   echo "  (campaign coveragePct=${cpct:-<none>}; $(grep -c 'via corpusDir' "$dlog") value-file(s) resolved from corpus)"
   rm -f "$dlog"
 
+  # --- DD-026 PR 1: the run emits its interesting "replay corpus" as a campaign-owned ConfigMap ---
+  ccorpus="$($K -n "$NS" get closurejvmcampaign jpetstore-campaign -o jsonpath='{.status.corpusConfigMap}' 2>/dev/null || true)"
+  ccount=0; cowner2=""
+  if [ -n "$ccorpus" ]; then
+    ccount="$($K -n "$NS" get configmap "$ccorpus" -o jsonpath='{.data.corpus\.txt}' 2>/dev/null | grep -c '^/' || true)"
+    cowner2="$($K -n "$NS" get configmap "$ccorpus" -o jsonpath='{.metadata.ownerReferences[0].kind}' 2>/dev/null || true)"
+  fi
+  check "campaign emitted status.corpusConfigMap"            "echo '$ccorpus' | grep -q 'jpetstore-campaign-corpus-out'"
+  check "replay-corpus ConfigMap has route entries"          "[ '${ccount:-0}' -ge 1 ]"
+  check "replay-corpus ConfigMap owned by the campaign (GC)" "[ '$cowner2' = 'ClosureJVMCampaign' ]"
+  echo "  (corpusConfigMap=${ccorpus:-<none>}; ${ccount} route(s))"
+
   # --- P5b: the operator brought up a per-campaign dashboard and the driver pushed to it ---------
   say "Assert the per-campaign dashboard (P5b)"
   durl="$($K -n "$NS" get closurejvmcampaign jpetstore-campaign -o jsonpath='{.status.dashboardURL}' 2>/dev/null || true)"

@@ -120,6 +120,7 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 			// remove it explicitly to keep specs isolated.
 			&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: campaignName + "-dashboard", Namespace: namespace}},
 			&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: campaignName + "-dashboard", Namespace: namespace}},
+			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: campaignName + "-corpus-out", Namespace: namespace}},
 		} {
 			_ = k8sClient.Delete(ctx, o)
 		}
@@ -218,6 +219,44 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 		Expect(got.Status.CoveragePct).To(Equal("23.1"))
 		Expect(got.Status.Findings).To(Equal(int32(19)))
 		Expect(got.Status.CompletionTime).NotTo(BeNil())
+	})
+
+	It("emits the replay corpus as a campaign-owned ConfigMap on completion (DD-026 PR 1)", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		Expect(k8sClient.Create(ctx, newCampaign())).To(Succeed())
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		job := &batchv1.Job{}
+		Expect(k8sClient.Get(ctx, jobKey, job)).To(Succeed())
+		job.Status.Succeeded = 1
+		Expect(k8sClient.Status().Update(ctx, job)).To(Succeed())
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: campaignName + "-driver-c", Namespace: namespace,
+				Labels: map[string]string{"closurejvm.dev/campaign": campaignName}},
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "driver", Image: runnerImg}}},
+		}
+		Expect(k8sClient.Create(ctx, pod)).To(Succeed())
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: namespace}, pod)).To(Succeed())
+		pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+			Name: "driver",
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+				Message: `{"exploration":{"corpus":2,"coverage":{"pct":11.0}},"replayCorpus":["/actions/Catalog.action","/actions/Cart.action?add=1"]}`}},
+		}}
+		Expect(k8sClient.Status().Update(ctx, pod)).To(Succeed())
+
+		_, err = reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.CorpusConfigMap).To(Equal(campaignName + "-corpus-out"))
+
+		cm := &corev1.ConfigMap{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: campaignName + "-corpus-out", Namespace: namespace}, cm)).To(Succeed())
+		Expect(cm.Data["corpus.txt"]).To(Equal("/actions/Catalog.action\n/actions/Cart.action?add=1\n"))
+		Expect(cm.OwnerReferences).To(ContainElement(HaveField("Name", campaignName)))
 	})
 
 	It("surfaces a failed initContainer's reason in campaign status (review #24)", func() {

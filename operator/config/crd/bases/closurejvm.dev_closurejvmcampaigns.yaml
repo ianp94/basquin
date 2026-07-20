@@ -229,6 +229,12 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              corpusConfigMap:
+                description: |-
+                  CorpusConfigMap names a ConfigMap the operator emits at end-of-run holding the run's interesting
+                  "replay corpus" (the inputs that reached new coverage), for reproducibility, the dashboard corpus
+                  view, and load-mode replay (DD-026 PR 1). Owner-referenced to the campaign, so it GCs with it.
+                type: string
               coveragePct:
                 description: CoveragePct/Findings are read from the driver's end-of-run
                   summary (DD-025 §7a).

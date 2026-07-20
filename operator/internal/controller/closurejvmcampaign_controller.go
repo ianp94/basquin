@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -62,7 +63,7 @@ type ClosureJVMCampaignReconciler struct {
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
-//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch
+//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update
 
 func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
@@ -200,11 +201,28 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	// --- aggregate the Job's outcome -----------------------------------------------------------
 	if job.Status.Succeeded > 0 {
-		campaign.Status.Phase = closurejvmv1alpha1.CampaignCompleted
 		if s := r.readDriverSummary(ctx, &campaign); s != nil {
 			campaign.Status.CoveragePct = fmt.Sprintf("%.1f", s.Exploration.Coverage.Pct)
 			campaign.Status.Findings = s.Exploration.Corpus
+			// Persist the interesting "replay corpus" as a campaign-owned ConfigMap (DD-026 PR 1) —
+			// for reproducibility, the dashboard corpus view, and load-mode replay. The driver stays
+			// credential-less: it wrote the corpus into its summary (termination message); the operator,
+			// which already holds the RBAC, materializes the ConfigMap here. Emit BEFORE flipping to a
+			// terminal phase: a terminal campaign never reconciles again (top-of-func guard), so a
+			// transient failure here would otherwise permanently forfeit the corpus. On failure, stay
+			// Running and retry next reconcile (the create-or-update is idempotent).
+			if len(s.ReplayCorpus) > 0 {
+				if err := r.emitCorpusConfigMap(ctx, &campaign, s.ReplayCorpus); err != nil {
+					l.Error(err, "emitting replay-corpus ConfigMap; will retry")
+					campaign.Status.Phase = closurejvmv1alpha1.CampaignRunning
+					if uerr := r.Status().Update(ctx, &campaign); uerr != nil {
+						return ctrl.Result{}, uerr
+					}
+					return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+				}
+			}
 		}
+		campaign.Status.Phase = closurejvmv1alpha1.CampaignCompleted
 		now := metav1.Now()
 		campaign.Status.CompletionTime = &now
 		meta.SetStatusCondition(&campaign.Status.Conditions, metav1.Condition{
@@ -231,7 +249,7 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 }
 
-// driverSummary is the subset of StatusReporter.snapshotJson the campaign surfaces.
+// driverSummary is the subset of the driver's end-of-run summary the campaign surfaces.
 type driverSummary struct {
 	Exploration struct {
 		Corpus   int32 `json:"corpus"`
@@ -239,6 +257,44 @@ type driverSummary struct {
 			Pct float64 `json:"pct"`
 		} `json:"coverage"`
 	} `json:"exploration"`
+	// ReplayCorpus is the capped set of interesting inputs the run fired (DD-026 PR 1); the operator
+	// materializes it into status.corpusConfigMap.
+	ReplayCorpus []string `json:"replayCorpus"`
+}
+
+const corpusOutKey = "corpus.txt"
+
+func corpusConfigMapName(c *closurejvmv1alpha1.ClosureJVMCampaign) string {
+	return c.Name + "-corpus-out"
+}
+
+// emitCorpusConfigMap materializes the run's replay corpus into a campaign-owned ConfigMap (one key,
+// newline-joined) and records it in status.corpusConfigMap. Create-or-update (idempotent on requeue).
+func (r *ClosureJVMCampaignReconciler) emitCorpusConfigMap(ctx context.Context, c *closurejvmv1alpha1.ClosureJVMCampaign, corpus []string) error {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: corpusConfigMapName(c), Namespace: c.Namespace},
+		Data:       map[string]string{corpusOutKey: strings.Join(corpus, "\n") + "\n"},
+	}
+	if err := controllerutil.SetControllerReference(c, cm, r.Scheme); err != nil {
+		return err
+	}
+	var existing corev1.ConfigMap
+	switch err := r.Get(ctx, types.NamespacedName{Namespace: cm.Namespace, Name: cm.Name}, &existing); {
+	case apierrors.IsNotFound(err):
+		if cerr := r.Create(ctx, cm); cerr != nil && !apierrors.IsAlreadyExists(cerr) {
+			return cerr
+		}
+	case err != nil:
+		return err
+	default:
+		existing.Data = cm.Data
+		existing.OwnerReferences = cm.OwnerReferences
+		if uerr := r.Update(ctx, &existing); uerr != nil {
+			return uerr
+		}
+	}
+	c.Status.CorpusConfigMap = cm.Name
+	return nil
 }
 
 // readDriverSummary finds the driver Job's pod and parses the summary the runner wrote to its

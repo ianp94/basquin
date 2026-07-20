@@ -139,6 +139,9 @@ public final class CoverageGuidedRun {
         // Start the corpus as the full seed set so every seeded endpoint is exercised, rather than
         // relying on random discovery to stumble onto them.
         List<String> corpus = new ArrayList<>(seeds);
+        // Publish the live corpus so the end-of-run summary can emit a capped "replay corpus" the
+        // operator persists (DD-026 PR 1). Same list object, populated as the run finds new coverage.
+        lastCorpus = corpus;
         long best = 0, total = 0;
 
         // Alternate session epochs: sign on for a stretch (so account/cart/order handlers run
@@ -174,7 +177,9 @@ public final class CoverageGuidedRun {
                 total = lastCoverageTotal;   // else a sequence-only run reports coverage=N/0
                 if (coveredAfterSeq > best) {
                     best = coveredAfterSeq;
-                    corpus.add(sequence.get(sequence.size() - 1));
+                    // Synchronized: the summary shutdown hook may snapshot this list concurrently on an
+                    // external SIGTERM (kubectl delete pod / eviction) before the deadline is hit.
+                    synchronized (corpus) { corpus.add(sequence.get(sequence.size() - 1)); }
                     StatusReporter.recordSaved("Coverage");
                 }
                 continue;
@@ -212,7 +217,7 @@ public final class CoverageGuidedRun {
             total = lastCoverageTotal;
             if (covered > best) {
                 best = covered;
-                corpus.add(input);
+                synchronized (corpus) { corpus.add(input); } // see the sequence branch above
                 StatusReporter.recordSaved("Coverage");
             }
         }
@@ -236,14 +241,109 @@ public final class CoverageGuidedRun {
         return (long) (Double.parseDouble(num.trim()) * mult);
     }
 
-    /** Write the end-of-run metrics (StatusReporter's snapshot JSON) to {@code path} for the operator. */
-    private static void writeSummary(String path) {
+    /** The run's live corpus, published for the end-of-run summary's replay-corpus emission (DD-026). */
+    static volatile List<String> lastCorpus; // package-private for the combined-size test
+
+    /** Absolute upper bound on the replay-corpus bytes (also overridable); the effective budget is the
+     *  smaller of this and what's left of the ~4 KiB termination message after the metrics JSON. */
+    static final int REPLAY_CORPUS_MAX_BYTES =
+            Integer.getInteger("closurejvm.corpus.out.maxBytes", 3000);
+
+    /** Keep the whole summary (metrics + corpus) safely under kubelet's 4096-byte termination cap. */
+    private static final int TERMINATION_MSG_BUDGET = 3900;
+
+    /**
+     * Write the end-of-run summary (StatusReporter's metrics JSON, plus a capped {@code replayCorpus}
+     * array of the interesting inputs) to {@code path} for the operator to read back (DD-025 §7a,
+     * DD-026 PR 1). The corpus is best-effort and is built in a separate try so a corpus failure (e.g.
+     * a shutdown-time hiccup) can never take down the metrics summary the operator depends on.
+     */
+    static void writeSummary(String path) { // package-private for testing
+        String snap;
         try {
-            java.nio.file.Files.write(Paths.get(path),
-                    StatusReporter.snapshotJson().getBytes(StandardCharsets.UTF_8));
+            snap = StatusReporter.snapshotJson(); // a complete JSON object: {...}
+        } catch (Exception e) {
+            return; // no metrics to write
+        }
+        String corpusJson = "[]";
+        try {
+            // Defensive copy under the list's own monitor — the main loop's synchronized add()s and this
+            // snapshot can't interleave, so no ConcurrentModificationException on a SIGTERM race.
+            List<String> lc = lastCorpus;
+            List<String> snapshot;
+            if (lc != null) {
+                synchronized (lc) { snapshot = new ArrayList<>(lc); }
+            } else {
+                snapshot = java.util.Collections.emptyList();
+            }
+            // Budget the corpus to what fits the termination message alongside the actual metrics size.
+            int snapBytes = snap.getBytes(StandardCharsets.UTF_8).length;
+            int overhead = ",\"replayCorpus\":".length(); // the closing '}' is already counted in snap
+            int budget = Math.min(REPLAY_CORPUS_MAX_BYTES, TERMINATION_MSG_BUDGET - snapBytes - overhead);
+            corpusJson = replayCorpusJson(snapshot, Math.max(2, budget)); // >=2 so "[]" always fits
+        } catch (Exception ignored) {
+            corpusJson = "[]"; // corpus is best-effort; fall through and still write the metrics
+        }
+        try {
+            // Splice "replayCorpus":[...] before the closing brace; the operator ignores the field if it
+            // doesn't parse it, and materializes status.corpusConfigMap if it does.
+            String merged = snap.endsWith("}")
+                    ? snap.substring(0, snap.length() - 1) + ",\"replayCorpus\":" + corpusJson + "}"
+                    : snap;
+            java.nio.file.Files.write(Paths.get(path), merged.getBytes(StandardCharsets.UTF_8));
         } catch (Exception ignored) {
             // never let summary-writing break the run's exit
         }
+    }
+
+    /**
+     * A JSON array of distinct corpus inputs, added in order until the encoded UTF-8 size would exceed
+     * {@code maxBytes} (a true byte budget — the termination message is byte-limited). Package-private
+     * for testing.
+     */
+    static String replayCorpusJson(List<String> corpus, int maxBytes) {
+        StringBuilder sb = new StringBuilder("[");
+        int bytes = 1 + 1; // '[' + ']'
+        if (corpus != null) {
+            java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>(corpus);
+            boolean first = true;
+            for (String entry : seen) {
+                String enc = jsonString(entry);
+                int encBytes = enc.getBytes(StandardCharsets.UTF_8).length + (first ? 0 : 1); // + comma
+                if (bytes + encBytes > maxBytes) {
+                    break;
+                }
+                if (!first) {
+                    sb.append(',');
+                }
+                sb.append(enc);
+                bytes += encBytes;
+                first = false;
+            }
+        }
+        return sb.append(']').toString();
+    }
+
+    /** Minimal JSON string encoder (quotes + escapes) — avoids a JSON dependency for one field. */
+    private static String jsonString(String s) {
+        StringBuilder b = new StringBuilder("\"");
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"':  b.append("\\\""); break;
+                case '\\': b.append("\\\\"); break;
+                case '\n': b.append("\\n");  break;
+                case '\r': b.append("\\r");  break;
+                case '\t': b.append("\\t");  break;
+                default:
+                    if (c < 0x20) {
+                        b.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        b.append(c);
+                    }
+            }
+        }
+        return b.append('"').toString();
     }
 
     /**

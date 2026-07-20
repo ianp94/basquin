@@ -374,6 +374,11 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 - [ ] Per-instance finding attribution — valve stamps `HOSTNAME` into a response header the driver already parses, so "one sick pod" ≠ "systemic" *(v0.10, DD-020 limit)*
 - [ ] Optional in-process JaCoCo coverage % for the local JQF targets (no HTTP round-trip) *(v0.10)*
 
+### Load / soak mode — replay the interesting corpus under load *(post-v0.11 idea, user 2026-07-20)*
+- [ ] **Persist the coverage-guided corpus as an artifact.** A fuzz run already accumulates the inputs that reached new coverage (the "interesting" set) in-memory; write them out at end-of-run (e.g. a corpus ConfigMap/PVC the campaign emits), closing the design's already-noted "corpus vanishes on teardown" gap. This is the producer half.
+- [ ] **Load/soak mode that replays that corpus at volume.** A new run mode (a `mode: explore|load` on the campaign, or a follow-on `ClosureJVMLoadTest` that consumes a saved corpus) that stops *exploring* and instead sends the saved interesting inputs at high concurrency/throughput for a duration — reusing the existing HTTP driver and the invariant oracles (latency budget, heap-delta, thread/leak detection) but tuned for soak, not discovery. The pitch: **fuzz to discover the interesting states, then hammer those states under load** and watch the same invariants hold. Ties the fuzzer's output directly into a stress/soak workflow.
+- [ ] Report load-mode-specific stats (throughput/RPS, latency percentiles under sustained load, heap/thread drift over the soak) distinct from exploration stats (coverage %, corpus growth).
+
 ### Dashboard
 - [ ] Dismiss/mute a cluster (dashboard-local hide; no control channel, safe to build now — distinct from removing it from a driver's corpus, which conflicts with DD-006/DD-014 "never drop a finding") *(v0.10)*
 - [ ] Persistence / eviction beyond in-memory (TTL or small store) for real deployments *(v0.10)*

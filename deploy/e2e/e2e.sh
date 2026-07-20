@@ -130,7 +130,7 @@ say "Clean slate (revert+remove any prior target, then the app) so each run star
 # annotations + initContainer but resets the env, which reads as 'already injected' and isn't re-fixed.
 # Delete the campaign first so its owned driver Job is GC'd before the target it depends on goes away.
 $K -n "$NS" delete closurejvmcampaign jpetstore-campaign --ignore-not-found --timeout=60s
-$K -n "$NS" delete configmap jpetstore-grammar --ignore-not-found
+$K -n "$NS" delete configmap jpetstore-grammar jpetstore-corpus --ignore-not-found
 $K -n "$NS" delete closurejvmtarget jpetstore --ignore-not-found --timeout=60s
 $K -n "$NS" delete deploy jpetstore --ignore-not-found --timeout=90s
 
@@ -239,9 +239,16 @@ check "status.coverageEndpoint published (DD-023 flag)"  "echo '$endpoint' | gre
 # the operator surfaces as status.coveragePct. Only meaningful once the injection checks above pass.
 # ---------------------------------------------------------------------------------------------------
 if [ "$phase" = "Injected" ] && [ -n "$endpoint" ]; then
-  say "Create grammar ConfigMap + apply ClosureJVMCampaign (drives traffic, reads coverage)"
+  say "Create grammar + corpus ConfigMaps + apply ClosureJVMCampaign (drives traffic, reads coverage)"
   $K -n "$NS" create configmap jpetstore-grammar \
     --from-file=jpetstore.grammar="$ROOT/examples/grammar/jpetstore.grammar" \
+    --dry-run=client -o yaml | $K apply -f -
+  # Flat corpus: route-seed files (top level) + value files (values/) as basename keys. --from-file on
+  # a dir is non-recursive, so pass both levels. loadSeeds walks it for /-prefixed routes; the grammar's
+  # @../corpus/... value refs fall back to <corpusDir>/<basename> (DD-018).
+  $K -n "$NS" create configmap jpetstore-corpus \
+    --from-file="$ROOT/examples/corpus/jpetstore/" \
+    --from-file="$ROOT/examples/corpus/jpetstore/values/" \
     --dry-run=client -o yaml | $K apply -f -
   $K apply -f - <<YAML
 apiVersion: closurejvm.dev/v1alpha1
@@ -253,6 +260,7 @@ spec:
   driver:
     iterations: 200
     grammarConfigMap: jpetstore-grammar
+    corpusConfigMap: jpetstore-corpus
     classesPath: /usr/local/tomcat/webapps/ROOT/WEB-INF/classes
 YAML
 
@@ -273,10 +281,20 @@ YAML
 
   # coveragePct is a string like "12.4"; reduce to yes/no HERE (awk quoting is fragile through eval).
   cpos="$(awk 'BEGIN{exit !('"${cpct:-0}"'+0 > 0)}' >/dev/null 2>&1 && echo yes || echo no)"
-  check "campaign reached Completed"                        "[ '$cphase' = 'Completed' ]"
-  check "operator owns the driver Job (GC wired)"           "[ '$cowner' = 'ClosureJVMCampaign' ]"
-  check "campaign reported non-zero coverage %"             "[ '$cpos' = 'yes' ]"
-  echo "  (campaign coveragePct=${cpct:-<none>})"
+  # Corpus propagation: with a grammar present the routes come from grammar.expandAll(), so the corpus
+  # matters as *values* — the grammar's @-value-file refs resolve via the corpusDir fallback. Assert
+  # that positively from the driver log (robust vs. coverage's run-to-run wobble): at least one value
+  # file resolved via corpusDir, and none was reported missing.
+  dlog="$(mktemp)"; $K -n "$NS" logs "job/$cjob" > "$dlog" 2>/dev/null || true
+  valresolved="$(grep -q 'resolved values .* via corpusDir' "$dlog" && echo yes || echo no)"
+  valsmissing="$(grep -q 'values file not found' "$dlog" && echo yes || echo no)"
+  check "campaign reached Completed"                         "[ '$cphase' = 'Completed' ]"
+  check "operator owns the driver Job (GC wired)"            "[ '$cowner' = 'ClosureJVMCampaign' ]"
+  check "campaign reported non-zero coverage %"              "[ '$cpos' = 'yes' ]"
+  check "grammar resolved corpus value files via corpusDir"  "[ '$valresolved' = 'yes' ]"
+  check "no corpus value file was missing"                   "[ '$valsmissing' = 'no' ]"
+  echo "  (campaign coveragePct=${cpct:-<none>}; $(grep -c 'via corpusDir' "$dlog") value-file(s) resolved from corpus)"
+  rm -f "$dlog"
 
   # --- P5b: the operator brought up a per-campaign dashboard and the driver pushed to it ---------
   say "Assert the per-campaign dashboard (P5b)"

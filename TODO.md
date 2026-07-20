@@ -267,3 +267,9 @@ and the dashboard) — decide once the boundaries are clear.
 - [ ] **Web UI dashboard**: a browser dashboard over the k8s deployment — campaigns across pods,
   live findings, coverage growth, corpus, invariant violations, triage bundles. The "product"
   surface. Candidate separate repo.
+  - [ ] Surface the actual findings in the UI: per-finding crash detail (exception, message,
+    stack), invariant violations (kind, threshold, sampled stack), the saved input, and the
+    route/metrics — i.e. browse the triage bundles, not just counts.
+  - [ ] Optional Claude-API-backed analysis: with a configured API key, let Claude analyze a
+    finding (or a campaign) from the dashboard — cluster/dedupe findings, explain a stack, suggest
+    a root cause / minimized repro. Opt-in; key stays server-side.

@@ -80,19 +80,27 @@ Details and the "why" behind each choice: [ARCHITECTURE](docs/ARCHITECTURE.md) �
 
 ## Exploration
 
-Coverage-guided fuzzing (JQF) runs each input through the same iteration boundaries and
-invariants, and the live status screen grows an **exploration panel** as a campaign progresses:
-execs/sec, corpus size, finds by classification (crash / invariant), time-since-last-find, and a
-**coverage %** row that lights up when a coverage source reports.
+Exploration (fuzzing / HTTP driving) runs each input through the same iteration boundaries and
+invariants, and the live status screen grows an **exploration panel**: execs/sec, corpus size,
+finds by classification (crash / invariant), **rejected** (expected input validations, not
+crashes), time-since-last-find, and a **coverage %** row that lights up when a coverage source
+reports.
 
-![ClosureJVM exploration panel during a JQF campaign](docs/demo-explore.svg)
+![ClosureJVM exploration panel driving JPetStore](docs/demo-explore.svg)
+
+*Above: exploring an unmodified JPetStore over HTTP — 220 requests, **0 crashes** (it's robust),
+**48 invariant finds** harvested server-side via the valve. Point it at a running app:*
 
 ```bash
-./gradlew runFuzzCalculatorJQF -DenableJQF=true -Dclosurejvm.status=true
+./gradlew runHttpDrive -Dexamples.http.baseUrl=http://localhost:8080 \
+  -Dclosurejvm.invariant.latency.maxMs=25 -Dclosurejvm.invariant.mode=soft
 ```
 
-The crash counter is consistent across every run path — the top `crashes` figure and the
-exploration `finds crash` count come from the same signal (a target exception), so they agree.
+**Crashes are real crashes.** A target declares its expected input rejections via
+`CrashClassifier`, so a parser throwing `IllegalArgumentException("bad char")` is counted as
+*rejected*, not a crash — only genuine faults (an unhandled `NoSuchElementException`, an `NPE`, a
+5xx) count. The top `crashes` figure and the exploration `finds crash` count come from that same
+signal, so they always agree.
 
 *Next (v0.10): the coverage % is fed by a server-side coverage agent that reports the
 app-under-test's per-request coverage back to the client fuzzer over HTTP — a real

@@ -1,0 +1,58 @@
+# Default values for closurejvm-operator.
+
+# The operator controller image.
+image:
+  repository: closurejvm/operator
+  tag: "0.2.0"
+  pullPolicy: IfNotPresent
+
+# The three images the operator launches or injects. Each maps to a controller flag; leaving one
+# empty makes the operator fall back to its built-in default (usually not what you want on a cluster
+# that can't pull those defaults — pin them to tags you built and loaded).
+images:
+  agents: closurejvm/agents:0.2.0       # --agents-image (target injection initContainer)
+  runner: closurejvm/runner:0.2.0       # --runner-image (campaign driver Job)
+  dashboard: closurejvm/dashboard:0.2.0 # --dashboard-image (per-campaign dashboard Deployment)
+
+# The operator is NAMESPACED BY DESIGN: it watches and mutates only its own namespace (WATCH_NAMESPACE
+# is set from the release namespace via the downward API, and the operator refuses to start if empty).
+# Install one release per namespace you want to instrument. There is no cluster-wide mode.
+
+replicaCount: 1
+leaderElect: true
+
+# imagePullSecrets for private registries, e.g. [{ name: regcred }].
+imagePullSecrets: []
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+serviceAccount:
+  # Created by the chart. Set a name to use/override; empty uses the fullname.
+  name: ""
+  annotations: {}
+
+# Pod-level knobs.
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Security context mirrors the kustomize manifest (non-root, drop ALL caps, no privilege escalation).
+podSecurityContext:
+  runAsNonRoot: true
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+# Name overrides (kept short so resources read like the kustomize install, e.g. closurejvm-controller-manager).
+nameOverride: ""
+fullnameOverride: ""

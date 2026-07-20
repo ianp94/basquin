@@ -375,8 +375,10 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 - [ ] Optional in-process JaCoCo coverage % for the local JQF targets (no HTTP round-trip) *(v0.10)*
 
 ### Load / soak mode — replay the interesting corpus under load *(post-v0.11 idea, user 2026-07-20)*
-- [ ] **Persist the coverage-guided corpus as an artifact.** A fuzz run already accumulates the inputs that reached new coverage (the "interesting" set) in-memory; write them out at end-of-run (e.g. a corpus ConfigMap/PVC the campaign emits), closing the design's already-noted "corpus vanishes on teardown" gap. This is the producer half.
-- [ ] **Load/soak mode that replays that corpus at volume.** A new run mode (a `mode: explore|load` on the campaign, or a follow-on `ClosureJVMLoadTest` that consumes a saved corpus) that stops *exploring* and instead sends the saved interesting inputs at high concurrency/throughput for a duration — reusing the existing HTTP driver and the invariant oracles (latency budget, heap-delta, thread/leak detection) but tuned for soak, not discovery. The pitch: **fuzz to discover the interesting states, then hammer those states under load** and watch the same invariants hold. Ties the fuzzer's output directly into a stress/soak workflow.
+**Managing the fuzz-vs-load split (planned decomposition, user 2026-07-20):** design-note first, then two PRs along the producer/consumer seam.
+- [ ] **PR 0 — design note (DD-0xx).** Decide the crux: is load a **`mode: explore|load` field on `ClosureJVMCampaign`** (reuses the target-gating + driver-Job + dashboard + status machinery; one CRD, two objectives — *recommended first cut*, fuzz and load differ in goal, not infrastructure) OR a **separate `ClosureJVMLoadTest` CRD** (cleaner status separation, but duplicates the reconciler)? Also fix the corpus **artifact format** and the load **metrics** shape. Do this first — design-first caught real bugs on DD-025.
+- [ ] **PR 1 — persist the corpus (producer).** A fuzz run already accumulates the inputs that reached new coverage in-memory; write them out at end-of-run (a corpus ConfigMap/PVC the campaign emits), closing the "corpus vanishes on teardown" gap. Independently useful (reproducibility, the dashboard **corpus view** above) — ship it on its own.
+- [ ] **PR 2 — load/soak mode (consumer).** Consumes a saved corpus and replays it at high concurrency/throughput for a duration — reusing the HTTP driver + invariant oracles (latency budget, heap-delta, thread/leak) but tuned for soak, not discovery. **Fuzz to discover the interesting states, then hammer those states under load** and watch the same invariants hold. Depends on PR 1's artifact format + PR 0's mode/CRD decision.
 - [ ] Report load-mode-specific stats (throughput/RPS, latency percentiles under sustained load, heap/thread drift over the soak) distinct from exploration stats (coverage %, corpus growth).
 
 ### Dashboard
@@ -385,6 +387,7 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 - [ ] Full crash / sampled-stack drill-down in the findings view (currently a text excerpt) *(v0.10)*
 - [ ] Exercise the Claude analysis path against a live key — the `verifyClaude` smoke check is merged (PR #5); one real `[claude-check] OK` run closes it *(v0.10, DD-015)*
 - [ ] Periodic machine-readable status line (JSON) on stdout for external tooling (distinct from the dashboard push) *(v0.7)*
+- [ ] **Corpus view in the dashboard** — surface the accumulated coverage-guided corpus (the interesting inputs that reached new coverage), not just status/coverage/findings. The driver already holds the corpus in-memory; push a sample (or all) to the dashboard and render a browsable/searchable list. Pairs with the load/soak-mode idea (persist + replay the interesting corpus) above. *(user 2026-07-20)*
 
 ### Operator orchestration — P5 (confirmed 2026-07-20: two CRDs, after P2–P4)
 The operator owns the whole test, not just injection. Two-CRD shape confirmed; built as **P5** after

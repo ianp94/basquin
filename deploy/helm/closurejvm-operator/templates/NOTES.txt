@@ -1,0 +1,22 @@
+closurejvm-operator {{ .Chart.AppVersion }} installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+The operator is NAMESPACED BY DESIGN — it manages only namespace "{{ .Release.Namespace }}".
+Install one release per namespace you want to instrument.
+
+Images it launches/injects (override with --set images.*):
+  agents     {{ .Values.images.agents | default "(built-in default)" }}
+  runner     {{ .Values.images.runner | default "(built-in default)" }}
+  dashboard  {{ .Values.images.dashboard | default "(built-in default)" }}
+
+1. Check the controller is up:
+     kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "closurejvm-operator.controllerName" . }}
+
+2. Instrument an app, then run a test (full guide: docs/OPERATOR-USAGE.md):
+     kubectl -n {{ .Release.Namespace }} apply -f your-closurejvmtarget.yaml
+     kubectl -n {{ .Release.Namespace }} get closurejvmtargets      # wait for PHASE=Injected
+     kubectl -n {{ .Release.Namespace }} apply -f your-closurejvmcampaign.yaml
+     kubectl -n {{ .Release.Namespace }} get closurejvmcampaigns    # PHASE, COVERAGE, FINDINGS
+
+CRDs are installed from the chart's crds/ directory. NOTE: Helm does not upgrade or delete CRDs — on
+`helm upgrade`, re-apply changed CRDs manually; on `helm uninstall`, CRDs (and any remaining
+Target/Campaign CRs) are left in place.

@@ -94,35 +94,59 @@ DOCKER
 fi
 kind load docker-image "$RAW_APP_IMAGE" --name "$CLUSTER"
 
-say "Install CRDs + deploy operator (namespaced RBAC) into '$NS'"
-$K apply -f "$ROOT/operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml"
-$K apply -f "$ROOT/operator/config/crd/bases/closurejvm.dev_closurejvmcampaigns.yaml"
-$K create namespace "$NS" --dry-run=client -o yaml | $K apply -f -
-install="$(mktemp)"
-$K kustomize "$ROOT/operator/config/default" | sed "s#image: controller:latest#image: ${OPERATOR_IMAGE}#" > "$install"
-$K apply -f "$install"; rm -f "$install"
-# Tell the operator which agents image to inject (fixed tag => initContainer uses the kind-loaded
-# one). Idempotent: only append the flag if it isn't already there, so repeated runs (without
-# --teardown) don't accumulate duplicate --agents-image args.
-if ! $K -n "$NS" get deploy closurejvm-controller-manager \
-      -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--agents-image'; then
-  $K -n "$NS" patch deploy closurejvm-controller-manager --type=json \
-    -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--agents-image=${AGENTS_IMAGE}\"}]"
+if [ "${INSTALL:-kustomize}" = "helm" ]; then
+  say "Install operator via HELM CHART (namespaced RBAC) into '$NS'"
+  command -v helm >/dev/null || die "helm not found (INSTALL=helm)"
+  # Clear any prior KUSTOMIZE-style install that would collide — Helm refuses to adopt resources it
+  # doesn't own (managed-by: kustomize), and the chart's namespaced Role vs kustomize's ClusterRole
+  # makes the RoleBinding roleRef immutable-incompatible anyway. Remove the kustomize-owned operator
+  # resources (by name — labels aren't on all of them) so Helm gets a clean install. A prior *Helm*
+  # release is handled by `upgrade --install`; skip the wipe if this namespace is already Helm-owned.
+  if [ "$($K -n "$NS" get sa closurejvm-controller-manager -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null)" = "kustomize" ]; then
+    $K -n "$NS" delete deploy,sa,role,rolebinding closurejvm-controller-manager closurejvm-manager-rolebinding \
+      closurejvm-leader-election-role closurejvm-leader-election-rolebinding --ignore-not-found >/dev/null 2>&1 || true
+    $K delete clusterrole closurejvm-manager-role --ignore-not-found >/dev/null 2>&1 || true
+  fi
+  helm --kube-context "kind-${CLUSTER}" upgrade --install closurejvm "$ROOT/deploy/helm/closurejvm-operator" \
+    --namespace "$NS" --create-namespace \
+    --set fullnameOverride=closurejvm \
+    --set image.repository="${OPERATOR_IMAGE%:*}" --set image.tag="${OPERATOR_IMAGE##*:}" \
+    --set images.agents="$AGENTS_IMAGE" \
+    --set images.runner="$RUNNER_IMAGE" \
+    --set images.dashboard="$DASHBOARD_IMAGE" \
+    --wait --timeout=150s
+  $K -n "$NS" rollout status deploy/closurejvm-controller-manager --timeout=120s
+else
+  say "Install CRDs + deploy operator (kustomize, namespaced RBAC) into '$NS'"
+  $K apply -f "$ROOT/operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml"
+  $K apply -f "$ROOT/operator/config/crd/bases/closurejvm.dev_closurejvmcampaigns.yaml"
+  $K create namespace "$NS" --dry-run=client -o yaml | $K apply -f -
+  install="$(mktemp)"
+  $K kustomize "$ROOT/operator/config/default" | sed "s#image: controller:latest#image: ${OPERATOR_IMAGE}#" > "$install"
+  $K apply -f "$install"; rm -f "$install"
+  # Tell the operator which agents image to inject (fixed tag => initContainer uses the kind-loaded
+  # one). Idempotent: only append the flag if it isn't already there, so repeated runs (without
+  # --teardown) don't accumulate duplicate --agents-image args.
+  if ! $K -n "$NS" get deploy closurejvm-controller-manager \
+        -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--agents-image'; then
+    $K -n "$NS" patch deploy closurejvm-controller-manager --type=json \
+      -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--agents-image=${AGENTS_IMAGE}\"}]"
+  fi
+  # Likewise pin the runner image the campaign driver Job runs (fixed tag => kind-loaded one).
+  if ! $K -n "$NS" get deploy closurejvm-controller-manager \
+        -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--runner-image'; then
+    $K -n "$NS" patch deploy closurejvm-controller-manager --type=json \
+      -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--runner-image=${RUNNER_IMAGE}\"}]"
+  fi
+  # ...and the per-campaign dashboard image (P5b).
+  if ! $K -n "$NS" get deploy closurejvm-controller-manager \
+        -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--dashboard-image'; then
+    $K -n "$NS" patch deploy closurejvm-controller-manager --type=json \
+      -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--dashboard-image=${DASHBOARD_IMAGE}\"}]"
+  fi
+  $K -n "$NS" rollout restart deploy/closurejvm-controller-manager
+  $K -n "$NS" rollout status  deploy/closurejvm-controller-manager --timeout=120s
 fi
-# Likewise pin the runner image the campaign driver Job runs (fixed tag => kind-loaded one).
-if ! $K -n "$NS" get deploy closurejvm-controller-manager \
-      -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--runner-image'; then
-  $K -n "$NS" patch deploy closurejvm-controller-manager --type=json \
-    -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--runner-image=${RUNNER_IMAGE}\"}]"
-fi
-# ...and the per-campaign dashboard image (P5b).
-if ! $K -n "$NS" get deploy closurejvm-controller-manager \
-      -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--dashboard-image'; then
-  $K -n "$NS" patch deploy closurejvm-controller-manager --type=json \
-    -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--dashboard-image=${DASHBOARD_IMAGE}\"}]"
-fi
-$K -n "$NS" rollout restart deploy/closurejvm-controller-manager
-$K -n "$NS" rollout status  deploy/closurejvm-controller-manager --timeout=120s
 
 say "Clean slate (revert+remove any prior target, then the app) so each run starts from RAW"
 # The operator (now running) reverts and releases the finalizer, so this blocks until fully gone.

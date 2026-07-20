@@ -18,6 +18,8 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -129,6 +131,9 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	// --- ensure the driver Job -----------------------------------------------------------------
+	// Hash the run-defining spec now, from the spec as stored (before the NotFound branch resolves
+	// GrammarKey in-memory), so the created-Job annotation and the job-exists comparison agree.
+	specHash := driverSpecHash(&campaign)
 	var job batchv1.Job
 	jkey := types.NamespacedName{Namespace: campaign.Namespace, Name: driverJobName(&campaign)}
 	switch err := r.Get(ctx, jkey, &job); {
@@ -143,6 +148,13 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 			campaign.Spec.Driver.GrammarKey = key // in-memory, consumed by buildDriverJob
 		}
 		desired := buildDriverJob(&campaign, appImage, target.Status.CoverageEndpoint, runnerImage, dashboardPush)
+		// Stamp the run-defining spec hash so a later spec edit is detected as a NEW run (§7c). Compute
+		// it from the spec as stored (before the in-memory GrammarKey resolution above), so the value
+		// matches what the job-exists branch recomputes from the unmutated spec on the next reconcile.
+		if desired.Annotations == nil {
+			desired.Annotations = map[string]string{}
+		}
+		desired.Annotations[specHashAnnotation] = specHash
 		if serr := controllerutil.SetControllerReference(&campaign, desired, r.Scheme); serr != nil {
 			return ctrl.Result{}, serr
 		}
@@ -162,6 +174,26 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	case err != nil:
 		return ctrl.Result{}, err
+	}
+
+	// --- spec edit mid-run → new run (§7c) -----------------------------------------------------
+	// The driver Job is immutable and create-if-missing, so without this a spec edit while Running is
+	// a silent no-op. If the run-defining spec changed, delete the stale Job (propagating to its pods)
+	// and recreate on the next reconcile as a fresh run.
+	if job.Annotations[specHashAnnotation] != specHash {
+		l.Info("campaign spec changed since the driver Job was created; recreating", "job", job.Name)
+		policy := metav1.DeletePropagationBackground
+		if derr := r.Delete(ctx, &job, &client.DeleteOptions{PropagationPolicy: &policy}); derr != nil && !apierrors.IsNotFound(derr) {
+			return ctrl.Result{}, derr
+		}
+		// Drop the stale run's summary pods so the recreated run's status isn't read from the old pod.
+		_ = r.DeleteAllOf(ctx, &corev1.Pod{}, client.InNamespace(campaign.Namespace),
+			client.MatchingLabels{"closurejvm.dev/campaign": campaign.Name})
+		campaign.Status.Phase = closurejvmv1alpha1.CampaignProvisioning
+		if uerr := r.Status().Update(ctx, &campaign); uerr != nil {
+			return ctrl.Result{}, uerr
+		}
+		return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
 	}
 
 	// --- aggregate the Job's outcome -----------------------------------------------------------
@@ -352,6 +384,25 @@ func (r *ClosureJVMCampaignReconciler) campaignsForTarget(ctx context.Context, o
 		}
 	}
 	return reqs
+}
+
+// specHashAnnotation stores the hash of a campaign's run-defining spec on its driver Job, so a later
+// spec edit is detected as a new run rather than silently ignored (DD-025 §7c).
+const specHashAnnotation = "closurejvm.dev/spec-hash"
+
+// driverSpecHash hashes the campaign fields that define a run (what buildDriverJob consumes). It's
+// computed from the spec as stored — the in-memory GrammarKey resolution isn't persisted, so both the
+// create-time stamp and the later comparison hash the same value. Target-driven inputs (app image,
+// coverage endpoint) are deliberately excluded: those changing is handled as TargetGone, not a rerun.
+func driverSpecHash(c *closurejvmv1alpha1.ClosureJVMCampaign) string {
+	payload := struct {
+		BaseURL   string
+		Driver    closurejvmv1alpha1.CampaignDriverSpec
+		Dashboard closurejvmv1alpha1.CampaignDashboardSpec
+	}{c.Spec.BaseURL, c.Spec.Driver, c.Spec.Dashboard}
+	b, _ := json.Marshal(payload)
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:8]) // 16 hex chars — ample to distinguish spec revisions
 }
 
 func jobBackoffExhausted(job *batchv1.Job) bool {

@@ -147,8 +147,8 @@ spec:
             type: object
             x-kubernetes-validations:
             - message: set exactly one of driver.duration or driver.iterations
-              rule: (has(self.driver.duration) && self.driver.duration != '') != (has(self.driver.iterations)
-                && self.driver.iterations > 0)
+              rule: (has(self.driver.duration) && size(self.driver.duration) > 0)
+                != (has(self.driver.iterations) && self.driver.iterations > 0)
           status:
             description: ClosureJVMCampaignStatus defines the observed state of ClosureJVMCampaign.
             properties:

@@ -74,7 +74,7 @@ type CampaignDashboardSpec struct {
 
 // ClosureJVMCampaignSpec defines the desired state of ClosureJVMCampaign.
 // Exactly one of driver.duration / driver.iterations must be set.
-// +kubebuilder:validation:XValidation:rule="(has(self.driver.duration) && self.driver.duration != ”) != (has(self.driver.iterations) && self.driver.iterations > 0)",message="set exactly one of driver.duration or driver.iterations"
+// +kubebuilder:validation:XValidation:rule="(has(self.driver.duration) && size(self.driver.duration) > 0) != (has(self.driver.iterations) && self.driver.iterations > 0)",message="set exactly one of driver.duration or driver.iterations"
 type ClosureJVMCampaignSpec struct {
 	// TargetRef is the ClosureJVMTarget to drive (must be Injected before the run starts).
 	TargetRef TargetReference `json:"targetRef"`

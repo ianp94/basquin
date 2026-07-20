@@ -52,17 +52,17 @@ say "Ensure kind cluster '$CLUSTER'"
 kind get clusters | grep -qx "$CLUSTER" || kind create cluster --name "$CLUSTER"
 
 say "Build + load agents image ($AGENTS_IMAGE)"
-"$ROOT/deploy/agents-image/build.sh" "$TAG" "$CLUSTER"
+bash "$ROOT/deploy/agents-image/build.sh" "$TAG" "$CLUSTER"
 
 say "Build + load operator image ($OPERATOR_IMAGE)"
 docker build -t "$OPERATOR_IMAGE" "$ROOT/operator"
 kind load docker-image "$OPERATOR_IMAGE" --name "$CLUSTER"
 
 say "Build + load runner image ($RUNNER_IMAGE)"
-"$ROOT/deploy/runner-image/build.sh" "$TAG" "$CLUSTER"
+bash "$ROOT/deploy/runner-image/build.sh" "$TAG" "$CLUSTER"
 
 say "Build + load dashboard image ($DASHBOARD_IMAGE)"
-"$ROOT/deploy/dashboard-image/build.sh" "$TAG" "$CLUSTER"
+bash "$ROOT/deploy/dashboard-image/build.sh" "$TAG" "$CLUSTER"
 
 say "Ensure raw app image ($RAW_APP_IMAGE)"
 if ! docker image inspect "$RAW_APP_IMAGE" >/dev/null 2>&1; then

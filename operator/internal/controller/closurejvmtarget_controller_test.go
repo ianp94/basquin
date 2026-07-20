@@ -238,9 +238,90 @@ var _ = Describe("ClosureJVMTarget Controller (P2: injection)", func() {
 		Expect(got.Status.Phase).To(Equal(closurejvmv1alpha1.PhaseError))
 		cond := meta.FindStatusCondition(got.Status.Conditions, "Ready")
 		Expect(cond).NotTo(BeNil())
-		Expect(cond.Reason).To(Equal("ContainerNotResolved"))
+		Expect(cond.Reason).To(Equal("InjectionRejected"))
+		Expect(cond.Message).To(ContainSubstring("container"))
 		// nothing was injected
 		Expect(getDeploy().Spec.Template.Spec.InitContainers).To(BeEmpty())
+	})
+
+	It("restores the injected container's jvmOptsVar without touching a sidecar that sets the same var", func() {
+		// A sidecar independently sets CATALINA_OPTS; revert must not clobber it (review HIGH #1).
+		Expect(k8sClient.Create(ctx, newDeploy(
+			corev1.Container{Name: container, Image: "busybox",
+				Env: []corev1.EnvVar{{Name: "CATALINA_OPTS", Value: origOpts}}},
+			corev1.Container{Name: "sidecar", Image: "busybox",
+				Env: []corev1.EnvVar{{Name: "CATALINA_OPTS", Value: "-Dsidecar=1"}}},
+		))).To(Succeed())
+		Expect(k8sClient.Create(ctx, newTarget())).To(Succeed())
+		reconcileN(2)
+
+		// Only the app container was instrumented; the sidecar's var is untouched.
+		var sidecarOpts string
+		for _, c := range getDeploy().Spec.Template.Spec.Containers {
+			if c.Name == "sidecar" {
+				sidecarOpts = envValue(c.Env, "CATALINA_OPTS")
+			}
+		}
+		Expect(sidecarOpts).To(Equal("-Dsidecar=1"))
+
+		// Revert: the sidecar's var must survive, the app's must return to exactly origOpts.
+		t := &closurejvmv1alpha1.ClosureJVMTarget{}
+		Expect(k8sClient.Get(ctx, targetKey, t)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, t)).To(Succeed())
+		reconcileN(1)
+		d := getDeploy()
+		for _, c := range d.Spec.Template.Spec.Containers {
+			switch c.Name {
+			case "sidecar":
+				Expect(envValue(c.Env, "CATALINA_OPTS")).To(Equal("-Dsidecar=1"), "sidecar var clobbered by revert")
+			case container:
+				Expect(envValue(c.Env, "CATALINA_OPTS")).To(Equal(origOpts))
+			}
+		}
+	})
+
+	It("refuses to instrument a valueFrom-sourced jvmOptsVar rather than silently losing it", func() {
+		// review HIGH #2: appending would replace the reference with a literal, and revert would then
+		// delete it — permanent loss of a Secret/ConfigMap-sourced var. Fail loud instead.
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{
+			Name: container, Image: "busybox",
+			Env: []corev1.EnvVar{{Name: "CATALINA_OPTS", ValueFrom: &corev1.EnvVarSource{
+				ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "cfg"}, Key: "opts"}}}},
+		}))).To(Succeed())
+		Expect(k8sClient.Create(ctx, newTarget())).To(Succeed())
+		reconcileN(2)
+
+		got := &closurejvmv1alpha1.ClosureJVMTarget{}
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(closurejvmv1alpha1.PhaseError))
+		cond := meta.FindStatusCondition(got.Status.Conditions, "Ready")
+		Expect(cond.Reason).To(Equal("InjectionRejected"))
+		Expect(cond.Message).To(ContainSubstring("valueFrom"))
+		// nothing injected, and the original valueFrom reference is intact.
+		d := getDeploy()
+		Expect(d.Spec.Template.Spec.InitContainers).To(BeEmpty())
+		ev := findEnv(appContainer(d).Env, "CATALINA_OPTS")
+		Expect(ev).NotTo(BeNil())
+		Expect(ev.ValueFrom).NotTo(BeNil(), "valueFrom reference must be untouched")
+	})
+
+	It("re-heals out-of-band content drift (injected fields stripped, annotation left)", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{
+			Name: container, Image: "busybox",
+			Env: []corev1.EnvVar{{Name: "CATALINA_OPTS", Value: origOpts}},
+		}))).To(Succeed())
+		Expect(k8sClient.Create(ctx, newTarget())).To(Succeed())
+		reconcileN(2)
+		Expect(getDeploy().Spec.Template.Spec.InitContainers).To(HaveLen(1))
+
+		// Simulate a `kubectl edit` that strips the initContainer but leaves the annotation.
+		d := getDeploy()
+		d.Spec.Template.Spec.InitContainers = nil
+		Expect(k8sClient.Update(ctx, d)).To(Succeed())
+
+		reconcileN(1) // must notice the content drift and re-inject
+		Expect(getDeploy().Spec.Template.Spec.InitContainers).To(HaveLen(1))
 	})
 
 	It("reports DeploymentNotFound and requeues when the Deployment is absent", func() {

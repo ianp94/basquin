@@ -124,13 +124,21 @@ func (r *ClosureJVMTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	// --- inject if drifted ----------------------------------------------------------------------
 	wantHash := specHash(&target.Spec, agentsImage)
 	if !injectionApplied(&deploy, wantHash) {
-		// Recompute from the original every time (applyInjection reads the stashed original), so a
-		// spec change re-derives cleanly rather than layering onto an already-injected value.
+		// If a previous injection exists (spec changed, or out-of-band content drift), revert it
+		// first so applyInjection re-derives from a clean original — this also un-instruments the
+		// old container when spec.Container is retargeted, rather than leaving it instrumented.
+		if wasInjected(&deploy) {
+			revertInjection(&deploy)
+		}
 		if err := applyInjection(&deploy, &target.Spec, agentsImage); err != nil {
-			// A misconfigured container reference is the user's to fix; surface it, don't thrash.
+			// A bad container reference or a valueFrom-sourced jvmOptsVar is the user's to fix;
+			// surface it and stop, don't thrash. (revert above already cleared any old injection.)
+			if uerr := r.Update(ctx, &deploy); uerr != nil {
+				return ctrl.Result{}, uerr
+			}
 			target.Status.Phase = closurejvmv1alpha1.PhaseError
 			meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
-				Type: "Ready", Status: metav1.ConditionFalse, Reason: "ContainerNotResolved",
+				Type: "Ready", Status: metav1.ConditionFalse, Reason: "InjectionRejected",
 				Message: err.Error(),
 			})
 			if uerr := r.Status().Update(ctx, &target); uerr != nil {
@@ -197,6 +205,9 @@ func (r *ClosureJVMTargetReconciler) revertDeployment(ctx context.Context, targe
 // Deployment it does not own, and an owner ref would make Kubernetes garbage-collect that Deployment
 // when the target is deleted, when the intent is to revert it.
 func (r *ClosureJVMTargetReconciler) targetsForDeployment(ctx context.Context, obj client.Object) []reconcile.Request {
+	// Full namespace list + filter. Fine at the namespaced scale this operator runs at; if target
+	// count or Deployment churn grows, a field indexer on spec.deploymentRef.name would turn this
+	// into a targeted lookup (deferred — see TODO backlog).
 	var targets closurejvmv1alpha1.ClosureJVMTargetList
 	if err := r.List(ctx, &targets, client.InNamespace(obj.GetNamespace())); err != nil {
 		return nil

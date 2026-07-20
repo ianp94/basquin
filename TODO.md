@@ -386,8 +386,9 @@ the P1–P4 injection work (a campaign needs a working instrumented target). Des
 - [ ] Package the **runner** and **dashboard** images the operator launches (alongside the `closurejvm/agents` image below)
 
 ### Operator (post-P1 platform work — beyond the P2–P4 checklist)
-- [ ] Build & publish the versioned `closurejvm/agents:<tag>` image the operator's initContainer copies from (P2 depends on it existing)
+- [ ] Build & publish the versioned `closurejvm/agents:<tag>` image the operator's initContainer copies from (P2 depends on it existing); e2e-instrument the **stock** JPetStore image with it
 - [ ] Operator CI: `go build` / `go vet` / `gofmt` (and envtest when assets are cached) in the pipeline — today only the Java build is in CI
+- [ ] Field indexer on `spec.deploymentRef.name` so the Deployment mapping-watch does a targeted lookup instead of a namespace-wide list+filter (PR #11 review; fine at current scale, optimization for high target-count/churn namespaces)
 - [ ] Validating enforcement for `container` required-when-ambiguous (a CRD schema can't express "required only when the pod has >1 container") — pairs with P2
 - [ ] Namespaced metrics security: re-enable a metrics-protection approach that needs no cluster-scoped binding (the kube-rbac-proxy sidecar was dropped in P1 because it requires a `system:auth-delegator` ClusterRoleBinding)
 - [ ] **Multi-runtime profiles** (`runtimeProfile: jvm | node | …`) — the forward reason for Go: the CR/reconcile/inject/revert control plane is runtime-agnostic; a new profile supplies different agents/flags without touching the machinery

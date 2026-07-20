@@ -828,3 +828,15 @@ and — the safety property — that deleting the target reverts the Deployment 
 
 **Not yet.** End-to-end against a real pod needs the `closurejvm/agents` image built and published
 (backlog); P2 proves the reconcile/patch/revert logic, which is the risky part.
+
+**Revert exactness — refinements (2026-07-20, PR #11 review).** Three correctness gaps in the naïve
+revert were closed: (a) the env-var restore is scoped to the **exact injected container** (stashed in
+`closurejvm.dev/jvmopts-container`), so a sidecar that independently sets the same generic var
+(`JAVA_TOOL_OPTIONS`/`CATALINA_OPTS`) is never clobbered; (b) a `valueFrom`-sourced `jvmOptsVar` is
+**refused at inject time** (`InjectionRejected`) rather than silently flattened to a literal and then
+deleted on revert — that would be permanent loss of a Secret/ConfigMap-sourced value; (c) an
+originally-*absent* var is distinguished from an explicit-empty one (annotation-key presence), so
+revert removes the former and restores the latter. Additionally, `injectionApplied` now checks the
+initContainer is actually present (not just the hash annotation), so **out-of-band content drift**
+(a `kubectl edit` stripping the fields) self-heals; and a spec change re-derives by reverting the
+prior injection first, so retargeting `spec.Container` un-instruments the old container.

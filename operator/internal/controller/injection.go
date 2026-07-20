@@ -51,6 +51,9 @@ const (
 	// Records which env var name we appended to, so revert targets the right one even if the spec's
 	// jvmOptsVar changed between inject and revert.
 	annOptsVar = "closurejvm.dev/jvmopts-var"
+	// Records WHICH container we injected into, so revert restores the env var on exactly that
+	// container — never an unrelated sidecar that happens to set the same (generic) var name.
+	annOptsContainer = "closurejvm.dev/jvmopts-container"
 
 	// Names for the injected initContainer / shared volume, and where the agents are mounted.
 	agentsInitName   = "closurejvm-agents"
@@ -130,23 +133,44 @@ func buildAgentArgs(spec *closurejvmv1alpha1.ClosureJVMTargetSpec) string {
 }
 
 // specHash is a stable fingerprint of the parts of the spec that affect the injected patch. Injecting
-// is a no-op while this matches the Deployment's annInjectedHash annotation.
+// is a no-op while this matches the Deployment's annInjectedHash annotation. spec.Container is
+// included: retargeting from one container to another with nothing else changed must still re-derive.
 func specHash(spec *closurejvmv1alpha1.ClosureJVMTargetSpec, agentsImage string) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "img=%s;var=%s;args=%s;covPort=%d;covEnabled=%t",
-		agentsImage, jvmOptsVarName(spec), buildAgentArgs(spec),
+	fmt.Fprintf(h, "img=%s;container=%s;var=%s;args=%s;covPort=%d;covEnabled=%t",
+		agentsImage, spec.Container, jvmOptsVarName(spec), buildAgentArgs(spec),
 		spec.Agents.Coverage.Port, spec.Agents.Coverage.Enabled)
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
-// injectionApplied reports whether the Deployment already carries this exact injection.
+// injectionApplied reports whether the Deployment already carries this exact injection. It checks
+// both the spec-hash annotation AND that the initContainer is actually still present, so out-of-band
+// content drift (a human `kubectl edit`, another webhook stripping the fields) is re-healed rather
+// than reported as steady-state Injected forever.
 func injectionApplied(deploy *appsv1.Deployment, wantHash string) bool {
-	return deploy.Annotations[annInjectedHash] == wantHash
+	if deploy.Annotations[annInjectedHash] != wantHash {
+		return false
+	}
+	for _, ic := range deploy.Spec.Template.Spec.InitContainers {
+		if ic.Name == agentsInitName {
+			return true
+		}
+	}
+	return false
 }
 
-// applyInjection mutates deploy in place to carry the agents for the given spec. It is computed from
-// the container's ORIGINAL jvmOptsVar (stashed in an annotation on first inject, reused thereafter),
-// so re-reconciling never double-appends. Returns an error if the target container can't be resolved.
+// wasInjected reports whether we have injected this Deployment before (so a re-derive should revert
+// the previous injection first, cleanly re-deriving even if spec.Container changed).
+func wasInjected(deploy *appsv1.Deployment) bool {
+	_, ok := deploy.Annotations[annInjectedHash]
+	return ok
+}
+
+// applyInjection mutates deploy in place to carry the agents for the given spec. The original
+// jvmOptsVar is read from the target container on first inject (and stashed) and reused thereafter,
+// so re-reconciling never double-appends. Returns an error if the target container can't be resolved
+// or if its jvmOptsVar is sourced from valueFrom (which we could not restore on revert). Callers that
+// re-derive after a spec change should revertInjection first so this reads a clean original.
 func applyInjection(deploy *appsv1.Deployment, spec *closurejvmv1alpha1.ClosureJVMTargetSpec, agentsImage string) error {
 	tmpl := &deploy.Spec.Template.Spec
 	ci, err := resolveContainer(spec, tmpl)
@@ -157,11 +181,24 @@ func applyInjection(deploy *appsv1.Deployment, spec *closurejvmv1alpha1.ClosureJ
 		deploy.Annotations = map[string]string{}
 	}
 	varName := jvmOptsVarName(spec)
+	cname := tmpl.Containers[ci].Name
 
-	// Original opts: from the stash if we've injected before, else the container's current value.
-	original, stashed := deploy.Annotations[annOriginalOpts]
-	if !stashed {
-		original = envValue(tmpl.Containers[ci].Env, varName)
+	// Determine the ORIGINAL jvmOptsVar. Reuse the stash if we've injected this container before
+	// (so we never read an already-appended value); otherwise read it from the container now. Absent
+	// vs explicit-empty is tracked by the presence of the annOriginalOpts key, so revert restores an
+	// explicit "" but removes an originally-absent var.
+	var original string
+	var originalPresent bool
+	if _, injectedBefore := deploy.Annotations[annOptsContainer]; injectedBefore {
+		original, originalPresent = deploy.Annotations[annOriginalOpts]
+	} else if ev := findEnv(tmpl.Containers[ci].Env, varName); ev != nil {
+		if ev.ValueFrom != nil {
+			// We can't faithfully restore a Secret/ConfigMap-sourced var, and appending to it means
+			// replacing the reference with a literal — silent data loss on revert. Refuse instead.
+			return fmt.Errorf("container %q sources %s from valueFrom; refusing to instrument "+
+				"(revert could not restore the reference)", cname, varName)
+		}
+		original, originalPresent = ev.Value, true
 	}
 
 	// initContainer: copy the agents into the shared volume.
@@ -198,8 +235,13 @@ func applyInjection(deploy *appsv1.Deployment, spec *closurejvmv1alpha1.ClosureJ
 	}
 
 	deploy.Annotations[annInjectedHash] = specHash(spec, agentsImage)
-	deploy.Annotations[annOriginalOpts] = original
 	deploy.Annotations[annOptsVar] = varName
+	deploy.Annotations[annOptsContainer] = cname
+	if originalPresent {
+		deploy.Annotations[annOriginalOpts] = original
+	} else {
+		delete(deploy.Annotations, annOriginalOpts) // absent original: revert removes the var
+	}
 	return nil
 }
 
@@ -212,12 +254,17 @@ func revertInjection(deploy *appsv1.Deployment) {
 	removeVolume(tmpl, agentsVolumeName)
 
 	varName := deploy.Annotations[annOptsVar]
-	original, hadStash := deploy.Annotations[annOriginalOpts]
+	cname := deploy.Annotations[annOptsContainer]
+	original, originalPresent := deploy.Annotations[annOriginalOpts]
 	for i := range tmpl.Containers {
+		// The volume mount and coverage port carry names namespaced to us (closurejvm-agents,
+		// cjvm-jacoco), so removing them from any container is safe.
 		removeVolumeMount(&tmpl.Containers[i], agentsVolumeName)
 		removeContainerPort(&tmpl.Containers[i], coveragePortName)
-		if varName != "" {
-			if hadStash && original != "" {
+		// The env var name is generic (CATALINA_OPTS/JAVA_TOOL_OPTIONS), so restore/remove it ONLY on
+		// the container we actually injected — never an unrelated sidecar that sets the same name.
+		if varName != "" && tmpl.Containers[i].Name == cname {
+			if originalPresent {
 				setEnv(&tmpl.Containers[i], varName, original)
 			} else {
 				removeEnv(&tmpl.Containers[i], varName)
@@ -227,6 +274,7 @@ func revertInjection(deploy *appsv1.Deployment) {
 	delete(deploy.Annotations, annInjectedHash)
 	delete(deploy.Annotations, annOriginalOpts)
 	delete(deploy.Annotations, annOptsVar)
+	delete(deploy.Annotations, annOptsContainer)
 }
 
 // --- small pod-spec helpers (idempotent upserts / removals) -------------------------------------
@@ -238,6 +286,16 @@ func envValue(env []corev1.EnvVar, name string) string {
 		}
 	}
 	return ""
+}
+
+// findEnv returns a pointer to the named env var (so callers can inspect ValueFrom), or nil if absent.
+func findEnv(env []corev1.EnvVar, name string) *corev1.EnvVar {
+	for i := range env {
+		if env[i].Name == name {
+			return &env[i]
+		}
+	}
+	return nil
 }
 
 func setEnv(c *corev1.Container, name, value string) {

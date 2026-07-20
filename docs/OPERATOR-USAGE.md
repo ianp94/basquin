@@ -44,9 +44,6 @@ injects — you supply each via a flag:
 Each flag empty falls back to a built-in default; in practice you pin them to a fixed tag you built
 and loaded, so the cluster uses your image instead of pulling.
 
-> **No Helm chart yet** — it's on the roadmap. Installation today is kustomize (`config/default`)
-> plus wiring the three image flags onto the controller Deployment, exactly as below.
-
 **Build the three images** (each `build.sh` takes `[TAG] [KIND_CLUSTER]`; with a cluster name it also
 `kind load`s the image):
 
@@ -60,7 +57,30 @@ docker build -t closurejvm/operator:0.2.0 operator/
 kind load docker-image closurejvm/operator:0.2.0 --name <kind-cluster>
 ```
 
-**Install the CRDs + operator** (kustomize, pinning the operator image):
+### Install with Helm (recommended)
+
+The chart at [`deploy/helm/closurejvm-operator`](../deploy/helm/closurejvm-operator) installs the CRDs,
+namespaced RBAC, and the controller — with the three images wired straight from values (no manual
+`kubectl patch` of the controller args). Full chart docs:
+[the chart README](../deploy/helm/closurejvm-operator/README.md).
+
+```bash
+helm install closurejvm ./deploy/helm/closurejvm-operator \
+  --namespace closurejvm-system --create-namespace \
+  --set fullnameOverride=closurejvm \
+  --set image.tag=0.2.0 \
+  --set images.agents=closurejvm/agents:0.2.0 \
+  --set images.runner=closurejvm/runner:0.2.0 \
+  --set images.dashboard=closurejvm/dashboard:0.2.0
+```
+
+`--set fullnameOverride=closurejvm` makes the resources read as `closurejvm-controller-manager`, … to
+match this guide; omit it for the default `<release>-<chart>` prefix. RBAC is namespaced `Role`s (the
+operator needs no cluster-scoped grants). Note: Helm does **not** upgrade or delete CRDs — re-apply
+changed CRDs by hand on `helm upgrade`, and they (plus any remaining CRs) are left in place on
+`helm uninstall`.
+
+### Or install with kustomize
 
 ```bash
 kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml
@@ -70,11 +90,8 @@ kubectl create namespace closurejvm-system
 kubectl kustomize operator/config/default \
   | sed 's#image: controller:latest#image: closurejvm/operator:0.2.0#' \
   | kubectl apply -f -                      # controller Deployment + ServiceAccount/Role/RoleBinding
-```
 
-**Wire the three image flags** onto the controller (append to its container args, then restart):
-
-```bash
+# then wire the three image flags onto the controller (Helm does this for you):
 for arg in \
   --agents-image=closurejvm/agents:0.2.0 \
   --runner-image=closurejvm/runner:0.2.0 \
@@ -82,12 +99,11 @@ for arg in \
   kubectl -n closurejvm-system patch deploy closurejvm-controller-manager --type=json \
     -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"$arg\"}]"
 done
-
 kubectl -n closurejvm-system rollout status deploy/closurejvm-controller-manager --timeout=120s
 ```
 
-(The e2e script guards each patch so repeated runs don't append duplicate args — do the same if you
-re-run it by hand.)
+(The in-cluster e2e installs either way — `INSTALL=helm deploy/e2e/e2e.sh` exercises the chart end to
+end; the default uses kustomize.)
 
 ## 3. Instrument an app (`ClosureJVMTarget`)
 

@@ -190,7 +190,7 @@ Grammar, sequences, and every v0.10 flag are documented in [USAGE](docs/USAGE.md
 ## Docs
 
 - [USAGE](docs/USAGE.md) — commands, flags, and every runnable task
-- [OPERATOR-USAGE](docs/OPERATOR-USAGE.md) — driving the Kubernetes operator (instrument an app, run a campaign, read results)
+- [OPERATOR-USAGE](docs/OPERATOR-USAGE.md) — driving the Kubernetes operator (instrument an app, run a campaign, read results); install via the [Helm chart](deploy/helm/closurejvm-operator/README.md)
 - [ARCHITECTURE](docs/ARCHITECTURE.md) — how and why
 - [DESIGN-DECISIONS](docs/DESIGN-DECISIONS.md) — decision log with rejected alternatives
 - [THIRD-PARTY-APPS](docs/THIRD-PARTY-APPS.md) — running against unmodified WARs (JPetStore)

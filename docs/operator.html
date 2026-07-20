@@ -273,6 +273,45 @@ spec:
 
   <hr class="rule">
 
+  <h2>Load / soak mode — <code>spec.mode: load</code></h2>
+  <p>A campaign runs in one of two modes (<code>spec.mode</code>, default <code>explore</code>). An
+    <strong>explore</strong> run, on completion, <strong>emits its interesting "replay corpus"</strong>
+    (the inputs that reached new coverage) as a campaign-owned ConfigMap
+    <code>&lt;campaign&gt;-corpus-out</code> (<code>status.corpusConfigMap</code>). A <strong>load</strong>
+    run replays a saved corpus at a fixed concurrency for a duration — no mutation, no coverage — watching
+    the same invariant oracles under sustained traffic. <em>Fuzz to discover the interesting states, then
+    hammer those states under load.</em></p>
+  <div class="codewrap"><div class="label">load.yaml</div></div>
+  <pre><code>apiVersion: closurejvm.dev/v1alpha1
+kind: ClosureJVMCampaign
+metadata:
+  name: jpetstore-load
+  namespace: closurejvm-system
+spec:
+  mode: load
+  targetRef:
+    name: jpetstore
+  baseURL: http://jpetstore-app.closurejvm-system.svc.cluster.local:8080
+  driver:
+    duration: 30m                            <span class="c"># load is time-bounded (requires duration, not iterations)</span>
+    concurrency: 50                          <span class="c"># parallel in-flight requests</span>
+    corpusConfigMap: jpetstore-campaign-corpus-out   <span class="c"># the corpus the explore run emitted</span>
+    <span class="c"># warmup: 30s                            # optional: excluded from the reported latency percentiles</span></code></pre>
+  <p>Load requires <code>driver.corpusConfigMap</code> and forbids a grammar (CEL-enforced); its driver
+    Job is coverage-free. Read the results from <code>status.load</code>:</p>
+  <pre><code>kubectl -n closurejvm-system get closurejvmcampaign jpetstore-load -o jsonpath='{.status.load}'
+<span class="c"># {"requests":1284003,"throughputRps":"713.4","latencyMs":{"p50":8,"p90":22,"p99":61,"max":240},</span>
+<span class="c">#  "heapDriftKb":1840,"threadDrift":0,"violations":{"latency":12,"heap":0,"thread":0}}</span>
+
+<span class="c"># ...or via the CLI:</span>
+closurejvm run --mode load --target jpetstore --base-url http://jpetstore-app...:8080 \
+  --duration 30m --concurrency 50 --corpus ./saved-corpus --watch</code></pre>
+  <p>First cut: only <code>violations.latency</code> is threshold-gated (against
+    <code>invariants.latencyMaxMs</code>); heap/thread are reported as end-to-end drift, measured on the
+    driver.</p>
+
+  <hr class="rule">
+
   <h2>Dashboard</h2>
   <p>By default every campaign gets its <strong>own</strong> dashboard — the operator creates a
     Deployment + Service (<code>&lt;campaign&gt;-dashboard</code>, ClusterIP on port <strong>7070</strong>),

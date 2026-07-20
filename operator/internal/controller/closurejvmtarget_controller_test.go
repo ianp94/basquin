@@ -231,6 +231,7 @@ var _ = Describe("ClosureJVMTarget Controller (P2: injection)", func() {
 		t := newTarget()
 		t.Spec.Container = "" // ambiguous: two containers, none named
 		Expect(k8sClient.Create(ctx, t)).To(Succeed())
+		rvBefore := getDeploy().ResourceVersion
 		reconcileN(2)
 
 		got := &closurejvmv1alpha1.ClosureJVMTarget{}
@@ -240,8 +241,11 @@ var _ = Describe("ClosureJVMTarget Controller (P2: injection)", func() {
 		Expect(cond).NotTo(BeNil())
 		Expect(cond.Reason).To(Equal("InjectionRejected"))
 		Expect(cond.Message).To(ContainSubstring("container"))
-		// nothing was injected
-		Expect(getDeploy().Spec.Template.Spec.InitContainers).To(BeEmpty())
+		// nothing was injected — and, since no prior injection existed, the Deployment must not be
+		// written at all (a no-op write would emit a MODIFIED event that self-re-enqueues → storm).
+		d := getDeploy()
+		Expect(d.Spec.Template.Spec.InitContainers).To(BeEmpty())
+		Expect(d.ResourceVersion).To(Equal(rvBefore), "error path must not write the Deployment when nothing was reverted")
 	})
 
 	It("restores the injected container's jvmOptsVar without touching a sidecar that sets the same var", func() {

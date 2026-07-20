@@ -127,14 +127,21 @@ func (r *ClosureJVMTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		// If a previous injection exists (spec changed, or out-of-band content drift), revert it
 		// first so applyInjection re-derives from a clean original — this also un-instruments the
 		// old container when spec.Container is retargeted, rather than leaving it instrumented.
+		reverted := false
 		if wasInjected(&deploy) {
 			revertInjection(&deploy)
+			reverted = true
 		}
 		if err := applyInjection(&deploy, &target.Spec, agentsImage); err != nil {
 			// A bad container reference or a valueFrom-sourced jvmOptsVar is the user's to fix;
-			// surface it and stop, don't thrash. (revert above already cleared any old injection.)
-			if uerr := r.Update(ctx, &deploy); uerr != nil {
-				return ctrl.Result{}, uerr
+			// surface it and stop. Persist the Deployment ONLY if we actually reverted a prior
+			// injection — otherwise `deploy` is unchanged, and writing it would emit a no-op
+			// MODIFIED event that our own Deployment watch re-enqueues, storming on a target that
+			// is permanently misconfigured (e.g. a typo'd spec.Container).
+			if reverted {
+				if uerr := r.Update(ctx, &deploy); uerr != nil {
+					return ctrl.Result{}, uerr
+				}
 			}
 			target.Status.Phase = closurejvmv1alpha1.PhaseError
 			meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{

@@ -97,6 +97,11 @@ public final class DashboardClient {
         c.setRequestMethod("POST");
         c.setDoOutput(true);
         c.setRequestProperty("Content-Type", "application/json");
+        // Required by DashboardServer: proves this is a deliberate client, not a cross-origin
+        // form post from a page the operator happens to have open.
+        c.setRequestProperty("X-ClosureJVM-Dashboard", "1");
+        String token = System.getProperty("closurejvm.dashboard.token", "");
+        if (!token.isEmpty()) c.setRequestProperty("X-ClosureJVM-Token", token);
         byte[] b = body.getBytes(StandardCharsets.UTF_8);
         try (OutputStream os = c.getOutputStream()) {
             os.write(b);

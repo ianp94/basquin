@@ -709,3 +709,49 @@ guard was checked rather than assumed. 41 tests total, 31 new.
 logic that has already broken, not a number); unit-testing the HTTP/dashboard plumbing (its value
 is in real integration, which the live runs against JPetStore already exercise); deleting the
 now-redundant manual verification steps from the docs (they document how the bugs were found).
+
+---
+
+## DD-022: The dashboard is loopback-only, guarded, and never CORS-open (2026-07-20)
+
+**Context.** PR review found the dashboard bound `new InetSocketAddress(port)` — all interfaces —
+with `Access-Control-Allow-Origin: *` on every response and no authentication, while exposing
+`POST /api/analyze/{id}`, which spends the operator's Claude credit. A cross-origin POST with no
+custom headers isn't preflighted, so any page the operator had open could trigger billed calls in
+a loop, and anyone on the same network could do so directly.
+
+**Decision.** Three layers, cheapest first:
+1. **Bind `127.0.0.1` by default** (`closurejvm.dashboard.bind` to override). This is a local
+   operator tool; network exposure should be opt-in, not the default.
+2. **No CORS headers at all.** The UI is same-origin, so the wildcard bought nothing and only
+   enabled cross-origin reads.
+3. **Require an `X-ClosureJVM-Dashboard` header** on every state-changing or billed endpoint
+   (`/ingest/*`, `/api/analyze/*`). A cross-origin "simple" request cannot set a custom header
+   without a preflight, and with no CORS headers the preflight fails — so this closes the drive-by
+   CSRF path without any token distribution. An optional `closurejvm.dashboard.token` adds a shared
+   secret; when the bind is non-loopback and no token is set, `/api/analyze` refuses outright and
+   the server says so at startup.
+
+**Why a header rather than only a token.** A token has to be handed to both the driver and the
+browser, which invites embedding it in the page. The header alone defeats the CSRF vector because
+of how the browser's preflight rules work; the token is then optional hardening for the deliberate
+non-loopback case rather than load-bearing for the default one.
+
+**Verified (2026-07-20).** `ss` confirms the listener is `127.0.0.1:7070` only; `/ingest/status`
+and `/api/analyze` both return `missing X-ClosureJVM-Dashboard header` without it and succeed with
+it; no `Access-Control-*` header appears on any response.
+
+**Also fixed from the same review.** The kind deploy targeted whatever kubectl context happened to
+be current (`kind create cluster` sets it, and is skipped on re-run) — every `kubectl` call is now
+pinned to `--context kind-$CLUSTER`, since the failure mode was deploying into a shared cluster.
+The JaCoCo tcpserver was published as a NodePort even though its protocol is unauthenticated and
+permits *resetting* execution data; the Service is now `ClusterIP`, matching the docs that already
+said to use `port-forward`. A fixed `:latest` tag made re-runs a silent no-op that reported success
+while the pod kept the old image, so the tag is now unique per build and the deploy does an
+explicit `set image`. And `COVERAGE_INCLUDES` defaulted to `*`, directly contradicting the comment
+above it and instrumenting Tomcat and MyBatis — inflating the coverage denominator and adding
+enough overhead to fake latency violations.
+
+**Rejected.** Leaving the bind wide with a warning (the default should be safe, not documented as
+unsafe); putting a token in the served HTML (turns a shared secret into a page-readable one);
+disabling `/api/analyze` entirely (the feature is wanted, it just needed a trust boundary).

@@ -99,8 +99,19 @@ public final class CoverageGuidedRun {
         String jacoco = System.getProperty("closurejvm.coverage.jacoco", "localhost:6300");
         String classes = System.getProperty("closurejvm.coverage.classes");
         if (classes == null) { throw new IllegalArgumentException("set -Dclosurejvm.coverage.classes"); }
-        String host = jacoco.substring(0, jacoco.indexOf(':'));
-        int port = Integer.parseInt(jacoco.substring(jacoco.indexOf(':') + 1));
+        int colon = jacoco.lastIndexOf(':');
+        if (colon <= 0 || colon == jacoco.length() - 1) {
+            throw new IllegalArgumentException(
+                "-Dclosurejvm.coverage.jacoco must be host:port (got \"" + jacoco + "\")");
+        }
+        String host = jacoco.substring(0, colon);
+        int port;
+        try {
+            port = Integer.parseInt(jacoco.substring(colon + 1).trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                "-Dclosurejvm.coverage.jacoco port is not a number in \"" + jacoco + "\"");
+        }
         JacocoCoverageProvider cov = new JacocoCoverageProvider(host, port, Paths.get(classes));
 
         Random rnd = new Random(1);
@@ -145,6 +156,7 @@ public final class CoverageGuidedRun {
             if (sequence != null) {
                 runSequence(baseUrl, sequence);
                 long coveredAfterSeq = sampleCoverage(cov);
+                total = lastCoverageTotal;   // else a sequence-only run reports coverage=N/0
                 if (coveredAfterSeq > best) {
                     best = coveredAfterSeq;
                     corpus.add(sequence.get(sequence.size() - 1));

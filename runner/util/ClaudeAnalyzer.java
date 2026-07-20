@@ -41,8 +41,15 @@ public final class ClaudeAnalyzer {
             throw new IOException("Claude API key not configured (set ANTHROPIC_API_KEY)");
         }
         String model = System.getProperty("closurejvm.claude.model", DEFAULT_MODEL);
-        String body = "{\"model\":\"" + esc(model) + "\",\"max_tokens\":800,\"messages\":["
-                + "{\"role\":\"user\",\"content\":\"" + esc(prompt) + "\"}]}";
+        // Thinking is DISABLED and the ceiling is generous on purpose. Sonnet runs adaptive
+        // thinking when "thinking" is omitted, and thinking tokens count against max_tokens -- an
+        // 800-token ceiling could be consumed almost entirely by thinking, returning a truncated
+        // analysis or none at all. This is summarisation over pre-clustered data; it does not
+        // need extended thinking.
+        int maxTokens = Integer.getInteger("closurejvm.claude.maxTokens", 2000);
+        String body = "{\"model\":\"" + esc(model) + "\",\"max_tokens\":" + maxTokens
+                + ",\"thinking\":{\"type\":\"disabled\"}"
+                + ",\"messages\":[{\"role\":\"user\",\"content\":\"" + esc(prompt) + "\"}]}";
 
         HttpURLConnection c = (HttpURLConnection) new URL(API_URL).openConnection();
         c.setConnectTimeout(5000);
@@ -61,7 +68,13 @@ public final class ClaudeAnalyzer {
         if (code >= 300) {
             throw new IOException("Claude API error " + code + ": " + truncate(resp, 300));
         }
-        return extractText(resp);
+        String text = extractText(resp);
+        // A max_tokens stop is otherwise indistinguishable from a complete answer.
+        if ("max_tokens".equals(JsonScan.extract(resp, "stop_reason", 0))) {
+            text += "\n\n[truncated: hit max_tokens (" + maxTokens
+                  + "). Raise -Dclosurejvm.claude.maxTokens for a fuller analysis.]";
+        }
+        return text;
     }
 
     // Response shape: {"content":[{"type":"text","text":"..."}], ...}. Pull the first "text"
@@ -106,23 +119,4 @@ public final class ClaudeAnalyzer {
         return b.toString();
     }
 
-    private static String unescape(String s) {
-        StringBuilder b = new StringBuilder();
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == '\\' && i + 1 < s.length()) {
-                char n = s.charAt(++i);
-                switch (n) {
-                    case 'n': b.append('\n'); break;
-                    case 't': b.append('\t'); break;
-                    case '"': b.append('"'); break;
-                    case '\\': b.append('\\'); break;
-                    default: b.append(n);
-                }
-            } else {
-                b.append(c);
-            }
-        }
-        return b.toString();
-    }
 }

@@ -98,8 +98,36 @@ pre.raw{margin:6px 0 0;white-space:pre-wrap;color:#8b949e;font-size:11px;backgro
 
 <script>
 let current = null, expanded = new Set(), expandedRaw = new Set(), lastFleet = [];
+// Monotonic generation: every poll captures the value at entry and discards its results if a
+// newer poll started meanwhile. Without it, overlapping ticks (the 1.5s interval plus direct
+// calls from click handlers, against a server that can block while /api/analyze runs) resolve
+// out of order and the slowest response wins, painting stale numbers over fresh ones.
+let generation = 0;
 
-const esc = s => (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+// Silently swallowing fetch errors while the header dot stayed green meant a dead server or a
+// 500 looked identical to a healthy idle run: frozen counters, no indication they were stale.
+function setLive(ok, detail){
+  const dot = document.getElementById('hdot');
+  dot.classList.toggle('dead', !ok);
+  dot.title = ok ? 'connected' : ('disconnected: ' + (detail||'unknown'));
+  if(!ok){
+    const sub = document.getElementById('sub');
+    if(!/stale/.test(sub.textContent)) sub.textContent += '  — stale (dashboard unreachable)';
+  }
+}
+
+async function getJson(url){
+  const res = await fetch(url);
+  if(!res.ok) throw new Error(url + ' -> HTTP ' + res.status);
+  return res.json();
+}
+
+const esc = s => (s||'').replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// classification lands in a class="" attribute. It comes from on-disk meta files rather than a
+// hardcoded literal, so restrict it to the tag names we actually style instead of interpolating
+// whatever the file contained.
+const tagClass = s => /^[A-Za-z-]+$/.test(s||'') ? s : 'unknown';
 const fmtTime = ms => ms ? new Date(+ms).toLocaleTimeString() : '—';
 function fmtDur(s){s=s|0;const p=n=>String(n).padStart(2,'0');return p(s/3600|0)+':'+p(s%3600/60|0)+':'+p(s%60);}
 
@@ -175,8 +203,10 @@ function renderSample(c, s, idx){
 let lastStatus = null;
 
 async function tickFleet(){
+  const gen = ++generation;
   try{
-    const list = await (await fetch('/api/campaigns')).json();
+    const list = await getJson('/api/campaigns');
+    if(gen !== generation) return;   // a newer poll superseded this one
     lastFleet = list;
     document.getElementById('sub').textContent = 'fleet view — '+list.length+' campaign(s)';
     document.getElementById('fleet').innerHTML = list.length ? list.map(c =>
@@ -191,30 +221,35 @@ async function tickFleet(){
         '<code>-Dclosurejvm.dashboard.push=localhost:'+location.port+'</code></div>';
 
     // Fleet-wide findings: the same defect found on several targets merges into one row.
-    const fc = await (await fetch('/api/clusters')).json();
+    const fc = await getJson('/api/clusters');
+    if(gen !== generation) return;
     const ftotal = fc.reduce((a,c)=>a+c.count,0);
     document.getElementById('fleetFindsSub').textContent =
       fc.length ? fc.length+' unique / '+ftotal+' total across '+list.length+' campaign(s)' : '';
     document.getElementById('fleetFinds').innerHTML = fc.length ? fc.map(c =>
-      '<tr><td><span class="tag '+c.classification+'">'+(c.classification||'?')+'</span></td>'+
+      '<tr><td><span class="tag '+tagClass(c.classification)+'">'+esc(c.classification||'?')+'</span></td>'+
       '<td>'+esc(c.kind)+(c.routePattern?'<br><span class="muted">'+esc(c.routePattern)+'</span>':'')+'</td>'+
       '<td>'+c.count+'&times;</td>'+
       '<td>'+(c.campaigns||0)+(c.campaignNames?'<br><span class="muted">'+esc(c.campaignNames)+'</span>':'')+'</td>'+
       '<td>'+fmtTime(c.lastSeenMs)+'</td></tr>').join('')
       : '<tr><td colspan="5" class="muted">No findings yet.</td></tr>';
-  }catch(e){}
+    setLive(true);
+  }catch(e){ setLive(false, e.message); }
 }
 
 async function tick(){
   if(!current) return;
+  const gen = ++generation;
   try{
-    const st = await (await fetch('/api/campaign/'+encodeURIComponent(current)+'/status')).json();
+    const st = await getJson('/api/campaign/'+encodeURIComponent(current)+'/status');
+    if(gen !== generation) return;
     lastStatus = st;
     document.getElementById('sub').textContent = 'campaign: '+current+' — '+fmtDur(st.elapsedSec||0)+' · '+((st.rate||0).toFixed(1))+'/s';
     const inv = st.invariants||{latency:0,heap:0,thread:0};
     const ex = st.exploration||{};
 
-    const cl = await (await fetch('/api/campaign/'+encodeURIComponent(current)+'/clusters')).json();
+    const cl = await getJson('/api/campaign/'+encodeURIComponent(current)+'/clusters');
+    if(gen !== generation) return;
     // Invariants come from two different places and conflating them is misleading: the harness
     // measures some in ITS OWN jvm (latency/heap/thread of the driver), while the app's agent
     // reports its own via response headers, which arrive as Invariant-Remote findings. Showing
@@ -245,7 +280,7 @@ async function tick(){
     document.getElementById('finds').innerHTML = cl.length ? cl.map(c => {
       const open = expanded.has(c.fingerprint);
       let row = '<tr class="clusterRow" data-fp="'+encodeURIComponent(c.fingerprint)+'">'+
-        '<td><span class="tag '+c.classification+'">'+(c.classification||'?')+'</span></td>'+
+        '<td><span class="tag '+tagClass(c.classification)+'">'+esc(c.classification||'?')+'</span></td>'+
         '<td>'+(open?'▾ ':'▸ ')+esc(c.kind)+
           (c.routePattern?'<br><span class="muted">'+esc(c.routePattern)+'</span>':'')+'</td>'+
         '<td>'+c.count+'&times;'+(c.distinctRoutes>1?'<br><span class="muted">'+c.distinctRoutes+' routes</span>':'')+'</td>'+
@@ -302,7 +337,7 @@ document.getElementById('cfgBtn').onclick = async function(){
   panel.style.display='block'; this.textContent='hide';
   panel.innerHTML = '<div class="muted">loading…</div>';
   try{
-    const cfg = await (await fetch('/api/campaign/'+encodeURIComponent(current)+'/config')).json();
+    const cfg = await getJson('/api/campaign/'+encodeURIComponent(current)+'/config');
     const params = cfg.params||{};
     const keys = Object.keys(params).sort();
     let h = '<div class="card"><div class="k">parameters</div>';
@@ -327,7 +362,7 @@ document.getElementById('analyzeBtn').onclick = async function(){
   btn.disabled=true; btn.textContent='Analyzing…';
   panel.style.display='block'; panel.textContent='Asking Claude about this campaign’s clusters…';
   try{
-    const r = await (await fetch('/api/analyze/'+encodeURIComponent(current),{method:'POST'})).json();
+    const r = await (await fetch('/api/analyze/'+encodeURIComponent(current),{method:'POST',headers:{'X-ClosureJVM-Dashboard':'1'}})).json();
     panel.textContent = r.analysis || ('Not available: '+(r.error||'unknown error'));
   }catch(e){ panel.textContent='Request failed: '+e; }
   btn.disabled=false; btn.textContent='Analyze with Claude';

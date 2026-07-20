@@ -272,6 +272,18 @@ tasks.register('copyJacocoAgent', Copy) {
     rename '.*', 'jacocoagent.jar'
 }
 
+// Stage the agent + valve jars at stable, version-independent paths. Bind-mounting the
+// version-pinned build outputs means a version bump silently turns the mount source into an
+// empty directory, and Tomcat then dies on '-javaagent: <a directory>'.
+tasks.register('stageAgents', Copy) {
+    group = 'build'
+    description = 'Copy agent/valve jars to build/stage/ under stable names, plus the JaCoCo agent.'
+    dependsOn 'jar', ':tomcat-valve:jar', 'copyJacocoAgent'
+    into layout.buildDirectory.dir('stage')
+    from(tasks.named('jar')) { rename '.*', 'closurejvm-agent.jar' }
+    from(project(':tomcat-valve').tasks.named('jar')) { rename '.*', 'closurejvm-valve.jar' }
+}
+
 // Coverage-guided-over-HTTP driver: polls the target's JaCoCo coverage into the live panel,
 // then drives HTTP routes. Point it at a running app that has the JaCoCo agent + valve.
 tasks.register('runHttpDriveCoverage', JavaExec) {

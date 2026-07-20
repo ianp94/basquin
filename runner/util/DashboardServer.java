@@ -43,9 +43,31 @@ public final class DashboardServer {
     private static final Map<String, Campaign> CAMPAIGNS = new ConcurrentHashMap<>();
     private static final long STALE_AFTER_MS = Long.getLong("closurejvm.dashboard.staleAfterMs", 10_000L);
 
+    /**
+     * Bind loopback by default. This process exposes an endpoint that spends money
+     * ({@code /api/analyze} calls the Claude API with the operator's key), so it must not be
+     * reachable from the network unless someone deliberately asks for it.
+     */
+    private static final String BIND_ADDRESS = System.getProperty("closurejvm.dashboard.bind", "127.0.0.1");
+    /** Optional shared secret, required in addition to the header when set. */
+    private static final String TOKEN = System.getProperty("closurejvm.dashboard.token", "");
+    /**
+     * Any state-changing or billed endpoint requires this header. A cross-origin "simple" POST
+     * cannot set a custom header without a preflight, and we send no CORS headers at all, so the
+     * preflight fails — which closes the drive-by CSRF path where a page the operator happens to
+     * be visiting triggers billed API calls in a loop.
+     */
+    private static final String GUARD_HEADER = "X-ClosureJVM-Dashboard";
+
     public static void main(String[] args) throws IOException {
         int port = Integer.getInteger("closurejvm.dashboard.server.port", 7070);
-        HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
+        java.net.InetAddress bind = java.net.InetAddress.getByName(BIND_ADDRESS);
+        HttpServer server = HttpServer.create(new InetSocketAddress(bind, port), 0);
+        if (!bind.isLoopbackAddress() && TOKEN.isEmpty()) {
+            System.err.println("[ClosureJVM] WARNING: dashboard bound to " + BIND_ADDRESS
+                + " with no -Dclosurejvm.dashboard.token; /api/analyze (which spends API credit)"
+                + " is disabled. Set a token to enable it on a non-loopback bind.");
+        }
 
         server.createContext("/ingest/status", ex -> ingest(ex, true));
         server.createContext("/ingest/findings", ex -> ingest(ex, false));
@@ -72,6 +94,7 @@ public final class DashboardServer {
             ex.sendResponseHeaders(405, -1);
             return;
         }
+        if (!guarded(ex)) return;
         String id = queryParam(ex, "id");
         if (id == null || id.isEmpty()) {
             ex.sendResponseHeaders(400, -1);
@@ -91,6 +114,7 @@ public final class DashboardServer {
     /** Config is immutable per run, so it is pushed once rather than on every interval. */
     private static void ingestConfig(HttpExchange ex) throws IOException {
         if (!"POST".equals(ex.getRequestMethod())) { ex.sendResponseHeaders(405, -1); return; }
+        if (!guarded(ex)) return;
         String id = queryParam(ex, "id");
         if (id == null || id.isEmpty()) { ex.sendResponseHeaders(400, -1); return; }
         Campaign c = CAMPAIGNS.computeIfAbsent(id, k -> new Campaign());
@@ -156,6 +180,13 @@ public final class DashboardServer {
             ex.sendResponseHeaders(405, -1);
             return;
         }
+        if (!guarded(ex)) return;
+        if (!isLoopbackBind() && TOKEN.isEmpty()) {
+            respond(ex, "application/json",
+                "{\"error\":\"analysis disabled: dashboard is bound to a non-loopback address"
+                + " without -Dclosurejvm.dashboard.token\"}");
+            return;
+        }
         String id = ex.getRequestURI().getPath().substring("/api/analyze/".length());
         Campaign c = CAMPAIGNS.get(id);
         if (c == null) {
@@ -202,13 +233,40 @@ public final class DashboardServer {
 
     // --- helpers ---
 
+    private static boolean isLoopbackBind() {
+        try {
+            return java.net.InetAddress.getByName(BIND_ADDRESS).isLoopbackAddress();
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** Enforce the CSRF guard header, and the shared token when one is configured. */
+    private static boolean guarded(HttpExchange ex) throws IOException {
+        if (ex.getRequestHeaders().getFirst(GUARD_HEADER) == null) {
+            respond(ex, "application/json", "{\"error\":\"missing " + GUARD_HEADER + " header\"}");
+            return false;
+        }
+        if (!TOKEN.isEmpty() && !TOKEN.equals(ex.getRequestHeaders().getFirst("X-ClosureJVM-Token"))) {
+            respond(ex, "application/json", "{\"error\":\"bad or missing X-ClosureJVM-Token\"}");
+            return false;
+        }
+        return true;
+    }
+
     private static String queryParam(HttpExchange ex, String key) {
+        // getRawQuery() is undecoded while campaignDetail splits an already-decoded path, so a id
+        // needing encoding would be stored and looked up under different keys. Decode here.
         String q = ex.getRequestURI().getRawQuery();
         if (q == null) return null;
         for (String kv : q.split("&")) {
             int i = kv.indexOf('=');
             if (i > 0 && kv.substring(0, i).equals(key)) {
-                return kv.substring(i + 1);
+                try {
+                    return java.net.URLDecoder.decode(kv.substring(i + 1), "UTF-8");
+                } catch (IOException e) {
+                    return kv.substring(i + 1);
+                }
             }
         }
         return null;
@@ -229,7 +287,6 @@ public final class DashboardServer {
     private static void respond(HttpExchange ex, String type, String body) throws IOException {
         byte[] b = body.getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().set("Content-Type", type);
-        ex.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
         ex.sendResponseHeaders(200, b.length);
         try (OutputStream os = ex.getResponseBody()) {
             os.write(b);

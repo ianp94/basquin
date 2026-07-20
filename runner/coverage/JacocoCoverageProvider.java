@@ -31,14 +31,24 @@ public final class JacocoCoverageProvider {
 
     private final String host;
     private final int port;
-    private final List<File> classFiles;
+    /**
+     * Class bytes are read ONCE at construction. sample() is called per iteration, and the class
+     * files cannot change during a run, so re-reading and re-parsing hundreds of files per HTTP
+     * request was pure overhead on the hot path.
+     */
+    private final List<byte[]> classBytes = new ArrayList<>();
 
     public JacocoCoverageProvider(String host, int port, Path classesDir) throws IOException {
         this.host = host;
         this.port = port;
-        this.classFiles = new ArrayList<>();
         try (Stream<Path> s = Files.walk(classesDir)) {
-            s.filter(p -> p.toString().endsWith(".class")).forEach(p -> classFiles.add(p.toFile()));
+            for (Path p : s.filter(x -> x.toString().endsWith(".class")).collect(java.util.stream.Collectors.toList())) {
+                try {
+                    classBytes.add(Files.readAllBytes(p));
+                } catch (IOException ignored) {
+                    // skip unreadable class; analysis just omits it
+                }
+            }
         }
     }
 
@@ -67,9 +77,9 @@ public final class JacocoCoverageProvider {
 
         CoverageBuilder builder = new CoverageBuilder();
         Analyzer analyzer = new Analyzer(execStore, builder);
-        for (File f : classFiles) {
-            try (InputStream in = Files.newInputStream(f.toPath())) {
-                analyzer.analyzeClass(in, f.getPath());
+        for (byte[] bytes : classBytes) {
+            try {
+                analyzer.analyzeClass(bytes, "");
             } catch (Exception ignored) {
                 // skip classes JaCoCo can't analyze (e.g. version mismatch)
             }

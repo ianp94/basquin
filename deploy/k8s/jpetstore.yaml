@@ -35,8 +35,12 @@ metadata:
   name: jpetstore
   labels: { app: jpetstore, part-of: closurejvm-demo }
 spec:
-  type: NodePort
+  # ClusterIP, not NodePort. JaCoCo's remote-control protocol is unauthenticated and lets any
+  # client dump AND RESET execution data, so port 6300 must not be reachable from outside the
+  # cluster. Access both ports via `kubectl port-forward`, which is what the docs describe and
+  # needs no published node port.
+  type: ClusterIP
   selector: { app: jpetstore }
   ports:
-    - { name: http, port: 8080, targetPort: 8080, nodePort: 30080 }
-    - { name: jacoco, port: 6300, targetPort: 6300, nodePort: 30063 }
+    - { name: http, port: 8080, targetPort: 8080 }
+    - { name: jacoco, port: 6300, targetPort: 6300 }

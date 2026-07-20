@@ -10,7 +10,16 @@ cd "$(dirname "$0")/../.."
 
 : "${JPETSTORE_WAR:?set JPETSTORE_WAR to a built jpetstore.war}"
 CLUSTER="${KIND_CLUSTER:-closurejvm}"
-IMAGE="closurejvm/jpetstore-demo:latest"
+# Every kubectl call is pinned to the kind context. `kind create cluster` is what sets
+# current-context, and it is skipped when the cluster already exists -- so on a re-run an
+# unpinned kubectl would deploy into whatever context happens to be active (possibly a
+# shared or staging cluster).
+KCTX="kind-${CLUSTER}"
+# Unique tag per build: with a fixed :latest tag the manifest is byte-identical between runs,
+# `kubectl apply` is a no-op, and `rollout status` reports success while the pod keeps the
+# previously loaded image -- i.e. you measure a stale build and are told it deployed.
+TAG="$(date +%Y%m%d%H%M%S)"
+IMAGE="closurejvm/jpetstore-demo:${TAG}"
 
 echo "==> Building agents"
 ./gradlew jar :tomcat-valve:jar copyJacocoAgent -q
@@ -34,13 +43,14 @@ kind get clusters | grep -qx "$CLUSTER" || kind create cluster --name "$CLUSTER"
 echo "==> Loading image into the cluster"
 kind load docker-image "$IMAGE" --name "$CLUSTER"
 
-echo "==> Applying manifests"
-kubectl apply -f deploy/k8s/jpetstore.yaml
-kubectl rollout status deploy/jpetstore --timeout=180s
+echo "==> Applying manifests (context: $KCTX)"
+kubectl --context "$KCTX" apply -f deploy/k8s/jpetstore.yaml
+kubectl --context "$KCTX" set image deploy/jpetstore jpetstore="$IMAGE"
+kubectl --context "$KCTX" rollout status deploy/jpetstore --timeout=180s
 
 echo
 echo "JPetStore is running in kind. To drive it with coverage:"
-echo "  kubectl port-forward svc/jpetstore 8080:8080 6300:6300 &"
+echo "  kubectl --context $KCTX port-forward svc/jpetstore 8080:8080 6300:6300 &"
 echo "  (cd \$(mktemp -d) && unzip -q '$JPETSTORE_WAR' 'WEB-INF/classes/*' && echo \$PWD)"
 echo "  ./gradlew runHttpDriveCoverage -Dexamples.http.baseUrl=http://localhost:8080 \\"
 echo "    -Dclosurejvm.coverage.jacoco=localhost:6300 -Dclosurejvm.coverage.classes=<dir>/WEB-INF/classes \\"

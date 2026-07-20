@@ -416,8 +416,8 @@ the P1–P4 injection work (a campaign needs a working instrumented target). Des
 - [~] **CLI to launch tests** — a thin Go `closurejvm` CLI (reuses the operator's api/v1alpha1 types + controller-runtime client → applies real typed CRs). `make -C operator cli`.
   - [x] `instrument` — apply a `ClosureJVMTarget` from flags (--deployment, --container, --jvm-opts-var, --coverage-includes, --coverage-port, --coverage-service, --invariant-*, --thread-tracker), `--wait` for Injected. Unit-tested + validated against the kind cluster.
   - [x] `run` — create grammar/corpus ConfigMaps from local files (owner-ref'd to the campaign → GC'd with it) + apply a `ClosureJVMCampaign` (--target, --base-url, --iterations|--duration, --grammar, --corpus, --no-dashboard/--external-push), `--watch` tails to Completed and prints coverage/findings/dashboard. Unit-tested + validated against kind (full run to Completed, ConfigMap GC).
-  - [ ] `status` — target + campaign status (phase, coverage %, findings, dashboardURL) as a table, `--watch`.
-  - [ ] `dashboard` — port-forward the per-campaign dashboard Service, print the local URL.
+  - [x] `status` — renders targets + campaigns (phase, coverage %, findings, dashboardURL) as aligned tables, `--watch` re-renders. Validated against kind.
+  - [x] `dashboard` — self-contained client-go port-forward to the campaign's dashboard pod, prints the local URL. Validated against kind (forwarded + served live `/api/campaigns`).
   - [ ] Distribution: publish the CLI binary (goreleaser / GitHub release), and/or a `kubectl closurejvm` plugin alias.
 - [ ] **Keep the operator usage docs current** — refresh `docs/` (CRD reference: target + campaign fields, dashboard, grammar/corpus ConfigMaps, spec-edit rerun) as the operator surface grows; a recurring pass, not one-and-done. *(user 2026-07-20)*
 - [ ] Operator CI: `go build` / `go vet` / `gofmt` (and envtest when assets are cached) in the pipeline — today only the Java build is in CI

@@ -318,6 +318,10 @@ kubectl -n closurejvm-system get closurejvmcampaign jpetstore-campaign -o jsonpa
 
 kubectl -n closurejvm-system port-forward svc/jpetstore-campaign-dashboard 7070:7070
 # then open http://localhost:7070
+
+# ...or let the CLI find the dashboard pod and forward it:
+closurejvm dashboard -n closurejvm-system --campaign jpetstore-campaign
+# Dashboard for "jpetstore-campaign" at http://localhost:7070  (Ctrl-C to stop)
 ```
 
 The dashboard **outlives the run** — it's GC'd with the campaign, not with the driver Job, so results
@@ -352,6 +356,14 @@ kubectl -n closurejvm-system get closurejvmcampaign
 
 kubectl -n closurejvm-system get closurejvmcampaign jpetstore-campaign -o yaml | less
 # status.phase / coveragePct / findings / dashboardURL / driverJob / startTime / completionTime
+
+# ...or the CLI, which renders targets + campaigns together (add --watch to follow):
+closurejvm status -n closurejvm-system
+# TARGET      DEPLOYMENT   PHASE      COVERAGE-ENDPOINT
+# jpetstore   jpetstore    Injected   jpetstore-cjvm-jacoco...:6300
+#
+# CAMPAIGN             TARGET      PHASE       COVERAGE   FINDINGS   DASHBOARD
+# jpetstore-campaign   jpetstore   Completed   22.5       72         http://jpetstore-campaign-dashboard...:7070
 ```
 
 Phase machine: **`Pending`** (target not yet `Injected`) → **`Provisioning`** (creating dashboard /

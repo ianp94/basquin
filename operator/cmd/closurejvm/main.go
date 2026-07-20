@@ -33,6 +33,8 @@ Usage:
 Commands:
   instrument   Apply a ClosureJVMTarget to instrument an app Deployment (and optionally wait for it).
   run          Apply a ClosureJVMCampaign (with grammar/corpus ConfigMaps) and optionally tail it.
+  status       Show the targets and campaigns in a namespace (optionally --watch).
+  dashboard    Port-forward a campaign's dashboard to localhost.
   help         Show this help.
 
 Run "closurejvm <command> -h" for a command's flags.
@@ -53,6 +55,16 @@ func main() {
 		}
 	case "run":
 		if err := runRun(args); err != nil {
+			fmt.Fprintln(os.Stderr, "error: "+err.Error())
+			os.Exit(1)
+		}
+	case "status":
+		if err := runStatus(args); err != nil {
+			fmt.Fprintln(os.Stderr, "error: "+err.Error())
+			os.Exit(1)
+		}
+	case "dashboard":
+		if err := runDashboard(args); err != nil {
 			fmt.Fprintln(os.Stderr, "error: "+err.Error())
 			os.Exit(1)
 		}

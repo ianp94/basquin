@@ -158,8 +158,9 @@ kubectl -n closurejvm-system get closurejvmtarget jpetstore -o jsonpath='{.statu
 ```
 
 Phases: `Pending → Injecting → Injected` (or `Reverting`/`Error`). With `coverageService: true` the
-operator creates a headless Service named `<target>-cjvm-jacoco` and writes its DNS name to
-`status.coverageEndpoint`.
+operator creates a headless Service named after the **Deployment it targets** —
+`<deploymentRef.name>-cjvm-jacoco` (not the `ClosureJVMTarget` CR's own name; they match in this
+example) — and writes its DNS name to `status.coverageEndpoint`.
 
 ## 4. Run a test (`ClosureJVMCampaign`)
 

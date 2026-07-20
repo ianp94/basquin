@@ -52,32 +52,68 @@ spec:
   `driver.duration`, no mutation/coverage-guidance. Reports load metrics (§4).
 
 `mode` is a `+kubebuilder:validation:Enum=explore;load` with `+kubebuilder:default=explore`, so
-existing campaigns are unaffected. It joins the driver-spec hash, so flipping mode reruns (DD-025 §7c).
+existing campaigns are unaffected. It joins the driver-spec hash (verified: `driverSpecHash` hashes the
+whole `CampaignDriverSpec`, so new fields auto-join with no special-casing), so flipping mode reruns
+(DD-025 §7c).
 
-CEL: `load` requires a `corpusConfigMap` and forbids `iterations`/`grammarConfigMap` (a load run isn't
-bounded by iterations and doesn't explore); `explore` keeps today's iterations-XOR-duration rule.
+**CEL** (this is the *first* multi-field CEL on the campaign — only the iterations-XOR-duration rule
+exists today, so this is new ground, spelled out concretely rather than left prose):
+
+```
+// on ClosureJVMCampaignSpec:
+rule: "self.mode != 'load' || (has(self.driver.corpusConfigMap) && size(self.driver.corpusConfigMap) > 0)"
+  message: "mode: load requires driver.corpusConfigMap (the corpus to replay)"
+rule: "self.mode != 'load' || !has(self.driver.grammarConfigMap)"
+  message: "mode: load replays a fixed corpus and ignores a grammar; remove driver.grammarConfigMap"
+```
+
+`explore` keeps today's iterations-XOR-duration rule; `load` is duration-bounded (§8).
+
+> **Semantic overload to name explicitly (review #32):** `driver.corpusConfigMap` means **different
+> things** by mode. In `explore` (DD-018) its entries are mutation *seeds/values* — always run through
+> `mutate()` before firing, there is no verbatim-replay path in the runner today. In `load` its entries
+> are **verbatim, fully-formed requests replayed as-is**. Same field name, opposite semantics; CEL can
+> enforce presence but not this meaning-shift. The producer (§3) closes the gap by emitting a corpus
+> that is *already* in the verbatim-request shape (post-mutation route strings), so an emitted corpus
+> fed back into `load` behaves correctly — but a hand-written explore-style value corpus pointed at
+> `load` will not. Documented, not silently coupled.
 
 ## 3. Producer — persist the interesting corpus (PR 1)
 
-An `explore` run accumulates, in `CoverageGuidedRun`, the inputs that reached new coverage. Two halves:
+An `explore` run accumulates, in `CoverageGuidedRun`, the inputs that reached new coverage.
 
-- **Runner:** at end-of-run, write the interesting corpus to a file (one input per line) at a known
-  path (e.g. `-Dclosurejvm.corpus.out=/closurejvm-out/corpus.txt`), alongside the existing summary.
-  This is the same in-memory `corpus` list the run already keeps; we just serialize it.
-- **Operator:** after the driver Job succeeds, read that file back (via a shared `emptyDir` +
-  a tiny sidecar/`kubectl cp`-equivalent, or — simpler — the driver writes it into an
-  operator-created **output ConfigMap** it has RBAC to patch) and expose `status.corpusConfigMap`
-  pointing at a ConfigMap owner-ref'd to the campaign. The map is keyed like any corpus
-  (`corpus.txt`), so **load mode consumes it through the existing corpus-ConfigMap mount + `corpusDir`
-  path** — no new consumption code.
+- **Runner:** at end-of-run, serialize the interesting corpus to a file, one input per line
+  (`-Dclosurejvm.corpus.out=...`). Crucially this is the **post-mutation, fully-formed route strings**
+  the run actually fired (the `loadSeeds()`-shape, not DD-018's pre-mutation raw values) — the right
+  shape for verbatim replay (§2). It's a *different artifact wearing the "corpus" name*; call it the
+  *replay corpus* to avoid confusion with input corpora.
+- **Operator:** capture that file into a ConfigMap owner-ref'd to the campaign and set
+  `status.corpusConfigMap`. The ConfigMap's *mount* into a later load run reuses the existing
+  corpus-volume + `-Dclosurejvm.corpusDir` mechanics — but see the honesty note below on what does
+  **not** already exist.
 
-Independently useful beyond load mode: reproducibility (re-run exactly what was found) and the
-**dashboard corpus view** (TODO, user request) — the dashboard can render `status.corpusConfigMap`.
+Independently useful beyond load mode: reproducibility and the **dashboard corpus view** (TODO, user
+request) — the dashboard can render `status.corpusConfigMap`.
 
-> **Open (PR 1):** the read-back path. Options — (a) driver writes directly to a pre-created ConfigMap
-> via the in-cluster API (needs a token/RBAC for the driver pod); (b) shared `emptyDir` + the operator
-> reads it from the pod before GC (bounded by the ~1 MB ConfigMap limit either way); (c) cap the
-> emitted corpus to the top-N-by-coverage inputs to stay well under 1 MB. Leaning (b)+(c).
+> **Honest accounting of PR 1's real cost (review #32) — this is new plumbing, not reuse.** Neither a
+> ConfigMap *write-back* path, the operator RBAC for it, nor any driver-pod identity exists today:
+> - The driver summary is read via the **pod termination message + pod-list** (`campaign_resources.go`,
+>   `closurejvmcampaign_controller.go`), **not** a ConfigMap. There is no write-back path for *any*
+>   artifact. The termination message is capped at **~4 KiB** — fine for a one-line summary, too small
+>   for a corpus file. So "reuse the results ConfigMap" is a non-starter: it was never built.
+> - The operator's Role grants `configmaps: get;list;watch` only — **no create/patch/update**. Emitting
+>   a ConfigMap needs a new grant.
+> - The driver Job runs with **no ServiceAccount** (namespace `default`, zero API access). Giving the
+>   driver process credentials to write a ConfigMap would be the **first** driver-pod API identity — a
+>   real new trust boundary (a buggy/compromised driver would gain namespace write access).
+>
+> **Recommendation:** (c) **cap the replay corpus to top-N-by-coverage** (bounds it well under 1 MiB;
+> no RBAC question) is the only genuinely low-risk piece. For transport, prefer a **write-back sidecar
+> with a tightly-scoped Role** (this Job's own SA; `configmaps: create;update` on the *single named*
+> output object) over granting the driver process itself credentials — the driver stays credential-less.
+> This is a documented PR-1 build item, not a free reuse. (The earlier "read from the pod before GC"
+> idea rested on a GC race that doesn't exist — driver pods persist until the owner-ref cascade — so it
+> isn't simpler; it still needs a sidecar/identity.)
 
 ## 4. Consumer — load mode (PR 2)
 
@@ -87,9 +123,22 @@ Independently useful beyond load mode: reproducibility (re-run exactly what was 
   (that's exploration overhead). Every request still passes through the invariant oracles and
   `StatusReporter`, so latency/heap/thread violations are recorded exactly as in explore mode.
 - **Load metrics** (distinct from exploration's coverage %/corpus growth): throughput (req/s),
-  latency percentiles under sustained load (p50/p90/p99/max), and heap/thread **drift over the soak**
-  (start vs end, to catch slow leaks). Surfaced in a new `status.load` block and pushed to the
-  dashboard.
+  latency percentiles under sustained load (p50/p90/p99/max), and heap/thread **drift over the soak**.
+  Surfaced in a new `status.load` block and pushed to the dashboard.
+
+**Soak-test mechanics that must be in PR 2 (review #32), not just "fire N workers":**
+- **Warmup/ramp** — firing `concurrency` workers at t=0 conflates JIT + connection-pool warmup with
+  real latency, and can trip a *false* latency violation at the start. Exclude a short warmup window
+  from the percentile calculation (and from invariant enforcement), configurable via
+  `driver.warmup` (e.g. `30s`). Fixed concurrency for the rest of the run (no ramp-*curve*) is an
+  accepted first-cut simplification, documented as such.
+- **Connection reuse / keepalive** — confirm the runner's HTTP layer pools connections across the
+  worker pool. A soak that opens a new connection per request mostly measures TCP/TLS handshake cost,
+  not the app's steady state. (There is no pooled HTTP-client abstraction in `runner/` today to point
+  at — PR 2 must establish one or verify keep-alive on the existing client.)
+- **Periodic heap/thread sampling** — `heapDriftKb`/`threadDrift` as a single start-vs-end delta (§5)
+  misses non-monotonic patterns (a leak that plateaus, GC noise at sample time). Sample a handful of
+  points across the soak, report the trend, not just the endpoints.
 
 ## 5. Status shape
 
@@ -124,12 +173,16 @@ follow-on load run replays it and reports throughput/latency/drift).
 
 ## 7. Reconciler + runner touch-points
 
-- CRD: `spec.mode` (enum, default explore), `driver.concurrency` (load), `status.corpusConfigMap`,
-  `status.load`. CEL rules per §2.
-- `buildDriverJob`: pass `-Dclosurejvm.mode`, `-Dclosurejvm.concurrency`, `-Dclosurejvm.corpus.out`;
-  in load mode, skip the grammar volume, keep the corpus volume.
-- Reconciler: on an explore Job's success, capture the corpus → ConfigMap → `status.corpusConfigMap`.
-- Runner: `-Dclosurejvm.corpus.out` write-out (PR 1); the load loop + load metrics (PR 2).
+- CRD: `spec.mode` (enum, default explore), `driver.concurrency` + `driver.warmup` (load),
+  `status.corpusConfigMap`, `status.load`. CEL rules per §2.
+- `buildDriverJob`: pass `-Dclosurejvm.mode`, `-Dclosurejvm.concurrency`, `-Dclosurejvm.warmup`,
+  `-Dclosurejvm.corpus.out`; in load mode skip the grammar volume, keep the corpus volume.
+- **New RBAC + identity (PR 1):** a `configmaps: create;update` grant, and a write-back **sidecar**
+  with a Job-scoped SA that writes the replay corpus to the single named output ConfigMap (the driver
+  container stays credential-less — §3).
+- Reconciler: on an explore Job's success, set `status.corpusConfigMap` (owner-ref'd to the campaign).
+- Runner: `-Dclosurejvm.corpus.out` write-out of the post-mutation route strings (PR 1); the load loop
+  with a pooled/keep-alive HTTP client, warmup exclusion, and periodic drift sampling (PR 2).
 
 ## 8. Alternatives considered
 

@@ -102,9 +102,23 @@ reports.
 5xx) count. The top `crashes` figure and the exploration `finds crash` count come from that same
 signal, so they always agree.
 
-*Next (v0.10): the coverage % is fed by a server-side coverage agent that reports the
-app-under-test's per-request coverage back to the client fuzzer over HTTP — a real
-"% of code explored." See [TODO](TODO.md).*
+**Coverage comes from the app under test.** A JaCoCo agent runs in the target's JVM and the driver
+reads it over the wire, so the coverage % is a real "% of code explored" rather than anything
+measured in the harness. Coverage-*guided* mutation then keeps the inputs that reach new code:
+
+```bash
+./gradlew runCoverageGuided \
+  -Dexamples.http.baseUrl=http://localhost:8080 \
+  -Dclosurejvm.coverage.jacoco=localhost:6300 \
+  -Dclosurejvm.coverage.classes=<dir>/WEB-INF/classes \
+  -Dclosurejvm.grammar=examples/grammar/jpetstore.grammar
+```
+
+The reachable surface is **data, not code**: a [request grammar](docs/USAGE.md#writing-a-request-grammar)
+supplies route templates, the corpus supplies parameter values, and `~EST-[0-9]{1,4}`-style
+structural generation invents ids that *parse but don't exist* — which is how the deepest crashes
+were found. `@sequence` blocks run ordered, session-carrying transactions (sign on → add to cart →
+check out) to reach code that a single request never can.
 
 ## Kubernetes demo (kind)
 
@@ -141,16 +155,29 @@ point the auto-injection operator (see [TODO](TODO.md)) would point every instru
   -Dclosurejvm.coverage.jacoco=localhost:6300 -Dclosurejvm.coverage.classes=<dir>/WEB-INF/classes
 ```
 
-No extra dependency (JDK `httpserver`) on either side. Design rationale: [DD-013](docs/DESIGN-DECISIONS.md).
+No extra dependency (JDK `httpserver`) on either side. It binds **127.0.0.1** by default and
+guards its ingest/analyze endpoints, since the analysis endpoint spends API credit — see
+[DD-013](docs/DESIGN-DECISIONS.md) for the decoupling and [DD-022](docs/DESIGN-DECISIONS.md) for
+the trust boundary.
+
+Grammar, sequences, and every v0.10 flag are documented in [USAGE](docs/USAGE.md).
 
 ## Features
 
 - Availability invariants (latency / heap / thread-delta) with hard-fail or soft-signal modes
 - Thread, executor, and timer leak detection with stack evidence
 - Event-driven thread tracking via a JVMTI native agent (one jar, JDK 17 & 21)
-- Coverage-guided exploration (JQF), corpus replay, and ddmin minimization
+- **Coverage of the app under test**, read from its JaCoCo agent over the wire — and used to guide
+  input mutation
+- **Grammar-driven exploration**: routes and value structure as data, with multi-step
+  session-carrying transactions
+- Crash findings carry the **app's** stack, not the harness's, so they're triageable as-is
+- Findings **clustered** by fingerprint (and across targets), so a systemic issue is one row
 - Tomcat valve for unmodified third-party WARs — one jar for `javax` and `jakarta`
+- Standalone **web dashboard**: fleet view, run configuration, findings with the inputs that
+  produced them, optional Claude-backed analysis
 - Live AFL-style status screen for long runs
+- JQF fuzzing, corpus replay, and ddmin minimization
 
 ## Docs
 
@@ -158,4 +185,5 @@ No extra dependency (JDK `httpserver`) on either side. Design rationale: [DD-013
 - [ARCHITECTURE](docs/ARCHITECTURE.md) — how and why
 - [DESIGN-DECISIONS](docs/DESIGN-DECISIONS.md) — decision log with rejected alternatives
 - [THIRD-PARTY-APPS](docs/THIRD-PARTY-APPS.md) — running against unmodified WARs (JPetStore)
+- [deploy/k8s](deploy/k8s/README.md) — the kind cluster demo
 - [TODO](TODO.md) — roadmap and milestones · [agents.md](agents.md) — maintainer guardrails

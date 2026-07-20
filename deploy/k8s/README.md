@@ -15,17 +15,25 @@ JaCoCo coverage agent — inside a [kind](https://kind.sigs.k8s.io/) (Kubernetes
 JPETSTORE_WAR=/abs/jpetstore.war deploy/k8s/up.sh
 ```
 
-This builds the agents, bakes a self-contained image (`deploy/k8s/Dockerfile.jpetstore`), creates
-the `closurejvm` kind cluster, loads the image, and applies `deploy/k8s/jpetstore.yaml`
-(Deployment + Service). When it finishes, the JPetStore pod is `Running` with:
+This builds the agents, bakes a self-contained image (`deploy/k8s/Dockerfile.jpetstore`) tagged
+uniquely per build, creates the `closurejvm` kind cluster, loads the image, and applies
+`deploy/k8s/jpetstore.yaml` (Deployment + Service). Every `kubectl` call is pinned to
+`--context kind-closurejvm`, and the deploy does an explicit `set image` — so a re-run can neither
+touch whatever context happens to be current nor silently keep the previously loaded image.
+
+When it finishes, the JPetStore pod is `Running` with:
 
 - **8080** — the app, every request wrapped by the ClosureJVM valve (server-side invariants)
 - **6300** — the JaCoCo coverage tcpserver (scoped to `org.mybatis.jpetstore.*`)
 
 ## Drive it (all features, in-cluster)
 
+The Service is deliberately **ClusterIP**: JaCoCo's remote-control protocol is unauthenticated and
+lets any client dump *and reset* execution data, so port 6300 is never published outside the
+cluster (DD-022). Reach both ports through a port-forward.
+
 ```bash
-kubectl port-forward svc/jpetstore 8080:8080 6300:6300 &
+kubectl --context kind-closurejvm port-forward svc/jpetstore 8080:8080 6300:6300 &
 
 # extract the app's classes for the coverage analyzer
 D=$(mktemp -d); (cd "$D" && unzip -q /abs/jpetstore.war 'WEB-INF/classes/*')
@@ -45,13 +53,13 @@ the app in the cluster.
 Verify pieces directly:
 
 ```bash
-kubectl get pods -l app=jpetstore
+kubectl --context kind-closurejvm get pods -l app=jpetstore
 curl -D - -o /dev/null "http://localhost:8080/actions/Catalog.action"   # X-ClosureJVM-Invariant-* headers
 ```
 
 ## Tear down
 
 ```bash
-kubectl delete -f deploy/k8s/jpetstore.yaml
+kubectl --context kind-closurejvm delete -f deploy/k8s/jpetstore.yaml
 kind delete cluster --name closurejvm
 ```

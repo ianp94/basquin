@@ -311,7 +311,7 @@ processes is effectively remote code execution on whatever it runs on.
 - [ ] Optional in-process coverage %: a JaCoCo provider for the local JQF targets, so the panel
   shows a real percentage without the server round-trip.
 - [x] **Kubernetes deploy**: `kind` demo environment (`deploy/k8s/`): JPetStore as a pod with
-  valve + JaCoCo + ClosureJVM agent baked into a self-contained image, NodePort Service,
+  valve + JaCoCo + ClosureJVM agent baked into a self-contained image, ClusterIP Service,
   one-command `up.sh`. Verified in-cluster: valve invariant headers, 96 server-side invariant
   finds, and live coverage % (281/6368 edges) all working against the pod. Demo `docs/demo-k8s.svg`.
 - [ ] **Auto-injection agent**: a mutating admission webhook (operator) that injects the
@@ -348,8 +348,9 @@ but it's more manual than it should be for a real user. Pain points noticed whil
   jars `COPY`'d in — every new target app means a new bespoke image build, not a reusable pattern.
 - Coverage requires manually extracting `WEB-INF/classes` from the WAR on the host and pointing
   `-Dclosurejvm.coverage.classes` at it by hand.
-- Reaching the pod means either a NodePort + manual `docker inspect` for the node IP, or a
-  `kubectl port-forward` the user has to manage themselves.
+- Reaching the pod means a `kubectl port-forward` the user has to manage themselves. (The Service
+  is deliberately ClusterIP: JaCoCo's remote-control port is unauthenticated and must not be
+  published — see DD-022.)
 - No Helm chart / single manifest set; `jpetstore.yaml` is demo-specific, not a template for "any
   WAR."
 

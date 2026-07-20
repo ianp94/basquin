@@ -25,6 +25,38 @@ The command catalog and flag reference. For what the tool is and why, see the
 | `-Dexamples.sleepMs=<n>` / `-Dexamples.threads=<n>` | Example work duration / worker count |
 | `-Dexamples.http.baseUrl=<url>` / `-Dexamples.http.routes=<csv>` | HTTP driver target config |
 
+### Exploration surface (v0.10)
+
+| Flag | Meaning |
+|------|---------|
+| `-Dclosurejvm.grammar=<file>` | Request grammar: route templates + parameter value space (takes precedence over a plain corpus) |
+| `-Dclosurejvm.corpusDir=<dir>` | Seed corpus of routes, one per line per file (used when no grammar is given) |
+| `-Dclosurejvm.sequencePercent=<n>` | Chance (%) an iteration runs a multi-step `@sequence` instead of a single request (default 25) |
+| `-Dclosurejvm.session=false` | Disable session handling (default on) |
+| `-Dclosurejvm.session.epoch=<n>` | Iterations per session epoch; alternates signed-on and anonymous (default 40) |
+
+### Coverage of the app under test (v0.10)
+
+| Flag | Meaning |
+|------|---------|
+| `-Dclosurejvm.coverage.jacoco=host:port` | The target's JaCoCo tcpserver (default `localhost:6300`) |
+| `-Dclosurejvm.coverage.classes=<dir>` | Directory of the app's `.class` files, for computing covered/total |
+| `-Dclosurejvm.coverage.intervalMs=<n>` | Poll interval for the non-guided coverage driver (default 1000) |
+
+### Dashboard (v0.10)
+
+The dashboard is a **separate process**; drivers push to it and it never drives anything itself.
+
+| Flag | Meaning |
+|------|---------|
+| `-Dclosurejvm.dashboard.push=host:port` | Driver side: push status/findings/config to this dashboard |
+| `-Dclosurejvm.dashboard.id=<name>` | Campaign id (defaults to `HOSTNAME`, i.e. the pod name in Kubernetes) |
+| `-Dclosurejvm.dashboard.server.port=<n>` | Dashboard side: listen port (default 7070) |
+| `-Dclosurejvm.dashboard.bind=<addr>` | Dashboard side: bind address. **Defaults to `127.0.0.1`** — this process exposes an endpoint that spends API credit, so network exposure is opt-in |
+| `-Dclosurejvm.dashboard.token=<secret>` | Shared secret required alongside the `X-ClosureJVM-Dashboard` header. Required for `/api/analyze` on a non-loopback bind |
+| `ANTHROPIC_API_KEY` / `-Dclosurejvm.claude.apiKey` | Dashboard side only: enables the "Analyze with Claude" button |
+| `-Dclosurejvm.claude.model` / `-Dclosurejvm.claude.maxTokens` | Model (default `claude-sonnet-5`) and output ceiling (default 2000) |
+
 ### Invariants (v0.2)
 
 Disabled unless set. Modes: `hard` (fail fast) or `soft` (record + continue).
@@ -124,6 +156,73 @@ screen. Harvests server-side `X-ClosureJVM-Invariant-*` headers when the app has
 ./gradlew runHttpDrive -Dexamples.http.baseUrl=http://localhost:8080 \
   -Dclosurejvm.invariant.latency.maxMs=50 -Dclosurejvm.invariant.mode=soft -Ddrive.iterations=200
 ```
+
+## Coverage-guided exploration (v0.10)
+
+Point it at a running app that has the JaCoCo agent and the ClosureJVM valve injected
+(`docker-compose.coverage.yml`, or the kind demo in [deploy/k8s](../deploy/k8s/README.md)).
+
+```bash
+./gradlew stageAgents            # agent + valve + jacocoagent at stable paths
+
+./gradlew runDashboard &         # standalone dashboard on 127.0.0.1:7070
+
+./gradlew runCoverageGuided \
+  -Dexamples.http.baseUrl=http://localhost:8080 \
+  -Dclosurejvm.coverage.jacoco=localhost:6300 \
+  -Dclosurejvm.coverage.classes=/path/to/WEB-INF/classes \
+  -Dclosurejvm.grammar=examples/grammar/jpetstore.grammar \
+  -Dclosurejvm.invariant.latency.maxMs=25 -Dclosurejvm.invariant.mode=soft \
+  -Dclosurejvm.dashboard.push=localhost:7070
+```
+
+Related tasks: `runHttpDriveCoverage` (coverage % without guided mutation), `runHttpDrive`
+(no coverage at all), `stageAgents`, `copyJacocoAgent`, `buildNativeAgent`.
+
+## Writing a request grammar
+
+The grammar decides what the fuzzer can ever reach, so it is **data, not code**. Two concerns are
+deliberately split: the **corpus supplies values**, the **grammar supplies structure**.
+
+```
+# a rule: alternatives may be literals, a corpus file, a structure, or a generator
+$itemId     = @../corpus/jpetstore/values/itemId.txt | ~EST-[0-9]{1,4} | <empty> | <string>
+$categoryId = FISH | DOGS | ~[A-Z]{4,8}
+
+# a route template; ${name} expands to one alternative of that rule
+/actions/Catalog.action?viewItem=&itemId=${itemId}
+```
+
+| Form | Meaning |
+|------|---------|
+| `@file` | Load values from a corpus file, one per line (`#` comments allowed). Relative to the grammar file |
+| `~pattern` | **Structural** generation: literals, `[A-Z]`/`[a-z]`/`[0-9]`/`[abc]` classes, `{n}` and `{n,m}` repetition |
+| `<int>` | Boundary-biased integer (0, 1, -1, MAX_VALUE, …) |
+| `<string>` | Short random string, sometimes containing metacharacters |
+| `<long>` | Long string, for length/overflow probing |
+| `<empty>` | The empty string |
+
+Why both `@file` and `~pattern`: real values reach happy paths and deep code; **structurally valid
+but nonexistent** values (`EST-847`) get past parsing and format checks into the lookup and
+dereference code, which is where the interesting failures are; purely random junk usually gets
+rejected at the first validation. Using only one of the three finds noticeably less.
+
+### Multi-step transactions
+
+Some code is only reachable after an ordered sequence against one session — order placement needs
+a *populated cart*, not just a login. Indented steps belong to the sequence; a blank line ends it.
+
+```
+@sequence signon_browse_checkout
+  /actions/Account.action?signon=&username=j2ee&password=j2ee
+  /actions/Catalog.action?viewItem=&itemId=${itemId}
+  /actions/Cart.action?addItemToCart=&workingItemId=${itemId}
+  /actions/Cart.action?checkOut=
+```
+
+**Placeholders bind once per sequence execution**, so `${itemId}` above is the same item in every
+step. If it re-randomised per step the transaction would add one item and remove a different one —
+still plausible-looking in a dashboard, while never reaching checkout code.
 
 ## Tomcat demo (embedded + Docker)
 

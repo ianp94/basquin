@@ -1,0 +1,112 @@
+name: Operator e2e (kind)
+
+# The in-cluster test envtest structurally can't do: build + load every image, deploy the operator as
+# a real pod with its namespaced RBAC (via the Helm chart), instrument a raw JPetStore, run a
+# coverage-guided campaign + a load campaign, and stand up the dashboard — all in an ephemeral kind
+# cluster. This is what has repeatedly caught bugs local/envtest runs masked (missing RBAC verbs,
+# imagePullPolicy, war-only classes, helm/kustomize install gaps).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'operator/**'
+      - 'deploy/**'
+      - 'runner/**'
+      - 'agent/**'
+      - 'native/**'
+      - 'examples/grammar/**'
+      - 'examples/corpus/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - 'gradle/**'
+      - '.github/workflows/operator-e2e.yml'
+  pull_request:
+    paths:
+      - 'operator/**'
+      - 'deploy/**'
+      - 'runner/**'
+      - 'agent/**'
+      - 'native/**'
+      - 'examples/grammar/**'
+      - 'examples/corpus/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - 'gradle/**'
+      - '.github/workflows/operator-e2e.yml'
+
+jobs:
+  e2e:
+    name: In-cluster e2e (Helm install)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - run: chmod +x gradlew
+      - name: Set up Java 17 (gradle jars + native agent)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/gradle-build-action@v3
+      # No host Go toolchain: the operator image is built entirely inside operator/Dockerfile's
+      # golang:1.21 multi-stage builder, and neither e2e.sh nor the build.sh scripts shell out to `go`.
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+      - name: Install helm
+        uses: azure/setup-helm@v4
+      - name: Install kind
+        run: |
+          curl -fsSLo ./kind https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
+          chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+          kind version
+      - name: Set up Maven 3.9 (JPetStore-6 needs 3.9+)
+        run: |
+          set -e
+          curl -fsSL https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz \
+            | tar xz -C /opt
+          echo "/opt/apache-maven-3.9.9/bin" >> "$GITHUB_PATH"
+      - name: Cache Maven (for the JPetStore WAR build)
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: m2-jpetstore-${{ runner.os }}
+      - name: Build the JPetStore WAR (the un-instrumented target app under test)
+        # Pin the upstream commit: jpetstore-6 is the one dependency this workflow can't control, and an
+        # unpinned master could break CI (new build tooling requirements) with no change in this repo.
+        # Bump JPETSTORE_SHA deliberately when you want a newer upstream.
+        env:
+          JPETSTORE_SHA: c8f62cc76b8ac08066bb79618cf5824144f24e03
+        run: |
+          set -e
+          mvn -version
+          git init -q /tmp/jpetstore-6
+          git -C /tmp/jpetstore-6 fetch --depth 1 https://github.com/mybatis/jpetstore-6.git "$JPETSTORE_SHA"
+          git -C /tmp/jpetstore-6 checkout -q FETCH_HEAD
+          # JPetStore-6's build plugins gate on newer tooling; skip the gates (see docs/THIRD-PARTY-APPS.md).
+          mvn -q -f /tmp/jpetstore-6/pom.xml -DskipTests -Denforcer.skip=true -Dmaven.gitcommitid.skip=true package
+          echo "JPETSTORE_WAR=/tmp/jpetstore-6/target/jpetstore.war" >> "$GITHUB_ENV"
+      - name: Run the in-cluster e2e (builds every image, Helm-installs the operator, drives it)
+        run: INSTALL=helm bash deploy/e2e/e2e.sh
+      - name: Operator logs on failure
+        if: failure()
+        run: |
+          K="kubectl --context kind-closurejvm -n closurejvm-system"
+          echo "::group::operator logs"
+          $K logs -l control-plane=controller-manager --tail=200 || true
+          echo "::endgroup::"
+          echo "::group::CRs"
+          $K get closurejvmtargets,closurejvmcampaigns -o wide || true
+          echo "::endgroup::"
+          # Events + app-pod logs catch failures the operator's own log won't show — e.g. ImagePullBackOff
+          # on the injected initContainer, or the target app pod crashing after injection.
+          echo "::group::events"
+          $K get events --sort-by=.lastTimestamp || true
+          echo "::endgroup::"
+          echo "::group::pods + app logs"
+          $K get pods -o wide || true
+          $K logs -l app=jpetstore-raw --tail=200 --all-containers || true
+          echo "::endgroup::"

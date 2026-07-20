@@ -52,7 +52,7 @@ type ClosureJVMTargetReconciler struct {
 	AgentsImage string
 }
 
-//+kubebuilder:rbac:groups=closurejvm.dev,resources=closurejvmtargets,verbs=get;list;watch
+//+kubebuilder:rbac:groups=closurejvm.dev,resources=closurejvmtargets,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=closurejvm.dev,resources=closurejvmtargets/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=closurejvm.dev,resources=closurejvmtargets/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch

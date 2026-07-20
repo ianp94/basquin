@@ -840,3 +840,13 @@ revert removes the former and restores the latter. Additionally, `injectionAppli
 initContainer is actually present (not just the hash annotation), so **out-of-band content drift**
 (a `kubectl edit` stripping the fields) self-heals; and a spec change re-derives by reverting the
 prior injection first, so retargeting `spec.Container` un-instruments the old container.
+
+**Validated in-cluster (2026-07-20).** `deploy/e2e/e2e.sh` runs the operator as a real pod (its
+namespaced ServiceAccount/Role/RoleBinding, built image) and instruments a *raw* JPetStore: agents
+loaded on the live JVM, `CATALINA_OPTS` appended (original kept), app serving. This caught two bugs
+the envtest/local-run path masked (both fixed): the operator Role was missing `update;patch` on
+`closurejvmtargets` — so the P2 finalizer could not be added and the operator could not run
+in-cluster at all; and the injected initContainer needed `imagePullPolicy: IfNotPresent` (a `:latest`
+agents image otherwise `ImagePullBackOff`s on a kind/air-gapped node). Lesson: envtest runs as admin
+and never exercises the operator's own RBAC — the namespaced-trust-boundary design must be verified
+against the real ServiceAccount.

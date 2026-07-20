@@ -13,6 +13,8 @@
 #   deploy/agents-image/build.sh 0.2.0 closurejvm    # ...and load into the `closurejvm` kind cluster
 set -euo pipefail
 
+die() { echo "ERROR: $*" >&2; exit 1; }
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CTX="$(dirname "${BASH_SOURCE[0]}")"
 IMAGE="closurejvm/agents"
@@ -28,24 +30,23 @@ fi
 
 echo "==> Building agent artifacts (jars + native .so)"
 "$GRADLEW" stageAgents copyJacocoAgent buildNativeAgent -q
+# Query the version through the SAME stripped wrapper, BEFORE removing it — otherwise on a CRLF
+# checkout (the case this handling exists for) the query would run the broken original gradlew, fail
+# silently, and TAG would wrongly fall back to "dev".
+VERSION="$("$GRADLEW" -q properties 2>/dev/null | awk -F': ' '/^version:/{print $2}' || true)"
 [ -f .gradlew.lf ] && rm -f .gradlew.lf || true
-
-VERSION="$("$REPO_ROOT/gradlew" -q properties 2>/dev/null | awk -F': ' '/^version:/{print $2}' || true)"
 TAG="${1:-${VERSION:-dev}}"
 KIND_CLUSTER="${2:-}"
-
-if [ ! -f build/native/libclosurejvmti.so ]; then
-  echo "ERROR: build/native/libclosurejvmti.so not built (need a C compiler + JDK headers). Aborting." >&2
-  exit 1
-fi
 
 echo "==> Staging agents into $CTX/agents/"
 rm -rf "$CTX/agents"
 mkdir -p "$CTX/agents"
-cp build/stage/closurejvm-agent.jar   "$CTX/agents/"
-cp build/stage/closurejvm-valve.jar   "$CTX/agents/"
-cp build/jacoco/jacocoagent.jar       "$CTX/agents/"
-cp build/native/libclosurejvmti.so    "$CTX/agents/"
+# Explicit checks so a missing artifact is a clear message, not a bare `cp: cannot stat`.
+for f in build/stage/closurejvm-agent.jar build/stage/closurejvm-valve.jar \
+         build/jacoco/jacocoagent.jar build/native/libclosurejvmti.so; do
+  [ -f "$f" ] || die "expected artifact not built: $f (native .so needs a C compiler + JDK headers)"
+  cp "$f" "$CTX/agents/"
+done
 
 echo "==> docker build $IMAGE:$TAG (+ :latest)"
 docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" "$CTX"

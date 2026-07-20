@@ -2,12 +2,13 @@
 # End-to-end test of the ClosureJVM operator IN-CLUSTER (kind): build + load every image, deploy the
 # operator as a real pod with its scoped RBAC, deploy a RAW (un-instrumented) app, apply a
 # ClosureJVMTarget, and assert the operator injects the agents and the app comes up with them loaded.
-# Then apply a ClosureJVMCampaign and assert the operator drives a coverage run to a non-zero %.
+# Then apply a ClosureJVMCampaign and assert the operator drives a coverage run to a non-zero %,
+# brings up a per-campaign dashboard (P5b), and the driver's pushes land on it.
 #
 # This is the test that envtest structurally can't do: it exercises the built operator image, the
 # namespaced ServiceAccount/Role/RoleBinding (not admin creds), the injected initContainer pulling
-# the real agents image, the agents actually loading in a live JVM, and the campaign driver Job
-# reading live coverage back from the target and reporting it as status.
+# the real agents image, the agents actually loading in a live JVM, the campaign driver Job reading
+# live coverage back from the target and reporting it as status, and the per-campaign dashboard.
 #
 # Usage:
 #   deploy/e2e/e2e.sh [--teardown]
@@ -27,6 +28,7 @@ RAW_APP_IMAGE="${RAW_APP_IMAGE:-closurejvm/jpetstore-raw:0.2.0}"
 AGENTS_IMAGE="closurejvm/agents:${TAG}"
 OPERATOR_IMAGE="closurejvm/operator:${TAG}"
 RUNNER_IMAGE="closurejvm/runner:${TAG}"
+DASHBOARD_IMAGE="closurejvm/dashboard:${TAG}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 K="kubectl --context kind-${CLUSTER}"
 
@@ -58,6 +60,9 @@ kind load docker-image "$OPERATOR_IMAGE" --name "$CLUSTER"
 
 say "Build + load runner image ($RUNNER_IMAGE)"
 "$ROOT/deploy/runner-image/build.sh" "$TAG" "$CLUSTER"
+
+say "Build + load dashboard image ($DASHBOARD_IMAGE)"
+"$ROOT/deploy/dashboard-image/build.sh" "$TAG" "$CLUSTER"
 
 say "Ensure raw app image ($RAW_APP_IMAGE)"
 if ! docker image inspect "$RAW_APP_IMAGE" >/dev/null 2>&1; then
@@ -109,6 +114,12 @@ if ! $K -n "$NS" get deploy closurejvm-controller-manager \
       -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--runner-image'; then
   $K -n "$NS" patch deploy closurejvm-controller-manager --type=json \
     -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--runner-image=${RUNNER_IMAGE}\"}]"
+fi
+# ...and the per-campaign dashboard image (P5b).
+if ! $K -n "$NS" get deploy closurejvm-controller-manager \
+      -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--dashboard-image'; then
+  $K -n "$NS" patch deploy closurejvm-controller-manager --type=json \
+    -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--dashboard-image=${DASHBOARD_IMAGE}\"}]"
 fi
 $K -n "$NS" rollout restart deploy/closurejvm-controller-manager
 $K -n "$NS" rollout status  deploy/closurejvm-controller-manager --timeout=120s
@@ -266,10 +277,33 @@ YAML
   check "operator owns the driver Job (GC wired)"           "[ '$cowner' = 'ClosureJVMCampaign' ]"
   check "campaign reported non-zero coverage %"             "[ '$cpos' = 'yes' ]"
   echo "  (campaign coveragePct=${cpct:-<none>})"
+
+  # --- P5b: the operator brought up a per-campaign dashboard and the driver pushed to it ---------
+  say "Assert the per-campaign dashboard (P5b)"
+  durl="$($K -n "$NS" get closurejvmcampaign jpetstore-campaign -o jsonpath='{.status.dashboardURL}' 2>/dev/null || true)"
+  dname="jpetstore-campaign-dashboard"
+  dsvc="$($K -n "$NS" get svc "$dname" -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || true)"
+  downer="$($K -n "$NS" get deploy "$dname" -o jsonpath='{.metadata.ownerReferences[0].kind}' 2>/dev/null || true)"
+  $K -n "$NS" rollout status deploy/"$dname" --timeout=90s || true
+  davail="$($K -n "$NS" get deploy "$dname" -o jsonpath='{.status.availableReplicas}' 2>/dev/null || true)"
+  # Reachability + data: curl the dashboard Service from inside the cluster (the app pod has curl) and
+  # confirm the campaign id shows up — proof the driver's push actually landed during the run.
+  dapi=""
+  if [ -n "$apod" ]; then
+    dapi="$($K -n "$NS" exec "$apod" -c jpetstore -- sh -c \
+      "curl -s http://${dname}.${NS}.svc.cluster.local:7070/api/campaigns" 2>/dev/null || true)"
+  fi
+
+  check "status.dashboardURL points at the dashboard Service"  "echo '$durl' | grep -q '${dname}.*:7070'"
+  check "dashboard Service exposes port 7070"                  "[ '$dsvc' = '7070' ]"
+  check "operator owns the dashboard Deployment (GC wired)"    "[ '$downer' = 'ClosureJVMCampaign' ]"
+  check "dashboard Deployment is available"                    "[ '${davail:-0}' -ge 1 ]"
+  check "dashboard is reachable and saw the campaign's pushes" "echo '$dapi' | grep -q 'jpetstore-campaign'"
+  echo "  (dashboardURL=${durl:-<none>}; /api/campaigns=${dapi:-<none>})"
 else
   echo "  (skipping campaign checks — injection did not complete, nothing to drive)"
   fail=1
 fi
 
 echo
-if [ "$fail" = 0 ]; then printf '\033[1;32mE2E PASSED\033[0m — operator instrumented a raw app AND ran a coverage campaign in-cluster.\n'; else die "one or more checks failed"; fi
+if [ "$fail" = 0 ]; then printf '\033[1;32mE2E PASSED\033[0m — operator instrumented a raw app, ran a coverage campaign, and stood up its dashboard in-cluster.\n'; else die "one or more checks failed"; fi

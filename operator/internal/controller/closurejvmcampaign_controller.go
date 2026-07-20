@@ -49,12 +49,16 @@ type ClosureJVMCampaignReconciler struct {
 	Scheme *runtime.Scheme
 	// RunnerImage is the coverage-guided runner image the driver Job runs. Empty uses the default.
 	RunnerImage string
+	// DashboardImage is the per-campaign dashboard image (P5b). Empty uses the default.
+	DashboardImage string
 }
 
 //+kubebuilder:rbac:groups=closurejvm.dev,resources=closurejvmcampaigns,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=closurejvm.dev,resources=closurejvmcampaigns/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=closurejvm.dev,resources=closurejvmcampaigns/finalizers,verbs=update
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;delete
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;delete
+//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch
 
@@ -115,6 +119,15 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return r.pending(ctx, &campaign, "TargetDeploymentNotReady", err.Error())
 	}
 
+	// --- ensure the dashboard (P5b) ------------------------------------------------------------
+	// Resolve where the driver pushes status/findings: a per-campaign dashboard the operator brings
+	// up (default), an external/shared one, or nowhere (disabled). Sets status.dashboardURL as a
+	// side effect; the value is persisted by the Status().Update calls below.
+	dashboardPush, derr := r.ensureDashboard(ctx, &campaign)
+	if derr != nil {
+		return ctrl.Result{}, derr
+	}
+
 	// --- ensure the driver Job -----------------------------------------------------------------
 	var job batchv1.Job
 	jkey := types.NamespacedName{Namespace: campaign.Namespace, Name: driverJobName(&campaign)}
@@ -129,7 +142,7 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 			}
 			campaign.Spec.Driver.GrammarKey = key // in-memory, consumed by buildDriverJob
 		}
-		desired := buildDriverJob(&campaign, appImage, target.Status.CoverageEndpoint, runnerImage)
+		desired := buildDriverJob(&campaign, appImage, target.Status.CoverageEndpoint, runnerImage, dashboardPush)
 		if serr := controllerutil.SetControllerReference(&campaign, desired, r.Scheme); serr != nil {
 			return ctrl.Result{}, serr
 		}
@@ -228,6 +241,85 @@ func (r *ClosureJVMCampaignReconciler) targetAppImage(ctx context.Context, targe
 		return cs[0].Image, nil
 	}
 	return "", fmt.Errorf("target Deployment has %d containers; its spec.container must name one", len(cs))
+}
+
+// ensureDashboard resolves where the driver pushes status/findings and, for a per-campaign dashboard,
+// brings up its Deployment + Service (P5b). It returns the push target as host:port ("" = don't push)
+// and sets c.Status.DashboardURL as a side effect (persisted by the caller's Status().Update).
+//   - disabled                → no dashboard, no push
+//   - externalPush set        → push to that shared dashboard; the operator creates nothing
+//   - enabled, no externalPush → create/own a per-campaign dashboard and push to it
+func (r *ClosureJVMCampaignReconciler) ensureDashboard(ctx context.Context, c *closurejvmv1alpha1.ClosureJVMCampaign) (string, error) {
+	// Default (nil) is enabled; only an explicit false disables it. If a per-campaign dashboard was
+	// created earlier and the spec later flips to disabled / externalPush, tear it down now (it's
+	// otherwise orphaned until the whole CR is deleted) — spec.dashboard isn't immutable, so a
+	// `kubectl apply` edit reaches these branches on the next reconcile.
+	if c.Spec.Dashboard.Enabled != nil && !*c.Spec.Dashboard.Enabled {
+		if err := r.deleteDashboard(ctx, c); err != nil {
+			return "", err
+		}
+		c.Status.DashboardURL = ""
+		return "", nil
+	}
+	if push := c.Spec.Dashboard.ExternalPush; push != "" {
+		if err := r.deleteDashboard(ctx, c); err != nil {
+			return "", err
+		}
+		c.Status.DashboardURL = "http://" + push
+		return push, nil
+	}
+
+	image := r.DashboardImage
+	if image == "" {
+		image = defaultDashboardImage
+	}
+
+	// Deployment (create-if-missing; the read-only DashboardServer needs no spec-driven updates).
+	var dep appsv1.Deployment
+	dkey := types.NamespacedName{Namespace: c.Namespace, Name: dashboardName(c)}
+	if err := r.Get(ctx, dkey, &dep); apierrors.IsNotFound(err) {
+		desired := buildDashboardDeployment(c, image)
+		if serr := controllerutil.SetControllerReference(c, desired, r.Scheme); serr != nil {
+			return "", serr
+		}
+		if cerr := r.Create(ctx, desired); cerr != nil && !apierrors.IsAlreadyExists(cerr) {
+			return "", cerr
+		}
+	} else if err != nil {
+		return "", err
+	}
+
+	// Service (create-if-missing).
+	var svc corev1.Service
+	if err := r.Get(ctx, dkey, &svc); apierrors.IsNotFound(err) {
+		desired := buildDashboardService(c)
+		if serr := controllerutil.SetControllerReference(c, desired, r.Scheme); serr != nil {
+			return "", serr
+		}
+		if cerr := r.Create(ctx, desired); cerr != nil && !apierrors.IsAlreadyExists(cerr) {
+			return "", cerr
+		}
+	} else if err != nil {
+		return "", err
+	}
+
+	// In-cluster host:port; the driver posts to http://<host>/ingest/... (DashboardClient adds scheme).
+	push := fmt.Sprintf("%s.%s.svc.cluster.local:%d", dashboardName(c), c.Namespace, dashboardPort)
+	c.Status.DashboardURL = "http://" + push
+	return push, nil
+}
+
+// deleteDashboard removes a per-campaign dashboard Deployment + Service if present (idempotent). Used
+// when a campaign's dashboard config flips away from "own a dashboard" after one was already created.
+func (r *ClosureJVMCampaignReconciler) deleteDashboard(ctx context.Context, c *closurejvmv1alpha1.ClosureJVMCampaign) error {
+	name := types.NamespacedName{Namespace: c.Namespace, Name: dashboardName(c)}
+	if err := r.Delete(ctx, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: name.Name, Namespace: name.Namespace}}); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if err := r.Delete(ctx, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: name.Name, Namespace: name.Namespace}}); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	return nil
 }
 
 // resolveGrammarKey returns the grammar ConfigMap's sole key (used when the campaign didn't name one),

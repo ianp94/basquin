@@ -41,6 +41,7 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 	const (
 		appImage    = "myco/app:1.2.3"
 		runnerImg   = "test/runner:v1"
+		dashImg     = "test/dashboard:v1"
 		namespace   = "default"
 		covEndpoint = "camp-cjvm-jacoco.default.svc.cluster.local:6300"
 	)
@@ -60,7 +61,8 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 	})
 
 	rec := func() *ClosureJVMCampaignReconciler {
-		return &ClosureJVMCampaignReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), RunnerImage: runnerImg}
+		return &ClosureJVMCampaignReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(),
+			RunnerImage: runnerImg, DashboardImage: dashImg}
 	}
 	reconcileOnce := func() (reconcile.Result, error) {
 		return rec().Reconcile(ctx, reconcile.Request{NamespacedName: campaignKey})
@@ -113,6 +115,10 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 			&batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: campaignName + "-driver", Namespace: namespace}},
 			&closurejvmv1alpha1.ClosureJVMTarget{ObjectMeta: metav1.ObjectMeta{Name: targetName, Namespace: namespace}},
 			&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: deployName, Namespace: namespace}},
+			// The per-campaign dashboard (P5b) is owner-ref'd to the campaign, but envtest has no GC, so
+			// remove it explicitly to keep specs isolated.
+			&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: campaignName + "-dashboard", Namespace: namespace}},
+			&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: campaignName + "-dashboard", Namespace: namespace}},
 		} {
 			_ = k8sClient.Delete(ctx, o)
 		}
@@ -309,4 +315,109 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 		Expect(got.Status.Phase).To(Equal(closurejvmv1alpha1.CampaignFailed))
 		Expect(meta.FindStatusCondition(got.Status.Conditions, "Ready").Reason).To(Equal("TargetGone"))
 	})
+
+	// --- P5b: per-campaign dashboard ------------------------------------------------------------
+	dashKey := func() types.NamespacedName {
+		return types.NamespacedName{Name: campaignName + "-dashboard", Namespace: namespace}
+	}
+
+	It("creates a per-campaign dashboard by default and wires the driver push at it", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		Expect(k8sClient.Create(ctx, newCampaign())).To(Succeed()) // dashboard.enabled defaults true
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Dashboard Deployment + Service exist, run the dashboard image, owner-ref'd to the campaign.
+		dep := &appsv1.Deployment{}
+		Expect(k8sClient.Get(ctx, dashKey(), dep)).To(Succeed())
+		Expect(dep.Spec.Template.Spec.Containers[0].Image).To(Equal(dashImg))
+		Expect(dep.OwnerReferences).To(ContainElement(HaveField("Name", campaignName)))
+		svc := &corev1.Service{}
+		Expect(k8sClient.Get(ctx, dashKey(), svc)).To(Succeed())
+		Expect(svc.Spec.Ports[0].Port).To(Equal(int32(dashboardPort)))
+		Expect(svc.OwnerReferences).To(ContainElement(HaveField("Name", campaignName)))
+
+		// The driver pushes at the in-cluster dashboard Service, grouped under the campaign id.
+		wantPush := fmt.Sprintf("%s-dashboard.%s.svc.cluster.local:%d", campaignName, namespace, dashboardPort)
+		jto := envValue(getJob(jobKey).Spec.Template.Spec.Containers[0].Env, "JAVA_TOOL_OPTIONS")
+		Expect(jto).To(ContainSubstring("-Dclosurejvm.dashboard.push=" + wantPush))
+		Expect(jto).To(ContainSubstring("-Dclosurejvm.dashboard.id=" + campaignName))
+
+		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.DashboardURL).To(Equal("http://" + wantPush))
+	})
+
+	It("uses externalPush and creates no dashboard of its own", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		c := newCampaign()
+		c.Spec.Dashboard.ExternalPush = "fleet-dashboard.other.svc:7070"
+		Expect(k8sClient.Create(ctx, c)).To(Succeed())
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		// No per-campaign dashboard is created; the driver pushes at the external one.
+		Expect(k8sClient.Get(ctx, dashKey(), &appsv1.Deployment{})).NotTo(Succeed())
+		Expect(k8sClient.Get(ctx, dashKey(), &corev1.Service{})).NotTo(Succeed())
+		jto := envValue(getJob(jobKey).Spec.Template.Spec.Containers[0].Env, "JAVA_TOOL_OPTIONS")
+		Expect(jto).To(ContainSubstring("-Dclosurejvm.dashboard.push=fleet-dashboard.other.svc:7070"))
+
+		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.DashboardURL).To(Equal("http://fleet-dashboard.other.svc:7070"))
+	})
+
+	It("creates no dashboard and pushes nowhere when dashboard is disabled", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		c := newCampaign()
+		c.Spec.Dashboard.Enabled = boolPtr(false) // *bool so this survives admission (not re-defaulted)
+		Expect(k8sClient.Create(ctx, c)).To(Succeed())
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(k8sClient.Get(ctx, dashKey(), &appsv1.Deployment{})).NotTo(Succeed())
+		jto := envValue(getJob(jobKey).Spec.Template.Spec.Containers[0].Env, "JAVA_TOOL_OPTIONS")
+		Expect(jto).NotTo(ContainSubstring("-Dclosurejvm.dashboard.push"))
+
+		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.DashboardURL).To(BeEmpty())
+	})
+
+	It("tears down a per-campaign dashboard when it is later disabled (review #21)", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		Expect(k8sClient.Create(ctx, newCampaign())).To(Succeed()) // default: dashboard on
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient.Get(ctx, dashKey(), &appsv1.Deployment{})).To(Succeed()) // created
+
+		// Flip dashboard off on the existing campaign (spec.dashboard isn't immutable).
+		c := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, c)).To(Succeed())
+		c.Spec.Dashboard.Enabled = boolPtr(false)
+		Expect(k8sClient.Update(ctx, c)).To(Succeed())
+		_, err = reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		// The orphaned Deployment + Service are removed, not left running until CR deletion.
+		Eventually(func() bool {
+			return k8sClient.Get(ctx, dashKey(), &appsv1.Deployment{}) != nil &&
+				k8sClient.Get(ctx, dashKey(), &corev1.Service{}) != nil
+		}).Should(BeTrue())
+		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.DashboardURL).To(BeEmpty())
+	})
 })
+
+func getJob(key types.NamespacedName) *batchv1.Job {
+	job := &batchv1.Job{}
+	ExpectWithOffset(1, k8sClient.Get(context.Background(), key, job)).To(Succeed())
+	return job
+}
+
+func boolPtr(b bool) *bool { return &b }

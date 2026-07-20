@@ -318,8 +318,11 @@ processes is effectively remote code execution on whatever it runs on. **Update 
     mapping-watch (no owner refs — they'd GC the Deployment). envtest verifies patch shape / append /
     idempotency / exact revert / Injected phase (7/7). *Remaining:* e2e against a real pod needs the
     `closurejvm/agents` image (Backlog); valve mounting deferred (needs Tomcat `context.xml`).
-  - [ ] **P3 — coverage Service + status.** Headless Service (Ready-pod IPs), `status.coverageEndpoint`,
-    wired end-to-end to the DD-023 union-coverage driver flag across replicas.
+  - [x] **P3 — coverage Service + status.** Operator creates a headless Service (`clusterIP: None`)
+    selecting the target's pods on the coverage port, owner-ref'd (GC'd on delete), toggled by
+    `spec.coverageService`; publishes `status.coverageEndpoint` (`<svc>.<ns>.svc.cluster.local:6300`)
+    for the DD-023 union-coverage flag. `core/services` RBAC added. envtest (create/endpoint/toggle-off)
+    + in-cluster e2e (headless, has-endpoint, endpoint-published) all green.
   - [ ] **P4 — docs + demo.** Replace the bake-into-the-image path in `deploy/k8s` with an
     apply-a-CR path; USAGE + ARCHITECTURE updates.
 - [x] **Web dashboard, decoupled (DD-013)**: `DashboardServer` is a standalone aggregator process

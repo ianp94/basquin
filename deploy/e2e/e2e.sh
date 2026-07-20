@@ -129,6 +129,7 @@ spec:
   jvmOptsVar: CATALINA_OPTS
   agents: { threadTracker: true, coverage: { enabled: true, port: 6300, includes: "org.mybatis.jpetstore.*" } }
   invariants: { mode: soft, latencyMaxMs: 25, heapDeltaMaxKb: 256 }
+  coverageService: true
 YAML
 
 say "Wait for injection to roll out"
@@ -170,12 +171,19 @@ for i in $(seq 1 20); do
   sleep 3
 done
 
+endpoint="$($K -n "$NS" get closurejvmtarget jpetstore -o jsonpath='{.status.coverageEndpoint}')"
+svcip="$($K -n "$NS" get svc jpetstore-cjvm-jacoco -o jsonpath='{.spec.clusterIP}' 2>/dev/null || true)"
+epaddr="$($K -n "$NS" get endpoints jpetstore-cjvm-jacoco -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)"
+
 check "target status is Injected"                         "[ '$phase' = 'Injected' ]"
 check "operator injected the agents initContainer"        "echo '$initc' | grep -q 'closurejvm/agents'"
 check "CATALINA_OPTS appended, original -Xmx512m kept"    "echo '$opts' | grep -q '^-Xmx512m ' && echo '$opts' | grep -q closurejvm-agent.jar"
 check "operator ran with NO RBAC forbidden errors"        "[ '${forbidden:-0}' = '0' ]"
 check "agents loaded on the live app JVM"                 "echo '$cmdline' | grep -q 'agentpath:/closurejvm/libclosurejvmti.so' && echo '$cmdline' | grep -q 'javaagent:/closurejvm/closurejvm-agent.jar'"
 check "app serves HTTP 200 with agents loaded"            "[ '$http' = '200' ]"
+check "coverage Service is headless (clusterIP None)"    "[ '$svcip' = 'None' ]"
+check "coverage Service has the pod as an endpoint"      "[ -n '$epaddr' ]"
+check "status.coverageEndpoint published (DD-023 flag)"  "echo '$endpoint' | grep -q 'jpetstore-cjvm-jacoco.*:6300'"
 
 echo
 if [ "$fail" = 0 ]; then printf '\033[1;32mE2E PASSED\033[0m — operator instrumented a raw app in-cluster.\n'; else die "one or more checks failed"; fi

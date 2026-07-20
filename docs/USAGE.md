@@ -204,16 +204,25 @@ name, in its own namespace.
 
 **Build + install** (into a kind cluster, for the local demo):
 
+The fastest way to see all of this is **`deploy/e2e/e2e.sh`**, which builds every image, deploys the
+operator, applies a target against a raw app, and asserts the result. To do it by hand:
+
 ```bash
 # 1. Build the agents image the operator injects, and load it into your cluster.
-deploy/k8s/../agents-image/build.sh 0.2.0 <kind-cluster>      # => closurejvm/agents:0.2.0
+deploy/agents-image/build.sh 0.2.0 <kind-cluster>            # => closurejvm/agents:0.2.0
 
-# 2. Build + load the operator image, install the CRD, and deploy the operator (namespaced RBAC).
-#    deploy/e2e/e2e.sh does all of this end-to-end (build, deploy, apply a target, assert) — the
-#    fastest way to see it work. To do it by hand:
+# 2. Build + load the operator image (a fixed tag => IfNotPresent, so kind uses the loaded image
+#    instead of trying to pull the manifest's default controller:latest).
+docker build -t closurejvm/operator:0.2.0 operator/
+kind load docker-image closurejvm/operator:0.2.0 --name <kind-cluster>
+
+# 3. Install the CRD and deploy the operator (namespaced RBAC), pinning that image.
 kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml
-kubectl kustomize operator/config/default | kubectl apply -f -    # operator + Role/RoleBinding/SA
-# tell the operator which agents image to inject (a fixed tag => IfNotPresent on a kind node):
+kubectl kustomize operator/config/default \
+  | sed 's#image: controller:latest#image: closurejvm/operator:0.2.0#' \
+  | kubectl apply -f -                                       # operator + Role/RoleBinding/SA
+
+# 4. Tell the operator which agents image to inject.
 kubectl -n closurejvm-system patch deploy closurejvm-controller-manager --type=json \
   -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--agents-image=closurejvm/agents:0.2.0"}]'
 ```

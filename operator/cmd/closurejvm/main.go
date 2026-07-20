@@ -32,6 +32,7 @@ Usage:
 
 Commands:
   instrument   Apply a ClosureJVMTarget to instrument an app Deployment (and optionally wait for it).
+  run          Apply a ClosureJVMCampaign (with grammar/corpus ConfigMaps) and optionally tail it.
   help         Show this help.
 
 Run "closurejvm <command> -h" for a command's flags.
@@ -47,6 +48,11 @@ func main() {
 	switch cmd {
 	case "instrument":
 		if err := runInstrument(args); err != nil {
+			fmt.Fprintln(os.Stderr, "error: "+err.Error())
+			os.Exit(1)
+		}
+	case "run":
+		if err := runRun(args); err != nil {
 			fmt.Fprintln(os.Stderr, "error: "+err.Error())
 			os.Exit(1)
 		}

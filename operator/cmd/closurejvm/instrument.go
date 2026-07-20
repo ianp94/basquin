@@ -24,9 +24,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	closurejvmv1alpha1 "github.com/ianp94/closureJVM/operator/api/v1alpha1"
@@ -127,34 +125,14 @@ func runInstrument(args []string) error {
 	}
 
 	// Load kubeconfig (rest config + default namespace) honoring --context.
-	rules := clientcmd.NewDefaultClientConfigLoadingRules()
-	overrides := &clientcmd.ConfigOverrides{}
-	if kubeCtx != "" {
-		overrides.CurrentContext = kubeCtx
-	}
-	cc := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, overrides)
-	if o.namespace == "" {
-		if ns, _, err := cc.Namespace(); err == nil && ns != "" {
-			o.namespace = ns
-		} else {
-			o.namespace = "default"
-		}
-	}
+	cc := kubeConfig(kubeCtx)
+	o.namespace = resolveNamespace(cc, o.namespace)
 	if err := validateInstrument(o); err != nil {
 		return err
 	}
-
-	cfg, err := cc.ClientConfig()
+	c, err := newClient(cc)
 	if err != nil {
-		return fmt.Errorf("loading kubeconfig: %w", err)
-	}
-	scheme := runtime.NewScheme()
-	if err := closurejvmv1alpha1.AddToScheme(scheme); err != nil {
 		return err
-	}
-	c, err := client.New(cfg, client.Options{Scheme: scheme})
-	if err != nil {
-		return fmt.Errorf("building client: %w", err)
 	}
 
 	ctx := context.Background()

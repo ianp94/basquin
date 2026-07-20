@@ -248,6 +248,30 @@ Field notes:
 - **`driver.classesPath`** must point at real `.class` *files in the target image*. A war-only image
   (no exploded `WEB-INF/classes`) has nothing to copy and coverage reports zero — see Troubleshooting.
 
+**Or with the CLI.** `closurejvm run` creates the grammar/corpus ConfigMaps from local files (§5), applies
+the campaign, and — with `--watch` — tails it to completion, printing coverage/findings/dashboard. The
+ConfigMaps are owner-referenced to the campaign, so `kubectl delete closurejvmcampaign` GCs them:
+
+```bash
+closurejvm run -n closurejvm-system --target jpetstore \
+  --base-url http://jpetstore-app.closurejvm-system.svc.cluster.local:8080 \
+  --iterations 200 \
+  --grammar examples/grammar/jpetstore.grammar \
+  --corpus  examples/corpus/jpetstore \
+  --watch
+# Created ClosureJVMCampaign closurejvm-system/jpetstore-campaign (target "jpetstore")
+#   grammar ConfigMap jpetstore-campaign-grammar (key jpetstore.grammar)
+#   corpus ConfigMap jpetstore-campaign-corpus (27 file(s))
+#   phase: Running
+#   phase: Completed
+# Completed ✓  coverage=22.8%  findings=44  dashboard=http://jpetstore-campaign-dashboard...:7070
+```
+
+`--corpus` reads the dir's top-level files **and** its `values/` subdir (the corpus layout), keyed by
+basename — the same flat convention the `kubectl create configmap --from-file` commands below produce.
+`--duration 10m` bounds by time instead of `--iterations`; `--no-dashboard` / `--external-push host:port`
+control the dashboard. `closurejvm run -h` lists every flag.
+
 ## 5. Grammar & corpus ConfigMaps
 
 The driver's exploration surface is a **grammar** (structure) and a **corpus** (values), each delivered

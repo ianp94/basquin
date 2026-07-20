@@ -106,6 +106,11 @@ func (r *ClosureJVMTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		if apierrors.IsNotFound(err) {
 			target.Status.Phase = closurejvmv1alpha1.PhasePending
 			target.Status.InstrumentedReplicas = 0
+			// The Deployment is gone: tear down the coverage Service and clear the endpoint so we
+			// don't keep a Service with a dead selector and publish a stale coverage endpoint.
+			if cerr := r.removeCoverageService(ctx, &target); cerr != nil {
+				return ctrl.Result{}, cerr
+			}
 			meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
 				Type:   "Ready",
 				Status: metav1.ConditionFalse,
@@ -218,26 +223,23 @@ func (r *ClosureJVMTargetReconciler) revertDeployment(ctx context.Context, targe
 // Service is owner-referenced to the target so it's garbage-collected when the target is deleted.
 func (r *ClosureJVMTargetReconciler) reconcileCoverageService(ctx context.Context,
 	target *closurejvmv1alpha1.ClosureJVMTarget, deploy *appsv1.Deployment) error {
-	key := types.NamespacedName{Namespace: target.Namespace, Name: coverageServiceName(target)}
-
 	if !target.Spec.CoverageService || !target.Spec.Agents.Coverage.Enabled {
-		// Not wanted (or toggled off): delete any Service we created, clear the endpoint.
-		var existing corev1.Service
-		if err := r.Get(ctx, key, &existing); err == nil {
-			if derr := r.Delete(ctx, &existing); derr != nil && !apierrors.IsNotFound(derr) {
-				return derr
-			}
-		} else if !apierrors.IsNotFound(err) {
-			return err
-		}
-		target.Status.CoverageEndpoint = ""
-		return nil
+		return r.removeCoverageService(ctx, target)
 	}
 
 	desired := desiredCoverageService(target, deploy)
+	if len(desired.Spec.Selector) == 0 {
+		// A selectorless Service gets no auto-managed Endpoints, so DD-023 coverage would silently
+		// resolve to nothing. Only happens if the Deployment uses matchExpressions-only selectors
+		// (which a Service selector can't represent) — surface it rather than fail silently.
+		log.FromContext(ctx).Info("coverage Service selector is empty; it will back no pods "+
+			"(Deployment uses matchExpressions?) and DD-023 coverage will not resolve",
+			"service", desired.Name)
+	}
 	if err := controllerutil.SetControllerReference(target, desired, r.Scheme); err != nil {
 		return err
 	}
+	key := types.NamespacedName{Namespace: target.Namespace, Name: coverageServiceName(target)}
 	var existing corev1.Service
 	switch err := r.Get(ctx, key, &existing); {
 	case apierrors.IsNotFound(err):
@@ -255,6 +257,24 @@ func (r *ClosureJVMTargetReconciler) reconcileCoverageService(ctx context.Contex
 		return err
 	}
 	target.Status.CoverageEndpoint = coverageEndpoint(target)
+	return nil
+}
+
+// removeCoverageService deletes the coverage Service (if present) and clears status.coverageEndpoint.
+// Called when coverage is not wanted AND when the referenced Deployment disappears, so a dead
+// endpoint is never left published.
+func (r *ClosureJVMTargetReconciler) removeCoverageService(ctx context.Context,
+	target *closurejvmv1alpha1.ClosureJVMTarget) error {
+	key := types.NamespacedName{Namespace: target.Namespace, Name: coverageServiceName(target)}
+	var existing corev1.Service
+	if err := r.Get(ctx, key, &existing); err == nil {
+		if derr := r.Delete(ctx, &existing); derr != nil && !apierrors.IsNotFound(derr) {
+			return derr
+		}
+	} else if !apierrors.IsNotFound(err) {
+		return err
+	}
+	target.Status.CoverageEndpoint = ""
 	return nil
 }
 
@@ -288,6 +308,8 @@ func (r *ClosureJVMTargetReconciler) targetsForDeployment(ctx context.Context, o
 func (r *ClosureJVMTargetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&closurejvmv1alpha1.ClosureJVMTarget{}).
+		// Owns the coverage Service (owner-ref'd), so an out-of-band edit/delete of it self-heals.
+		Owns(&corev1.Service{}).
 		Watches(&appsv1.Deployment{}, handler.EnqueueRequestsFromMapFunc(r.targetsForDeployment)).
 		Complete(r)
 }

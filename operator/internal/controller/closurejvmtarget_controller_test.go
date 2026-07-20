@@ -396,6 +396,28 @@ var _ = Describe("ClosureJVMTarget Controller (P2: injection)", func() {
 		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
 		Expect(got.Status.CoverageEndpoint).To(BeEmpty())
 	})
+
+	It("tears down the coverage Service + clears the endpoint when the Deployment disappears", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{Name: container, Image: "busybox"}))).To(Succeed())
+		t := newTarget()
+		t.Spec.CoverageService = true
+		Expect(k8sClient.Create(ctx, t)).To(Succeed())
+		reconcileN(2)
+		svcKey := types.NamespacedName{Name: deployName + coverageServiceSuffix, Namespace: namespace}
+		Expect(k8sClient.Get(ctx, svcKey, &corev1.Service{})).To(Succeed()) // created
+
+		// The referenced Deployment vanishes after the Service was provisioned.
+		Expect(k8sClient.Delete(ctx, &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: deployName, Namespace: namespace}})).To(Succeed())
+		reconcileN(1)
+
+		// Service torn down and endpoint cleared — not left publishing a dead one.
+		Expect(k8sClient.Get(ctx, svcKey, &corev1.Service{})).NotTo(Succeed())
+		got := &closurejvmv1alpha1.ClosureJVMTarget{}
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(got.Status.CoverageEndpoint).To(BeEmpty())
+		Expect(meta.FindStatusCondition(got.Status.Conditions, "Ready").Reason).To(Equal("DeploymentNotFound"))
+	})
 })
 
 func int32Ptr(i int32) *int32 { return &i }

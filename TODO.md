@@ -314,8 +314,11 @@ processes is effectively remote code execution on whatever it runs on.
   valve + JaCoCo + ClosureJVM agent baked into a self-contained image, ClusterIP Service,
   one-command `up.sh`. Verified in-cluster: valve invariant headers, 96 server-side invariant
   finds, and live coverage % (281/6368 edges) all working against the pod. Demo `docs/demo-k8s.svg`.
-- [ ] **Auto-injection agent**: a mutating admission webhook (operator) that injects the
-  `-javaagent` + valve into annotated pods automatically — likely its own repo.
+- [ ] **Auto-injection operator** — design proposed in [`docs/OPERATOR-DESIGN.md`](OPERATOR-DESIGN.md),
+  under review. Chosen model is an **explicit patch controller** (a namespaced `ClosureJVMTarget`
+  CR that instruments only the Deployments you name via an initContainer + shared volume, revertible
+  by deleting the CR) — deliberately *not* a mutating admission webhook, for a bounded, auditable
+  trust boundary. Delivered in phases P1–P4; becomes DD-024 on approval.
 - [x] **Web dashboard, decoupled (DD-013)**: `DashboardServer` is a standalone aggregator process
   (own port, no driving logic) that many drivers push to via `DashboardClient`
   (`-Dclosurejvm.dashboard.push=host:port`), keyed by campaign id (defaults to `HOSTNAME` — a pod's

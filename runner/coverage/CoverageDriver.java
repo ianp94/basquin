@@ -27,10 +27,9 @@ public final class CoverageDriver {
         long intervalMs = Long.getLong("closurejvm.coverage.intervalMs", 1000L);
 
         if (classes != null && !classes.isEmpty()) {
-            String host = jacoco.contains(":") ? jacoco.substring(0, jacoco.indexOf(':')) : jacoco;
-            int port = jacoco.contains(":") ? Integer.parseInt(jacoco.substring(jacoco.indexOf(':') + 1)) : 6300;
             Path classesDir = Paths.get(classes);
-            JacocoCoverageProvider provider = new JacocoCoverageProvider(host, port, classesDir);
+            JacocoCoverageProvider provider =
+                    new JacocoCoverageProvider(JacocoCoverageProvider.parseEndpoints(jacoco), classesDir);
             Thread poller = new Thread(() -> pollLoop(provider, intervalMs), "ClosureJVM-Coverage");
             poller.setDaemon(true);
             poller.start();
@@ -46,7 +45,7 @@ public final class CoverageDriver {
         while (true) {
             try {
                 JacocoCoverageProvider.Coverage c = provider.sample();
-                StatusReporter.recordCoverage(c.covered, c.total);
+                StatusReporter.recordCoverage(c.covered, c.total, c.sourcesResponded, c.sourcesTotal);
             } catch (Throwable t) {
                 // Agent may not be up yet, or the socket blipped; keep trying quietly.
             }

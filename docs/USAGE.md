@@ -39,7 +39,7 @@ The command catalog and flag reference. For what the tool is and why, see the
 
 | Flag | Meaning |
 |------|---------|
-| `-Dclosurejvm.coverage.jacoco=host:port` | The target's JaCoCo tcpserver (default `localhost:6300`) |
+| `-Dclosurejvm.coverage.jacoco=host:port[,host:port...]` | The target's JaCoCo tcpserver(s), default `localhost:6300`. Accepts a comma-separated list; a host that resolves to several addresses (a headless Service name → all pod IPs) is expanded automatically. Coverage is union-merged across every replica that responds (DD-023). |
 | `-Dclosurejvm.coverage.classes=<dir>` | Directory of the app's `.class` files, for computing covered/total |
 | `-Dclosurejvm.coverage.intervalMs=<n>` | Poll interval for the non-guided coverage driver (default 1000) |
 
@@ -178,6 +178,22 @@ Point it at a running app that has the JaCoCo agent and the ClosureJVM valve inj
 
 Related tasks: `runHttpDriveCoverage` (coverage % without guided mutation), `runHttpDrive`
 (no coverage at all), `stageAgents`, `copyJacocoAgent`, `buildNativeAgent`.
+
+### Multiple replicas
+
+When one driver drives a target Service backed by several replicas, name every JaCoCo endpoint so
+coverage reflects the whole fleet, not the one pod your reader connected to (DD-023):
+
+```bash
+# explicit list of pod endpoints...
+-Dclosurejvm.coverage.jacoco=10.0.1.4:6300,10.0.1.5:6300,10.0.1.6:6300
+# ...or a headless Service name, which resolves to all pod IPs on its own
+-Dclosurejvm.coverage.jacoco=jpetstore-jacoco.default.svc.cluster.local:6300
+```
+
+Coverage is union-merged across replicas. The status panel shows `[N/M pods]` whenever a replica
+is unreachable or more than one is expected, so an under-count from a restarting pod is visible
+rather than being mistaken for genuinely low coverage.
 
 ## Writing a request grammar
 

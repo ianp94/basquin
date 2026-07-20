@@ -755,3 +755,38 @@ enough overhead to fake latency violations.
 **Rejected.** Leaving the bind wide with a warning (the default should be safe, not documented as
 unsafe); putting a token in the served HTML (turns a shared secret into a page-readable one);
 disabling `/api/analyze` entirely (the feature is wanted, it just needed a trust boundary).
+
+## DD-023: Coverage merges across replicas, not per-connection (2026-07-20)
+
+**Context.** One HTTP driver drives a target Service that fronts N replicas. Requests load-balance
+across all N pods, so no single pod sees the whole campaign — but the coverage reader opened one
+JaCoCo tcpserver connection, which lands on exactly one pod. The number it reported was that one
+pod's slice: with 3 replicas evenly balanced, coverage read ~1/3 of what the fleet had actually
+executed. This is worse than a missing feature — it is a *wrong number* that gets worse the more
+you scale, and it silently under-reports exactly when a run matters most.
+
+**Decision.** Read every replica and merge. JaCoCo keys execution data by a CRC64 of the class
+bytes, so identical replicas (same image → same class ids) produce the same keys, and dumping all
+of them into one `ExecutionDataStore` OR-merges their probe arrays into true union coverage — no
+custom merge logic, the store already does it. `JacocoCoverageProvider` now takes a list of
+`host:port` endpoints, and each host is resolved with `InetAddress.getAllByName`, so a **headless
+Service** name transparently expands to every pod IP behind it — the driver never has to enumerate
+pods itself. The `-Dclosurejvm.coverage.jacoco` flag accordingly accepts a comma-separated list.
+
+**Partial responses are reported, not hidden.** A restarting or unreachable replica is skipped
+(one dead pod must not zero the campaign's accumulated coverage), but the sample carries
+`sourcesResponded`/`sourcesTotal`, and the status panel shows `[N/M pods]` whenever a replica is
+missing or more than one is expected. Under-reporting because a pod is down looks identical to
+genuinely low coverage on the number alone; surfacing the fraction is what distinguishes them. If
+*nothing* responds, `sample()` throws rather than reporting a confident 0%.
+
+**Why union over the fleet is the right semantic.** The question a campaign answers is "what code
+did our inputs reach," not "what did pod 2 reach." Two pods covering disjoint halves of a branch
+should read as full coverage of that branch, because the corpus did exercise both sides. OR-merge
+gives exactly that; averaging or per-pod reporting would answer a question nobody asked.
+
+**Rejected.** Session affinity to pin the reader and the traffic to one pod (throws away the
+parallelism that having replicas buys, and still misses whatever the other pods' warm caches and
+state reach); scraping per-pod files and merging offline (a live campaign needs the number now, and
+the tcpserver dump already streams it); averaging pod percentages (a covered line on any pod is
+covered — union, not mean, is the fleet's real reach).

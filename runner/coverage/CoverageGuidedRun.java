@@ -99,20 +99,9 @@ public final class CoverageGuidedRun {
         String jacoco = System.getProperty("closurejvm.coverage.jacoco", "localhost:6300");
         String classes = System.getProperty("closurejvm.coverage.classes");
         if (classes == null) { throw new IllegalArgumentException("set -Dclosurejvm.coverage.classes"); }
-        int colon = jacoco.lastIndexOf(':');
-        if (colon <= 0 || colon == jacoco.length() - 1) {
-            throw new IllegalArgumentException(
-                "-Dclosurejvm.coverage.jacoco must be host:port (got \"" + jacoco + "\")");
-        }
-        String host = jacoco.substring(0, colon);
-        int port;
-        try {
-            port = Integer.parseInt(jacoco.substring(colon + 1).trim());
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(
-                "-Dclosurejvm.coverage.jacoco port is not a number in \"" + jacoco + "\"");
-        }
-        JacocoCoverageProvider cov = new JacocoCoverageProvider(host, port, Paths.get(classes));
+        // Accepts host:port or a comma-separated list; a headless-service host expands to all pods.
+        JacocoCoverageProvider cov = new JacocoCoverageProvider(
+                JacocoCoverageProvider.parseEndpoints(jacoco), Paths.get(classes));
 
         Random rnd = new Random(1);
 
@@ -243,7 +232,7 @@ public final class CoverageGuidedRun {
         try {
             JacocoCoverageProvider.Coverage c = cov.sample();
             lastCoverageTotal = c.total;
-            StatusReporter.recordCoverage(c.covered, c.total);
+            StatusReporter.recordCoverage(c.covered, c.total, c.sourcesResponded, c.sourcesTotal);
             return c.covered;
         } catch (Throwable ignored) {
             return 0; // agent blip; treat as "no new coverage" rather than failing the run

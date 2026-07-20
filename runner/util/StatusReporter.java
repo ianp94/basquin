@@ -51,6 +51,12 @@ public final class StatusReporter {
     // over HTTP, or an in-process JaCoCo/JQF provider). Zero until a source reports.
     private static long coveredEdges;
     private static long totalEdges;
+    // How many coverage sources (pods) answered the last sample, out of how many were expected.
+    // When responded < expected the coverage % is UNDER-reporting (a replica is down/unreachable),
+    // which is the exact failure mode multi-pod merging exists to prevent — so it is surfaced, not
+    // hidden. Zero/zero means a single-source or not-yet-reported run.
+    private static int coverageSourcesResponded;
+    private static int coverageSourcesExpected;
 
     private StatusReporter() {}
 
@@ -120,9 +126,16 @@ public final class StatusReporter {
      * provider — calls this; the coverage row appears once total &gt; 0.
      */
     public static synchronized void recordCoverage(long covered, long total) {
+        recordCoverage(covered, total, 0, 0);
+    }
+
+    /** As above, plus how many coverage sources answered vs were expected (fleet under-reporting). */
+    public static synchronized void recordCoverage(long covered, long total, int sourcesResponded, int sourcesExpected) {
         if (!ENABLED) return;
         coveredEdges = covered;
         totalEdges = total;
+        coverageSourcesResponded = sourcesResponded;
+        coverageSourcesExpected = sourcesExpected;
     }
 
     /** Render one final status frame — call when the run ends so the final tally always shows. */
@@ -184,8 +197,10 @@ public final class StatusReporter {
             sb.append("├─ exploration ─────────────────────────────────┤\n");
             row(sb, "execs", String.format("%d  (%.1f/s)", iterations, rate));
             if (totalEdges > 0) {
-                row(sb, "coverage", String.format("%.1f%%  (%d/%d edges)",
-                        100.0 * coveredEdges / totalEdges, coveredEdges, totalEdges));
+                String src = (coverageSourcesExpected > 1 || coverageSourcesResponded < coverageSourcesExpected)
+                        ? String.format("  [%d/%d pods]", coverageSourcesResponded, coverageSourcesExpected) : "";
+                row(sb, "coverage", String.format("%.1f%%  (%d/%d edges)%s",
+                        100.0 * coveredEdges / totalEdges, coveredEdges, totalEdges, src));
             }
             row(sb, "corpus", String.valueOf(corpusSaved));
             row(sb, "finds", String.format("crash=%d  invariant=%d", findCrash, findInvariant));
@@ -210,13 +225,15 @@ public final class StatusReporter {
             + "\"latencyMs\":{\"last\":%d,\"mean\":%.0f,\"max\":%d},"
             + "\"heapKb\":{\"last\":%d,\"max\":%d},\"threads\":%d,"
             + "\"exploration\":{\"corpus\":%d,\"findCrash\":%d,\"findInvariant\":%d,\"rejected\":%d,"
-            + "\"coverage\":{\"covered\":%d,\"total\":%d,\"pct\":%.1f}}}",
+            + "\"coverage\":{\"covered\":%d,\"total\":%d,\"pct\":%.1f,"
+            + "\"sourcesResponded\":%d,\"sourcesExpected\":%d}}}",
             elapsedS, iterations, rate, crashes, leaks, resets,
             violLatency, violHeap, violThread,
             lastLatencyMs, meanLatency, maxLatencyMs,
             lastHeapKb, maxHeapKb, lastThreads,
             corpusSaved, findCrash, findInvariant, rejected,
-            coveredEdges, totalEdges, coveragePct);
+            coveredEdges, totalEdges, coveragePct,
+            coverageSourcesResponded, coverageSourcesExpected);
     }
 
     private static String sinceLastFind() {

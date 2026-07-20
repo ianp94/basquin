@@ -43,6 +43,9 @@ const (
 	campaignGrammarVol = "closurejvm-grammar"
 	campaignGrammarDir = "/closurejvm-grammar"
 	campaignGrammarKey = "grammar" // the grammar is projected into the volume under this fixed filename
+
+	campaignCorpusVol = "closurejvm-corpus"
+	campaignCorpusDir = "/closurejvm-corpus"
 )
 
 func driverJobName(c *closurejvmv1alpha1.ClosureJVMCampaign) string { return c.Name + "-driver" }
@@ -96,6 +99,16 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 			}}})
 		mounts = append(mounts, corev1.VolumeMount{Name: campaignGrammarVol, MountPath: campaignGrammarDir})
 		props = append(props, "-Dclosurejvm.grammar="+campaignGrammarDir+"/"+campaignGrammarKey)
+	}
+	if d.CorpusConfigMap != "" {
+		// Flat corpus mount: every ConfigMap key becomes a file under campaignCorpusDir (keys are
+		// valid filenames — no key projection needed). loadSeeds walks this dir for /-prefixed route
+		// seeds, and the grammar's @-value-file refs fall back to <corpusDir>/<basename> (DD-018).
+		volumes = append(volumes, corev1.Volume{Name: campaignCorpusVol, VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{Name: d.CorpusConfigMap}}}})
+		mounts = append(mounts, corev1.VolumeMount{Name: campaignCorpusVol, MountPath: campaignCorpusDir})
+		props = append(props, "-Dclosurejvm.corpusDir="+campaignCorpusDir)
 	}
 
 	var args []string

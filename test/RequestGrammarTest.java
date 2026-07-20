@@ -97,6 +97,36 @@ public class RequestGrammarTest {
         }
     }
 
+    /**
+     * A grammar authored with laptop-relative @refs (grammar and corpus as sibling dirs) must still
+     * find its values in a container, where the operator flattens the corpus into one dir and sets
+     * -Dclosurejvm.corpusDir. When the ref misses relative to the grammar file, resolution falls back
+     * to corpusDir/<basename>. Without this, campaigns silently run on structure only (DD-018).
+     */
+    @Test
+    public void resolvesValueFileByBasenameFromCorpusDirWhenRelativeRefMisses() throws IOException {
+        Path corpusDir = Files.createTempDirectory("corpus");
+        corpusDir.toFile().deleteOnExit();
+        Path vf = corpusDir.resolve("categoryId.txt");
+        Files.write(vf, "FISH\nDOGS\n".getBytes(StandardCharsets.UTF_8));
+        vf.toFile().deleteOnExit();
+
+        String prev = System.getProperty("closurejvm.corpusDir");
+        System.setProperty("closurejvm.corpusDir", corpusDir.toString());
+        try {
+            // "nope/categoryId.txt" does not exist next to the temp grammar file → basename fallback.
+            RequestGrammar g = load("$c = @nope/categoryId.txt\n/x?c=${c}\n");
+            for (int i = 0; i < 20; i++) {
+                String out = g.randomRequest();
+                assertTrue("must resolve corpus values via corpusDir fallback: " + out,
+                        out.equals("/x?c=FISH") || out.equals("/x?c=DOGS"));
+            }
+        } finally {
+            if (prev == null) System.clearProperty("closurejvm.corpusDir");
+            else System.setProperty("closurejvm.corpusDir", prev);
+        }
+    }
+
     @Test
     public void emptyGrammarIsReportedRatherThanSilentlyExploringNothing() throws IOException {
         assertTrue(load("# nothing but a comment\n").isEmpty());

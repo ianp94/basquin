@@ -113,16 +113,40 @@ public final class RequestGrammar {
         List<String> out = new ArrayList<>();
         Path p = Paths.get(ref);
         if (!p.isAbsolute() && base != null) p = base.resolve(ref);
+        if (readInto(p, out)) return out;
+
+        // Fallback: resolve the ref's basename against a flat corpus dir. A grammar authored with
+        // laptop-relative @refs (e.g. @../corpus/jpetstore/values/categoryId.txt, which resolves next
+        // to the grammar file on disk) then works unchanged in a container where the operator mounts a
+        // flat corpus ConfigMap and sets -Dclosurejvm.corpusDir — the tree can't survive a flat
+        // ConfigMap, but the basename can.
+        String corpusDir = System.getProperty("closurejvm.corpusDir", "");
+        if (!corpusDir.isEmpty()) {
+            Path alt = Paths.get(corpusDir).resolve(p.getFileName().toString());
+            if (readInto(alt, out)) {
+                System.out.println("[ClosureJVM] grammar: resolved values \"" + ref + "\" via corpusDir (" + alt + ")");
+                return out;
+            }
+            System.err.println("[ClosureJVM] grammar: values file not found at " + p + " or " + alt);
+        } else {
+            System.err.println("[ClosureJVM] grammar: could not read values file " + p);
+        }
+        return out;
+    }
+
+    /** Read non-comment, non-blank lines of {@code p} into {@code out}. Returns false if unreadable. */
+    private static boolean readInto(Path p, List<String> out) {
+        if (!Files.isReadable(p)) return false;
         try {
             for (String line : new String(Files.readAllBytes(p), StandardCharsets.UTF_8).split("\n")) {
                 String v = line.trim();
                 if (v.isEmpty() || v.startsWith("#")) continue;
                 out.add(v);
             }
+            return true;
         } catch (IOException e) {
-            System.err.println("[ClosureJVM] grammar: could not read values file " + p + ": " + e);
+            return false;
         }
-        return out;
     }
 
     public boolean isEmpty() { return routes.isEmpty(); }

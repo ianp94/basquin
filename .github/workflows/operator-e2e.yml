@@ -18,6 +18,9 @@ on:
       - 'examples/corpus/**'
       - 'build.gradle'
       - 'settings.gradle'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - 'gradle/**'
       - '.github/workflows/operator-e2e.yml'
   pull_request:
     paths:
@@ -30,6 +33,9 @@ on:
       - 'examples/corpus/**'
       - 'build.gradle'
       - 'settings.gradle'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - 'gradle/**'
       - '.github/workflows/operator-e2e.yml'
 
 jobs:
@@ -46,10 +52,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/gradle-build-action@v3
-      - name: Set up Go (operator image + CLI)
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.21'
+      # No host Go toolchain: the operator image is built entirely inside operator/Dockerfile's
+      # golang:1.21 multi-stage builder, and neither e2e.sh nor the build.sh scripts shell out to `go`.
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
       - name: Install helm
@@ -71,10 +75,17 @@ jobs:
           path: ~/.m2/repository
           key: m2-jpetstore-${{ runner.os }}
       - name: Build the JPetStore WAR (the un-instrumented target app under test)
+        # Pin the upstream commit: jpetstore-6 is the one dependency this workflow can't control, and an
+        # unpinned master could break CI (new build tooling requirements) with no change in this repo.
+        # Bump JPETSTORE_SHA deliberately when you want a newer upstream.
+        env:
+          JPETSTORE_SHA: c8f62cc76b8ac08066bb79618cf5824144f24e03
         run: |
           set -e
           mvn -version
-          git clone --depth 1 https://github.com/mybatis/jpetstore-6.git /tmp/jpetstore-6
+          git init -q /tmp/jpetstore-6
+          git -C /tmp/jpetstore-6 fetch --depth 1 https://github.com/mybatis/jpetstore-6.git "$JPETSTORE_SHA"
+          git -C /tmp/jpetstore-6 checkout -q FETCH_HEAD
           # JPetStore-6's build plugins gate on newer tooling; skip the gates (see docs/THIRD-PARTY-APPS.md).
           mvn -q -f /tmp/jpetstore-6/pom.xml -DskipTests -Denforcer.skip=true -Dmaven.gitcommitid.skip=true package
           echo "JPETSTORE_WAR=/tmp/jpetstore-6/target/jpetstore.war" >> "$GITHUB_ENV"
@@ -83,6 +94,19 @@ jobs:
       - name: Operator logs on failure
         if: failure()
         run: |
-          kubectl --context kind-closurejvm -n closurejvm-system logs \
-            -l control-plane=controller-manager --tail=200 || true
-          kubectl --context kind-closurejvm -n closurejvm-system get closurejvmtargets,closurejvmcampaigns -o wide || true
+          K="kubectl --context kind-closurejvm -n closurejvm-system"
+          echo "::group::operator logs"
+          $K logs -l control-plane=controller-manager --tail=200 || true
+          echo "::endgroup::"
+          echo "::group::CRs"
+          $K get closurejvmtargets,closurejvmcampaigns -o wide || true
+          echo "::endgroup::"
+          # Events + app-pod logs catch failures the operator's own log won't show — e.g. ImagePullBackOff
+          # on the injected initContainer, or the target app pod crashing after injection.
+          echo "::group::events"
+          $K get events --sort-by=.lastTimestamp || true
+          echo "::endgroup::"
+          echo "::group::pods + app logs"
+          $K get pods -o wide || true
+          $K logs -l app=jpetstore-raw --tail=200 --all-containers || true
+          echo "::endgroup::"

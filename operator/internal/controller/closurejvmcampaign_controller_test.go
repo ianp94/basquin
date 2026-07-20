@@ -259,6 +259,79 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 		Expect(cm.OwnerReferences).To(ContainElement(HaveField("Name", campaignName)))
 	})
 
+	// --- DD-026 PR 2: load mode ------------------------------------------------------------------
+	newLoadCampaign := func(corpusCM string) *closurejvmv1alpha1.ClosureJVMCampaign {
+		c := newCampaign()
+		c.Spec.Mode = "load"
+		c.Spec.Driver.Iterations = 0
+		c.Spec.Driver.Duration = "5m"
+		c.Spec.Driver.CorpusConfigMap = corpusCM
+		c.Spec.Driver.Concurrency = 25
+		return c
+	}
+
+	It("builds a coverage-free driver Job in load mode", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		corpusCM := "corp-" + fmt.Sprint(runID)
+		Expect(k8sClient.Create(ctx, &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: corpusCM, Namespace: namespace},
+			Data:       map[string]string{"corpus.txt": "/actions/Catalog.action\n"}})).To(Succeed())
+		Expect(k8sClient.Create(ctx, newLoadCampaign(corpusCM))).To(Succeed())
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		job := getJob(jobKey)
+		Expect(job.Spec.Template.Spec.InitContainers).To(BeEmpty()) // no extract/verify in load
+		jto := envValue(job.Spec.Template.Spec.Containers[0].Env, "JAVA_TOOL_OPTIONS")
+		Expect(jto).To(ContainSubstring("-Dclosurejvm.mode=load"))
+		Expect(jto).To(ContainSubstring("-Dclosurejvm.concurrency=25"))
+		Expect(jto).To(ContainSubstring("-Dclosurejvm.corpusDir="))
+		Expect(jto).NotTo(ContainSubstring("-Dclosurejvm.coverage.jacoco"))
+		Expect(jto).NotTo(ContainSubstring("-Dclosurejvm.coverage.classes"))
+	})
+
+	It("completes a load run and reads status.load from the summary", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		corpusCM := "corp2-" + fmt.Sprint(runID)
+		Expect(k8sClient.Create(ctx, &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: corpusCM, Namespace: namespace},
+			Data:       map[string]string{"corpus.txt": "/actions/Catalog.action\n"}})).To(Succeed())
+		Expect(k8sClient.Create(ctx, newLoadCampaign(corpusCM))).To(Succeed())
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		job := getJob(jobKey)
+		job.Status.Succeeded = 1
+		Expect(k8sClient.Status().Update(ctx, job)).To(Succeed())
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: campaignName + "-driver-l", Namespace: namespace,
+				Labels: map[string]string{"closurejvm.dev/campaign": campaignName}},
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "driver", Image: runnerImg}}},
+		}
+		Expect(k8sClient.Create(ctx, pod)).To(Succeed())
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: namespace}, pod)).To(Succeed())
+		pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+			Name: "driver",
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+				Message: `{"load":{"requests":1000,"throughputRps":"250.5","latencyMs":{"p50":8,"p90":20,"p99":55,"max":120},"heapDriftKb":512,"threadDrift":1,"violations":{"latency":3,"heap":0,"thread":0}}}`}},
+		}}
+		Expect(k8sClient.Status().Update(ctx, pod)).To(Succeed())
+
+		_, err = reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(closurejvmv1alpha1.CampaignCompleted))
+		Expect(got.Status.Load).NotTo(BeNil())
+		Expect(got.Status.Load.Requests).To(Equal(int64(1000)))
+		Expect(got.Status.Load.ThroughputRps).To(Equal("250.5"))
+		Expect(got.Status.Load.LatencyMs.P99).To(Equal(int32(55)))
+		Expect(got.Status.Load.Violations.Latency).To(Equal(int32(3)))
+		Expect(got.Status.CorpusConfigMap).To(BeEmpty()) // load consumes a corpus, doesn't emit one
+	})
+
 	It("surfaces a failed initContainer's reason in campaign status (review #24)", func() {
 		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
 		makeInjectedTarget()

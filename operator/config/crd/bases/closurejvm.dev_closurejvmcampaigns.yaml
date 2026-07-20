@@ -57,6 +57,8 @@ spec:
             description: |-
               ClosureJVMCampaignSpec defines the desired state of ClosureJVMCampaign.
               Exactly one of driver.duration / driver.iterations must be set.
+              load mode replays a saved corpus at volume — it requires driver.corpusConfigMap, and ignores a
+              grammar / an iteration count (it is duration-bounded). DD-026.
             properties:
               baseURL:
                 description: |-
@@ -91,6 +93,13 @@ spec:
                       ClassesPath is where the app's .class files live inside the TARGET's container image; an
                       initContainer copies them out for JaCoCo coverage analysis (DD-025 §7b).
                     type: string
+                  concurrency:
+                    description: |-
+                      Concurrency is the number of parallel in-flight requests in load mode (DD-026). Ignored in
+                      explore mode. Defaults to 10 when mode=load.
+                    format: int32
+                    minimum: 1
+                    type: integer
                   corpusConfigMap:
                     type: string
                   duration:
@@ -131,7 +140,21 @@ spec:
                     format: int64
                     minimum: 1
                     type: integer
+                  warmup:
+                    description: |-
+                      Warmup (load mode) is a Go-style duration excluded from the reported latency percentiles and
+                      invariant enforcement, to skip JIT / connection-pool warmup noise (e.g. "30s"). Optional.
+                    type: string
                 type: object
+              mode:
+                default: explore
+                description: |-
+                  Mode selects the run objective: explore (coverage-guided fuzz, default) or load (replay a saved
+                  corpus at volume, watching the same invariant oracles under sustained traffic). DD-026.
+                enum:
+                - explore
+                - load
+                type: string
               targetRef:
                 description: TargetRef is the ClosureJVMTarget to drive (must be Injected
                   before the run starts).
@@ -151,6 +174,14 @@ spec:
             - message: set exactly one of driver.duration or driver.iterations
               rule: (has(self.driver.duration) && size(self.driver.duration) > 0)
                 != (has(self.driver.iterations) && self.driver.iterations > 0)
+            - message: 'mode: load requires driver.corpusConfigMap (the corpus to
+                replay)'
+              rule: self.mode != 'load' || (has(self.driver.corpusConfigMap) && size(self.driver.corpusConfigMap)
+                > 0)
+            - message: 'mode: load replays a fixed corpus and ignores a grammar; remove
+                driver.grammarConfigMap'
+              rule: self.mode != 'load' || !(has(self.driver.grammarConfigMap) &&
+                size(self.driver.grammarConfigMap) > 0)
           status:
             description: ClosureJVMCampaignStatus defines the observed state of ClosureJVMCampaign.
             properties:
@@ -246,6 +277,58 @@ spec:
               findings:
                 format: int32
                 type: integer
+              load:
+                description: 'Load holds load-mode results (throughput, latency percentiles,
+                  drift) — set only for mode: load.'
+                properties:
+                  heapDriftKb:
+                    description: HeapDriftKb / ThreadDrift are end-minus-start deltas
+                      over the soak (slow-leak signal).
+                    format: int64
+                    type: integer
+                  latencyMs:
+                    description: LatencyMs holds percentile latencies over the measured
+                      window.
+                    properties:
+                      max:
+                        format: int32
+                        type: integer
+                      p50:
+                        format: int32
+                        type: integer
+                      p90:
+                        format: int32
+                        type: integer
+                      p99:
+                        format: int32
+                        type: integer
+                    type: object
+                  requests:
+                    description: Requests is the total requests fired during the measured
+                      (post-warmup) window.
+                    format: int64
+                    type: integer
+                  threadDrift:
+                    format: int32
+                    type: integer
+                  throughputRps:
+                    description: ThroughputRps is requests/second over the measured
+                      window (formatted, e.g. "713.4").
+                    type: string
+                  violations:
+                    description: Violations counts invariant breaches under load.
+                    properties:
+                      heap:
+                        format: int32
+                        type: integer
+                      latency:
+                        format: int32
+                        type: integer
+                      thread:
+                        format: int32
+                        type: integer
+                    type: object
+                type: object
               observedGeneration:
                 format: int64
                 type: integer

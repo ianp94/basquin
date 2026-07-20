@@ -111,12 +111,14 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return r.pending(ctx, &campaign, "TargetNotInjected",
 			fmt.Sprintf("target %q is %q, waiting for Injected", target.Name, target.Status.Phase))
 	}
-	if target.Status.CoverageEndpoint == "" {
+	// Coverage is explore-only; a load run replays a corpus and doesn't sample coverage.
+	if campaign.Spec.Mode != "load" && target.Status.CoverageEndpoint == "" {
 		return r.pending(ctx, &campaign, "NoCoverageEndpoint",
 			"target has no status.coverageEndpoint (set spec.coverageService on the target)")
 	}
 
-	// The .class files come from the target's app-container image; find it via the target's Deployment.
+	// The .class files come from the target's app-container image (explore only — load skips them, but
+	// resolving the image is cheap and harmless).
 	appImage, err := r.targetAppImage(ctx, &target)
 	if err != nil {
 		return r.pending(ctx, &campaign, "TargetDeploymentNotReady", err.Error())
@@ -202,23 +204,29 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 	// --- aggregate the Job's outcome -----------------------------------------------------------
 	if job.Status.Succeeded > 0 {
 		if s := r.readDriverSummary(ctx, &campaign); s != nil {
-			campaign.Status.CoveragePct = fmt.Sprintf("%.1f", s.Exploration.Coverage.Pct)
-			campaign.Status.Findings = s.Exploration.Corpus
-			// Persist the interesting "replay corpus" as a campaign-owned ConfigMap (DD-026 PR 1) —
-			// for reproducibility, the dashboard corpus view, and load-mode replay. The driver stays
-			// credential-less: it wrote the corpus into its summary (termination message); the operator,
-			// which already holds the RBAC, materializes the ConfigMap here. Emit BEFORE flipping to a
-			// terminal phase: a terminal campaign never reconciles again (top-of-func guard), so a
-			// transient failure here would otherwise permanently forfeit the corpus. On failure, stay
-			// Running and retry next reconcile (the create-or-update is idempotent).
-			if len(s.ReplayCorpus) > 0 {
-				if err := r.emitCorpusConfigMap(ctx, &campaign, s.ReplayCorpus); err != nil {
-					l.Error(err, "emitting replay-corpus ConfigMap; will retry")
-					campaign.Status.Phase = closurejvmv1alpha1.CampaignRunning
-					if uerr := r.Status().Update(ctx, &campaign); uerr != nil {
-						return ctrl.Result{}, uerr
+			if campaign.Spec.Mode == "load" {
+				// Load/soak result (DD-026 PR 2): throughput/latency/drift. No coverage, no corpus emit
+				// (a load run consumes a corpus, it doesn't produce one).
+				campaign.Status.Load = s.Load
+			} else {
+				campaign.Status.CoveragePct = fmt.Sprintf("%.1f", s.Exploration.Coverage.Pct)
+				campaign.Status.Findings = s.Exploration.Corpus
+				// Persist the interesting "replay corpus" as a campaign-owned ConfigMap (DD-026 PR 1) —
+				// for reproducibility, the dashboard corpus view, and load-mode replay. The driver stays
+				// credential-less: it wrote the corpus into its summary (termination message); the
+				// operator, which holds the RBAC, materializes the ConfigMap here. Emit BEFORE the
+				// terminal phase flip: a terminal campaign never reconciles again (top-of-func guard), so
+				// a transient failure would otherwise permanently forfeit the corpus. On failure, stay
+				// Running and retry next reconcile (the create-or-update is idempotent).
+				if len(s.ReplayCorpus) > 0 {
+					if err := r.emitCorpusConfigMap(ctx, &campaign, s.ReplayCorpus); err != nil {
+						l.Error(err, "emitting replay-corpus ConfigMap; will retry")
+						campaign.Status.Phase = closurejvmv1alpha1.CampaignRunning
+						if uerr := r.Status().Update(ctx, &campaign); uerr != nil {
+							return ctrl.Result{}, uerr
+						}
+						return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 					}
-					return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 				}
 			}
 		}
@@ -260,6 +268,9 @@ type driverSummary struct {
 	// ReplayCorpus is the capped set of interesting inputs the run fired (DD-026 PR 1); the operator
 	// materializes it into status.corpusConfigMap.
 	ReplayCorpus []string `json:"replayCorpus"`
+	// Load is the load/soak run's result (DD-026 PR 2); the JSON tags match the API LoadStatus so it
+	// unmarshals straight into status.load.
+	Load *closurejvmv1alpha1.LoadStatus `json:"load"`
 }
 
 const corpusOutKey = "corpus.txt"
@@ -491,9 +502,10 @@ const specHashAnnotation = "closurejvm.dev/spec-hash"
 func driverSpecHash(c *closurejvmv1alpha1.ClosureJVMCampaign) string {
 	payload := struct {
 		BaseURL   string
+		Mode      string
 		Driver    closurejvmv1alpha1.CampaignDriverSpec
 		Dashboard closurejvmv1alpha1.CampaignDashboardSpec
-	}{c.Spec.BaseURL, c.Spec.Driver, c.Spec.Dashboard}
+	}{c.Spec.BaseURL, c.Spec.Mode, c.Spec.Driver, c.Spec.Dashboard}
 	b, _ := json.Marshal(payload)
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:8]) // 16 hex chars — ample to distinguish spec revisions

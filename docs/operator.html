@@ -111,22 +111,32 @@ deploy/agents-image/build.sh    0.2.0 &lt;kind-cluster&gt;
 deploy/runner-image/build.sh    0.2.0 &lt;kind-cluster&gt;
 deploy/dashboard-image/build.sh 0.2.0 &lt;kind-cluster&gt;</code></pre>
 
-  <h3>Install with Helm (recommended)</h3>
-  <p>The chart at <code>deploy/helm/closurejvm-operator</code> installs the CRDs, namespaced RBAC, and
-    the controller — with the three images wired straight from values, no manual arg-patching:</p>
-  <pre><code>helm install closurejvm ./deploy/helm/closurejvm-operator \
+  <h3>Install from the published repo (no clone, no build)</h3>
+  <p>The chart is published to a GitHub Pages Helm repo, and its default images to GitHub Container
+    Registry (<code>ghcr.io/ianp94/closurejvm-*</code>) — a plain <code>helm install</code> pulls real
+    images with nothing to build:</p>
+  <pre><code>helm repo add closurejvm https://ianp94.github.io/closureJVM/charts
+helm repo update
+helm install closurejvm closurejvm/closurejvm-operator \
   --namespace closurejvm-system --create-namespace \
-  <span class="f">--set</span> <span class="s">fullnameOverride=closurejvm</span> \
-  <span class="f">--set</span> <span class="s">image.tag=0.2.0</span> \
-  <span class="f">--set</span> <span class="s">images.agents=closurejvm/agents:0.2.0</span> \
-  <span class="f">--set</span> <span class="s">images.runner=closurejvm/runner:0.2.0</span> \
-  <span class="f">--set</span> <span class="s">images.dashboard=closurejvm/dashboard:0.2.0</span></code></pre>
+  <span class="f">--set</span> <span class="s">fullnameOverride=closurejvm</span></code></pre>
   <div class="note">
     <span class="tag">note</span>
     <p>RBAC is namespaced <code>Role</code>s (no cluster-scoped grants). Helm does <strong>not</strong>
       upgrade or delete CRDs — re-apply changed CRDs by hand on <code>helm upgrade</code>, and they
       (plus any remaining CRs) are left in place on <code>helm uninstall</code>.</p>
   </div>
+
+  <h3>Build + install from a checkout (local / kind)</h3>
+  <p>For a local kind cluster, build the images (below) and install from the checkout, pinning the
+    locally-built images:</p>
+  <pre><code>helm install closurejvm ./deploy/helm/closurejvm-operator \
+  --namespace closurejvm-system --create-namespace \
+  <span class="f">--set</span> <span class="s">fullnameOverride=closurejvm</span> \
+  <span class="f">--set</span> <span class="s">image.repository=closurejvm/operator</span> <span class="f">--set</span> <span class="s">image.tag=0.2.0</span> \
+  <span class="f">--set</span> <span class="s">images.agents=closurejvm/agents:0.2.0</span> \
+  <span class="f">--set</span> <span class="s">images.runner=closurejvm/runner:0.2.0</span> \
+  <span class="f">--set</span> <span class="s">images.dashboard=closurejvm/dashboard:0.2.0</span></code></pre>
 
   <h3>Or install with kustomize</h3>
   <pre><code>kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml

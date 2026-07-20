@@ -8,23 +8,39 @@ The operator is **namespaced by design**: it watches and mutates only its own na
 (`WATCH_NAMESPACE` from the release namespace via the downward API; it refuses to start if empty).
 Install **one release per namespace** you want to instrument. There is no cluster-wide mode.
 
-## Install
+## Install from the published Helm repo (no clone)
+
+The chart is published to a GitHub Pages Helm repo, and its default images to GitHub Container
+Registry (`ghcr.io/ianp94/closurejvm-*`) — so a plain `helm install` pulls real images:
 
 ```bash
-# From a checkout (chart isn't published to a repo yet):
+helm repo add closurejvm https://ianp94.github.io/closureJVM/charts
+helm repo update
+helm install closurejvm closurejvm/closurejvm-operator \
+  --namespace closurejvm-system --create-namespace \
+  --set fullnameOverride=closurejvm
+```
+
+## Install from a checkout
+
+```bash
 helm install closurejvm ./deploy/helm/closurejvm-operator \
   --namespace closurejvm-system --create-namespace \
-  --set fullnameOverride=closurejvm \
-  --set image.tag=0.2.0 \
-  --set images.agents=closurejvm/agents:0.2.0 \
-  --set images.runner=closurejvm/runner:0.2.0 \
-  --set images.dashboard=closurejvm/dashboard:0.2.0
+  --set fullnameOverride=closurejvm
+# ...add --set image.tag=… / --set images.*=… to pin local (e.g. kind-loaded) images.
 ```
 
 `--set fullnameOverride=closurejvm` makes resources read as `closurejvm-controller-manager`,
-`closurejvm-manager-role`, … matching the rest of the docs; omit it to get the default
-`<release>-<chart>` prefix. The in-cluster e2e (`deploy/e2e/e2e.sh`) exercises this chart end to end
-with `INSTALL=helm deploy/e2e/e2e.sh`.
+`closurejvm-manager-role`, … matching the rest of the docs; omit it for the default `<release>-<chart>`
+prefix. The in-cluster e2e (`deploy/e2e/e2e.sh`) exercises this chart end to end with
+`INSTALL=helm deploy/e2e/e2e.sh` (it `--set`s the locally-built `closurejvm/*` images).
+
+## Publishing (maintainer)
+
+`git tag v0.2.0 && git push origin v0.2.0` triggers [`release.yml`](../../../.github/workflows/release.yml):
+it builds + pushes the four images to ghcr, and attaches the CLI binaries + packaged chart to the
+GitHub Release. Refresh the Pages Helm repo with [`deploy/helm/publish.sh`](../publish.sh) (packages the
+chart into `docs/charts/` + regenerates `index.yaml`), then commit `docs/charts/`.
 
 Then follow [docs/OPERATOR-USAGE.md](../../../docs/OPERATOR-USAGE.md): apply a `ClosureJVMTarget` to
 instrument an app, then a `ClosureJVMCampaign` to run a coverage-guided test.

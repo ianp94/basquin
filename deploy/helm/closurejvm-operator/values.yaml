@@ -1,18 +1,18 @@
 # Default values for closurejvm-operator.
 
-# The operator controller image.
+# The operator controller image. Defaults to the published GitHub Container Registry image (built and
+# pushed by .github/workflows/release.yml on a version tag); override for a local/kind image.
 image:
-  repository: closurejvm/operator
+  repository: ghcr.io/ianp94/closurejvm-operator
   tag: "0.2.0"
   pullPolicy: IfNotPresent
 
 # The three images the operator launches or injects. Each maps to a controller flag; leaving one
-# empty makes the operator fall back to its built-in default (usually not what you want on a cluster
-# that can't pull those defaults — pin them to tags you built and loaded).
+# empty makes the operator fall back to its built-in default. Default to the published ghcr images.
 images:
-  agents: closurejvm/agents:0.2.0       # --agents-image (target injection initContainer)
-  runner: closurejvm/runner:0.2.0       # --runner-image (campaign driver Job)
-  dashboard: closurejvm/dashboard:0.2.0 # --dashboard-image (per-campaign dashboard Deployment)
+  agents: ghcr.io/ianp94/closurejvm-agents:0.2.0       # --agents-image (target injection initContainer)
+  runner: ghcr.io/ianp94/closurejvm-runner:0.2.0       # --runner-image (campaign driver Job)
+  dashboard: ghcr.io/ianp94/closurejvm-dashboard:0.2.0 # --dashboard-image (per-campaign dashboard Deployment)
 
 # The operator is NAMESPACED BY DESIGN: it watches and mutates only its own namespace (WATCH_NAMESPACE
 # is set from the release namespace via the downward API, and the operator refuses to start if empty).

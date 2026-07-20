@@ -236,6 +236,9 @@ privilege is bounded and inspectable, versus "mutate any pod at admission time."
   DD-023 driver flag end to end across replicas.
 - **P4 — docs + demo.** Replace the bake-it-into-the-image path in `deploy/k8s` with an
   apply-a-CR path; USAGE + ARCHITECTURE updates; record **DD-024**.
+- **P5 — orchestration (`ClosureJVMCampaign`).** The second CRD that fires off a whole test —
+  launches the runner + dashboard against an instrumented target and aggregates status. Designed in
+  full (likely **DD-025**) then implemented. See §10.
 
 ## 9. Rejected alternatives (summary)
 
@@ -254,17 +257,18 @@ privilege is bounded and inspectable, versus "mutate any pod at admission time."
 
 ---
 
-## 10. Operator-orchestrated test (proposed extension — under discussion 2026-07-20)
+## 10. Operator-orchestrated test — `ClosureJVMCampaign` (P5)
 
-**Status:** proposed, not yet designed in full. Captured here so the direction isn't lost; the exact
-CRD shape is the open decision. Lands after the P1–P4 injection work.
+**Status (2026-07-20):** direction and CRD shape **confirmed** — two CRDs, campaign built as **P5**
+after the P1–P4 injection work (a campaign needs a working instrumented target to drive). Full CRD
+schema + reconcile design still to be written before implementation (likely its own **DD-025**).
 
 **The ask.** The operator shouldn't only *instrument* a target — it should orchestrate the **whole
 test**: bring up the target's instrumentation, launch the **runner** (the coverage-guided HTTP
 driver) and the **dashboard** (aggregator), wire them together, and fire the run off from a single
 custom resource. "Create a test, everything starts."
 
-**Recommended shape: a second CRD, `ClosureJVMCampaign`, distinct from `ClosureJVMTarget`.**
+**Confirmed shape: two CRDs — a `ClosureJVMCampaign` distinct from `ClosureJVMTarget`.**
 
 - `ClosureJVMTarget` (P1–P4) stays the *instrument-a-Deployment* primitive: long-lived, "this app
   carries the agents." A target can exist with no test running.

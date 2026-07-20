@@ -359,8 +359,10 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 - [ ] Exercise the Claude analysis path against a live key — the `verifyClaude` smoke check is merged (PR #5); one real `[claude-check] OK` run closes it *(v0.10, DD-015)*
 - [ ] Periodic machine-readable status line (JSON) on stdout for external tooling (distinct from the dashboard push) *(v0.7)*
 
-### Operator orchestration (the operator owns the whole test, not just injection)
-See the *Operator-orchestrated test* section in [`docs/OPERATOR-DESIGN.md`](OPERATOR-DESIGN.md).
+### Operator orchestration — P5 (confirmed 2026-07-20: two CRDs, after P2–P4)
+The operator owns the whole test, not just injection. Two-CRD shape confirmed; built as **P5** after
+the P1–P4 injection work (a campaign needs a working instrumented target). Design in full first
+(likely DD-025). See §10 of [`docs/OPERATOR-DESIGN.md`](OPERATOR-DESIGN.md).
 - [ ] **`ClosureJVMCampaign` (test) CRD** — a second CRD that fires off a complete test run: reference a `ClosureJVMTarget`, spec the driver (grammar/corpus/duration/invariants) and the dashboard, and the operator reconciles it into a running campaign
 - [ ] Operator launches the **driver** as a Job (the coverage-guided runner) pointed at the target Service + JaCoCo endpoints + dashboard push
 - [ ] Operator launches/ensures the **dashboard** (aggregator Deployment + Service) and wires the driver's push at it

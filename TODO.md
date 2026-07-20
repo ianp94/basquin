@@ -204,3 +204,19 @@ Goal: Make a running harness legible at a glance, AFL-style.
   output is piped/non-interactive or in CI
 - [ ] Suppress the per-iteration metrics spam when the status screen is active
 - [ ] Optional: periodic machine-readable status line (JSON) for tooling
+
+---
+
+## Milestone: v0.8 — "Cross-namespace"
+
+Goal: Run against `javax.servlet` apps (Tomcat 9), not just `jakarta.servlet` (Tomcat 10+).
+The valve's only hard namespace coupling is `jakarta.servlet.ServletException` in the
+`invoke` signature; everything else can use the Catalina `Request`/`Response` directly.
+
+- [ ] javax-compiled valve variant (Tomcat 9 Catalina API). Decide: separate module vs a
+  shared-source, two-flavor build (one .java, two source sets against javax/jakarta APIs)
+- [ ] `docker-compose.valve9.yml` (or a WAR-namespace switch) for the Tomcat 9 path
+- [ ] Drop the unnecessary `HttpServletResponse` import from the valve so only the
+  `ServletException` throws clause differs between flavors
+- [ ] Verify against a real javax app (older JPetStore release, or another javax WAR)
+- [ ] Docs: THIRD-PARTY-APPS namespace-selection table (app namespace → Tomcat → valve flavor)

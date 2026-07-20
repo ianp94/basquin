@@ -61,6 +61,9 @@ func main() {
 	var agentsImage string
 	flag.StringVar(&agentsImage, "agents-image", "",
 		"Image the injected initContainer copies the ClosureJVM agents from (empty uses the built-in default).")
+	var runnerImage string
+	flag.StringVar(&runnerImage, "runner-image", "",
+		"Image the campaign driver Job runs the coverage-guided runner from (empty uses the built-in default).")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -148,6 +151,14 @@ func main() {
 		AgentsImage: agentsImage,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClosureJVMTarget")
+		os.Exit(1)
+	}
+	if err = (&controller.ClosureJVMCampaignReconciler{
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		RunnerImage: runnerImage,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ClosureJVMCampaign")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

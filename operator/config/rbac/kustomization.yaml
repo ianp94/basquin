@@ -17,6 +17,12 @@ resources:
 #- auth_proxy_role.yaml
 #- auth_proxy_role_binding.yaml
 #- auth_proxy_client_clusterrole.yaml
+# For each CRD, "Editor" and "Viewer" roles are scaffolded by
+# default, aiding admins in cluster management. Those roles are
+# not used by the Project itself. You can comment the following lines
+# if you do not want those helpers be installed with your Project.
+- closurejvmcampaign_editor_role.yaml
+- closurejvmcampaign_viewer_role.yaml
 # The scaffolded per-CRD "editor"/"viewer" ClusterRoles are omitted: they are unbound admin helpers
 # the operator itself never uses, and leaving them out keeps the install's only ClusterRole the
 # RoleBinding-scoped manager-role, matching the namespaced trust model (docs/OPERATOR-DESIGN.md §6).

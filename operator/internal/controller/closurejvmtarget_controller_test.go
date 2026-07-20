@@ -97,7 +97,7 @@ var _ = Describe("ClosureJVMTarget Controller (P2: injection)", func() {
 				Container:     container,
 				JVMOptsVar:    "CATALINA_OPTS",
 				Agents: closurejvmv1alpha1.AgentsSpec{
-					ThreadTracker: true,
+					ThreadTracker: boolPtr(true),
 					Coverage:      closurejvmv1alpha1.CoverageSpec{Enabled: true, Port: 6300, Includes: "com.example.*"},
 				},
 				Invariants: closurejvmv1alpha1.InvariantsSpec{Mode: "soft", LatencyMaxMs: 25},

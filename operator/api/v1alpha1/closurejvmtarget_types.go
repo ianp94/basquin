@@ -59,8 +59,11 @@ type CoverageSpec struct {
 // AgentsSpec selects which ClosureJVM agents to inject. Each is independently toggleable.
 type AgentsSpec struct {
 	// ThreadTracker injects the native JVMTI agent (-agentpath) for the leak/thread oracle.
+	// A *bool (not a plain bool) so `threadTracker: false` survives admission — with a plain bool +
+	// omitempty + a true default, false marshals as "unset" and gets re-defaulted to true, making the
+	// tracker impossible to disable (via the CLI or a typed client). nil = default (on).
 	// +kubebuilder:default=true
-	ThreadTracker bool `json:"threadTracker,omitempty"`
+	ThreadTracker *bool `json:"threadTracker,omitempty"`
 
 	// Valve injects the Tomcat valve for server-side invariants. Tomcat targets only.
 	// +kubebuilder:default=true

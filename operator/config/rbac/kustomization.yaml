@@ -1,0 +1,25 @@
+resources:
+# All RBAC will be applied under this service account in
+# the deployment namespace. You may comment out this resource
+# if your manager will use a service account that exists at
+# runtime. Be sure to update RoleBinding and ClusterRoleBinding
+# subjects if changing service account names.
+- service_account.yaml
+- role.yaml
+- role_binding.yaml
+- leader_election_role.yaml
+- leader_election_role_binding.yaml
+# The kube-rbac-proxy auth-proxy resources are intentionally DISABLED for P1: auth_proxy_role_binding
+# is a ClusterRoleBinding to system:auth-delegator, a cluster-scoped grant that would break the
+# no-cluster-wide-bindings trust model (docs/OPERATOR-DESIGN.md §6). Re-enable only alongside a
+# namespace-scoped metrics-protection approach.
+#- auth_proxy_service.yaml
+#- auth_proxy_role.yaml
+#- auth_proxy_role_binding.yaml
+#- auth_proxy_client_clusterrole.yaml
+# The scaffolded per-CRD "editor"/"viewer" ClusterRoles are omitted: they are unbound admin helpers
+# the operator itself never uses, and leaving them out keeps the install's only ClusterRole the
+# RoleBinding-scoped manager-role, matching the namespaced trust model (docs/OPERATOR-DESIGN.md §6).
+# The files remain on disk (config/rbac/*_role.yaml) for anyone who wants to apply them deliberately.
+#- closurejvmtarget_editor_role.yaml
+#- closurejvmtarget_viewer_role.yaml

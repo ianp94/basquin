@@ -386,7 +386,10 @@ the P1–P4 injection work (a campaign needs a working instrumented target). Des
 - [ ] Package the **runner** and **dashboard** images the operator launches (alongside the `closurejvm/agents` image below)
 
 ### Operator (post-P1 platform work — beyond the P2–P4 checklist)
-- [ ] Build & publish the versioned `closurejvm/agents:<tag>` image the operator's initContainer copies from (P2 depends on it existing); e2e-instrument the **stock** JPetStore image with it
+- [x] Build the versioned `closurejvm/agents:<tag>` image the operator's initContainer copies from — `deploy/agents-image/` (Dockerfile + `build.sh` staging the agent/valve/jacoco jars + native `.so` onto busybox). Built `closurejvm/agents:0.2.0` + `:latest`, loaded into the `closurejvm` kind cluster, verified contents + the initContainer `cp` + ELF arch.
+  - [ ] **e2e-instrument the stock JPetStore image** with it now that the image exists: deploy the operator to kind, apply a `ClosureJVMTarget` against an un-baked app, and confirm the agents actually load (coverage tcpserver up, invariant headers) — the real end-to-end P2 couldn't do in envtest
+  - [ ] Multi-arch agents image (the native `.so` is linux/amd64-only; arm64 clusters need an arm64 build) — *(surfaced building the image)*
+  - [ ] `docker push` / registry publish flow for the agents image (build.sh loads into kind only) — *(surfaced building the image)*
 - [ ] Operator CI: `go build` / `go vet` / `gofmt` (and envtest when assets are cached) in the pipeline — today only the Java build is in CI
 - [ ] Field indexer on `spec.deploymentRef.name` so the Deployment mapping-watch does a targeted lookup instead of a namespace-wide list+filter (PR #11 review; fine at current scale, optimization for high target-count/churn namespaces)
 - [ ] Validating enforcement for `container` required-when-ambiguous (a CRD schema can't express "required only when the pod has >1 container") — pairs with P2

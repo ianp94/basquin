@@ -203,10 +203,14 @@ func applyInjection(deploy *appsv1.Deployment, spec *closurejvmv1alpha1.ClosureJ
 
 	// initContainer: copy the agents into the shared volume.
 	setInitContainer(tmpl, corev1.Container{
-		Name:         agentsInitName,
-		Image:        agentsImage,
-		Command:      []string{"sh", "-c", "cp -r /agents/. " + agentsMountPath + "/"},
-		VolumeMounts: []corev1.VolumeMount{{Name: agentsVolumeName, MountPath: agentsMountPath}},
+		Name:  agentsInitName,
+		Image: agentsImage,
+		// IfNotPresent, not the tag-derived default: a `:latest` agents image would otherwise default
+		// to Always and ImagePullBackOff on a kind-loaded / air-gapped node. The agents image is a
+		// pinned build (DD-022), so re-pulling on every start buys nothing.
+		ImagePullPolicy: corev1.PullIfNotPresent,
+		Command:         []string{"sh", "-c", "cp -r /agents/. " + agentsMountPath + "/"},
+		VolumeMounts:    []corev1.VolumeMount{{Name: agentsVolumeName, MountPath: agentsMountPath}},
 	})
 	// Shared emptyDir volume + mount into the app container.
 	setVolume(tmpl, corev1.Volume{

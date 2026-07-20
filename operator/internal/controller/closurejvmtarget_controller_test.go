@@ -132,6 +132,8 @@ var _ = Describe("ClosureJVMTarget Controller (P2: injection)", func() {
 		Expect(d.Spec.Template.Spec.InitContainers).To(HaveLen(1))
 		Expect(d.Spec.Template.Spec.InitContainers[0].Name).To(Equal(agentsInitName))
 		Expect(d.Spec.Template.Spec.InitContainers[0].Image).To(Equal(agentsImg))
+		// IfNotPresent so a :latest agents image doesn't ImagePullBackOff on a kind/air-gapped node.
+		Expect(d.Spec.Template.Spec.InitContainers[0].ImagePullPolicy).To(Equal(corev1.PullIfNotPresent))
 		// shared volume + mount.
 		Expect(d.Spec.Template.Spec.Volumes).To(HaveLen(1))
 		Expect(d.Spec.Template.Spec.Volumes[0].Name).To(Equal(agentsVolumeName))

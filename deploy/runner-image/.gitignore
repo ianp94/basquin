@@ -1,0 +1,2 @@
+# Built runner jar, staged by build.sh into this dir for the Docker build — not committed (rebuild from source).
+closurejvm-runner.jar

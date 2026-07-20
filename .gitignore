@@ -4,4 +4,4 @@ build/*
 fuzz-results
 tomcat-war/build
 tomcat-valve/build
-build/nativedeploy/runner-image/closurejvm-runner.jar
+build/native

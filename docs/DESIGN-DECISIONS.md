@@ -673,3 +673,39 @@ has sharper problems that clustering does not address, and they are not yet fixe
 a read-path concern — DD-014); making a sequence abort on a failing step (later steps may still
 reach code, and stopping early hides it); pushing configuration every interval (it is immutable
 for a run).
+
+---
+
+## DD-021: The harness's own logic gets unit tests (2026-07-20)
+
+**Context.** v0.10 added ~1,800 lines of pure logic — grammar parsing and generation, findings
+clustering, JSON scanning, server-error parsing — with **zero** tests. CI was green only because
+nothing exercised any of it. Four real bugs were found in that code during development, every one
+by hand: a regex that stack-overflowed on realistic input, an error-page parser reading the wrong
+`<pre>` block, a frame parser requiring an `at ` prefix Tomcat doesn't emit, and a kind extractor
+that only understood one of the two saved-finding formats. None of those were caught by anything
+repeatable, and `agents.md` already says a feature is done when it has a minimal test. A tool whose
+job is finding other people's bugs cannot credibly ship untested parsing logic.
+
+**Decision.** Unit-test the pure logic that decides what the tool can find and how it reports it:
+`JsonScan`, `FindingsClusterer`, `RequestGrammar`. Prefer regression tests tied to bugs that
+actually happened over breadth-for-coverage's sake, and state in each test *why* it exists so the
+next person doesn't delete it as redundant. Integration behaviour (agent, invariants, leak
+detection, reset) keeps its existing forked-process tests.
+
+**Notable cases pinned.** The `JsonScan` stack-overflow guard uses a 20k-frame value, because the
+original failure needed only length, not exotic input. The clustering tests encode both saved
+formats and the crash route-fallback. The grammar tests pin the sequence invariant — a placeholder
+binds **once per sequence execution** — since re-randomising per step yields a transaction that
+adds one cart item and removes a different one, which still *looks* fine in a dashboard while
+never reaching checkout code.
+
+**Verified by mutation, not just by passing.** Sequence binding was deliberately broken
+(`computeIfAbsent` → bind per step); `placeholdersBindOncePerSequenceExecution` failed and nothing
+else did. A test that passes but wouldn't fail on the bug it names is worse than no test, so the
+guard was checked rather than assumed. 41 tests total, 31 new.
+
+**Rejected.** Chasing a coverage percentage on the harness itself (the goal is regression safety on
+logic that has already broken, not a number); unit-testing the HTTP/dashboard plumbing (its value
+is in real integration, which the live runs against JPetStore already exercise); deleting the
+now-redundant manual verification steps from the docs (they document how the bugs were found).

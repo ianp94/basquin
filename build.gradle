@@ -93,6 +93,9 @@ dependencies {
     fuzzImplementation 'edu.berkeley.cs.jqf:jqf-fuzz:1.9'
     fuzzImplementation 'edu.berkeley.cs.jqf:jqf-instrument:1.9'
     coverageImplementation "org.jacoco:org.jacoco.core:${jacocoVersion}"
+    // Let unit tests reach the coverage source set (RequestGrammar et al). Without this the
+    // grammar/sequence logic would stay untestable purely because of where it lives.
+    testImplementation sourceSets.coverage.output
     serverImplementation 'org.apache.tomcat.embed:tomcat-embed-core:10.1.24'
     serverImplementation 'jakarta.servlet:jakarta.servlet-api:6.0.0'
 }

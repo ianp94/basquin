@@ -121,11 +121,38 @@ public final class CoverageGuidedRun {
         int epochLength = Integer.getInteger("closurejvm.session.epoch", 40);
         boolean sessionsEnabled = !"false".equals(System.getProperty("closurejvm.session", "true"));
 
+        // Multi-step transactions: some code (order placement) is only reachable after an ordered
+        // sequence of requests against one session — a populated cart, not just a login. Run each
+        // declared sequence once up front, then mix them in probabilistically.
+        List<List<String>> pendingSequences = grammar != null && grammar.hasSequences()
+                ? new ArrayList<>(grammar.expandAllSequences()) : new ArrayList<>();
+        int sequencePercent = Integer.getInteger("closurejvm.sequencePercent", 25);
+
         for (int i = 0; i < iterations; i++) {
             if (sessionsEnabled && i % epochLength == 0) {
                 boolean authenticated = (i / epochLength) % 2 == 0;
                 if (authenticated) login(baseUrl); else resetSession();
             }
+
+            // A sequence is one coherent transaction: run its steps in order on the current
+            // session and score coverage for the whole thing, not per step.
+            List<String> sequence = null;
+            if (!pendingSequences.isEmpty()) {
+                sequence = pendingSequences.remove(0);
+            } else if (grammar != null && grammar.hasSequences() && rnd.nextInt(100) < sequencePercent) {
+                sequence = grammar.randomSequence();
+            }
+            if (sequence != null) {
+                runSequence(baseUrl, sequence);
+                long coveredAfterSeq = sampleCoverage(cov);
+                if (coveredAfterSeq > best) {
+                    best = coveredAfterSeq;
+                    corpus.add(sequence.get(sequence.size() - 1));
+                    StatusReporter.recordSaved("Coverage");
+                }
+                continue;
+            }
+
             String input;
             if (i < seeds.size()) {
                 // Deterministic first pass: hit every seed once so no endpoint is left to chance.
@@ -154,17 +181,12 @@ public final class CoverageGuidedRun {
 
             // Coverage feedback: keep inputs that reached new code (JaCoCo dumps accumulate, so a
             // rising covered count means this input hit an edge nothing before it had).
-            try {
-                JacocoCoverageProvider.Coverage c = cov.sample();
-                total = c.total;
-                StatusReporter.recordCoverage(c.covered, c.total);
-                if (c.covered > best) {
-                    best = c.covered;
-                    corpus.add(input);
-                    StatusReporter.recordSaved("Coverage");
-                }
-            } catch (Throwable ignored) {
-                // coverage agent blip; keep exploring
+            long covered = sampleCoverage(cov);
+            total = lastCoverageTotal;
+            if (covered > best) {
+                best = covered;
+                corpus.add(input);
+                StatusReporter.recordSaved("Coverage");
             }
         }
         StatusReporter.renderFinal();
@@ -181,6 +203,40 @@ public final class CoverageGuidedRun {
     private static volatile String sessionCookie = null;
 
     private static void resetSession() { sessionCookie = null; }
+
+    /** Track the last coverage total so both the single-request and sequence paths can report it. */
+    private static volatile long lastCoverageTotal = 0;
+
+    /**
+     * Run one transaction: every step in order against the current session. A failing step is
+     * recorded as a finding but does not abort the sequence — later steps may still reach code,
+     * and stopping early would hide it.
+     */
+    private static void runSequence(String baseUrl, List<String> steps) {
+        for (String step : steps) {
+            Agent.beginIteration();
+            try {
+                request(baseUrl, step);
+            } catch (Throwable t) {
+                StatusReporter.recordCrash();
+                FuzzIO.saveInteresting(step.getBytes(StandardCharsets.UTF_8), t);
+            } finally {
+                Agent.endIteration();
+            }
+        }
+    }
+
+    /** Sample coverage, keeping the panel updated; returns covered probes (0 if unavailable). */
+    private static long sampleCoverage(JacocoCoverageProvider cov) {
+        try {
+            JacocoCoverageProvider.Coverage c = cov.sample();
+            lastCoverageTotal = c.total;
+            StatusReporter.recordCoverage(c.covered, c.total);
+            return c.covered;
+        } catch (Throwable ignored) {
+            return 0; // agent blip; treat as "no new coverage" rather than failing the run
+        }
+    }
 
     /** Establish a signed-on session so authenticated handlers run their real logic. */
     private static void login(String base) {

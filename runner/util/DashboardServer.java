@@ -36,6 +36,7 @@ public final class DashboardServer {
     private static final class Campaign {
         volatile String statusJson = "{}";
         volatile String findingsJson = "[]";
+        volatile String configJson = "{}";
         volatile long lastSeenMillis = System.currentTimeMillis();
     }
 
@@ -48,7 +49,9 @@ public final class DashboardServer {
 
         server.createContext("/ingest/status", ex -> ingest(ex, true));
         server.createContext("/ingest/findings", ex -> ingest(ex, false));
+        server.createContext("/ingest/config", DashboardServer::ingestConfig);
         server.createContext("/api/campaigns", DashboardServer::listCampaigns);
+        server.createContext("/api/clusters", DashboardServer::fleetClusters);
         server.createContext("/api/campaign/", DashboardServer::campaignDetail);
         server.createContext("/api/analyze/", DashboardServer::analyze);
         server.createContext("/", ex -> respond(ex, "text/html; charset=utf-8", page()));
@@ -85,6 +88,17 @@ public final class DashboardServer {
         respond(ex, "text/plain", "ok");
     }
 
+    /** Config is immutable per run, so it is pushed once rather than on every interval. */
+    private static void ingestConfig(HttpExchange ex) throws IOException {
+        if (!"POST".equals(ex.getRequestMethod())) { ex.sendResponseHeaders(405, -1); return; }
+        String id = queryParam(ex, "id");
+        if (id == null || id.isEmpty()) { ex.sendResponseHeaders(400, -1); return; }
+        Campaign c = CAMPAIGNS.computeIfAbsent(id, k -> new Campaign());
+        c.configJson = readBody(ex);
+        c.lastSeenMillis = System.currentTimeMillis();
+        respond(ex, "text/plain", "ok");
+    }
+
     // --- read side (called by the browser) ---
 
     private static void listCampaigns(HttpExchange ex) throws IOException {
@@ -101,6 +115,14 @@ public final class DashboardServer {
                     + ",\"coveragePct\":" + numField(c.statusJson, "pct") + "}";
         }).collect(Collectors.joining(",", "[", "]"));
         respond(ex, "application/json", json);
+    }
+
+    /** Fleet-wide clusters: the same defect seen on several targets merges into one row (DD-020). */
+    private static void fleetClusters(HttpExchange ex) throws IOException {
+        Map<String, String> byCampaign = new java.util.LinkedHashMap<>();
+        CAMPAIGNS.forEach((id, c) -> byCampaign.put(id, c.findingsJson));
+        respond(ex, "application/json",
+                FindingsClusterer.toJson(FindingsClusterer.clusterAcross(byCampaign)));
     }
 
     private static void campaignDetail(HttpExchange ex) throws IOException {
@@ -120,6 +142,7 @@ public final class DashboardServer {
         switch (sub) {
             case "status": respond(ex, "application/json", c.statusJson); return;
             case "findings": respond(ex, "application/json", c.findingsJson); return;
+            case "config": respond(ex, "application/json", c.configJson); return;
             case "clusters":
                 respond(ex, "application/json", FindingsClusterer.toJson(FindingsClusterer.cluster(c.findingsJson)));
                 return;

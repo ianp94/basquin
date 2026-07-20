@@ -60,7 +60,14 @@ pre.raw{margin:6px 0 0;white-space:pre-wrap;color:#8b949e;font-size:11px;backgro
 </header>
 
 <div class="wrap">
-  <div id="fleetView"><div class="fleet" id="fleet"></div></div>
+  <div id="fleetView">
+    <div class="fleet" id="fleet"></div>
+    <h2>Findings across all targets <span id="fleetFindsSub" style="text-transform:none;letter-spacing:0"></span></h2>
+    <table>
+      <thead><tr><th>Type</th><th>Kind / route</th><th>Count</th><th>Seen on</th><th>Last seen</th></tr></thead>
+      <tbody id="fleetFinds"></tbody>
+    </table>
+  </div>
 
   <div id="campaignView" style="display:none">
     <div class="cards" id="cards"></div>
@@ -69,6 +76,12 @@ pre.raw{margin:6px 0 0;white-space:pre-wrap;color:#8b949e;font-size:11px;backgro
       <div class="v" id="covv">&mdash;</div>
       <div class="bar"><div id="covbar"></div></div>
     </div>
+
+    <div class="rowFlex">
+      <h2>Configuration</h2>
+      <button id="cfgBtn" style="margin-top:18px">show</button>
+    </div>
+    <div id="cfgPanel" style="display:none"></div>
 
     <div class="rowFlex">
       <h2>Findings <span id="findsSub" style="text-transform:none;letter-spacing:0"></span></h2>
@@ -176,6 +189,19 @@ async function tickFleet(){
       '</div>').join('')
       : '<div class="muted">No campaigns reporting yet. Start a driver with '+
         '<code>-Dclosurejvm.dashboard.push=localhost:'+location.port+'</code></div>';
+
+    // Fleet-wide findings: the same defect found on several targets merges into one row.
+    const fc = await (await fetch('/api/clusters')).json();
+    const ftotal = fc.reduce((a,c)=>a+c.count,0);
+    document.getElementById('fleetFindsSub').textContent =
+      fc.length ? fc.length+' unique / '+ftotal+' total across '+list.length+' campaign(s)' : '';
+    document.getElementById('fleetFinds').innerHTML = fc.length ? fc.map(c =>
+      '<tr><td><span class="tag '+c.classification+'">'+(c.classification||'?')+'</span></td>'+
+      '<td>'+esc(c.kind)+(c.routePattern?'<br><span class="muted">'+esc(c.routePattern)+'</span>':'')+'</td>'+
+      '<td>'+c.count+'&times;</td>'+
+      '<td>'+(c.campaigns||0)+(c.campaignNames?'<br><span class="muted">'+esc(c.campaignNames)+'</span>':'')+'</td>'+
+      '<td>'+fmtTime(c.lastSeenMs)+'</td></tr>').join('')
+      : '<tr><td colspan="5" class="muted">No findings yet.</td></tr>';
   }catch(e){}
 }
 
@@ -187,11 +213,26 @@ async function tick(){
     document.getElementById('sub').textContent = 'campaign: '+current+' — '+fmtDur(st.elapsedSec||0)+' · '+((st.rate||0).toFixed(1))+'/s';
     const inv = st.invariants||{latency:0,heap:0,thread:0};
     const ex = st.exploration||{};
+
+    const cl = await (await fetch('/api/campaign/'+encodeURIComponent(current)+'/clusters')).json();
+    // Invariants come from two different places and conflating them is misleading: the harness
+    // measures some in ITS OWN jvm (latency/heap/thread of the driver), while the app's agent
+    // reports its own via response headers, which arrive as Invariant-Remote findings. Showing
+    // only the former made this card read 0 while the findings table was full of heapDelta.
+    const appInv = {};
+    cl.filter(c => (c.classification||'').startsWith('Invariant'))
+      .forEach(c => { appInv[c.kind] = (appInv[c.kind]||0) + c.count; });
+    const appInvTotal = Object.values(appInv).reduce((a,b)=>a+b, 0);
+    const appInvSub = Object.keys(appInv).length
+      ? Object.entries(appInv).map(([k,v]) => k+' '+v).join(' · ') : 'none reported';
+
     document.getElementById('cards').innerHTML =
       card('iterations', st.iterations||0, ((st.rate||0).toFixed(1))+'/s') +
       card('crashes', st.crashes||0) +
       card('leaks', st.leaks||0) +
-      card('invariants', (inv.latency+inv.heap+inv.thread), 'lat '+inv.latency+' · heap '+inv.heap+' · thr '+inv.thread) +
+      card('app invariants', appInvTotal, appInvSub) +
+      card('harness invariants', (inv.latency+inv.heap+inv.thread),
+           'lat '+inv.latency+' · heap '+inv.heap+' · thr '+inv.thread) +
       card('latency ms', st.latencyMs?st.latencyMs.last:0, st.latencyMs?('mean '+st.latencyMs.mean+' · max '+st.latencyMs.max):'') +
       card('corpus', ex.corpus||0, (ex.rejected||0)+' rejected');
     const cv = ex.coverage||{total:0};
@@ -199,7 +240,6 @@ async function tick(){
     document.getElementById('covv').textContent = cv.total>0 ? (pct.toFixed(1)+'%  ('+cv.covered+'/'+cv.total+' edges)') : 'no coverage source';
     document.getElementById('covbar').style.width = pct+'%';
 
-    const cl = await (await fetch('/api/campaign/'+encodeURIComponent(current)+'/clusters')).json();
     const total = cl.reduce((a,c)=>a+c.count,0);
     document.getElementById('findsSub').textContent = cl.length+' unique / '+total+' total';
     document.getElementById('finds').innerHTML = cl.length ? cl.map(c => {
@@ -252,6 +292,33 @@ document.getElementById('back').onclick = () => {
   document.getElementById('campaignView').style.display='none';
   document.getElementById('back').style.display='none';
   tickFleet();
+};
+
+// Show the exact configuration that produced these results — params plus the grammar source.
+// A coverage number is uninterpretable without knowing which grammar and thresholds produced it.
+document.getElementById('cfgBtn').onclick = async function(){
+  const panel = document.getElementById('cfgPanel');
+  if(panel.style.display === 'block'){ panel.style.display='none'; this.textContent='show'; return; }
+  panel.style.display='block'; this.textContent='hide';
+  panel.innerHTML = '<div class="muted">loading…</div>';
+  try{
+    const cfg = await (await fetch('/api/campaign/'+encodeURIComponent(current)+'/config')).json();
+    const params = cfg.params||{};
+    const keys = Object.keys(params).sort();
+    let h = '<div class="card"><div class="k">parameters</div>';
+    h += keys.length
+      ? '<table>'+keys.map(k=>'<tr><td style="white-space:nowrap;color:#8b949e">'+esc(k)+
+          '</td><td><code style="color:#7ee787">'+esc(params[k])+'</code></td></tr>').join('')+'</table>'
+      : '<div class="muted">none reported</div>';
+    if(cfg.corpusDir) h += '<div class="s">corpus: <code>'+esc(cfg.corpusDir)+'</code></div>';
+    h += '</div>';
+    if(cfg.grammarText){
+      h += '<div class="card" style="margin-top:10px"><div class="k">grammar — '+
+           esc(cfg.grammarPath||'')+'</div><pre class="raw" style="max-height:420px">'+
+           esc(cfg.grammarText)+'</pre></div>';
+    }
+    panel.innerHTML = h;
+  }catch(e){ panel.innerHTML = '<div class="muted">config not reported by this driver</div>'; }
 };
 
 document.getElementById('analyzeBtn').onclick = async function(){

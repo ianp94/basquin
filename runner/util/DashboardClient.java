@@ -12,6 +12,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -60,8 +61,15 @@ public final class DashboardClient {
 
     private static void pushLoop(String target, String id, long intervalMs) {
         int consecutiveFailures = 0;
+        boolean configPushed = false;
         while (true) {
             try {
+                if (!configPushed) {
+                    // Config is immutable for the run; push once so the dashboard can show what
+                    // actually produced these results (params + the grammar source).
+                    post(target, "/ingest/config", id, configJson());
+                    configPushed = true;
+                }
                 post(target, "/ingest/status", id, StatusReporter.snapshotJson());
                 post(target, "/ingest/findings", id, findingsJson());
                 consecutiveFailures = 0;
@@ -106,6 +114,53 @@ public final class DashboardClient {
         } catch (Exception e) {
             return s;
         }
+    }
+
+    /**
+     * The run's configuration: the parameters it was launched with, plus the grammar/corpus it is
+     * driving from. Pushed so a result in the dashboard is interpretable — "23% coverage" means
+     * little without knowing which grammar, which endpoints, and which thresholds produced it.
+     *
+     * Values that look like credentials are redacted: a driver's system properties are not a
+     * deliberate secret store, but it costs nothing to avoid shipping one to a dashboard that may
+     * be shared, and this payload is displayed verbatim in a browser.
+     */
+    private static String configJson() {
+        StringBuilder params = new StringBuilder();
+        java.util.TreeMap<String, String> sorted = new java.util.TreeMap<>();
+        for (String name : System.getProperties().stringPropertyNames()) {
+            if (name.startsWith("closurejvm.") || name.startsWith("examples.")) {
+                sorted.put(name, System.getProperty(name));
+            }
+        }
+        for (Map.Entry<String, String> e : sorted.entrySet()) {
+            if (params.length() > 0) params.append(',');
+            String value = looksSecret(e.getKey()) ? "(redacted)" : e.getValue();
+            params.append('"').append(esc(e.getKey())).append("\":\"").append(esc(value)).append('"');
+        }
+
+        String grammarPath = System.getProperty("closurejvm.grammar", "");
+        String grammarText = "";
+        if (!grammarPath.isEmpty()) {
+            try {
+                grammarText = new String(Files.readAllBytes(Paths.get(grammarPath)), StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                grammarText = "(could not read " + grammarPath + ": " + e.getMessage() + ")";
+            }
+        }
+        return "{\"startedAtMs\":" + START_MS
+                + ",\"params\":{" + params + "}"
+                + ",\"grammarPath\":\"" + esc(grammarPath) + "\""
+                + ",\"grammarText\":\"" + esc(grammarText) + "\""
+                + ",\"corpusDir\":\"" + esc(System.getProperty("closurejvm.corpusDir", "")) + "\"}";
+    }
+
+    private static final long START_MS = System.currentTimeMillis();
+
+    private static boolean looksSecret(String key) {
+        String k = key.toLowerCase(java.util.Locale.ROOT);
+        return k.contains("key") || k.contains("secret") || k.contains("token")
+                || k.contains("password") || k.contains("credential");
     }
 
     // --- findings JSON: same shape/logic the old embedded dashboard used, now built client-side

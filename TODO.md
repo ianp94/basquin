@@ -276,9 +276,38 @@ and the dashboard) — decide once the boundaries are clear.
     (`@values/itemId.txt`), grammar supplies STRUCTURE (`~EST-[0-9]{1,4}`); driver maintains a
     JSESSIONID and alternates authenticated/anonymous session epochs. Coverage 17.7% → **22.1%**;
     verified with a control (listOrders: 200 with session, 500 without). Crash sites 6 → 7.
-  - [ ] Multi-step sequences (signon → addToCart → checkOut as an ordered transaction) to reach
-    order-placement code that needs a populated cart, not just a session.
+  - [x] **Multi-step sequences (DD-020)**: `@sequence` blocks in the grammar; steps run in order on
+    one session and placeholders bind ONCE per execution so a transaction is coherent. Coverage
+    22.1% → **23.1%**.
+  - [x] **Run config in the dashboard (DD-020)**: driver pushes its parameters + grammar source
+    once per run; shown per campaign (credential-looking values redacted).
+  - [x] **Cross-target clustering (DD-020)**: `/api/clusters` merges the same defect found on
+    several targets into one row with campaign attribution.
+  - [x] Fixed: the invariants card read 0 while findings were full of heapDelta — app-reported and
+    harness-measured invariants are now counted and labelled separately.
   - [ ] POST support with form bodies — several handlers are POST-only in real usage.
+
+### Multi-instance targets (one driver, N replicas behind a Service) — DD-020 known limits
+- [ ] **Coverage merge across replicas.** JaCoCo's tcpserver connection lands on one pod while
+  requests load-balance across all of them, so coverage reflects ~1/N of what ran. Poll every
+  replica and merge `ExecutionDataStore`s.
+- [ ] **Session affinity.** `JSESSIONID` is pinned to one pod; a round-robin Service breaks
+  multi-step sequences. Needs `sessionAffinity: ClientIP` or per-pod addressing.
+- [ ] **Per-instance attribution.** Findings don't record which replica served the request, so
+  "one sick pod" looks the same as "systemic". Cheap fix: the valve stamps `HOSTNAME` into a
+  response header the driver already parses.
+
+### Dashboard as a control plane (needs a decision before building)
+Currently the dashboard is strictly read-only: drivers push, it displays (DD-013). Making it
+*launch runs* or *reject corpus entries* reverses that and is a real architectural fork, not just
+a feature — it would need a control channel back to drivers, and a dashboard that can start
+processes is effectively remote code execution on whatever it runs on.
+- [ ] Launch/stop campaigns from the dashboard — decide the trust model first (who can reach it,
+  what it's allowed to run, auth). Probably belongs with the operator, which already needs
+  scheduling authority, rather than bolted onto the read-only viewer.
+- [ ] Reject/mute a cluster. A dashboard-local "dismiss" (hides it from triage, changes nothing in
+  the driver) needs no control channel and is safe to build now. Truly removing an entry from a
+  driver's corpus does need one — and conflicts with DD-006/DD-014's "never drop a finding".
 - [ ] Optional in-process coverage %: a JaCoCo provider for the local JQF targets, so the panel
   shows a real percentage without the server round-trip.
 - [x] **Kubernetes deploy**: `kind` demo environment (`deploy/k8s/`): JPetStore as a pod with

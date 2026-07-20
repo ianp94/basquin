@@ -44,6 +44,8 @@ public final class FindingsClusterer {
         public long minMagnitude = Long.MAX_VALUE;
         public long maxMagnitude = Long.MIN_VALUE;
         public final TreeSet<String> distinctRoutes = new TreeSet<>();
+        /** Which campaigns (target instances) this defect was seen on — fleet view. */
+        public final TreeSet<String> campaigns = new TreeSet<>();
         public String exampleText = "";
         /** Bounded sample of the actual inputs that produced this cluster, for the viewer. */
         public final List<Sample> samples = new ArrayList<>();
@@ -74,8 +76,35 @@ public final class FindingsClusterer {
      * stack-overflow-by-recursion-depth a naive "match an escaped string" regex hits on
      * production-sized text (verified against 935 real saved findings during development).
      */
+    /**
+     * Cluster across many campaigns at once — the fleet view of findings.
+     *
+     * With several instances of the app under test (e.g. one driver per pod), the SAME defect is
+     * found independently by each, and per-campaign clustering shows it as N unrelated clusters in
+     * N places. Fingerprints are instance-independent by construction (invariant kind + route
+     * shape, or exception class), so the same defect merges here regardless of which target found
+     * it, and {@code campaigns} records where it was seen. See DD-020.
+     */
+    public static List<Cluster> clusterAcross(Map<String, String> campaignToFindingsJson) {
+        Map<String, Cluster> byFingerprint = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : campaignToFindingsJson.entrySet()) {
+            clusterInto(e.getValue(), e.getKey(), byFingerprint);
+        }
+        List<Cluster> out = new ArrayList<>(byFingerprint.values());
+        out.sort((a, b) -> Integer.compare(b.count, a.count));
+        return out;
+    }
+
     public static List<Cluster> cluster(String findingsJsonArray) {
         Map<String, Cluster> byFingerprint = new LinkedHashMap<>();
+        clusterInto(findingsJsonArray, null, byFingerprint);
+        List<Cluster> out = new ArrayList<>(byFingerprint.values());
+        out.sort((a, b) -> Integer.compare(b.count, a.count));
+        return out;
+    }
+
+    private static void clusterInto(String findingsJsonArray, String campaign,
+                                    Map<String, Cluster> byFingerprint) {
         int cursor = 0;
         while (true) {
             int classStart = JsonScan.valueStart(findingsJsonArray, "classification", cursor);
@@ -130,6 +159,7 @@ public final class FindingsClusterer {
                 return nc;
             });
             c.count++;
+            if (campaign != null) c.campaigns.add(campaign);
             c.firstSeenMs = Math.min(c.firstSeenMs, ts);
             c.lastSeenMs = Math.max(c.lastSeenMs, ts);
             if (c.samples.size() < MAX_SAMPLES_PER_CLUSTER && !input.isEmpty()) {
@@ -145,10 +175,6 @@ public final class FindingsClusterer {
                 c.maxMagnitude = Math.max(c.maxMagnitude, mag);
             }
         }
-
-        List<Cluster> out = new ArrayList<>(byFingerprint.values());
-        out.sort((a, b) -> Integer.compare(b.count, a.count));
-        return out;
     }
 
     public static String toJson(List<Cluster> clusters) {
@@ -166,6 +192,8 @@ public final class FindingsClusterer {
               .append(",\"minMagnitude\":").append(c.minMagnitude == Long.MAX_VALUE ? -1 : c.minMagnitude)
               .append(",\"maxMagnitude\":").append(c.maxMagnitude == Long.MIN_VALUE ? -1 : c.maxMagnitude)
               .append(",\"distinctRoutes\":").append(c.distinctRoutes.size())
+              .append(",\"campaigns\":").append(c.campaigns.size())
+              .append(",\"campaignNames\":\"").append(esc(String.join(", ", c.campaigns))).append('"')
               .append(",\"exampleText\":\"").append(esc(c.exampleText)).append('"')
               .append(",\"samples\":[");
             for (int j = 0; j < c.samples.size(); j++) {

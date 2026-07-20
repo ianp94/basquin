@@ -621,3 +621,55 @@ from fuzzed usernames (a validation smell) rather than the null-dereference clas
 **Rejected.** Capturing the throwable in the valve (the framework swallows it first); scraping the
 container log (couples the driver to log access and formatting, and breaks entirely across a
 network/pod boundary); reporting only the HTTP status (the status quo — untriageable).
+
+---
+
+## DD-020: Multi-step transactions, run configuration in the dashboard, and what breaks with many target instances (2026-07-20)
+
+**Context.** Three things, all from reviewing real runs.
+
+**1. Multi-step transactions.** Order-placement code needs a *populated cart*, not just a login, so
+no amount of single-request fuzzing reaches it. The grammar gained `@sequence` blocks: indented
+steps run in order against one session. The critical detail is that placeholders **bind once per
+sequence execution**, so `${itemId}` is the same item in `viewItem`, `addItemToCart` and
+`removeItemFromCart`. Re-randomising per step would produce an incoherent transaction that adds
+one item and removes a different one, never reaching the code a real checkout does. Coverage went
+**22.1% → 23.1%** (1409 → 1469 of 6368).
+
+**2. Run configuration is part of the result.** "23% coverage, 7 crash sites" is uninterpretable
+without knowing which grammar, endpoints and thresholds produced it. The driver now pushes its
+configuration once per run — the `closurejvm.*`/`examples.*` parameters plus the grammar source —
+and the dashboard shows it per campaign. Values whose names look like credentials are redacted:
+system properties aren't a deliberate secret store, but this payload is rendered verbatim in a
+browser that may be shared.
+
+**3. Findings cluster across target instances.** Fingerprints are instance-independent by
+construction (invariant kind + route shape, or exception class), so the same defect found on
+several targets merges into one row via `/api/clusters`, with `campaigns` recording where it was
+seen — rather than the same bug appearing as N unrelated clusters in N campaigns.
+
+**Also fixed: the invariants card read 0 while findings were full of heapDelta.** Invariants arrive
+from two different places — the harness measures latency/heap/thread in ITS OWN JVM, while the
+app's agent reports its own through response headers, which land as `Invariant-Remote` findings.
+The card only counted the former. It now shows both, separately labelled ("app" vs "harness"),
+because conflating them is exactly what made the display look broken.
+
+**Known limits with many target instances.** Cross-campaign clustering solves the
+*one-driver-per-pod* topology. The *one-driver-behind-a-Service* topology (N replicas, one driver)
+has sharper problems that clustering does not address, and they are not yet fixed:
+
+- **Coverage under-reports.** The JaCoCo tcpserver connection lands on ONE pod while requests
+  load-balance across all N, so the coverage figure reflects roughly 1/N of what was actually
+  exercised. Fixing it means polling every replica and merging `ExecutionDataStore`s (JaCoCo
+  supports merging) rather than talking to a single address.
+- **Sessions break.** `JSESSIONID` is pinned to the pod that created it, but a round-robin Service
+  will route the next step elsewhere, so multi-step sequences silently lose their session. Needs
+  `sessionAffinity: ClientIP` on the Service (or per-pod addressing).
+- **No per-instance attribution.** A finding records the route and the app's stack but not *which*
+  replica served it, so "one sick pod" is indistinguishable from "systemic". The cheap fix is for
+  the valve to stamp its pod identity (`HOSTNAME`) into a response header the driver already reads.
+
+**Rejected.** Merging findings across campaigns by mutating what each driver saves (clustering is
+a read-path concern — DD-014); making a sequence abort on a failing step (later steps may still
+reach code, and stopping early hides it); pushing configuration every interval (it is immutable
+for a run).

@@ -42,7 +42,21 @@ public final class RequestGrammar {
 
     private final Map<String, List<String>> rules = new LinkedHashMap<>();
     private final List<String> routes = new ArrayList<>();
+    private final List<Sequence> sequences = new ArrayList<>();
     private final Random rnd;
+
+    /**
+     * An ordered multi-step transaction (e.g. signon → view item → add to cart → check out).
+     * Steps run in order against one session, and — critically — placeholders bind ONCE per
+     * execution and are reused across steps, so the item you add to the cart is the item you
+     * viewed. Re-randomising per step would produce an incoherent transaction that never reaches
+     * the code a real checkout does.
+     */
+    public static final class Sequence {
+        public final String name;
+        public final List<String> steps = new ArrayList<>();
+        Sequence(String name) { this.name = name; }
+    }
 
     private RequestGrammar(Random rnd) {
         this.rnd = rnd;
@@ -51,12 +65,25 @@ public final class RequestGrammar {
     public static RequestGrammar load(Path file, Random rnd) throws IOException {
         RequestGrammar g = new RequestGrammar(rnd);
         Path base = file.toAbsolutePath().getParent();
+        Sequence current = null;
         for (String raw : new String(Files.readAllBytes(file), StandardCharsets.UTF_8).split("\n")) {
             String line = raw;
             int hash = line.indexOf('#');
             if (hash >= 0) line = line.substring(0, hash);
+            boolean indented = !line.isEmpty() && Character.isWhitespace(line.charAt(0));
             line = line.trim();
-            if (line.isEmpty()) continue;
+            if (line.isEmpty()) { current = null; continue; }   // blank line ends a sequence block
+            if (line.startsWith("@sequence")) {
+                String name = line.substring("@sequence".length()).trim();
+                current = new Sequence(name.isEmpty() ? "seq" + g.sequences.size() : name);
+                g.sequences.add(current);
+                continue;
+            }
+            if (current != null && indented && line.startsWith("/")) {
+                current.steps.add(line);
+                continue;
+            }
+            current = null;
             if (line.startsWith("$")) {
                 int eq = line.indexOf('=');
                 if (eq < 0) continue;
@@ -102,17 +129,43 @@ public final class RequestGrammar {
     public int routeCount() { return routes.size(); }
     public int ruleCount() { return rules.size(); }
 
+    public int sequenceCount() { return sequences.size(); }
+    public boolean hasSequences() { return !sequences.isEmpty(); }
+
     /** All route templates, expanded once each — used for a deterministic first pass. */
     public List<String> expandAll() {
         List<String> out = new ArrayList<>(routes.size());
-        for (String r : routes) out.add(expand(r));
+        for (String r : routes) out.add(expand(r, new LinkedHashMap<>()));
         return out;
     }
 
-    /** A random route template, expanded. */
+    /** A random route template, expanded (placeholders bound independently). */
     public String randomRequest() {
         if (routes.isEmpty()) return "/";
-        return expand(routes.get(rnd.nextInt(routes.size())));
+        return expand(routes.get(rnd.nextInt(routes.size())), new LinkedHashMap<>());
+    }
+
+    /**
+     * A random sequence, expanded as a unit: every step shares one binding map, so a placeholder
+     * used in several steps resolves to the same value throughout the transaction.
+     */
+    public List<String> randomSequence() {
+        if (sequences.isEmpty()) return null;
+        return expandSequence(sequences.get(rnd.nextInt(sequences.size())));
+    }
+
+    /** Each sequence expanded once — used for the deterministic first pass. */
+    public List<List<String>> expandAllSequences() {
+        List<List<String>> out = new ArrayList<>();
+        for (Sequence s : sequences) out.add(expandSequence(s));
+        return out;
+    }
+
+    private List<String> expandSequence(Sequence s) {
+        Map<String, String> bindings = new LinkedHashMap<>();
+        List<String> out = new ArrayList<>(s.steps.size());
+        for (String step : s.steps) out.add(expand(step, bindings));
+        return out;
     }
 
     /**
@@ -122,7 +175,7 @@ public final class RequestGrammar {
      */
     public String mutate(String concrete) {
         String template = templateFor(concrete);
-        return template != null ? expand(template) : randomRequest();
+        return template != null ? expand(template, new LinkedHashMap<>()) : randomRequest();
     }
 
     /** Find the template whose literal (non-placeholder) parts match this concrete request. */
@@ -143,7 +196,12 @@ public final class RequestGrammar {
         return null;
     }
 
-    private String expand(String template) {
+    /**
+     * Expand a template. {@code bindings} carries values already chosen in this scope: within a
+     * sequence it is shared across steps (so {@code ${itemId}} is the same item throughout);
+     * for a standalone request a fresh map is passed, so each request binds independently.
+     */
+    private String expand(String template, Map<String, String> bindings) {
         StringBuilder out = new StringBuilder();
         int i = 0;
         while (i < template.length()) {
@@ -152,7 +210,8 @@ public final class RequestGrammar {
             int close = template.indexOf('}', open);
             if (close < 0) { out.append(template, i, template.length()); break; }
             out.append(template, i, open);
-            out.append(value(template.substring(open + 2, close)));
+            String name = template.substring(open + 2, close);
+            out.append(bindings.computeIfAbsent(name, this::value));
             i = close + 1;
         }
         return out.toString();

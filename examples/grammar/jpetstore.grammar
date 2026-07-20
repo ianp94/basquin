@@ -58,3 +58,39 @@ $quantity   = ~[0-9]{1,3} | 0 | -1 | <int>
 /actions/Order.action?newOrderForm=
 /actions/Order.action?newOrder=
 /actions/Order.action?viewOrder=&orderId=${orderId}
+
+# ---- multi-step transactions -------------------------------------------------------
+# Steps run in order against ONE session, and placeholders bind ONCE per execution, so
+# ${itemId} below is the same item throughout — that coherence is what lets the flow
+# actually reach order-placement code, which needs a POPULATED CART, not just a login.
+# Indented lines belong to the sequence; a blank line ends it.
+
+@sequence signon_browse_checkout
+  /actions/Account.action?signon=&username=j2ee&password=j2ee
+  /actions/Catalog.action?viewItem=&itemId=${itemId}
+  /actions/Cart.action?addItemToCart=&workingItemId=${itemId}
+  /actions/Cart.action?viewCart=
+  /actions/Cart.action?checkOut=
+  /actions/Order.action?newOrderForm=
+  /actions/Order.action?newOrder=
+  /actions/Order.action?listOrders=
+
+@sequence cart_lifecycle
+  /actions/Account.action?signon=&username=j2ee&password=j2ee
+  /actions/Cart.action?addItemToCart=&workingItemId=${itemId}
+  /actions/Cart.action?updateCartQuantities=&quantity=${quantity}
+  /actions/Cart.action?removeItemFromCart=&workingItemId=${itemId}
+  /actions/Cart.action?viewCart=
+
+@sequence account_lifecycle
+  /actions/Account.action?newAccountForm=
+  /actions/Account.action?newAccount=&username=${username}&password=${password}&repeatedPassword=${password}
+  /actions/Account.action?signon=&username=${username}&password=${password}
+  /actions/Account.action?editAccountForm=
+  /actions/Account.action?editAccount=&username=${username}
+  /actions/Account.action?signoff=
+
+@sequence anonymous_then_auth
+  /actions/Order.action?listOrders=
+  /actions/Account.action?signon=&username=j2ee&password=j2ee
+  /actions/Order.action?listOrders=

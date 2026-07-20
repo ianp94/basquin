@@ -6,7 +6,10 @@ plugins {
 
 group = 'com.closurejvm'
 version = '0.2.0'
+// Target Java 17 bytecode so artifacts run on JDK 17 and 21+ alike.
+// CI verifies the build and tests on both 17 and 21 (see .github/workflows/ci.yml).
 sourceCompatibility = '17'
+targetCompatibility = '17'
 
 repositories {
     mavenCentral()
@@ -176,6 +179,47 @@ tasks.register('runSoakProper', JavaExec) {
     mainClass = 'runner.GenericRunner'
     jvmArgs '-Dexamples.sleepMs=1', '-Dexamples.threads=2', '-Dexamples.mode=proper'
     args '10000', 'examples.targets.ThreadLeakTarget'
+}
+
+// --- JVMTI native agent (optional) ---
+// Compiles native/closurejvmti.c to build/native/libclosurejvmti.{so,dylib}.
+// Requires a C compiler (cc/gcc) and JDK headers; skipped gracefully if no compiler is found,
+// so it is never a hard dependency of the normal build.
+def nativeLibName = org.gradle.internal.os.OperatingSystem.current().isMacOsX()
+        ? 'libclosurejvmti.dylib' : 'libclosurejvmti.so'
+def nativeLib = layout.buildDirectory.file("native/${nativeLibName}").get().asFile
+
+tasks.register('buildNativeAgent', Exec) {
+    group = 'build'
+    description = 'Compile the JVMTI native agent (native/closurejvmti.c). Requires a C compiler + JDK headers.'
+    def cc = System.getenv('CC') ?: 'cc'
+    onlyIf {
+        try {
+            def p = ['sh', '-c', "command -v ${cc}"].execute()
+            p.waitFor() == 0
+        } catch (ignored) {
+            false
+        }
+    }
+    workingDir 'native'
+    commandLine 'make'
+    inputs.file 'native/closurejvmti.c'
+    outputs.file nativeLib
+}
+
+// Demo: GenericRunner with the native agent injected (builds the agent first).
+tasks.register('runGenericNativeProper', JavaExec) {
+    group = 'application'
+    description = 'Run GenericRunner in proper mode with the JVMTI native agent loaded for thread counts.'
+    dependsOn 'buildNativeAgent'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.GenericRunner'
+    doFirst {
+        jvmArgs "-agentpath:${nativeLib.absolutePath}",
+                "-Dclosurejvm.native.lib=${nativeLib.absolutePath}",
+                '-Dexamples.sleepMs=1', '-Dexamples.threads=2', '-Dexamples.mode=proper'
+    }
+    args '20', 'examples.targets.ThreadLeakTarget'
 }
 
 // JQF fuzzing (v0.3 preview) — only resolves when explicitly run

@@ -231,7 +231,13 @@ public class Agent {
     }
 
     private static int snapshotTotalThreadCount() {
-        // Live thread count (daemon + non-daemon) straight from the management bean; no stack walk.
+        // Prefer the JVMTI native agent's event-maintained count when it is loaded: no JMX call,
+        // no stack walk. Falls back to the management bean's count otherwise. Both are used only
+        // via deltas across an iteration, so the small absolute offset between the two sources
+        // (JVMTI sees threads JMX does not) does not affect the thread-delta signal.
+        if (NativeThreadTracker.isActive()) {
+            return NativeThreadTracker.liveThreadCount();
+        }
         return THREAD_MX.getThreadCount();
     }
 

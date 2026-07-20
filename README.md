@@ -47,6 +47,20 @@ Reset (how it works):
 - `-Dexamples.javalin.port=<n>` — port for Javalin demo server.
 - `-Dclosurejvm.heap.gcBeforeMeasure=true` — run `System.gc()` before heap baseline and end-of-iteration measurement so heap delta reflects retention rather than allocation noise (slower; off by default).
 
+## Native Agent (JVMTI, optional)
+
+For event-driven thread tracking with no polling and no safepoint stack walks, ClosureJVM ships an optional JVMTI native agent (`native/closurejvmti.c`). It maintains live and non-daemon thread counts incrementally from `ThreadStart`/`ThreadEnd` events; the harness reads those counts and falls back to `ThreadMXBean` when the agent is not loaded.
+
+- Build it: `./gradlew buildNativeAgent` (needs a C compiler + JDK headers; skipped gracefully if `cc`/`gcc` is absent). Output: `build/native/libclosurejvmti.so` (`.dylib` on macOS). Manual build: `cd native && make`.
+- Load it: pass the same library path twice — once to the JVM as an agent, once to the harness so the JNI bridge resolves:
+  - `-agentpath:/abs/build/native/libclosurejvmti.so`
+  - `-Dclosurejvm.native.lib=/abs/build/native/libclosurejvmti.so`
+- Demo: `./gradlew runGenericNativeProper` (builds the agent, injects it, runs a short proper-mode loop).
+
+Notes:
+- Runs on JDK 17 and 21+ (JVMTI is ABI-stable across versions).
+- The count-based signals (thread count, thread-delta invariant) use the native counts when active; the non-daemon leak *set* (which threads leaked, with names/stacks) still uses in-process enumeration, captured only when a leak is flagged. Event-driven leak-set tracking (with thread identity) is the next step.
+
 ## Directory Structure
 
 - `agent/` — iteration boundaries and checks (v0.1: thread leak detection)

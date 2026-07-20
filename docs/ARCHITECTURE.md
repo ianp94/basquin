@@ -51,6 +51,9 @@ Inputs → Harness/Runner → App Entry → Metrics & Coverage → Invariants �
 
 - Runner: executes iterations, manages lifecycle, orchestrates checks
 - Java Agent: instruments/observes runtime, tracks threads/executors
+- Native Agent (optional, JVMTI): event-driven thread lifecycle tracking (ThreadStart/ThreadEnd)
+  for count signals without polling or safepoint stack walks; harness falls back to ThreadMXBean
+  when it is not loaded
 - Reset Engine: enforce cleanliness; fallback to hard reset (ClassLoader swap)
 
 ## Early Usage Pattern (preview)

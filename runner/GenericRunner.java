@@ -28,9 +28,10 @@ public class GenericRunner {
 
     public static void main(String[] args) {
         System.out.println("Starting ClosureJVM GenericRunner");
-        // Start the triage consumer thread before any iteration baseline is captured,
-        // so it never appears as a mid-iteration thread delta.
+        // Start the triage consumer and status threads before any iteration baseline is
+        // captured, so they never appear as a mid-iteration thread delta.
         runner.util.TriageSink.ensureStarted();
+        runner.util.StatusReporter.ensureStarted();
 
         int iterations = parseIterations(args);
         String targetClass = parseTargetClass(args);
@@ -51,7 +52,9 @@ public class GenericRunner {
         try {
             handle.target.initialize();
             for (int i = 0; i < iterations; i++) {
-                System.out.println("Iteration " + (i + 1));
+                if (!runner.util.StatusReporter.isEnabled()) {
+                    System.out.println("Iteration " + (i + 1));
+                }
                 boolean failed = false;
                 boolean endAttempted = false;
                 Agent.beginIteration();
@@ -64,6 +67,9 @@ public class GenericRunner {
                     // Ensure endIteration still runs metrics/leak checks if executeIteration failed,
                     // but never re-run it when the failure came from endIteration itself
                     if (!endAttempted) {
+                        // A throw from executeIteration itself is a target crash (a throw from
+                        // endIteration is our own leak/invariant signal, already counted).
+                        runner.util.StatusReporter.recordCrash();
                         try { Agent.endIteration(); } catch (Throwable t2) { /* prefer original failure info */ }
                     }
                     if (!(resetViaClassloader && resetOnFailure && resets < maxResets)) {
@@ -77,6 +83,7 @@ public class GenericRunner {
                 // Reset on failure if configured
                 if (failed && resetViaClassloader && resetOnFailure && resets < maxResets) {
                     resets++;
+                    runner.util.StatusReporter.recordReset();
                     safeCloseTarget(handle);
                     safeCloseLoader(handle);
                     handle = createTargetHandle(targetClass, true);
@@ -86,6 +93,7 @@ public class GenericRunner {
                     System.out.println("[ClosureJVM] Performed classloader reset (#" + resets + ")");
                 }
             }
+            runner.util.StatusReporter.renderFinal();
             System.out.println("GenericRunner completed " + iterations + " iterations");
         } catch (Exception e) {
             throw new RuntimeException("Failure during run", e);

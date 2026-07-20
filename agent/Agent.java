@@ -64,7 +64,9 @@ public class Agent {
     /** Begin an iteration, returning its context. Pass the result to {@link #end(IterationContext)}. */
     public static IterationContext begin() {
         IterationContext ctx = new IterationContext(ITERATION.incrementAndGet());
-        System.out.println("Beginning iteration");
+        if (!runner.util.StatusReporter.isEnabled()) {
+            System.out.println("Beginning iteration");
+        }
         // Keep baseline and end-of-iteration heap readings symmetric (see end());
         // GC runs before the latency clock starts so it never counts against the iteration.
         if (Boolean.getBoolean("closurejvm.heap.gcBeforeMeasure")) {
@@ -108,9 +110,11 @@ public class Agent {
         ctx.heapDeltaBytes = heapDeltaBytes;
         ctx.threadCount = threadsNow;
         ctx.threadDelta = threadsDelta;
-        System.out.println(String.format(
-                "[ClosureJVM] Iteration %d metrics: latency=%dms, heapDelta=%+d KB, threads=%d (%+d)",
-                ctx.iterationNumber, elapsedMs, heapDeltaBytes / 1024, threadsNow, threadsDelta));
+        if (!runner.util.StatusReporter.isEnabled()) {
+            System.out.println(String.format(
+                    "[ClosureJVM] Iteration %d metrics: latency=%dms, heapDelta=%+d KB, threads=%d (%+d)",
+                    ctx.iterationNumber, elapsedMs, heapDeltaBytes / 1024, threadsNow, threadsDelta));
+        }
 
         // Configurable invariants (v0.2): thresholds checked here. Defaults disabled unless props set.
         try {
@@ -119,6 +123,7 @@ public class Agent {
             // Publish evidence before the throw propagates so servlet integrations can read it.
             publishInvariantEvidence(ctx);
             cancelLatencySample(ctx);
+            recordStatus(ctx);
             // If configured to fail-hard, rethrow to stop the iteration loop fast
             if (Boolean.getBoolean("closurejvm.forceExitOnLeak")) {
                 System.err.println("[ClosureJVM] Forcing process exit due to invariant violation (closurejvm.forceExitOnLeak=true)");
@@ -209,6 +214,7 @@ public class Agent {
         }
 
         ctx.leakDetected = leakDetected;
+        recordStatus(ctx);
         if (leakDetected) {
             // Optional hard-exit for demos/CI so leaked non-daemon threads don't keep JVM alive
             if (Boolean.getBoolean("closurejvm.forceExitOnLeak")) {
@@ -219,7 +225,14 @@ public class Agent {
             throw new IllegalStateException("Leak(s) detected after iteration " + ctx.iterationNumber);
         }
 
-        System.out.println("Ending iteration");
+        if (!runner.util.StatusReporter.isEnabled()) {
+            System.out.println("Ending iteration");
+        }
+    }
+
+    private static void recordStatus(IterationContext ctx) {
+        runner.util.StatusReporter.recordIteration(
+                ctx.latencyMs, ctx.heapDeltaBytes / 1024L, ctx.threadCount, ctx.leakDetected, ctx.invariantViolations);
     }
 
     // --- Legacy API (thread-local-backed wrappers over the context API) ---

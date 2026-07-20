@@ -222,6 +222,18 @@ tasks.register('runGenericNativeProper', JavaExec) {
     args '20', 'examples.targets.ThreadLeakTarget'
 }
 
+// HTTP route driver against a running app (e.g. JPetStore). Client-side latency + crash
+// detection, with the live status screen enabled. Point it at a running server first.
+tasks.register('runHttpDrive', JavaExec) {
+    group = 'application'
+    description = 'Drive HTTP routes of a running app with the live status screen. Config via -Dexamples.http.baseUrl / -Dexamples.http.routes.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.GenericRunner'
+    systemProperties System.getProperties().findAll { k, v -> k.toString().startsWith('examples.http.') || k.toString().startsWith('closurejvm.') }
+    jvmArgs '-Dclosurejvm.status=true'
+    args System.getProperty('drive.iterations', '200'), 'examples.targets.HttpRouteDriveTarget'
+}
+
 // JQF fuzzing (v0.3 preview) — only resolves when explicitly run
 tasks.register('runFuzzJQF', JavaExec) {
     group = 'verification'

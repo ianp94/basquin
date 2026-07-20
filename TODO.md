@@ -196,16 +196,19 @@ concurrency correctness stops depending on a serialization lock.
 
 ---
 
-## Milestone: v0.7 — "Operator DX"
+## Milestone: v0.7 — "Operator DX" — DONE
 
 Goal: Make a running harness legible at a glance, AFL-style.
 
-- [ ] Live in-place CLI status screen (`-Dclosurejvm.status`): elapsed, iterations,
-  iters/sec, crashes, invariant violations by kind (latency/heap/thread), leaks, latency
-  p50/max, heap delta, live threads, resets
-- [ ] TTY-aware: redraw in place on a terminal; degrade to periodic one-line summaries when
-  output is piped/non-interactive or in CI
-- [ ] Suppress the per-iteration metrics spam when the status screen is active
+- [x] Live in-place CLI status screen (`-Dclosurejvm.status`): elapsed, iterations, iters/sec,
+  crashes, invariants by kind (latency/heap/thread), leaks, latency last/mean/max, heap delta,
+  threads, resets. `StatusReporter` fed once per iteration from `Agent.end`.
+- [x] TTY-aware: in-place box on a terminal, one-line summaries when piped/CI;
+  `-Dclosurejvm.status.forceTty` to force the box; `renderFinal()` guarantees a final tally.
+- [x] Suppresses per-iteration metrics spam when active.
+- [x] HTTP driver target (`examples.targets.HttpRouteDriveTarget`, task `runHttpDrive`):
+  client-side latency + 5xx-as-crash, harvests server-side `X-ClosureJVM-Invariant-*` headers.
+- [x] Animated demo (`docs/demo.svg`) from real frames, embedded in the rewritten README.
 - [ ] Optional: periodic machine-readable status line (JSON) for tooling
 
 ---

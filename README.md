@@ -78,6 +78,21 @@ Inputs → Runner (begin/end iteration) → App entry → Metrics & invariants �
 Details and the "why" behind each choice: [ARCHITECTURE](docs/ARCHITECTURE.md) ·
 [DESIGN-DECISIONS](docs/DESIGN-DECISIONS.md).
 
+## Exploration
+
+Coverage-guided fuzzing (JQF) runs each input through the same iteration boundaries and
+invariants, and the live status screen grows an **exploration panel** as a campaign progresses —
+execs/sec, corpus size, finds by classification (crash / invariant), and time-since-last-find.
+
+![ClosureJVM exploration panel during a JQF campaign](docs/demo-explore.svg)
+
+```bash
+./gradlew runFuzzCalculatorJQF -DenableJQF=true -Dclosurejvm.status=true
+```
+
+*Next (v0.10): coverage-guided over HTTP — a server-side coverage agent feeds the app-under-test's
+per-request coverage back to the client fuzzer. See [TODO](TODO.md).*
+
 ## Features
 
 - Availability invariants (latency / heap / thread-delta) with hard-fail or soft-signal modes

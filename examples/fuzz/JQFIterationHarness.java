@@ -23,8 +23,9 @@ public class JQFIterationHarness {
         if (initialized) return;
         synchronized (JQFIterationHarness.class) {
             if (initialized) return;
-            // Start the triage consumer before the first iteration baseline
+            // Start the triage consumer and status reporter before the first iteration baseline
             runner.util.TriageSink.ensureStarted();
+            runner.util.StatusReporter.ensureStarted();
             String cls = System.getProperty("closurejvm.target");
             if (cls == null || cls.isBlank()) {
                 throw new IllegalStateException("closurejvm.target not set for JQF harness");

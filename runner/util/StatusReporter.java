@@ -40,6 +40,12 @@ public final class StatusReporter {
     private static long lastHeapKb;
     private static long maxHeapKb;
     private static int lastThreads;
+    // Exploration (fuzzing/corpus) counters, fed from the triage layer.
+    private static long corpusSaved;
+    private static long findCrash;
+    private static long findInvariant;
+    private static long lastFindNanos;
+    private static long lastFindIter;
 
     private StatusReporter() {}
 
@@ -55,6 +61,9 @@ public final class StatusReporter {
         Thread t = new Thread(StatusReporter::renderLoop, "ClosureJVM-Status");
         t.setDaemon(true);
         t.start();
+        // Guarantee a final frame on exit for any run type (JQF, corpus, generic), not just the
+        // runners that call renderFinal() explicitly.
+        Runtime.getRuntime().addShutdownHook(new Thread(StatusReporter::renderFinal, "ClosureJVM-Status-Final"));
     }
 
     /** Record one completed iteration's metrics and any violations/leak it carried. */
@@ -80,6 +89,22 @@ public final class StatusReporter {
 
     public static synchronized void recordCrash() { if (ENABLED) crashes++; }
     public static synchronized void recordReset() { if (ENABLED) resets++; }
+
+    /**
+     * Record a saved exploration finding (from the triage layer). {@code classification} is the
+     * triage label, e.g. "Crash", "Invariant", "Invariant-Remote". Drives the exploration panel.
+     */
+    public static synchronized void recordSaved(String classification) {
+        if (!ENABLED) return;
+        corpusSaved++;
+        if (classification != null && classification.startsWith("Crash")) {
+            findCrash++;
+        } else if (classification != null && classification.startsWith("Invariant")) {
+            findInvariant++;
+        }
+        lastFindNanos = System.nanoTime();
+        lastFindIter = iterations;
+    }
 
     /** Render one final status frame — call when the run ends so the final tally always shows. */
     public static void renderFinal() {
@@ -107,13 +132,18 @@ public final class StatusReporter {
         double elapsedSec = elapsedNanos / 1_000_000_000.0;         // fractional, for the rate
         double rate = elapsedSec > 0.05 ? iterations / elapsedSec : 0.0;
         double meanLatency = iterations > 0 ? (double) sumLatencyMs / iterations : 0.0;
+        boolean exploring = corpusSaved > 0 || Boolean.getBoolean("closurejvm.status.explore");
 
         if (!TTY) {
+            String explore = exploring
+                ? String.format(" explore[corpus=%d crash=%d inv=%d lastFind=%s]",
+                        corpusSaved, findCrash, findInvariant, sinceLastFind())
+                : "";
             System.out.printf(
                 "[ClosureJVM] %s iters=%d (%.1f/s) crashes=%d leaks=%d inv[lat=%d heap=%d thr=%d] "
-                + "lat(last/mean/max)=%d/%.0f/%dms heap(last/max)=%d/%dKB threads=%d resets=%d%n",
+                + "lat(last/mean/max)=%d/%.0f/%dms heap(last/max)=%d/%dKB threads=%d resets=%d%s%n",
                 fmt(elapsedS), iterations, rate, crashes, leaks, violLatency, violHeap, violThread,
-                lastLatencyMs, meanLatency, maxLatencyMs, lastHeapKb, maxHeapKb, lastThreads, resets);
+                lastLatencyMs, meanLatency, maxLatencyMs, lastHeapKb, maxHeapKb, lastThreads, resets, explore);
             return;
         }
 
@@ -129,8 +159,23 @@ public final class StatusReporter {
         row(sb, "heap Δ KB", String.format("last=%d  max=%d", lastHeapKb, maxHeapKb));
         row(sb, "threads", String.valueOf(lastThreads));
         row(sb, "resets", String.valueOf(resets));
+        if (exploring) {
+            sb.append("├─ exploration ─────────────────────────────────┤\n");
+            row(sb, "execs", String.format("%d  (%.1f/s)", iterations, rate));
+            row(sb, "corpus", String.valueOf(corpusSaved));
+            row(sb, "finds", String.format("crash=%d  invariant=%d", findCrash, findInvariant));
+            row(sb, "last find", sinceLastFind());
+        }
         sb.append("└───────────────────────────────────────────────┘");
         System.out.println(sb);
+    }
+
+    private static String sinceLastFind() {
+        if (lastFindNanos == 0L) {
+            return "none yet";
+        }
+        long agoS = Math.max(0L, (System.nanoTime() - lastFindNanos) / 1_000_000_000L);
+        return String.format("%ds ago (@ iter %d)", agoS, lastFindIter);
     }
 
     private static void row(StringBuilder sb, String label, String value) {

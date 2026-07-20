@@ -1,0 +1,18 @@
+# Sets WATCH_NAMESPACE to the pod's own namespace via the downward API. main.go scopes the manager's
+# cache/watches to this namespace and refuses to start if it is unset — the operator is namespaced by
+# design (docs/OPERATOR-DESIGN.md §6) and must never silently watch cluster-wide.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          env:
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace

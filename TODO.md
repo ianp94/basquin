@@ -317,13 +317,28 @@ processes is effectively remote code execution on whatever it runs on.
   valve + JaCoCo + ClosureJVM agent baked into a self-contained image, ClusterIP Service,
   one-command `up.sh`. Verified in-cluster: valve invariant headers, 96 server-side invariant
   finds, and live coverage % (281/6368 edges) all working against the pod. Demo `docs/demo-k8s.svg`.
-- [ ] **Auto-injection operator** — design proposed in [`docs/OPERATOR-DESIGN.md`](OPERATOR-DESIGN.md),
-  under review. Chosen model is an **explicit patch controller** (a namespaced `ClosureJVMTarget`
-  CR that instruments only the Deployments you name via an initContainer + shared volume, revertible
-  by deleting the CR) — deliberately *not* a mutating admission webhook, for a bounded, auditable
-  trust boundary. Built in **Go / kubebuilder** as its own `operator/` module (the control plane is
-  runtime-agnostic; keeps the door open to non-JVM runtime profiles). Delivered in phases P1–P4;
-  becomes DD-024 on approval.
+- [ ] **Auto-injection operator** — design **approved** and merged
+  ([`docs/OPERATOR-DESIGN.md`](OPERATOR-DESIGN.md), PR #6). An **explicit patch controller**: a
+  namespaced `ClosureJVMTarget` CR that instruments only the Deployments you name via an
+  initContainer + shared volume, revertible by deleting the CR — deliberately *not* a mutating
+  admission webhook, for a bounded, auditable trust boundary. Built in **Go / kubebuilder** as its
+  own `operator/` module (the control plane is runtime-agnostic; keeps the door open to non-JVM
+  runtime profiles). Becomes **DD-024** when P2 lands the actual injection. Phased delivery, each its
+  own PR:
+  - [x] **P1 — scaffold + CRD + no-op controller.** `kubebuilder init` under `operator/` (Go module,
+    controller-runtime 0.17), `ClosureJVMTarget` CRD (group `closurejvm.dev/v1alpha1`, spec/status
+    per the design, `includes` required-when-coverage-enabled), a reconciler that only *observes* the
+    named Deployment and writes `status` (never patches a workload; `instrumentedReplicas` always 0),
+    and **namespaced** RBAC — one `ClusterRole` bound via `RoleBinding` (no `ClusterRoleBinding`,
+    no webhook), manager cache scoped to `WATCH_NAMESPACE` and refuses to run cluster-wide. Zero
+    mutation risk. Renders clean (`kubectl kustomize`), `go build`/`go vet` green.
+  - [ ] **P2 — injection + revert.** Deployment patch (initContainer + `emptyDir` + appended
+    `jvmOptsVar` + coverage port), spec-hash idempotency, finalizer-based exact revert. Verify by
+    instrumenting the **stock** JPetStore image instead of the baked one. Record **DD-024** here.
+  - [ ] **P3 — coverage Service + status.** Headless Service (Ready-pod IPs), `status.coverageEndpoint`,
+    wired end-to-end to the DD-023 union-coverage driver flag across replicas.
+  - [ ] **P4 — docs + demo.** Replace the bake-into-the-image path in `deploy/k8s` with an
+    apply-a-CR path; USAGE + ARCHITECTURE updates.
 - [x] **Web dashboard, decoupled (DD-013)**: `DashboardServer` is a standalone aggregator process
   (own port, no driving logic) that many drivers push to via `DashboardClient`
   (`-Dclosurejvm.dashboard.push=host:port`), keyed by campaign id (defaults to `HOSTNAME` — a pod's

@@ -1,0 +1,36 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - closurejvm.dev
+  resources:
+  - closurejvmtargets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - closurejvm.dev
+  resources:
+  - closurejvmtargets/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - closurejvm.dev
+  resources:
+  - closurejvmtargets/status
+  verbs:
+  - get
+  - patch
+  - update

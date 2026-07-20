@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- closurejvm_v1alpha1_closurejvmtarget.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

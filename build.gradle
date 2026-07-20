@@ -120,6 +120,26 @@ jar {
     }
 }
 
+// Self-contained runner fat jar for the operator's driver Job image (deploy/runner-image).
+// The coverage-guided entry point lives in the `coverage` source set, which is deliberately kept
+// out of the main jar (line 47), so bundle its runtimeClasspath — coverage + main + JaCoCo — here.
+tasks.register('runnerJar', Jar) {
+    archiveClassifier = 'runner'
+    manifest {
+        attributes('Main-Class': 'runner.coverage.CoverageGuidedRun')
+    }
+    from(sourceSets.coverage.output)
+    from(sourceSets.main.output)
+    from {
+        sourceSets.coverage.runtimeClasspath
+            .filter { it.isFile() && it.name.endsWith('.jar') }
+            .collect { zipTree(it) }
+    }
+    // Multiple deps ship their own META-INF signatures/manifests; drop them to avoid a sealed/invalid jar.
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/MANIFEST.MF'
+}
+
 // Convenience run tasks
 tasks.register('runExampleProper', JavaExec) {
     group = 'application'

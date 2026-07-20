@@ -82,6 +82,10 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
 
+.PHONY: cli
+cli: fmt vet ## Build the closurejvm CLI binary (bin/closurejvm).
+	go build -o bin/closurejvm ./cmd/closurejvm
+
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go

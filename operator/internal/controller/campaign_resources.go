@@ -48,8 +48,9 @@ const (
 func driverJobName(c *closurejvmv1alpha1.ClosureJVMCampaign) string { return c.Name + "-driver" }
 
 // buildDriverJob builds the coverage-guided driver Job. appImage is the target's app-container image
-// (source of the .class files); coverageEndpoint is the target's status.coverageEndpoint.
-func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverageEndpoint, runnerImage string) *batchv1.Job {
+// (source of the .class files); coverageEndpoint is the target's status.coverageEndpoint;
+// dashboardPush is the resolved dashboard host:port to push status/findings to ("" = don't push).
+func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverageEndpoint, runnerImage, dashboardPush string) *batchv1.Job {
 	d := &c.Spec.Driver
 
 	props := []string{
@@ -71,10 +72,11 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 	if d.Invariants.HeapDeltaMaxKb > 0 {
 		props = append(props, fmt.Sprintf("-Dclosurejvm.invariant.heapDelta.maxKb=%d", d.Invariants.HeapDeltaMaxKb))
 	}
-	// P5a: only push to a dashboard if one is provided externally (a per-campaign dashboard is P5b).
-	if c.Spec.Dashboard.ExternalPush != "" {
+	// Push status/findings to the resolved dashboard (per-campaign or external; "" when disabled).
+	// The id groups this campaign's pushes under /api/campaign/<name>/… on the dashboard.
+	if dashboardPush != "" {
 		props = append(props,
-			"-Dclosurejvm.dashboard.push="+c.Spec.Dashboard.ExternalPush,
+			"-Dclosurejvm.dashboard.push="+dashboardPush,
 			"-Dclosurejvm.dashboard.id="+c.Name)
 	}
 

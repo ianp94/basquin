@@ -64,9 +64,11 @@ type CampaignDriverSpec struct {
 // CampaignDashboardSpec configures the dashboard for a campaign.
 type CampaignDashboardSpec struct {
 	// Enabled (default true): the operator creates a per-campaign dashboard Deployment+Service,
-	// garbage-collected with the campaign.
+	// garbage-collected with the campaign. A *bool (not a plain bool) so `enabled: false` survives
+	// admission — with a plain bool + omitempty + a true default, false marshals as "unset" and gets
+	// re-defaulted to true, making the dashboard impossible to disable programmatically.
 	// +kubebuilder:default=true
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled *bool `json:"enabled,omitempty"`
 	// ExternalPush (host:port): push to an existing/shared dashboard instead of creating one.
 	// +optional
 	ExternalPush string `json:"externalPush,omitempty"`

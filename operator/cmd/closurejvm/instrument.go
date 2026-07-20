@@ -51,7 +51,7 @@ func buildTarget(o instrumentOpts) *closurejvmv1alpha1.ClosureJVMTarget {
 		Container:       o.container,
 		JVMOptsVar:      o.jvmOptsVar, // "" => the CRD defaults it (JAVA_TOOL_OPTIONS)
 		CoverageService: o.coverageService,
-		Agents:          closurejvmv1alpha1.AgentsSpec{ThreadTracker: o.threadTracker},
+		Agents:          closurejvmv1alpha1.AgentsSpec{ThreadTracker: &o.threadTracker},
 	}
 	if o.coverageIncludes != "" {
 		port := int32(o.coveragePort)
@@ -77,6 +77,17 @@ func validateInstrument(o instrumentOpts) error {
 	}
 	if o.coverageService && o.coverageIncludes == "" {
 		return fmt.Errorf("--coverage-service needs coverage enabled; pass --coverage-includes (e.g. 'com.example.*')")
+	}
+	// Fail fast with a clean message on values the CRD's enums would reject server-side anyway.
+	switch o.jvmOptsVar {
+	case "", "CATALINA_OPTS", "JAVA_TOOL_OPTIONS":
+	default:
+		return fmt.Errorf("--jvm-opts-var must be CATALINA_OPTS or JAVA_TOOL_OPTIONS, got %q", o.jvmOptsVar)
+	}
+	switch o.invariantMode {
+	case "", "soft", "hard":
+	default:
+		return fmt.Errorf("--invariant-mode must be soft or hard, got %q", o.invariantMode)
 	}
 	return nil
 }
@@ -106,6 +117,9 @@ func runInstrument(args []string) error {
 	fs.BoolVar(&wait, "wait", false, "Wait for the target to reach Injected.")
 	fs.DurationVar(&waitFor, "wait-timeout", 3*time.Minute, "How long to wait with --wait.")
 	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp { // -h/--help: flag already printed usage
+			return nil
+		}
 		return err
 	}
 	if o.name == "" {
@@ -179,19 +193,29 @@ func waitForInjected(ctx context.Context, c client.Client, key types.NamespacedN
 	for {
 		var t closurejvmv1alpha1.ClosureJVMTarget
 		if err := c.Get(ctx, key, &t); err != nil {
-			return fmt.Errorf("reading target status: %w", err)
+			// Don't abort the whole wait on a transient API hiccup — retry until the deadline.
+			if time.Now().After(deadline) {
+				return fmt.Errorf("reading target status: %w", err)
+			}
+			time.Sleep(2 * time.Second)
+			continue
 		}
+		// Only trust a terminal phase once the controller has observed THIS spec — otherwise a --wait
+		// re-apply that changed the spec could read the pre-update Injected status and return early.
+		observed := t.Status.ObservedGeneration >= t.Generation
 		phase := string(t.Status.Phase)
 		if phase != last && phase != "" {
 			fmt.Printf("  phase: %s\n", phase)
 			last = phase
 		}
-		switch t.Status.Phase {
-		case closurejvmv1alpha1.PhaseInjected:
-			fmt.Printf("Injected ✓  coverageEndpoint=%s\n", orNone(t.Status.CoverageEndpoint))
-			return nil
-		case closurejvmv1alpha1.PhaseError:
-			return fmt.Errorf("target entered Error (see: kubectl -n %s describe closurejvmtarget %s)", key.Namespace, key.Name)
+		if observed {
+			switch t.Status.Phase {
+			case closurejvmv1alpha1.PhaseInjected:
+				fmt.Printf("Injected ✓  coverageEndpoint=%s\n", orNone(t.Status.CoverageEndpoint))
+				return nil
+			case closurejvmv1alpha1.PhaseError:
+				return fmt.Errorf("target entered Error (see: kubectl -n %s describe closurejvmtarget %s)", key.Namespace, key.Name)
+			}
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("timed out after %s waiting for Injected (last phase %q)", timeout, orNone(phase))

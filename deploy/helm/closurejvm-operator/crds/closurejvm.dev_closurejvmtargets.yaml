@@ -87,8 +87,11 @@ spec:
                         > 0)'
                   threadTracker:
                     default: true
-                    description: ThreadTracker injects the native JVMTI agent (-agentpath)
-                      for the leak/thread oracle.
+                    description: |-
+                      ThreadTracker injects the native JVMTI agent (-agentpath) for the leak/thread oracle.
+                      A *bool (not a plain bool) so `threadTracker: false` survives admission — with a plain bool +
+                      omitempty + a true default, false marshals as "unset" and gets re-defaulted to true, making the
+                      tracker impossible to disable (via the CLI or a typed client). nil = default (on).
                     type: boolean
                   valve:
                     default: true

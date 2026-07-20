@@ -26,7 +26,7 @@ func TestBuildTargetMinimal(t *testing.T) {
 	if tg.Spec.DeploymentRef.Name != "app" {
 		t.Errorf("deploymentRef = %q", tg.Spec.DeploymentRef.Name)
 	}
-	if !tg.Spec.Agents.ThreadTracker {
+	if tg.Spec.Agents.ThreadTracker == nil || !*tg.Spec.Agents.ThreadTracker {
 		t.Error("threadTracker should be on")
 	}
 	if tg.Spec.Agents.Coverage.Enabled {
@@ -67,6 +67,18 @@ func TestBuildTargetCoveragePortDefaults(t *testing.T) {
 	}
 }
 
+func TestBuildTargetThreadTrackerFalseSurvives(t *testing.T) {
+	// The *bool must carry an explicit false to the CR (a plain bool + omitempty would drop it and the
+	// CRD default would re-enable it).
+	tg := buildTarget(instrumentOpts{deployment: "app", threadTracker: false})
+	if tg.Spec.Agents.ThreadTracker == nil {
+		t.Fatal("threadTracker should be an explicit pointer, not nil")
+	}
+	if *tg.Spec.Agents.ThreadTracker {
+		t.Error("threadTracker=false must be preserved")
+	}
+}
+
 func TestValidateInstrument(t *testing.T) {
 	cases := []struct {
 		name string
@@ -76,6 +88,10 @@ func TestValidateInstrument(t *testing.T) {
 		{"missing deployment", instrumentOpts{}, false},
 		{"coverage-service without includes", instrumentOpts{deployment: "app", coverageService: true}, false},
 		{"coverage-service with includes", instrumentOpts{deployment: "app", coverageService: true, coverageIncludes: "com.x.*"}, true},
+		{"bad jvm-opts-var", instrumentOpts{deployment: "app", jvmOptsVar: "FOO"}, false},
+		{"good jvm-opts-var", instrumentOpts{deployment: "app", jvmOptsVar: "CATALINA_OPTS"}, true},
+		{"bad invariant-mode", instrumentOpts{deployment: "app", invariantMode: "loud"}, false},
+		{"good invariant-mode", instrumentOpts{deployment: "app", invariantMode: "hard"}, true},
 		{"minimal valid", instrumentOpts{deployment: "app"}, true},
 	}
 	for _, tc := range cases {

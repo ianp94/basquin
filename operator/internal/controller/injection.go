@@ -99,7 +99,7 @@ func jvmOptsVarName(spec *closurejvmv1alpha1.ClosureJVMTargetSpec) string {
 // backlog) — enabling agents.valve alone does not add anything here.
 func buildAgentArgs(spec *closurejvmv1alpha1.ClosureJVMTargetSpec) string {
 	var args []string
-	if spec.Agents.ThreadTracker {
+	if spec.Agents.ThreadTracker == nil || *spec.Agents.ThreadTracker { // nil = default (on)
 		args = append(args, "-agentpath:"+agentsMountPath+"/libclosurejvmti.so")
 	}
 	// The Java agent carries the invariant oracle; inject it whenever any agent/invariant is wanted.

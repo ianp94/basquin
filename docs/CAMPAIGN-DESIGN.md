@@ -38,7 +38,9 @@ spec:
   # WHAT to drive — an existing ClosureJVMTarget in this namespace.
   targetRef: { name: jpetstore }
 
-  # The app's HTTP entrypoint the driver hits. Optional: default to the target's app Service.
+  # REQUIRED: the app's HTTP entrypoint the driver hits. The operator does NOT create a Service in
+  # front of the app (it only patches the Deployment + makes the coverage Service), and a target has
+  # no app-Service field to default from — so the campaign names it explicitly.
   baseURL: "http://jpetstore.closurejvm-system.svc:8080"
 
   driver:
@@ -72,16 +74,22 @@ status:
 ## 4. What the reconciler does
 
 1. **Resolve + gate on the target.** Look up `targetRef`; require its status `Injected` (else
-   `Pending`, requeue — you can't drive an app that isn't instrumented yet). Read the target's app
-   Service for the default `baseURL` and its `status.coverageEndpoint` (P3) for the coverage flag.
+   `Pending`, requeue — you can't drive an app that isn't instrumented yet). Read its
+   `status.coverageEndpoint` (P3) for the coverage flag. `baseURL` is taken from the campaign spec
+   (required — the operator doesn't front the app with a Service of its own).
 2. **Dashboard.** If `dashboard.enabled` and no `externalPush`: ensure a dashboard `Deployment` +
    `Service` (the standalone `DashboardServer`, DD-013), owner-referenced to the campaign. Set
    `status.dashboardURL`.
 3. **Driver.** Create a `Job` running the coverage-guided runner (`CoverageGuidedRun`) with:
    `-Dexamples.http.baseUrl=<baseURL>`, `-Dclosurejvm.grammar=<mounted grammar>`,
    `-Dclosurejvm.coverage.jacoco=<target coverageEndpoint>`,
-   `-Dclosurejvm.dashboard.push=<dashboard Service>`, plus the invariant flags and duration/iteration
-   cap. Owner-referenced to the campaign. Grammar/corpus arrive via mounted ConfigMaps.
+   `-Dclosurejvm.coverage.classes=<extracted classes dir>` (§7b),
+   `-Dclosurejvm.dashboard.push=<dashboard Service>`,
+   `-Dclosurejvm.dashboard.id=<campaign name>` (so pushes land at `/api/campaign/<name>/…` rather than
+   under the pod's random `HOSTNAME`), the invariant flags, and the run bound. Owner-referenced to the
+   campaign; grammar/corpus arrive via mounted ConfigMaps; `restartPolicy: Never` + a small
+   `backoffLimit`. **The run bound is enforced inside the runner, not by `activeDeadlineSeconds`** —
+   see §7.2/§7a for why (a kill would skip the summary write).
 4. **Aggregate status.** Watch the `Job`: Running → `Running`, success → `Completed`, failure/backoff
    → `Failed`. Populate `coveragePct`/`findings` (see §7 open decision on *how*).
 5. **Teardown.** Owner references on the Job + dashboard Deployment/Service mean deleting the campaign
@@ -103,12 +111,17 @@ already run these mainClasses). Could even be one image with two entrypoints. Re
 ## 6. RBAC additions (still namespaced)
 
 The operator gains, in its own namespace only:
+- `closurejvm.dev/closurejvmcampaigns` (+ `/status`, `/finalizers`): `get;list;watch;update;patch` —
+  the campaign's own CR, mirroring the grants `role.yaml` already gives `closurejvmtargets`;
 - `batch/jobs`: `get;list;watch;create;delete` (drive the runner);
-- `apps/deployments`: add `create;delete` (it currently only `update;patch`es the *target's* existing
-  Deployment; the dashboard is one it *creates*);
-- `core/configmaps`: `get;list;watch` (read grammar/corpus; `create` if we materialize inline grammar
-  into a ConfigMap);
-- `core/pods`: `get;list;watch` (surface driver pod status; read logs if we scrape results that way).
+- `apps/deployments`: add `create;delete` (P1–P4 only `update;patch` the *target's* existing
+  Deployment; the dashboard is one the operator *creates*);
+- `core/services`: already granted (P3); reused for the dashboard Service;
+- `core/configmaps`: `get;list;watch` (read grammar/corpus), plus `create` if inline grammar is
+  materialized into a ConfigMap and to write the `<campaign>-results` summary (§7a);
+- `core/pods`: `get;list;watch` (surface driver pod status only). **Not** `pods/log` — reading
+  container logs needs the separate `pods/log` subresource grant, which the §7.1-Option-B summary
+  approach deliberately avoids (no log scraping).
 
 **Trust note.** The operator now *runs workloads* (Jobs) in its namespace — genuine scheduling
 authority. That is the deliberate trade P5 makes, and it belongs with the operator (already namespaced,
@@ -126,9 +139,16 @@ arbitrary user commands.
    `externalPush` fans many campaigns into one long-lived dashboard (the DD-013 fleet view) when you
    want cross-campaign comparison. Both supported.
 
+2. **Duration vs iterations — RESOLVED (bound is enforced in the runner).** `iterations` uses the
+   runner's existing count cap. `duration` needs a **new runner flag** (`-Dclosurejvm.run.duration`)
+   that stops the loop and **exits 0 cleanly** at the deadline — NOT a Job `activeDeadlineSeconds`,
+   which SIGKILLs the pod (Job condition `Failed`/`DeadlineExceeded`, and — worse — the driver never
+   writes its `summary.json`, §7a). So both bounds end in a clean exit → `Completed` + a summary. A
+   generous `activeDeadlineSeconds` can still be set as a last-resort backstop, treated as `Failed`.
+   One-of (`duration` XOR `iterations`) validated via CEL. This is a second small additive runner
+   change, alongside the summary write (§7a).
+
 **Still open (not blocking P5a):**
-2. **Duration vs iterations.** Support both; `duration` maps to a Job `activeDeadlineSeconds`,
-   `iterations` to the runner's existing cap. One-of validation via CEL.
 4. **Result persistence.** The Job + dashboard are ephemeral; findings/corpus vanish on teardown. Out
    of scope for the first cut (results live while the campaign does); a `results:` sink (PVC / object
    store) is a follow-up.
@@ -189,6 +209,11 @@ will assert the driver reports a non-zero coverage % against the raw JPetStore.
 - **Watches.** `Owns(&batchv1.Job{})`, `Owns(&corev1.Service{})`, `Owns(&appsv1.Deployment{})` for the
   dashboard, plus a watch mapping the referenced `ClosureJVMTarget` back to campaigns (so a campaign
   created before its target is `Injected` starts as soon as injection completes).
+- **Target reverted mid-run.** If the referenced target is deleted (or drops out of `Injected`) while a
+  campaign is `Running`, the target-→-campaign watch re-reconciles; the campaign moves to a distinct
+  terminal `Failed` state with reason `TargetGone` (rather than letting the driver silently rack up
+  connection-refused "findings" that look like app bugs). First cut stops the run there; auto-resume
+  when the target returns is a later nicety.
 
 ## 8. Phased delivery within P5 (each its own PR)
 

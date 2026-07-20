@@ -82,7 +82,7 @@ spec:
     coverage:                     # JaCoCo tcpserver for coverage-guided-over-HTTP
       enabled: true
       port: 6300
-      includes: "org.mybatis.jpetstore.*"   # NOT "*" — see DD-022
+      includes: "org.mybatis.jpetstore.*"   # REQUIRED when enabled; must not default to "*" (DD-022)
 
   # HOW the JVM picks up the agents. Tomcat images honor CATALINA_OPTS; everything else uses
   # JAVA_TOOL_OPTIONS (the JVM appends it to every launch). The operator picks per `jvmOptsVar`.
@@ -113,6 +113,12 @@ status:
 The spec is intentionally a superset of the hand-written `CATALINA_OPTS` in the demo Dockerfile —
 anything that string encodes today, the CR encodes declaratively.
 
+**Validation:** when `agents.coverage.enabled: true`, `agents.coverage.includes` is **required** (CRD
+schema validation, no default). DD-022 showed that a `*` includes silently instruments Tomcat and
+MyBatis, inflating the coverage denominator and adding enough overhead to fake latency violations;
+the operator path must not be able to re-open that by omission, so there is deliberately no default
+value to fall back to.
+
 ## 4. How agents get into an unmodified pod
 
 The target image does **not** contain our agents, so we cannot just reference a path. Use the
@@ -124,16 +130,23 @@ Istio operators use):
      `cp /agents/* /closurejvm/` into…
    - a shared **`emptyDir` volume** mounted at `/closurejvm` in both the initContainer and the app
      container, and
-   - an **env var** (`jvmOptsVar`) whose value is the assembled agent string pointing at
-     `/closurejvm/closurejvm-agent.jar`, `/closurejvm/jacocoagent.jar`, etc., plus the
-     `-Dclosurejvm.*` flags from the spec, plus the JaCoCo `-javaagent` with the scoped `includes`.
+   - the assembled agent string — `-javaagent`/`-agentpath` pointing at
+     `/closurejvm/closurejvm-agent.jar`, `/closurejvm/jacocoagent.jar` (scoped `includes`), plus the
+     `-Dclosurejvm.*` flags — **appended to** the container's existing `jvmOptsVar`, not replacing
+     it. Target containers routinely set their own `JAVA_TOOL_OPTIONS`/`CATALINA_OPTS` (heap sizing,
+     GC flags); overwriting would silently change app behavior in ways unrelated to instrumentation.
+     If the var is set, the operator appends our flags to the original value (the same original it
+     stashes for revert, §5); if unset, it sets our flags alone.
    - the coverage **containerPort** (6300) if coverage is enabled.
 
 2. If `coverageService: true`, the operator also creates a **headless Service**
    (`clusterIP: None`) selecting the target's pods on the coverage port. Its DNS name resolves to
    every pod IP, which is exactly what `JacocoCoverageProvider.parseEndpoints` +
    `InetAddress.getAllByName` consume for union coverage (DD-023). The resolved name is written to
-   `status.coverageEndpoint` so the driver flag is copy-pasteable.
+   `status.coverageEndpoint` so the driver flag is copy-pasteable. Note that headless-Service DNS
+   returns only **Ready** pod IPs, so during a rollout the DD-023 `[N/M pods]` denominator moves as
+   pods cycle in and out — coherent (the panel shows exactly what is reachable), just expected rather
+   than a surprise to rediscover in P3.
 
 Because the agent binaries ship in a versioned image the operator controls, upgrading agents is an
 operator/image bump, never a target rebuild.
@@ -143,7 +156,9 @@ operator/image bump, never a target rebuild.
 Level-triggered, idempotent — the controller reconciles desired state, it does not apply diffs:
 
 1. **Observe** a `ClosureJVMTarget`. Load the referenced Deployment.
-2. **Compute** the desired pod-template patch from the spec (initContainer, volume, env, port).
+2. **Compute** the desired pod-template patch from the spec (initContainer, volume, env, port). The
+   `jvmOptsVar` value is `<stashed original> + " " + <our flags>` — computed against the stashed
+   original, never against the already-instrumented value, so re-reconciling never double-appends.
 3. **Compare** against what's already there (identified by a `closurejvm.dev/injected: <hash>`
    annotation recording the spec hash we last applied, plus the original `jvmOptsVar` value stashed
    in `closurejvm.dev/original-<var>` so revert is exact). If the hash matches, do nothing —
@@ -169,8 +184,13 @@ Shipped as a namespaced install by default:
   targets in another namespace you install another instance (or knowingly opt into a broader
   binding) — breadth is a deliberate act, never the default.
 
-This is the whole reason to prefer this model: the standing privilege is "patch Deployments in one
-namespace," which is auditable and bounded, versus "mutate any pod at admission time."
+Stated bluntly, so the grant is honest: "patch Deployments in one namespace" is, concretely, the
+power to inject an **arbitrary initContainer** — i.e. code execution on every workload in that
+namespace. That is not nothing. It is still categorically narrower than an admission webhook's
+"mutate any pod, cluster-wide, at creation," and naming it plainly is what makes the containment
+argument credible: the blast radius is one namespace you chose, auditable in plain Deployment YAML,
+not the whole cluster invisibly. This is the whole reason to prefer this model — the standing
+privilege is bounded and inspectable, versus "mutate any pod at admission time."
 
 ## 7. Decisions
 

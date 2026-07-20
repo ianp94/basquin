@@ -23,8 +23,7 @@ public final class ClaudeSmokeCheck {
                     + "-Dclosurejvm.claude.apiKey). Nothing sent.");
             System.exit(1);
         }
-        String model = System.getProperty("closurejvm.claude.model", "claude-sonnet-5");
-        System.out.println("[claude-check] model=" + model + " -> sending a minimal prompt…");
+        System.out.println("[claude-check] model=" + ClaudeAnalyzer.model() + " -> sending a minimal prompt…");
         try {
             // Deliberately tiny and deterministic: proves auth + model + body + parse without
             // spending meaningful tokens. Not asking for exact-match text — models legitimately add

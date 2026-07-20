@@ -28,6 +28,15 @@ public final class ClaudeAnalyzer {
         return apiKey() != null;
     }
 
+    /**
+     * The model {@link #analyze} will actually use: the {@code -Dclosurejvm.claude.model} override
+     * if set, else {@link #DEFAULT_MODEL}. Exposed so callers (e.g. the smoke check) can report the
+     * real model without duplicating the default and drifting out of sync with it.
+     */
+    public static String model() {
+        return System.getProperty("closurejvm.claude.model", DEFAULT_MODEL);
+    }
+
     private static String apiKey() {
         String v = System.getProperty("closurejvm.claude.apiKey");
         if (v != null && !v.isEmpty()) return v;
@@ -40,7 +49,7 @@ public final class ClaudeAnalyzer {
         if (key == null) {
             throw new IOException("Claude API key not configured (set ANTHROPIC_API_KEY)");
         }
-        String model = System.getProperty("closurejvm.claude.model", DEFAULT_MODEL);
+        String model = model();
         // Thinking is DISABLED and the ceiling is generous on purpose. Sonnet runs adaptive
         // thinking when "thinking" is omitted, and thinking tokens count against max_tokens -- an
         // 800-token ceiling could be consumed almost entirely by thinking, returning a truncated

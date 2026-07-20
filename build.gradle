@@ -261,7 +261,8 @@ tasks.register('verifyClaude', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.util.ClaudeSmokeCheck'
     systemProperties System.getProperties().findAll { k, v -> k.toString().startsWith('closurejvm.claude') }
-    environment 'ANTHROPIC_API_KEY', System.getenv('ANTHROPIC_API_KEY') ?: ''
+    // ANTHROPIC_API_KEY is inherited from the environment automatically (JavaExec passes it
+    // through); ClaudeAnalyzer reads it exactly as in production.
 }
 
 // HTTP route driver against a running app (e.g. JPetStore). Client-side latency + crash

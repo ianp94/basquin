@@ -251,6 +251,19 @@ tasks.register('runDashboard', JavaExec) {
     systemProperties System.getProperties().findAll { k, v -> k.toString().startsWith('closurejvm.dashboard') }
 }
 
+// One-shot smoke check of the dashboard's optional Claude-analysis path (DD-015). Exercises the
+// real ClaudeAnalyzer against ANTHROPIC_API_KEY so a green run proves the live round-trip, not
+// just that it compiles. The key is read from the environment by ClaudeAnalyzer and never printed.
+//   ANTHROPIC_API_KEY=sk-... ./gradlew verifyClaude -q
+tasks.register('verifyClaude', JavaExec) {
+    group = 'verification'
+    description = 'Send one minimal prompt through the real ClaudeAnalyzer to verify the live API path.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.util.ClaudeSmokeCheck'
+    systemProperties System.getProperties().findAll { k, v -> k.toString().startsWith('closurejvm.claude') }
+    environment 'ANTHROPIC_API_KEY', System.getenv('ANTHROPIC_API_KEY') ?: ''
+}
+
 // HTTP route driver against a running app (e.g. JPetStore). Client-side latency + crash
 // detection, with the live status screen enabled. Point it at a running server first.
 tasks.register('runHttpDrive', JavaExec) {

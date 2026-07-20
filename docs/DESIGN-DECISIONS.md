@@ -322,3 +322,49 @@ app); a custom JVMTI coverage agent (JaCoCo is battle-tested and gives covered/t
 parsing JaCoCo `.exec` files on disk per sample (the tcpserver dump is live and needs no shared
 volume); resetting coverage per request (campaign-total is what a "% explored" means; per-request
 deltas are a later refinement for guidance).
+
+---
+
+## DD-013: Decouple the dashboard from the driver process — push to a standalone aggregator (2026-07-20)
+
+**Context.** v0.10's first dashboard slice (`StatusServer`) was an HTTP server embedded in the
+harness driver process itself (`GenericRunner`/`CoverageGuidedRun`). It never touched the
+app-under-test's JVM — that part was already correctly isolated — but it still coupled the
+dashboard's lifetime and blast radius to the process doing the actual measuring and driving, and
+it could only ever show one campaign. That's the wrong shape for the stated next step: an
+auto-injection operator that instruments many pods and needs one place to watch aggregate metrics
+across all of them.
+
+**Decision.** Split into two processes. `DashboardServer` is a standalone aggregator: an
+in-memory store keyed by campaign id, fed by `POST /ingest/status?id=` and
+`POST /ingest/findings?id=` with the raw JSON a driver already produces, served back verbatim via
+`GET /api/campaign/{id}/status|findings` and summarized via `GET /api/campaigns`. `DashboardClient`
+runs inside the driver and periodically pushes to it — the driver process never opens a listening
+port. The dashboard's page gained a fleet view (campaign cards, alive/stale by last-seen) with
+drill-down into one campaign's full metrics + findings.
+
+**Why raw-JSON store-and-forward, not real parsing.** `DashboardServer` never parses the payload
+structurally — it stores the harness's JSON text and replays it to the browser, which does the
+real `JSON.parse`. The one exception is a narrow best-effort regex scrape of a few numeric fields
+(iterations/crashes/coverage %) purely for the fleet-view summary cards; it degrades to "—" on a
+miss and never throws. This keeps the aggregator schema-agnostic (no coupling to
+`StatusReporter`'s JSON shape, no dependency on a JSON library) and correctly stateless about
+what a campaign's payload means — exactly the shape that lets many different pods/producers push
+to one dashboard without the dashboard needing to understand or version their internals.
+
+**Why id defaults to `HOSTNAME`.** In Kubernetes, `HOSTNAME` is the pod's name by default — so a
+driver running as (or alongside) a pod reports under a natural, unique identity with zero
+configuration, which is the identity the future auto-injection operator would want per instrumented
+pod.
+
+**Verified (2026-07-20).** Two independent processes: `DashboardServer` on its own port, a
+`CoverageGuidedRun` driver hitting the kind JPetStore pod and pushing to it. Fleet view showed the
+live campaign (`alive:true`, real iteration/crash/coverage numbers); campaign detail and findings
+endpoints round-tripped the driver's data correctly.
+
+**Rejected.** Keeping the embedded per-driver dashboard (DD-012's `StatusServer`) — couples
+lifetime, no cross-campaign view, and is the wrong foundation for the operator's "watch the whole
+fleet" goal; a message bus between driver and dashboard (same reasoning as DD-006 — the
+measurement cost is elsewhere, and a bus is overkill for a store-and-forward relay at this scale);
+full server-side JSON parsing/validation of the payload (adds a dependency and a schema coupling
+the aggregator doesn't need for v1).

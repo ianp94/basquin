@@ -126,17 +126,22 @@ Details: [deploy/k8s/README.md](deploy/k8s/README.md).
 
 ## Web dashboard
 
-Any run started with `-Dclosurejvm.dashboard` serves a live browser dashboard (default
-`http://localhost:7070`): metric cards, a coverage bar of the app under test, and a findings
-table showing each invariant/crash with its route and detail — the triage bundles, not just
-counts. No extra dependency (JDK `httpserver`). It's the single-run foundation for a
-cluster-wide dashboard and optional Claude-API-backed finding analysis (see [TODO](TODO.md)).
+A **standalone** dashboard process — never embedded in a driver, and never anywhere near the app
+under test. Run it once; any number of drivers (one per campaign, one per pod) push their status
+and findings to it, keyed by campaign id (defaults to `HOSTNAME`, a pod's name in Kubernetes). The
+page shows a fleet view of every reporting campaign, with drill-down into metric cards, a coverage
+bar, and a findings table (route/detail/classification, not just counts). This is the aggregation
+point the auto-injection operator (see [TODO](TODO.md)) would point every instrumented pod at.
 
 ```bash
-./gradlew runCoverageGuided -Dclosurejvm.dashboard=true \
+./gradlew runDashboard &   # standalone, its own process/port (7070 by default)
+
+./gradlew runCoverageGuided -Dclosurejvm.dashboard.push=localhost:7070 \
   -Dexamples.http.baseUrl=http://localhost:8080 \
   -Dclosurejvm.coverage.jacoco=localhost:6300 -Dclosurejvm.coverage.classes=<dir>/WEB-INF/classes
 ```
+
+No extra dependency (JDK `httpserver`) on either side. Design rationale: [DD-013](docs/DESIGN-DECISIONS.md).
 
 ## Features
 

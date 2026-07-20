@@ -237,6 +237,16 @@ tasks.register('runGenericNativeProper', JavaExec) {
     args '20', 'examples.targets.ThreadLeakTarget'
 }
 
+// Standalone dashboard/aggregator (DD-013): run once, point any number of drivers at it with
+// -Dclosurejvm.dashboard.push=host:port. Deliberately not embedded in any driver process.
+tasks.register('runDashboard', JavaExec) {
+    group = 'application'
+    description = 'Standalone dashboard server. Drivers push status/findings to it; never embedded in a driver or the app under test.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'runner.util.DashboardServer'
+    systemProperties System.getProperties().findAll { k, v -> k.toString().startsWith('closurejvm.dashboard') }
+}
+
 // HTTP route driver against a running app (e.g. JPetStore). Client-side latency + crash
 // detection, with the live status screen enabled. Point it at a running server first.
 tasks.register('runHttpDrive', JavaExec) {

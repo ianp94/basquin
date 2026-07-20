@@ -32,7 +32,7 @@ public class GenericRunner {
         // captured, so they never appear as a mid-iteration thread delta.
         runner.util.TriageSink.ensureStarted();
         runner.util.StatusReporter.ensureStarted();
-        runner.util.StatusServer.startIfEnabled();
+        runner.util.DashboardClient.ensureStarted();
 
         int iterations = parseIterations(args);
         String targetClass = parseTargetClass(args);

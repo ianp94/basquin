@@ -269,14 +269,16 @@ and the dashboard) — decide once the boundaries are clear.
   finds, and live coverage % (281/6368 edges) all working against the pod. Demo `docs/demo-k8s.svg`.
 - [ ] **Auto-injection agent**: a mutating admission webhook (operator) that injects the
   `-javaagent` + valve into annotated pods automatically — likely its own repo.
-- [x] **Web dashboard (single-run foundation)**: `StatusServer` (JDK httpserver, no deps) serves
-  a live dashboard + API from any run (`-Dclosurejvm.dashboard`): metric cards, a coverage bar,
-  and a findings table. `/api/status` (live metrics) + `/api/findings` (triage bundles). Verified
-  live against the kind pod. Surfaces the actual findings (route + detail), not just counts.
-- [ ] **Web dashboard (cluster)**: aggregate campaigns across pods; the "product" surface over the
-  k8s deployment (coverage growth over time, corpus, per-pod status). Candidate separate repo.
-  - [x] Surface the actual findings in the UI (route/detail/classification/time) — done in the
-    single-run dashboard; extend with full crash stack / sampled stack drill-down.
+- [x] **Web dashboard, decoupled (DD-013)**: `DashboardServer` is a standalone aggregator process
+  (own port, no driving logic) that many drivers push to via `DashboardClient`
+  (`-Dclosurejvm.dashboard.push=host:port`), keyed by campaign id (defaults to `HOSTNAME` — a pod's
+  name in k8s). Fleet view (campaign cards, alive/stale) + drill-down into one campaign's metric
+  cards, coverage bar, and findings table (route/detail/classification/time). Verified live: two
+  independent processes, dashboard showed the driver's real numbers via push. Task: `runDashboard`.
+  This IS the aggregation point the auto-injection operator (below) would point every pod at.
+  - [ ] Persistence/eviction beyond in-memory (fine for the demo scale; a real deployment would
+    want a TTL or a small store).
+  - [ ] Full crash stack / sampled stack drill-down in the findings view (currently a text excerpt).
   - [ ] Optional Claude-API-backed analysis: with a configured API key, let Claude analyze a
     finding (or a campaign) from the dashboard — cluster/dedupe findings, explain a stack, suggest
     a root cause / minimized repro. Opt-in; key stays server-side.

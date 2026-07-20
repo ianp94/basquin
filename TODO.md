@@ -282,3 +282,30 @@ and the dashboard) — decide once the boundaries are clear.
   - [ ] Optional Claude-API-backed analysis: with a configured API key, let Claude analyze a
     finding (or a campaign) from the dashboard — cluster/dedupe findings, explain a stack, suggest
     a root cause / minimized repro. Opt-in; key stays server-side.
+
+---
+
+## Post-v1.0: simplify the Kubernetes deploy
+
+Explicitly deferred past v1.0 (2026-07-20) — the current `deploy/k8s/` path works and is verified,
+but it's more manual than it should be for a real user. Pain points noticed while building it:
+
+- `up.sh` hand-bakes a per-app Dockerfile (`Dockerfile.jpetstore`) with the WAR + all three agent
+  jars `COPY`'d in — every new target app means a new bespoke image build, not a reusable pattern.
+- Coverage requires manually extracting `WEB-INF/classes` from the WAR on the host and pointing
+  `-Dclosurejvm.coverage.classes` at it by hand.
+- Reaching the pod means either a NodePort + manual `docker inspect` for the node IP, or a
+  `kubectl port-forward` the user has to manage themselves.
+- No Helm chart / single manifest set; `jpetstore.yaml` is demo-specific, not a template for "any
+  WAR."
+
+Ideas for later (not decided; revisit once the auto-injection operator direction is clearer, since
+that will reshape a lot of this anyway):
+- A sidecar/init-container pattern instead of baking a custom image per app, so any existing app
+  image can be instrumented by adding a container/volume, not rebuilding its Dockerfile.
+- A Helm chart (or `kustomize` base) parameterized by image + WAR path instead of a hand-written
+  Dockerfile per target.
+- Have the coverage class extraction happen automatically (from the mounted WAR/image at pod
+  start) instead of a manual host-side unzip step.
+- A single CLI entry point that replaces the current mix of `up.sh` + manual `kubectl`/`docker`
+  commands from the README/deploy docs.

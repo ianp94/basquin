@@ -1,7 +1,10 @@
-# ClosureJVM injection operator — design proposal
+# ClosureJVM injection operator — design + status
 
-**Status:** proposed, under review. Not yet implemented. On approval this becomes **DD-024** and
-the implementation lands behind it.
+**Status (2026-07-20):** approved and in build. **P1** (scaffold + CRD + observe-only controller) and
+**P2** (injection + idempotency + finalizer revert, **DD-024**) are merged/implemented; **P3–P4**
+(coverage Service, docs/demo) and **P5** (`ClosureJVMCampaign` orchestration, §10) are ahead. What P2
+does not yet cover: end-to-end against a real pod (needs the `closurejvm/agents` image built) and
+valve mounting (deferred — it needs a Tomcat `context.xml` entry, not a JVM flag).
 
 **Decision being proposed (2026-07-20):** an *explicit patch controller* — a namespaced operator
 that instruments only the Deployments you name in a `ClosureJVMTarget` custom resource. No mutating
@@ -224,18 +227,17 @@ privilege is bounded and inspectable, versus "mutate any pod at admission time."
 
 ## 8. Phased delivery (each phase its own PR)
 
-- **P0 — this doc.** Agree the model and settle §7. *(Model + Go/kubebuilder settled 2026-07-20.)*
-- **P1 — kubebuilder scaffold + CRD + no-op controller.** `kubebuilder init` a Go module under
-  `operator/`, define the `ClosureJVMTarget` CRD, and a reconciler that only writes `status`
-  (observes, never patches). Ships the namespaced RBAC manifests (§6). Proves the wiring with zero
-  mutation risk.
-- **P2 — injection.** Deployment patch (initContainer + volume + env + port), spec-hash idempotency,
-  finalizer revert. Verified against the existing kind/JPetStore setup by instrumenting the
-  **stock** JPetStore image instead of the baked one.
+- **P0 — this doc.** Agree the model and settle §7. *(Model + Go/kubebuilder settled 2026-07-20.)* ✅
+- **P1 — kubebuilder scaffold + CRD + no-op controller.** Go module under `operator/`, the
+  `ClosureJVMTarget` CRD, an observe-only reconciler, namespaced RBAC (§6). Zero mutation risk. ✅ *(merged)*
+- **P2 — injection.** Deployment patch (initContainer + volume + appended env + port), spec-hash
+  idempotency, finalizer-based exact revert (**DD-024**). Verified by envtest (patch shape, append,
+  idempotency, revert, Injected phase). ✅ *(this PR)* — e2e against a real pod pending the
+  `closurejvm/agents` image; valve mounting deferred.
 - **P3 — coverage Service + status.** Headless Service, `status.coverageEndpoint`, wire it to the
   DD-023 driver flag end to end across replicas.
 - **P4 — docs + demo.** Replace the bake-it-into-the-image path in `deploy/k8s` with an
-  apply-a-CR path; USAGE + ARCHITECTURE updates; record **DD-024**.
+  apply-a-CR path; USAGE + ARCHITECTURE updates.
 - **P5 — orchestration (`ClosureJVMCampaign`).** The second CRD that fires off a whole test —
   launches the runner + dashboard against an instrumented target and aggregates status. Designed in
   full (likely **DD-025**) then implemented. See §10.

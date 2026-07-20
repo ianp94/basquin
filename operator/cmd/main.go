@@ -58,6 +58,9 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var agentsImage string
+	flag.StringVar(&agentsImage, "agents-image", "",
+		"Image the injected initContainer copies the ClosureJVM agents from (empty uses the built-in default).")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -140,8 +143,9 @@ func main() {
 	}
 
 	if err = (&controller.ClosureJVMTargetReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		AgentsImage: agentsImage,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClosureJVMTarget")
 		os.Exit(1)

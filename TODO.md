@@ -313,9 +313,11 @@ processes is effectively remote code execution on whatever it runs on. **Update 
     and **namespaced** RBAC — one `ClusterRole` bound via `RoleBinding` (no `ClusterRoleBinding`,
     no webhook), manager cache scoped to `WATCH_NAMESPACE` and refuses to run cluster-wide. Zero
     mutation risk. Renders clean (`kubectl kustomize`), `go build`/`go vet` green.
-  - [ ] **P2 — injection + revert.** Deployment patch (initContainer + `emptyDir` + appended
-    `jvmOptsVar` + coverage port), spec-hash idempotency, finalizer-based exact revert. Verify by
-    instrumenting the **stock** JPetStore image instead of the baked one. Record **DD-024** here.
+  - [x] **P2 — injection + revert (DD-024).** Deployment patch (initContainer + `emptyDir` + appended
+    `jvmOptsVar` + coverage port), spec-hash idempotency, finalizer-based exact revert, Deployment
+    mapping-watch (no owner refs — they'd GC the Deployment). envtest verifies patch shape / append /
+    idempotency / exact revert / Injected phase (7/7). *Remaining:* e2e against a real pod needs the
+    `closurejvm/agents` image (Backlog); valve mounting deferred (needs Tomcat `context.xml`).
   - [ ] **P3 — coverage Service + status.** Headless Service (Ready-pod IPs), `status.coverageEndpoint`,
     wired end-to-end to the DD-023 union-coverage driver flag across replicas.
   - [ ] **P4 — docs + demo.** Replace the bake-into-the-image path in `deploy/k8s` with an
@@ -384,8 +386,9 @@ the P1–P4 injection work (a campaign needs a working instrumented target). Des
 - [ ] Package the **runner** and **dashboard** images the operator launches (alongside the `closurejvm/agents` image below)
 
 ### Operator (post-P1 platform work — beyond the P2–P4 checklist)
-- [ ] Build & publish the versioned `closurejvm/agents:<tag>` image the operator's initContainer copies from (P2 depends on it existing)
+- [ ] Build & publish the versioned `closurejvm/agents:<tag>` image the operator's initContainer copies from (P2 depends on it existing); e2e-instrument the **stock** JPetStore image with it
 - [ ] Operator CI: `go build` / `go vet` / `gofmt` (and envtest when assets are cached) in the pipeline — today only the Java build is in CI
+- [ ] Field indexer on `spec.deploymentRef.name` so the Deployment mapping-watch does a targeted lookup instead of a namespace-wide list+filter (PR #11 review; fine at current scale, optimization for high target-count/churn namespaces)
 - [ ] Validating enforcement for `container` required-when-ambiguous (a CRD schema can't express "required only when the pod has >1 container") — pairs with P2
 - [ ] Namespaced metrics security: re-enable a metrics-protection approach that needs no cluster-scoped binding (the kube-rbac-proxy sidecar was dropped in P1 because it requires a `system:auth-delegator` ClusterRoleBinding)
 - [ ] **Multi-runtime profiles** (`runtimeProfile: jvm | node | …`) — the forward reason for Go: the CR/reconcile/inject/revert control plane is runtime-agnostic; a new profile supplies different agents/flags without touching the machinery

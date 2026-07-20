@@ -76,13 +76,15 @@ func runDashboard(args []string) error {
 	}
 	podName := ""
 	for i := range pods.Items {
-		if pods.Items[i].Status.Phase == corev1.PodRunning {
+		// Require Ready, not just Running — the dashboard has a readinessProbe on /api/campaigns, so a
+		// freshly-rolled Running pod may not be serving yet (review #31).
+		if pods.Items[i].Status.Phase == corev1.PodRunning && podReady(&pods.Items[i]) {
 			podName = pods.Items[i].Name
 			break
 		}
 	}
 	if podName == "" {
-		return fmt.Errorf("no running dashboard pod for campaign %q in %s (is dashboard.enabled and the campaign past Provisioning?)", campaign, ns)
+		return fmt.Errorf("no ready dashboard pod for campaign %q in %s (is dashboard.enabled and the campaign past Provisioning?)", campaign, ns)
 	}
 
 	// Port-forward to it (dashboard listens on 7070).
@@ -111,4 +113,14 @@ func runDashboard(args []string) error {
 		fmt.Printf("Dashboard for %q at http://localhost:%d  (Ctrl-C to stop)\n", campaign, localPort)
 	}()
 	return fw.ForwardPorts() // blocks until stopCh closed
+}
+
+// podReady reports whether the pod's PodReady condition is True.
+func podReady(p *corev1.Pod) bool {
+	for _, cond := range p.Status.Conditions {
+		if cond.Type == corev1.PodReady {
+			return cond.Status == corev1.ConditionTrue
+		}
+	}
+	return false
 }

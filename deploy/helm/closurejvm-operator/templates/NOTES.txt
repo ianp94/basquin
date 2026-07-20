@@ -4,9 +4,10 @@ The operator is NAMESPACED BY DESIGN — it manages only namespace "{{ .Release.
 Install one release per namespace you want to instrument.
 
 Images it launches/injects (override with --set images.*):
-  agents     {{ .Values.images.agents | default "(built-in default)" }}
-  runner     {{ .Values.images.runner | default "(built-in default)" }}
-  dashboard  {{ .Values.images.dashboard | default "(built-in default)" }}
+{{- $tag := .Values.imageTag | default .Chart.AppVersion }}
+  agents     {{ with .Values.images.agents }}{{ . }}:{{ $tag }}{{ else }}(built-in default){{ end }}
+  runner     {{ with .Values.images.runner }}{{ . }}:{{ $tag }}{{ else }}(built-in default){{ end }}
+  dashboard  {{ with .Values.images.dashboard }}{{ . }}:{{ $tag }}{{ else }}(built-in default){{ end }}
 
 1. Check the controller is up:
      kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "closurejvm-operator.controllerName" . }}

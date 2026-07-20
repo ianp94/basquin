@@ -27,7 +27,7 @@ helm install closurejvm closurejvm/closurejvm-operator \
 helm install closurejvm ./deploy/helm/closurejvm-operator \
   --namespace closurejvm-system --create-namespace \
   --set fullnameOverride=closurejvm
-# ...add --set image.tag=… / --set images.*=… to pin local (e.g. kind-loaded) images.
+# ...add --set imageTag=… + --set image.repository=… / images.*=… to pin local (kind-loaded) images.
 ```
 
 `--set fullnameOverride=closurejvm` makes resources read as `closurejvm-controller-manager`,

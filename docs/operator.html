@@ -133,10 +133,13 @@ helm install closurejvm closurejvm/closurejvm-operator \
   <pre><code>helm install closurejvm ./deploy/helm/closurejvm-operator \
   --namespace closurejvm-system --create-namespace \
   <span class="f">--set</span> <span class="s">fullnameOverride=closurejvm</span> \
-  <span class="f">--set</span> <span class="s">image.repository=closurejvm/operator</span> <span class="f">--set</span> <span class="s">image.tag=0.2.0</span> \
-  <span class="f">--set</span> <span class="s">images.agents=closurejvm/agents:0.2.0</span> \
-  <span class="f">--set</span> <span class="s">images.runner=closurejvm/runner:0.2.0</span> \
-  <span class="f">--set</span> <span class="s">images.dashboard=closurejvm/dashboard:0.2.0</span></code></pre>
+  <span class="f">--set</span> <span class="s">imageTag=0.2.0</span> \
+  <span class="f">--set</span> <span class="s">image.repository=closurejvm/operator</span> \
+  <span class="f">--set</span> <span class="s">images.agents=closurejvm/agents</span> \
+  <span class="f">--set</span> <span class="s">images.runner=closurejvm/runner</span> \
+  <span class="f">--set</span> <span class="s">images.dashboard=closurejvm/dashboard</span></code></pre>
+  <p><code>imageTag</code> sets all four image tags at once; on a published release it defaults to the
+    chart's appVersion, so a repo install needs no version flags.</p>
 
   <h3>Or install with kustomize</h3>
   <pre><code>kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml

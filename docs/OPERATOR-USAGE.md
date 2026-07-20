@@ -83,11 +83,15 @@ the checkout, `--set`ting the locally-built images (chart docs:
 helm install closurejvm ./deploy/helm/closurejvm-operator \
   --namespace closurejvm-system --create-namespace \
   --set fullnameOverride=closurejvm \
-  --set image.repository=closurejvm/operator --set image.tag=0.2.0 \
-  --set images.agents=closurejvm/agents:0.2.0 \
-  --set images.runner=closurejvm/runner:0.2.0 \
-  --set images.dashboard=closurejvm/dashboard:0.2.0
+  --set imageTag=0.2.0 \
+  --set image.repository=closurejvm/operator \
+  --set images.agents=closurejvm/agents \
+  --set images.runner=closurejvm/runner \
+  --set images.dashboard=closurejvm/dashboard
 ```
+
+(One `imageTag` sets all four image tags — for a published release it defaults to the chart's
+appVersion, so a plain `helm install` from the repo needs no version flags.)
 
 `--set fullnameOverride=closurejvm` makes the resources read as `closurejvm-controller-manager`, … to
 match this guide; omit it for the default `<release>-<chart>` prefix. RBAC is namespaced `Role`s (the

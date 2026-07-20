@@ -99,12 +99,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
-      - name: Package the chart
+      - name: Resolve version
+        id: v
+        run: echo "tag=${{ github.event.inputs.version || github.ref_name }}" | sed 's/tag=v/tag=/' >> "$GITHUB_OUTPUT"
+      - name: Package the chart at the release version (--app-version drives all image tags)
         run: |
           mkdir -p dist
-          helm package deploy/helm/closurejvm-operator --destination dist
+          helm package deploy/helm/closurejvm-operator --destination dist \
+            --version "${{ steps.v.outputs.tag }}" --app-version "${{ steps.v.outputs.tag }}"
       - name: Upload chart asset to the release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.version && format('v{0}', github.event.inputs.version) || github.ref_name }}
           files: dist/*.tgz
+
+  pages:
+    name: Publish chart to the GitHub Pages Helm repo
+    runs-on: ubuntu-latest
+    steps:
+      # Check out main (a tag build is detached HEAD) so we can commit the packaged chart + index back.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: azure/setup-helm@v4
+      - name: Resolve version
+        id: v
+        run: echo "tag=${{ github.event.inputs.version || github.ref_name }}" | sed 's/tag=v/tag=/' >> "$GITHUB_OUTPUT"
+      - name: Package into docs/charts + regenerate the repo index
+        run: |
+          helm package deploy/helm/closurejvm-operator --destination docs/charts \
+            --version "${{ steps.v.outputs.tag }}" --app-version "${{ steps.v.outputs.tag }}"
+          helm repo index docs/charts --url https://ianp94.github.io/closureJVM/charts --merge docs/charts/index.yaml
+      - name: Commit the updated Helm repo to main
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/charts
+          if git diff --cached --quiet; then
+            echo "no chart changes to publish"; exit 0
+          fi
+          git commit -m "chore(release): publish chart ${{ steps.v.outputs.tag }} to the Pages Helm repo [skip ci]"
+          git push origin main

@@ -113,10 +113,11 @@ if [ "${INSTALL:-kustomize}" = "helm" ]; then
   helm --kube-context "kind-${CLUSTER}" upgrade --install closurejvm "$ROOT/deploy/helm/closurejvm-operator" \
     --namespace "$NS" --create-namespace \
     --set fullnameOverride=closurejvm \
-    --set image.repository="${OPERATOR_IMAGE%:*}" --set image.tag="${OPERATOR_IMAGE##*:}" \
-    --set images.agents="$AGENTS_IMAGE" \
-    --set images.runner="$RUNNER_IMAGE" \
-    --set images.dashboard="$DASHBOARD_IMAGE" \
+    --set imageTag="$TAG" \
+    --set image.repository="${OPERATOR_IMAGE%:*}" \
+    --set images.agents="${AGENTS_IMAGE%:*}" \
+    --set images.runner="${RUNNER_IMAGE%:*}" \
+    --set images.dashboard="${DASHBOARD_IMAGE%:*}" \
     --wait --timeout=150s
   # Same image tag across runs => the Deployment spec is unchanged => helm won't restart the pod, so a
   # freshly `kind load`ed image wouldn't be picked up. Force a restart (the kustomize path does too).

@@ -1,18 +1,22 @@
 # Default values for closurejvm-operator.
 
-# The operator controller image. Defaults to the published GitHub Container Registry image (built and
-# pushed by .github/workflows/release.yml on a version tag); override for a local/kind image.
+# Single source of the image VERSION: imageTag (empty => the chart's appVersion). All four images
+# below share it, so a release is just a git tag — `helm package --app-version X.Y.Z` (release.yml
+# does this) makes every image resolve to X.Y.Z with no per-image edits. Override for a pinned tag.
+imageTag: ""
+
+# The operator controller image repository (published to GitHub Container Registry by release.yml).
 image:
   repository: ghcr.io/ianp94/closurejvm-operator
-  tag: "0.2.0"
   pullPolicy: IfNotPresent
 
-# The three images the operator launches or injects. Each maps to a controller flag; leaving one
-# empty makes the operator fall back to its built-in default. Default to the published ghcr images.
+# The three image REPOSITORIES the operator launches or injects (tag = imageTag/appVersion, above).
+# Each maps to a controller flag; an empty repository makes the operator fall back to its built-in
+# default. Default to the published ghcr repos.
 images:
-  agents: ghcr.io/ianp94/closurejvm-agents:0.2.0       # --agents-image (target injection initContainer)
-  runner: ghcr.io/ianp94/closurejvm-runner:0.2.0       # --runner-image (campaign driver Job)
-  dashboard: ghcr.io/ianp94/closurejvm-dashboard:0.2.0 # --dashboard-image (per-campaign dashboard Deployment)
+  agents: ghcr.io/ianp94/closurejvm-agents       # --agents-image (target injection initContainer)
+  runner: ghcr.io/ianp94/closurejvm-runner       # --runner-image (campaign driver Job)
+  dashboard: ghcr.io/ianp94/closurejvm-dashboard # --dashboard-image (per-campaign dashboard Deployment)
 
 # The operator is NAMESPACED BY DESIGN: it watches and mutates only its own namespace (WATCH_NAMESPACE
 # is set from the release namespace via the downward API, and the operator refuses to start if empty).

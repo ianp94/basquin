@@ -11,6 +11,8 @@ retention, thread/executor leaks — as first-class bug oracles, not just crashe
 
 [![CI](https://github.com/ianp94/closureJVM/actions/workflows/ci.yml/badge.svg)](https://github.com/ianp94/closureJVM/actions/workflows/ci.yml)
 
+📖 **[Documentation, guides & demos → ianp94.github.io/closureJVM](https://ianp94.github.io/closureJVM/)** — how it works, getting started, and running against your own Tomcat app in Kubernetes.
+
 ![ClosureJVM live status driving JPetStore](docs/demo.svg)
 
 *Above: the live status screen during a 200-iteration HTTP drive against an unmodified

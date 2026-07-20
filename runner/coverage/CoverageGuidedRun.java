@@ -220,12 +220,111 @@ public final class CoverageGuidedRun {
                     "route=" + path + "\ncount=" + inv + (detail != null ? "\ndetail=" + detail : ""));
         }
         InputStream is = code >= 400 ? c.getErrorStream() : c.getInputStream();
+        StringBuilder body = new StringBuilder();
         if (is != null) {
             try (BufferedReader r = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-                while (r.readLine() != null) { /* drain */ }
+                String line;
+                while ((line = r.readLine()) != null) {
+                    // Keep the body only for server errors — that's where the app's own stack is.
+                    if (code >= 500 && body.length() < 16384) body.append(line).append('\n');
+                }
             }
         }
-        if (code >= 500) { throw new RuntimeException("HTTP " + code + " for " + path); }
+        if (code >= 500) {
+            throw serverError(code, path, body.toString());
+        }
+    }
+
+    /**
+     * Build an exception that carries the APP'S failure, not ours.
+     *
+     * A driver-side {@code new RuntimeException("HTTP 500")} records
+     * {@code CoverageGuidedRun.request(...)} as the stack, which says nothing about why the app
+     * failed — the real NPE only existed in the server log. The container's 500 page already
+     * contains the server-side exception and stack, so parse it out and install it as this
+     * throwable's type/message/stack. FuzzIO then saves the app's stack into the finding, and the
+     * dashboard shows a directly triageable record instead of pointing at the harness.
+     */
+    private static RuntimeException serverError(int code, String path, String body) {
+        String stackText = extractServerStack(body);
+        if (stackText == null) {
+            return new RuntimeException("HTTP " + code + " for " + path
+                    + " (no server stack in response; check the app's logs or its error-page config)");
+        }
+        String[] lines = stackText.split("\n");
+        String header = lines[0].trim();
+        RuntimeException e = new RuntimeException("HTTP " + code + " for " + path + " — " + header);
+        List<StackTraceElement> frames = new ArrayList<>();
+        for (int i = 1; i < lines.length; i++) {
+            StackTraceElement f = parseFrame(lines[i]);
+            if (f != null) frames.add(f);
+        }
+        if (!frames.isEmpty()) {
+            e.setStackTrace(frames.toArray(new StackTraceElement[0]));
+        }
+        return e;
+    }
+
+    /**
+     * Pull the exception + stack out of a servlet container's error page.
+     *
+     * Tomcat emits two {@code <pre>} blocks: the wrapping framework exception first, then a
+     * "Root Cause" block with the actual failure and the application's own frames. The root cause
+     * is the useful one — the wrapper just says "unhandled exception in exception handler".
+     */
+    private static String extractServerStack(String body) {
+        if (body == null || body.isEmpty()) return null;
+        int searchFrom = 0;
+        int rootCause = body.indexOf("Root Cause");
+        if (rootCause >= 0) searchFrom = rootCause;      // prefer the deepest cause
+        int pre = body.indexOf("<pre>", searchFrom);
+        if (pre < 0) pre = body.indexOf("<pre>");        // no root-cause section; take what's there
+        if (pre < 0) return null;
+        int end = body.indexOf("</pre>", pre);
+        String block = unescapeHtml(body.substring(pre + 5, end > 0 ? end : body.length())).trim();
+        return block.isEmpty() ? null : block;
+    }
+
+    private static StackTraceElement parseFrame(String line) {
+        String t = line.trim();
+        // Tomcat's error page renders frames WITHOUT the "at " prefix that a logged stack has,
+        // so accept both forms.
+        if (t.startsWith("at ")) t = t.substring(3).trim();
+        if (t.isEmpty() || !t.endsWith(")")) return null;
+        int paren = t.indexOf('(');
+        if (paren < 0) return null;
+        String qualified = t.substring(0, paren);
+        String location = t.substring(paren + 1, t.endsWith(")") ? t.length() - 1 : t.length());
+        int lastDot = qualified.lastIndexOf('.');
+        if (lastDot < 0) return null;
+        String cls = qualified.substring(0, lastDot);
+        String method = qualified.substring(lastDot + 1);
+        String file = location;
+        int lineNo = -1;
+        int colon = location.lastIndexOf(':');
+        if (colon > 0) {
+            file = location.substring(0, colon);
+            try { lineNo = Integer.parseInt(location.substring(colon + 1).trim()); } catch (Exception ignored) { }
+        }
+        return new StackTraceElement(cls, method, file, lineNo);
+    }
+
+    private static String unescapeHtml(String s) {
+        String out = s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
+                .replace("&#39;", "'").replace("&nbsp;", " ");
+        // Tomcat escapes '/' in class paths as &#47;, so resolve numeric entities too.
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("&#(\\d{1,5});").matcher(out);
+        StringBuffer sb = new StringBuffer();
+        while (m.find()) {
+            try {
+                m.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(
+                        String.valueOf((char) Integer.parseInt(m.group(1)))));
+            } catch (NumberFormatException e) {
+                m.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(m.group()));
+            }
+        }
+        m.appendTail(sb);
+        return sb.toString().replace("&amp;", "&");
     }
 
     private static String mutate(String input, Random r) {

@@ -575,3 +575,49 @@ the case the corpus/structure split was meant to buy.
 logging in before every request (hides all unauthenticated-path bugs, which is where DD-016's
 findings came from); a full cookie-policy/redirect stack (`JSESSIONID` plus follow-redirects is
 all this needs, and it stays dependency-free).
+
+---
+
+## DD-019: A crash finding must carry the APP's stack, not the harness's (2026-07-20)
+
+**Context.** Reviewing crash findings in the dashboard, every single one showed the same stack:
+
+```
+java.lang.RuntimeException: HTTP 500 for /actions/Order.action?listOrders=
+  at runner.coverage.CoverageGuidedRun.request(CoverageGuidedRun.java:228)
+  at runner.coverage.CoverageGuidedRun.main(CoverageGuidedRun.java:147)
+```
+
+That is the driver's own stack. It records *that* a 500 happened and nothing about *why* — the
+actual `NullPointerException at OrderActionBean.listOrders:110` existed only in the container log,
+which had to be read by hand. A crash finding you can't triage from is barely a finding.
+
+**Decision.** On a 5xx the driver captures the response body (capped, only for errors) instead of
+draining it, parses the container's error page for the server-side exception and frames, and
+installs them on the thrown exception via `setStackTrace`. `FuzzIO` then persists the app's
+exception type, message, and stack into the finding, so the dashboard shows a directly triageable
+record. When no stack can be parsed, the message says so explicitly rather than pretending.
+
+**Why the response body.** The container already renders the failure there, so it needs no
+cooperation from the app, no agent change, and works for any servlet app. The alternative — having
+the valve capture the throwable — doesn't work here: Stripes catches the exception in its own
+handler and returns 500, so nothing propagates out to the valve to catch.
+
+**Verified (2026-07-20)**, and testing against the live app found three bugs a code review of the
+parser would not have:
+1. Tomcat emits **two** `<pre>` blocks — the framework wrapper first
+   (`StripesServletException: Unhandled exception in exception handler`), then a **Root Cause**
+   block holding the app's real exception. The first implementation took the first block, i.e. the
+   useless one. Now it prefers the root cause.
+2. Tomcat's error page renders frames **without** the `at ` prefix that a logged stack has. The
+   parser required it and would have extracted **zero frames** on every finding.
+3. `/` is HTML-escaped as `&#47;`, so class paths came back mangled; numeric entities are now
+   decoded.
+
+A finding now reads, e.g., `DataIntegrityViolationException` with the MyBatis/Spring frames — which
+also settled an open triage question, confirming the `newAccount` 500s are duplicate-key violations
+from fuzzed usernames (a validation smell) rather than the null-dereference class of defect.
+
+**Rejected.** Capturing the throwable in the valve (the framework swallows it first); scraping the
+container log (couples the driver to log access and formatting, and breaks entirely across a
+network/pod boundary); reporting only the HTTP status (the status quo — untriageable).

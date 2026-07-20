@@ -26,7 +26,7 @@ env:
 
 jobs:
   images:
-    name: Build + push container images (ghcr)
+    name: Build + push container images (ghcr, multi-arch)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +36,10 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/gradle-build-action@v3
+      - name: Set up QEMU (arm64 emulation for the multi-arch build)
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - name: Resolve version
         id: v
         run: echo "tag=${{ github.event.inputs.version || github.ref_name }}" | sed 's/tag=v/tag=/' >> "$GITHUB_OUTPUT"
@@ -45,25 +49,31 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build images (build.sh stages the gradle/native artifacts; operator via docker)
+      # Stage the jars + native source into each image's build context (STAGE_ONLY skips the local
+      # single-arch docker build); operator needs no staging (self-contained Dockerfile).
+      - name: Stage image build contexts
         run: |
           set -e
           T='${{ steps.v.outputs.tag }}'
-          deploy/agents-image/build.sh    "$T"
-          deploy/runner-image/build.sh    "$T"
-          deploy/dashboard-image/build.sh "$T"
-          docker build -t "closurejvm/operator:$T" operator/
-      - name: Tag + push to ghcr (versioned + latest)
+          STAGE_ONLY=1 bash deploy/agents-image/build.sh    "$T"
+          STAGE_ONLY=1 bash deploy/runner-image/build.sh    "$T"
+          STAGE_ONLY=1 bash deploy/dashboard-image/build.sh "$T"
+      # One buildx invocation per image builds BOTH arches and pushes a manifest list (DD-027). The
+      # agents image compiles its native .so per-arch inside the Dockerfile (native on amd64, QEMU on
+      # arm64); the others are arch-independent artifacts on multi-arch bases.
+      - name: Build + push multi-arch images (linux/amd64,linux/arm64)
         run: |
           set -e
           T='${{ steps.v.outputs.tag }}'
-          for img in operator agents runner dashboard; do
-            src="closurejvm/$img:$T"
+          PLATFORMS=linux/amd64,linux/arm64
+          for pair in "operator:operator" "agents:deploy/agents-image" \
+                      "runner:deploy/runner-image" "dashboard:deploy/dashboard-image"; do
+            img="${pair%%:*}"; ctx="${pair#*:}"
             dst="$REGISTRY/$OWNER/closurejvm-$img"
-            docker tag "$src" "$dst:$T"
-            docker tag "$src" "$dst:latest"
-            docker push "$dst:$T"
-            docker push "$dst:latest"
+            echo "==> buildx $dst ($PLATFORMS) from $ctx"
+            docker buildx build --platform "$PLATFORMS" \
+              -t "$dst:$T" -t "$dst:latest" \
+              --push "$ctx"
           done
 
   cli:

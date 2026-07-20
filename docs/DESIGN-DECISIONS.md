@@ -850,3 +850,41 @@ in-cluster at all; and the injected initContainer needed `imagePullPolicy: IfNot
 agents image otherwise `ImagePullBackOff`s on a kind/air-gapped node). Lesson: envtest runs as admin
 and never exercises the operator's own RBAC — the namespaced-trust-boundary design must be verified
 against the real ServiceAccount.
+
+## DD-027: Multi-arch images — compile the native agent per-arch inside the Dockerfile (2026-07-20)
+
+**Context.** The four published images (`ghcr.io/ianp94/closurejvm-{operator,agents,runner,dashboard}`)
+were built single-arch (`linux/amd64`) on the release runner. arm64 clusters (AWS Graviton, Apple-Silicon
+`kind`) can't pull them, and the injected agents initContainer would `exec format error` on an arm64 node.
+Of the four, only one artifact is actually arch-specific: the native JVMTI agent `libclosurejvmti.so`
+(DD-004). Everything else is arch-independent — the operator is a `CGO_ENABLED=0` Go binary on a multi-arch
+distroless base, the runner/dashboard are JVM jars on `eclipse-temurin:17-jre` (multi-arch), and the agents
+image's other payloads (`closurejvm-agent.jar`, `jacocoagent.jar`, `closurejvm-valve.jar`) are jars on a
+`busybox` base (multi-arch).
+
+**Decision.**
+1. **Build all four with `docker buildx --platform linux/amd64,linux/arm64 --push`** in `release.yml`,
+   with QEMU (`docker/setup-qemu-action`) for cross-platform emulation. The operator/runner/dashboard
+   Dockerfiles need **no change** — their bases are already multi-arch and their artifacts arch-independent;
+   buildx just fans the same build across platforms and pushes a manifest list.
+2. **Compile `libclosurejvmti.so` inside the agents Dockerfile, per-arch.** Rather than cross-compile the
+   `.so` on the host (managing an `aarch64-linux-gnu` toolchain + arch-matched JDK headers) or shipping two
+   pre-built `.so`s selected by `TARGETARCH`, add a `eclipse-temurin:17-jdk` builder stage that runs the
+   existing `native/Makefile` (`cc -shared closurejvmti.c`). Under buildx, that stage runs once **per target
+   platform** (natively on amd64, under QEMU for arm64), so each leg produces its own correct `.so` from the
+   same portable C source (standard JVMTI, no arch-specific asm) with zero cross-toolchain plumbing. The
+   busybox final stage `COPY --from` grabs the per-arch `.so`.
+   - Trade-off: the agents image now pulls a JDK builder layer at build time (cached), and an arm64 `.so`
+     compiled under emulation is not *functionally* exercised in CI (the amd64 e2e runner can build it but
+     can't run an arm64 JVM to load it). We accept build-time validation (both legs compile + the manifest
+     publishes) and defer functional arm64 validation to a real arm64 runner (follow-up). The C source is
+     small and portable, so the emulation-compiled `.so` is low-risk.
+3. **`STAGE_ONLY=1` on the build.sh scripts** stages the gradle/native artifacts into the build context
+   *without* running `docker build`, so `release.yml` can stage once and hand the context to `buildx`. The
+   default (local/`kind`) path is unchanged: a plain `docker build` still produces a single host-arch image
+   for `deploy/e2e/e2e.sh` (buildx `--load` can't load a multi-platform image anyway).
+
+**Consequence.** A release tag publishes arm64 + amd64 manifest lists for all four images; the local/e2e
+build path is untouched. Follow-up: a native arm64 runner (`ubuntu-24.04-arm`) to *run* the arm64 agents
+image and prove the emulation-compiled `.so` loads, and multi-arch for the raw-app e2e fixtures if we ever
+test on arm64 CI.

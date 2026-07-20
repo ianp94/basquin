@@ -1,2 +1,3 @@
-# Built agent artifacts, staged by build.sh — not committed (rebuild from source).
+# Built agent artifacts + staged native source, staged by build.sh — not committed (rebuild from source).
 agents/
+native/

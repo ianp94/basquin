@@ -42,6 +42,15 @@ JAR="build/libs/closurejvm-${VERSION:-0.2.0}-runner.jar"
 [ -n "$JAR" ] && [ -f "$JAR" ] || die "runner jar not built (expected build/libs/*-runner.jar)"
 cp "$JAR" "$CTX/closurejvm-runner.jar"
 
+# STAGE_ONLY=1: stage the jar and stop, so a caller (release.yml) can drive `docker buildx` for a
+# multi-arch push itself (the jar is arch-independent, so no per-arch work here). Leaves the staged
+# jar in place for buildx; the default path below builds a single host-arch image and cleans up.
+if [ "${STAGE_ONLY:-}" = "1" ]; then
+  echo "==> STAGE_ONLY=1: context staged at $CTX (skipping docker build)"
+  echo "    TAG=$TAG"
+  exit 0
+fi
+
 echo "==> docker build $IMAGE:$TAG (+ :latest)"
 docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" "$CTX"
 # The staged jar is a build product; don't leave it in the source tree.

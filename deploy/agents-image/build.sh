@@ -28,8 +28,11 @@ if head -1 ./gradlew | grep -q $'\r'; then
   tr -d '\r' < ./gradlew > .gradlew.lf && chmod +x .gradlew.lf && GRADLEW="./.gradlew.lf"
 fi
 
-echo "==> Building agent artifacts (jars + native .so)"
-"$GRADLEW" stageAgents copyJacocoAgent buildNativeAgent -q
+echo "==> Building agent jars"
+# The native .so is no longer built here — it's compiled per-arch inside the Dockerfile (DD-027), so
+# `docker buildx --platform ...` gets a correct .so for each target arch. We only stage the jars +
+# the native SOURCE into the build context.
+"$GRADLEW" stageAgents copyJacocoAgent -q
 # Query the version through the SAME stripped wrapper, BEFORE removing it — otherwise on a CRLF
 # checkout (the case this handling exists for) the query would run the broken original gradlew, fail
 # silently, and TAG would wrongly fall back to "dev".
@@ -38,15 +41,28 @@ VERSION="$("$GRADLEW" -q properties 2>/dev/null | awk -F': ' '/^version:/{print 
 TAG="${1:-${VERSION:-dev}}"
 KIND_CLUSTER="${2:-}"
 
-echo "==> Staging agents into $CTX/agents/"
-rm -rf "$CTX/agents"
-mkdir -p "$CTX/agents"
+echo "==> Staging agents into $CTX/agents/ (+ native source into $CTX/native/)"
+rm -rf "$CTX/agents" "$CTX/native"
+mkdir -p "$CTX/agents" "$CTX/native"
 # Explicit checks so a missing artifact is a clear message, not a bare `cp: cannot stat`.
 for f in build/stage/closurejvm-agent.jar build/stage/closurejvm-valve.jar \
-         build/jacoco/jacocoagent.jar build/native/libclosurejvmti.so; do
-  [ -f "$f" ] || die "expected artifact not built: $f (native .so needs a C compiler + JDK headers)"
+         build/jacoco/jacocoagent.jar; do
+  [ -f "$f" ] || die "expected artifact not built: $f"
   cp "$f" "$CTX/agents/"
 done
+# Native SOURCE (not the built .so): the Dockerfile compiles it per-arch (DD-027).
+for f in native/closurejvmti.c native/Makefile; do
+  [ -f "$f" ] || die "expected native source missing: $f"
+  cp "$f" "$CTX/native/"
+done
+
+# STAGE_ONLY=1: stage the context and stop, so a caller (release.yml) can drive `docker buildx` for a
+# multi-arch push itself. The default path below builds a single host-arch image for local/kind use.
+if [ "${STAGE_ONLY:-}" = "1" ]; then
+  echo "==> STAGE_ONLY=1: context staged at $CTX (skipping docker build)"
+  echo "    TAG=$TAG"
+  exit 0
+fi
 
 echo "==> docker build $IMAGE:$TAG (+ :latest)"
 docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" "$CTX"

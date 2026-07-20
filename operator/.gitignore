@@ -28,3 +28,6 @@ go.work
 
 # CLI binary from a bare `go build ./cmd/closurejvm` (Makefile uses bin/)
 /closurejvm
+
+# CLI cross-build output (release workflow)
+/dist/

@@ -51,7 +51,9 @@ spec:
       {{- end }}
       containers:
         - name: manager
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          {{- /* One shared image tag: imageTag, else the chart's appVersion (single-source version). */}}
+          {{- $tag := .Values.imageTag | default .Chart.AppVersion }}
+          image: "{{ .Values.image.repository }}:{{ $tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
             - /manager
@@ -60,13 +62,13 @@ spec:
             - --leader-elect
             {{- end }}
             {{- with .Values.images.agents }}
-            - --agents-image={{ . }}
+            - --agents-image={{ . }}:{{ $tag }}
             {{- end }}
             {{- with .Values.images.runner }}
-            - --runner-image={{ . }}
+            - --runner-image={{ . }}:{{ $tag }}
             {{- end }}
             {{- with .Values.images.dashboard }}
-            - --dashboard-image={{ . }}
+            - --dashboard-image={{ . }}:{{ $tag }}
             {{- end }}
           env:
             # Namespaced by design: the operator watches its own namespace (refuses to start if empty).

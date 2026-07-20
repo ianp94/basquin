@@ -1,0 +1,150 @@
+name: Release
+
+# Cut a release by pushing a version tag, e.g.  git tag v0.2.0 && git push origin v0.2.0
+# (or run manually via the Actions tab with a version input). Publishes:
+#   - the four container images to GitHub Container Registry (ghcr.io/ianp94/closurejvm-*)
+#   - the closurejvm CLI binaries (linux/darwin, amd64/arm64) as release assets
+#   - the packaged Helm chart as a release asset
+#   - the GitHub Pages Helm repo (docs/charts/) — the `pages` job repackages + reindexes + commits to
+#     main automatically (deploy/helm/publish.sh remains for a manual/bootstrap refresh).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without the leading v (e.g. 0.2.0)'
+        required: true
+
+permissions:
+  contents: write   # create the release + upload assets
+  packages: write   # push images to ghcr
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: ianp94
+
+jobs:
+  images:
+    name: Build + push container images (ghcr)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: chmod +x gradlew
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/gradle-build-action@v3
+      - name: Resolve version
+        id: v
+        run: echo "tag=${{ github.event.inputs.version || github.ref_name }}" | sed 's/tag=v/tag=/' >> "$GITHUB_OUTPUT"
+      - name: Log in to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build images (build.sh stages the gradle/native artifacts; operator via docker)
+        run: |
+          set -e
+          T='${{ steps.v.outputs.tag }}'
+          deploy/agents-image/build.sh    "$T"
+          deploy/runner-image/build.sh    "$T"
+          deploy/dashboard-image/build.sh "$T"
+          docker build -t "closurejvm/operator:$T" operator/
+      - name: Tag + push to ghcr (versioned + latest)
+        run: |
+          set -e
+          T='${{ steps.v.outputs.tag }}'
+          for img in operator agents runner dashboard; do
+            src="closurejvm/$img:$T"
+            dst="$REGISTRY/$OWNER/closurejvm-$img"
+            docker tag "$src" "$dst:$T"
+            docker tag "$src" "$dst:latest"
+            docker push "$dst:$T"
+            docker push "$dst:latest"
+          done
+
+  cli:
+    name: Build + upload CLI binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Cross-compile the closurejvm CLI
+        working-directory: operator
+        run: |
+          set -e
+          T='${{ github.event.inputs.version || github.ref_name }}'; T="${T#v}"
+          mkdir -p dist
+          for pair in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            os="${pair%/*}"; arch="${pair#*/}"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
+              go build -trimpath -ldflags="-s -w" -o "dist/closurejvm-$os-$arch" ./cmd/closurejvm
+          done
+          (cd dist && sha256sum closurejvm-* > checksums.txt)
+      - name: Upload CLI assets to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version && format('v{0}', github.event.inputs.version) || github.ref_name }}
+          files: |
+            operator/dist/closurejvm-*
+            operator/dist/checksums.txt
+
+  chart:
+    name: Package + upload Helm chart
+    needs: [cli]   # serialize the two action-gh-release calls (avoid a create race on the same tag)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Resolve version
+        id: v
+        run: echo "tag=${{ github.event.inputs.version || github.ref_name }}" | sed 's/tag=v/tag=/' >> "$GITHUB_OUTPUT"
+      - name: Package the chart at the release version (--app-version drives all image tags)
+        run: |
+          mkdir -p dist
+          helm package deploy/helm/closurejvm-operator --destination dist \
+            --version "${{ steps.v.outputs.tag }}" --app-version "${{ steps.v.outputs.tag }}"
+      - name: Upload chart asset to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version && format('v{0}', github.event.inputs.version) || github.ref_name }}
+          files: dist/*.tgz
+
+  pages:
+    name: Publish chart to the GitHub Pages Helm repo
+    # Only advertise a chart version once its images actually shipped + the chart asset is on the
+    # release — otherwise the Pages repo would offer a version whose ghcr images don't exist.
+    # NOTE: assumes the tag is the tip of main (this job re-packages from main, not the tagged commit).
+    needs: [images, chart]
+    runs-on: ubuntu-latest
+    steps:
+      # Check out main (a tag build is detached HEAD) so we can commit the packaged chart + index back.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: azure/setup-helm@v4
+      - name: Resolve version
+        id: v
+        run: echo "tag=${{ github.event.inputs.version || github.ref_name }}" | sed 's/tag=v/tag=/' >> "$GITHUB_OUTPUT"
+      - name: Package into docs/charts + regenerate the repo index
+        run: |
+          helm package deploy/helm/closurejvm-operator --destination docs/charts \
+            --version "${{ steps.v.outputs.tag }}" --app-version "${{ steps.v.outputs.tag }}"
+          helm repo index docs/charts --url https://ianp94.github.io/closureJVM/charts --merge docs/charts/index.yaml
+      - name: Commit the updated Helm repo to main
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/charts
+          if git diff --cached --quiet; then
+            echo "no chart changes to publish"; exit 0
+          fi
+          git commit -m "chore(release): publish chart ${{ steps.v.outputs.tag }} to the Pages Helm repo [skip ci]"
+          git push origin main

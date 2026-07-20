@@ -41,7 +41,7 @@
     <div class="tag-list">
       <span class="pill">group closurejvm.dev/v1alpha1</span>
       <span class="pill">namespaced by design</span>
-      <span class="pill">kubectl · kustomize · kind</span>
+      <span class="pill">helm · kubectl · kustomize</span>
     </div>
     <div class="btn-row" style="justify-content:flex-start; margin-top:8px;">
       <a class="btn btn-primary" href="https://github.com/ianp94/closureJVM/blob/main/docs/OPERATOR-USAGE.md">Full usage guide →</a>
@@ -104,39 +104,50 @@
   <p>Each flag empty falls back to a built-in default; in practice you pin them to a fixed tag you
     built and loaded, so the cluster uses your image instead of pulling.</p>
 
-  <div class="note soon">
-    <span class="tag">Roadmap</span>
-    <p><strong>No Helm chart yet.</strong> Installation today is kustomize (<code>config/default</code>)
-      plus wiring the three image flags onto the controller Deployment, exactly as below.</p>
-  </div>
-
-  <p>Build the three images (each <code>build.sh</code> takes <code>[TAG] [KIND_CLUSTER]</code>; with a
-    cluster name it also <code>kind load</code>s the image), then apply the CRDs and operator with
-    kustomize, pinning the operator image:</p>
+  <p>First build + kind-load the three images (each <code>build.sh</code> takes
+    <code>[TAG] [KIND_CLUSTER]</code>), then install with Helm (recommended) or kustomize.</p>
   <pre><code><span class="c"># build + kind-load the three images the operator uses</span>
 deploy/agents-image/build.sh    0.2.0 &lt;kind-cluster&gt;
 deploy/runner-image/build.sh    0.2.0 &lt;kind-cluster&gt;
-deploy/dashboard-image/build.sh 0.2.0 &lt;kind-cluster&gt;
+deploy/dashboard-image/build.sh 0.2.0 &lt;kind-cluster&gt;</code></pre>
 
-<span class="c"># CRDs + namespace</span>
-kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml
+  <h3>Install with Helm (recommended)</h3>
+  <p>The chart at <code>deploy/helm/closurejvm-operator</code> installs the CRDs, namespaced RBAC, and
+    the controller — with the three images wired straight from values, no manual arg-patching:</p>
+  <pre><code>helm install closurejvm ./deploy/helm/closurejvm-operator \
+  --namespace closurejvm-system --create-namespace \
+  <span class="f">--set</span> <span class="s">fullnameOverride=closurejvm</span> \
+  <span class="f">--set</span> <span class="s">image.tag=0.2.0</span> \
+  <span class="f">--set</span> <span class="s">images.agents=closurejvm/agents:0.2.0</span> \
+  <span class="f">--set</span> <span class="s">images.runner=closurejvm/runner:0.2.0</span> \
+  <span class="f">--set</span> <span class="s">images.dashboard=closurejvm/dashboard:0.2.0</span></code></pre>
+  <div class="note">
+    <span class="tag">note</span>
+    <p>RBAC is namespaced <code>Role</code>s (no cluster-scoped grants). Helm does <strong>not</strong>
+      upgrade or delete CRDs — re-apply changed CRDs by hand on <code>helm upgrade</code>, and they
+      (plus any remaining CRs) are left in place on <code>helm uninstall</code>.</p>
+  </div>
+
+  <h3>Or install with kustomize</h3>
+  <pre><code>kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml
 kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmcampaigns.yaml
 kubectl create namespace closurejvm-system
 
-<span class="c"># controller Deployment + ServiceAccount/Role/RoleBinding, pinning the operator image</span>
 kubectl kustomize operator/config/default \
   | sed 's#image: controller:latest#image: closurejvm/operator:0.2.0#' \
-  | kubectl apply -f -</code></pre>
-  <p>Then wire the three image flags onto the controller (append to its container args) and restart:</p>
-  <pre><code>for arg in \
-  <span class="f">--agents-image</span>=<span class="s">closurejvm/agents:0.2.0</span> \
-  <span class="f">--runner-image</span>=<span class="s">closurejvm/runner:0.2.0</span> \
-  <span class="f">--dashboard-image</span>=<span class="s">closurejvm/dashboard:0.2.0</span> ; do
+  | kubectl apply -f -
+
+<span class="c"># then wire the three image flags (Helm does this for you)</span>
+for arg in <span class="f">--agents-image</span>=<span class="s">closurejvm/agents:0.2.0</span> \
+           <span class="f">--runner-image</span>=<span class="s">closurejvm/runner:0.2.0</span> \
+           <span class="f">--dashboard-image</span>=<span class="s">closurejvm/dashboard:0.2.0</span> ; do
   kubectl -n closurejvm-system patch deploy closurejvm-controller-manager --type=json \
     -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"$arg\"}]"
 done
-
 kubectl -n closurejvm-system rollout status deploy/closurejvm-controller-manager --timeout=120s</code></pre>
+  <p>The <code>kubectl patch</code> loop appends unconditionally — re-running it by hand duplicates the
+    args (guard each with a <code>grep -q</code> check as <code>deploy/e2e/e2e.sh</code> does, or just
+    use Helm, which wires the flags declaratively).</p>
 
   <hr class="rule">
 

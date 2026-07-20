@@ -1,5 +1,7 @@
 package agent;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -212,11 +214,15 @@ public class Agent {
         return new HashSet<>(snapshotNonDaemonThreads().keySet());
     }
 
+    private static final ThreadMXBean THREAD_MX = ManagementFactory.getThreadMXBean();
+
     private static Map<Long, Thread> snapshotNonDaemonThreads() {
-        // getAllStackTraces() gives us all live threads and avoids missing threads not in current ThreadGroup
-        Map<Thread, StackTraceElement[]> all = Thread.getAllStackTraces();
+        // Enumerate via the root ThreadGroup, which returns Thread objects without walking
+        // any stacks. The previous Thread.getAllStackTraces() forced a safepoint stack walk
+        // of every thread on every iteration only to discard the stacks — the enumeration is
+        // all we need here. Stacks are captured lazily below, only for threads that leaked.
         Map<Long, Thread> result = new HashMap<>();
-        for (Thread t : all.keySet()) {
+        for (Thread t : enumerateAllThreads()) {
             if (t != null && t.isAlive() && !t.isDaemon()) {
                 result.put(t.getId(), t);
             }
@@ -225,8 +231,32 @@ public class Agent {
     }
 
     private static int snapshotTotalThreadCount() {
-        // Total live threads (daemon + non-daemon), best-effort via all stack traces
-        return Thread.getAllStackTraces().keySet().size();
+        // Live thread count (daemon + non-daemon) straight from the management bean; no stack walk.
+        return THREAD_MX.getThreadCount();
+    }
+
+    private static Thread[] enumerateAllThreads() {
+        ThreadGroup root = Thread.currentThread().getThreadGroup();
+        if (root == null) {
+            return new Thread[0];
+        }
+        for (ThreadGroup parent = root.getParent(); parent != null; parent = root.getParent()) {
+            root = parent;
+        }
+        // activeCount() is an estimate; oversize and retry until the array is not filled exactly,
+        // which guarantees we captured every thread rather than truncating.
+        int size = root.activeCount() + 16;
+        Thread[] threads;
+        int n;
+        while (true) {
+            threads = new Thread[size];
+            n = root.enumerate(threads, true);
+            if (n < size) {
+                break;
+            }
+            size *= 2;
+        }
+        return java.util.Arrays.copyOf(threads, n);
     }
 
     public static <T extends ExecutorService> T trackExecutor(T executor) {

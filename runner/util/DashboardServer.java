@@ -50,6 +50,7 @@ public final class DashboardServer {
         server.createContext("/ingest/findings", ex -> ingest(ex, false));
         server.createContext("/api/campaigns", DashboardServer::listCampaigns);
         server.createContext("/api/campaign/", DashboardServer::campaignDetail);
+        server.createContext("/api/analyze/", DashboardServer::analyze);
         server.createContext("/", ex -> respond(ex, "text/html; charset=utf-8", PAGE));
 
         server.setExecutor(Executors.newCachedThreadPool(r -> {
@@ -103,19 +104,77 @@ public final class DashboardServer {
     }
 
     private static void campaignDetail(HttpExchange ex) throws IOException {
-        // path: /api/campaign/{id}/status or /api/campaign/{id}/findings
+        // path: /api/campaign/{id}/status | findings | clusters
         String path = ex.getRequestURI().getPath();
         String[] parts = path.substring("/api/campaign/".length()).split("/", 2);
         if (parts.length != 2) {
             ex.sendResponseHeaders(404, -1);
             return;
         }
-        Campaign c = CAMPAIGNS.get(parts[0]);
+        String id = parts[0], sub = parts[1];
+        Campaign c = CAMPAIGNS.get(id);
         if (c == null) {
-            respond(ex, "application/json", "status".equals(parts[1]) ? "{}" : "[]");
+            respond(ex, "application/json", "status".equals(sub) ? "{}" : "[]");
             return;
         }
-        respond(ex, "application/json", "status".equals(parts[1]) ? c.statusJson : c.findingsJson);
+        switch (sub) {
+            case "status": respond(ex, "application/json", c.statusJson); return;
+            case "findings": respond(ex, "application/json", c.findingsJson); return;
+            case "clusters":
+                respond(ex, "application/json", FindingsClusterer.toJson(FindingsClusterer.cluster(c.findingsJson)));
+                return;
+            default: ex.sendResponseHeaders(404, -1);
+        }
+    }
+
+    /** POST /api/analyze/{id} — opt-in Claude-API analysis of this campaign's clusters (DD-015). */
+    private static void analyze(HttpExchange ex) throws IOException {
+        if (!"POST".equals(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+        String id = ex.getRequestURI().getPath().substring("/api/analyze/".length());
+        Campaign c = CAMPAIGNS.get(id);
+        if (c == null) {
+            respond(ex, "application/json", "{\"error\":\"unknown campaign\"}");
+            return;
+        }
+        if (!ClaudeAnalyzer.isConfigured()) {
+            respond(ex, "application/json",
+                "{\"error\":\"Claude API key not configured on the dashboard server (set ANTHROPIC_API_KEY)\"}");
+            return;
+        }
+        try {
+            List<FindingsClusterer.Cluster> clusters = FindingsClusterer.cluster(c.findingsJson);
+            String prompt = buildAnalysisPrompt(id, c.statusJson, clusters);
+            String analysis = ClaudeAnalyzer.analyze(prompt);
+            respond(ex, "application/json", "{\"analysis\":\"" + jsonEsc(analysis) + "\"}");
+        } catch (IOException e) {
+            respond(ex, "application/json", "{\"error\":\"" + jsonEsc(String.valueOf(e.getMessage())) + "\"}");
+        }
+    }
+
+    private static String buildAnalysisPrompt(String id, String statusJson, List<FindingsClusterer.Cluster> clusters) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("You are triaging results from ClosureJVM, a fuzzing/availability-testing harness. ")
+          .append("Campaign \"").append(id).append("\" status: ").append(statusJson).append("\n\n")
+          .append("Findings have already been deterministically clustered by fingerprint ")
+          .append("(same invariant kind + same route shape, or same exception class). ")
+          .append("Each line below is one cluster: kind, route pattern, how many times it fired, ")
+          .append("how many distinct concrete routes, and the magnitude range observed.\n\n");
+        int shown = 0;
+        for (FindingsClusterer.Cluster cl : clusters) {
+            if (shown++ >= 20) { sb.append("(").append(clusters.size() - 20).append(" more clusters omitted)\n"); break; }
+            sb.append("- ").append(cl.classification).append(" / ").append(cl.kind)
+              .append(" @ ").append(cl.routePattern.isEmpty() ? "(no route)" : cl.routePattern)
+              .append(" — fired ").append(cl.count).append("x across ").append(cl.distinctRoutes.size())
+              .append(" concrete route(s), magnitude ").append(cl.minMagnitude).append("-").append(cl.maxMagnitude)
+              .append('\n');
+        }
+        sb.append("\nIn under 200 words: which clusters look like the same underlying systemic behavior ")
+          .append("(e.g. proportional-to-payload-size allocation, expected) versus a genuine bug worth ")
+          .append("investigating, and what would you check first?");
+        return sb.toString();
     }
 
     // --- helpers ---
@@ -202,7 +261,13 @@ public final class DashboardServer {
         + "<div class=\"cards\" id=\"cards\"></div>"
         + "<div class=\"card\" style=\"margin-top:12px\"><div class=\"k\">coverage of app under test</div>"
         + "<div class=\"v\" id=\"covv\">—</div><div class=\"bar\"><div id=\"covbar\"></div></div></div>"
-        + "<h2>Findings</h2><table><thead><tr><th>Type</th><th>When</th><th>Detail</th></tr></thead>"
+        + "<div style=\"display:flex;align-items:center;justify-content:space-between\">"
+        + "<h2 style=\"margin-top:24px\">Findings <span id=\"findsSub\" style=\"text-transform:none;letter-spacing:0\"></span></h2>"
+        + "<button id=\"analyzeBtn\" style=\"margin-top:18px;background:#21262d;color:#c9d1d9;border:1px solid #30363d;"
+        + "border-radius:6px;padding:6px 12px;font:inherit;cursor:pointer\">Analyze with Claude</button></div>"
+        + "<div id=\"analysisPanel\" style=\"display:none;background:#161b22;border:1px solid #30363d;border-radius:10px;"
+        + "padding:14px;margin-top:8px;font-size:12px;white-space:pre-wrap;color:#c9d1d9\"></div>"
+        + "<table><thead><tr><th>Type</th><th>Kind / route</th><th>Count</th><th>Magnitude</th><th>Last seen</th></tr></thead>"
         + "<tbody id=\"finds\"></tbody></table></div>"
         + "</div><script>"
         + "let current=null;"
@@ -237,11 +302,23 @@ public final class DashboardServer {
         + "const cv=(st.exploration||{}).coverage||{total:0};var pct=cv.total>0?cv.pct:0;"
         + "document.getElementById('covv').textContent=cv.total>0?(pct.toFixed(1)+'%  ('+cv.covered+'/'+cv.total+' edges)'):'no coverage source';"
         + "document.getElementById('covbar').style.width=pct+'%';"
-        + "const fs=await (await fetch('/api/campaign/'+current+'/findings')).json();"
-        + "document.getElementById('finds').innerHTML=fs.map(f=>'<tr><td><span class=\"tag '+f.classification+'\">'+"
-        + "(f.classification||'?')+'</span></td><td>'+new Date(+f.timestamp).toLocaleTimeString()+'</td>"
-        + "<td><pre>'+esc(f.text)+'</pre></td></tr>').join('');"
+        + "const cl=await (await fetch('/api/campaign/'+current+'/clusters')).json();"
+        + "const total=cl.reduce((a,c)=>a+c.count,0);"
+        + "document.getElementById('findsSub').textContent=cl.length+' unique / '+total+' total';"
+        + "document.getElementById('finds').innerHTML=cl.length?cl.map(c=>'<tr><td><span class=\"tag '+c.classification+'\">'+"
+        + "(c.classification||'?')+'</span></td><td>'+esc(c.kind)+(c.routePattern?'<br><span style=\"color:#8b949e\">'+esc(c.routePattern)+'</span>':'')+'</td>"
+        + "<td>'+c.count+'x'+(c.distinctRoutes>1?' / '+c.distinctRoutes+' routes':'')+'</td>"
+        + "<td>'+(c.maxMagnitude>=0?(c.minMagnitude+'–'+c.maxMagnitude):'—')+'</td>"
+        + "<td>'+new Date(c.lastSeenMs).toLocaleTimeString()+'</td></tr>').join('')"
+        + ":'<tr><td colspan=4 style=\"color:#8b949e\">No findings yet.</td></tr>';"
         + "}catch(e){}}"
+        + "document.getElementById('analyzeBtn').onclick=async function(){"
+        + "if(!current)return;const btn=this,panel=document.getElementById('analysisPanel');"
+        + "btn.disabled=true;btn.textContent='Analyzing…';panel.style.display='block';panel.textContent='Asking Claude about this campaign\\u2019s clusters…';"
+        + "try{const r=await (await fetch('/api/analyze/'+current,{method:'POST'})).json();"
+        + "panel.textContent=r.analysis||('Not available: '+(r.error||'unknown error'));"
+        + "}catch(e){panel.textContent='Request failed: '+e;}"
+        + "btn.disabled=false;btn.textContent='Analyze with Claude';};"
         + "showFleet();setInterval(()=>current?tick():tickFleet(),1500);"
         + "</script></body></html>";
 }

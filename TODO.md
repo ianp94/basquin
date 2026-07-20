@@ -279,9 +279,16 @@ and the dashboard) — decide once the boundaries are clear.
   - [ ] Persistence/eviction beyond in-memory (fine for the demo scale; a real deployment would
     want a TTL or a small store).
   - [ ] Full crash stack / sampled stack drill-down in the findings view (currently a text excerpt).
-  - [ ] Optional Claude-API-backed analysis: with a configured API key, let Claude analyze a
-    finding (or a campaign) from the dashboard — cluster/dedupe findings, explain a stack, suggest
-    a root cause / minimized repro. Opt-in; key stays server-side.
+  - [x] **Noise reduction / clustering (DD-014)**: findings are grouped at read time by
+    fingerprint (classification + invariant kind + route shape, or crash + exception class) with
+    count / distinct-routes / magnitude-range / last-seen. Nothing is dropped at save time — the
+    corpus stays whole for exploration. Verified against 937 real findings: 937 → 19 clusters.
+  - [x] **Optional Claude-API analysis (DD-015)**: `POST /api/analyze/{campaign}` +
+    "Analyze with Claude" button; prompts from the *clustered* summary, key server-side only
+    (`ANTHROPIC_API_KEY`), explicit-click only, never on the auto-refresh. Strictly advisory —
+    it explains clusters, it never decides what counts as a finding.
+    - [ ] Not yet exercised against a live key (verified only that the request is well-formed and
+      the API rejects a bad key cleanly). Needs one real end-to-end call to confirm.
 
 ---
 

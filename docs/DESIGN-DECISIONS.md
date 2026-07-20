@@ -368,3 +368,74 @@ fleet" goal; a message bus between driver and dashboard (same reasoning as DD-00
 measurement cost is elsewhere, and a bus is overkill for a store-and-forward relay at this scale);
 full server-side JSON parsing/validation of the payload (adds a dependency and a schema coupling
 the aggregator doesn't need for v1).
+
+---
+
+## DD-014: Noise reduction by deterministic clustering on the read path, not by dropping findings (2026-07-20)
+
+**Context.** Soft-mode invariants are deliberately generous — that's what makes them useful for
+exploration. But it means a single systemic behavior (JPetStore allocating proportionally to page
+size) produced 125 near-identical `heapDelta` findings on one route shape. Reviewing "genuine
+issues" in a list like that is hopeless; the signal is real but the presentation buries it. The
+temptation is to filter at save time (thresholds, rate limits, dedupe-before-write).
+
+**Decision.** Never change what gets saved. Cluster at **read time**, in the dashboard, by a
+fingerprint: `classification + invariant-kind + route-pattern` (parameter *values* stripped, shape
+kept), or `crash + exception-class` for crashes. Each cluster reports count, distinct concrete
+routes, magnitude range, and first/last seen. The corpus on disk stays whole.
+
+**Why not filter at save time.** DD-006's "never drop a finding" exists because exploration needs
+the full corpus — a finding that looks redundant to a human is still a distinct input that reached
+distinct state, and the coverage-guided loop (DD-012) may care. Dropping at write time is
+irreversible and couples the *oracle* to a *presentation* concern. Clustering is a pure function
+of saved data: reversible, tunable later, and it can be recomputed differently without re-running
+a campaign.
+
+**Why deterministic, not the LLM.** agents.md's "enforcement > inference": anything the bug oracle
+or triage relies on should be a hard check. A model deciding what counts as a duplicate finding
+would make results non-reproducible run-to-run. The Claude layer (DD-015) sits strictly *on top*
+of these clusters, explaining what a human is already looking at — it never decides what is or
+isn't a finding.
+
+**Verified (2026-07-20).** Against 937 real findings accumulated across this project's runs:
+937 → 19 clusters. Testing at that scale caught two real bugs that unit-sized data would have
+hidden: (1) a `(?:[^"\\]|\\.)*`-style regex for matching escaped JSON strings overflows the stack
+(Java's `Pattern$Loop` recurses per character) on findings text of a few thousand chars — replaced
+with an iterative scanner (`JsonScan`); (2) two different saved-finding formats exist in the wild
+(HTTP-driven writes `detail=kind: …`, local/JQF writes the bare `kind: …` line), so keying only on
+`detail=` left every local finding's kind unresolved as `?`.
+
+**Rejected.** Save-time thresholds/dedupe (irreversible, couples oracle to presentation); stack-
+hash fingerprinting for invariants (the sampled stack is nearly identical across these — it's the
+route + kind that distinguishes them); LLM-based grouping (non-reproducible, see above).
+
+---
+
+## DD-015: Claude API analysis is opt-in, dashboard-side, and strictly advisory (2026-07-20)
+
+**Context.** Clustered findings answer "what's distinct"; they don't answer "which of these is
+actually a bug versus expected proportional behavior, and what would I check first."
+
+**Decision.** An optional `POST /api/analyze/{campaign}` on the standalone dashboard builds a
+prompt from the *already-clustered* summary plus campaign status, calls the Claude Messages API,
+and returns prose. Triggered only by an explicit button click — never on the 1.5s auto-refresh.
+The API key is read only by the `DashboardServer` process (`ANTHROPIC_API_KEY` or
+`-Dclosurejvm.claude.apiKey`); it is never passed to a driver, never sent to the app under test,
+and never rendered in the UI. Absent a key the endpoint returns a clear "not configured" message
+and the rest of the dashboard is unaffected.
+
+**Why advisory only.** The oracle stays deterministic (DD-014). Claude summarizes clusters a human
+is already reviewing — it cannot create, suppress, or reclassify a finding. That keeps
+reproducibility intact: two runs over the same corpus produce the same clusters regardless of
+whether anyone clicked Analyze.
+
+**Why the dashboard process.** It's the one component that already aggregates across campaigns and
+is deliberately decoupled from both the driver and the app (DD-013) — the natural place for an
+outbound network dependency and a secret, and the only place with the cross-campaign context that
+makes the analysis worth asking for.
+
+**Rejected.** Auto-analysis on refresh (unbounded cost, and would make the page's content
+non-deterministic); running analysis in the driver (would put a secret and an outbound dependency
+next to the measurement loop, violating DD-013); using the LLM to filter/dedupe findings
+(see DD-014); an SDK dependency (one `HttpURLConnection` POST matches the project's
+no-extra-dependency posture).

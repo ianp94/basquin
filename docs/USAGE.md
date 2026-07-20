@@ -195,6 +195,79 @@ Coverage is union-merged across replicas. The status panel shows `[N/M pods]` wh
 is unreachable or more than one is expected, so an under-count from a restarting pod is visible
 rather than being mistaken for genuinely low coverage.
 
+## Kubernetes: instrument any app with the operator
+
+Instead of baking the agents into a custom image (the manual path in `deploy/k8s/`), the operator
+instruments an **unmodified** app Deployment at deploy time and reverses it cleanly when you're done.
+Design: [OPERATOR-DESIGN.md](OPERATOR-DESIGN.md). It's namespaced — it only touches Deployments you
+name, in its own namespace.
+
+**Build + install** (into a kind cluster, for the local demo):
+
+The fastest way to see all of this is **`deploy/e2e/e2e.sh`**, which builds every image, deploys the
+operator, applies a target against a raw app, and asserts the result. To do it by hand:
+
+```bash
+# 1. Build the agents image the operator injects, and load it into your cluster.
+deploy/agents-image/build.sh 0.2.0 <kind-cluster>            # => closurejvm/agents:0.2.0
+
+# 2. Build + load the operator image (a fixed tag => IfNotPresent, so kind uses the loaded image
+#    instead of trying to pull the manifest's default controller:latest).
+docker build -t closurejvm/operator:0.2.0 operator/
+kind load docker-image closurejvm/operator:0.2.0 --name <kind-cluster>
+
+# 3. Install the CRD and deploy the operator (namespaced RBAC), pinning that image.
+kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml
+kubectl kustomize operator/config/default \
+  | sed 's#image: controller:latest#image: closurejvm/operator:0.2.0#' \
+  | kubectl apply -f -                                       # operator + Role/RoleBinding/SA
+
+# 4. Tell the operator which agents image to inject.
+kubectl -n closurejvm-system patch deploy closurejvm-controller-manager --type=json \
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--agents-image=closurejvm/agents:0.2.0"}]'
+```
+
+**Instrument an app** — apply a `ClosureJVMTarget` naming its Deployment:
+
+```yaml
+apiVersion: closurejvm.dev/v1alpha1
+kind: ClosureJVMTarget
+metadata: { name: myapp, namespace: closurejvm-system }
+spec:
+  deploymentRef: { name: myapp }
+  container: myapp                 # optional if the pod has one container
+  jvmOptsVar: CATALINA_OPTS        # or JAVA_TOOL_OPTIONS (non-Tomcat); the agents are APPENDED
+  agents:
+    threadTracker: true
+    coverage: { enabled: true, port: 6300, includes: "com.yourco.yourapp.*" }   # includes REQUIRED
+  invariants: { mode: soft, latencyMaxMs: 25, heapDeltaMaxKb: 256 }
+  coverageService: true            # operator creates a headless Service for DD-023 union coverage
+```
+
+The operator patches the Deployment (initContainer copies the agents into a shared volume, appends
+the agent flags to `jvmOptsVar`, exposes the coverage port), rolls it out, and reports:
+
+```bash
+kubectl -n closurejvm-system get closurejvmtargets
+# NAME    DEPLOYMENT   PHASE      INSTRUMENTED   AGE
+# myapp   myapp        Injected   1              30s
+
+# the coverage endpoint to point the DD-023 flag at:
+kubectl -n closurejvm-system get closurejvmtarget myapp -o jsonpath='{.status.coverageEndpoint}'
+# myapp-cjvm-jacoco.closurejvm-system.svc.cluster.local:6300
+```
+
+**Uninstall / revert** — delete the target; the operator restores the Deployment to exactly its
+pre-injection state (a finalizer guarantees it) and garbage-collects the coverage Service:
+
+```bash
+kubectl -n closurejvm-system delete closurejvmtarget myapp
+```
+
+> Status: injection (P2) + coverage Service (P3) are implemented and validated in-cluster by
+> `deploy/e2e/e2e.sh`. The Tomcat **valve** is deferred (it needs a `context.xml` entry, not a JVM
+> flag), and launching the *driver + dashboard* from the operator (`ClosureJVMCampaign`) is roadmap.
+
 ## Writing a request grammar
 
 The grammar decides what the fuzzer can ever reach, so it is **data, not code**. Two concerns are

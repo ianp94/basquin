@@ -129,7 +129,8 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 						// exec cp directly, NOT `sh -c "cp ... " + classesPath` — classesPath is a
 						// free-form spec field, and interpolating it into a shell string would let a
 						// campaign author inject commands into the initContainer (review #1).
-						Command:      []string{"cp", "-r", classesPath + "/.", campaignClassesDir + "/"},
+						// `--` so a classesPath starting with `-` is treated as a path, not a cp flag.
+						Command:      []string{"cp", "-r", "--", classesPath + "/.", campaignClassesDir + "/"},
 						VolumeMounts: []corev1.VolumeMount{{Name: campaignClassesVol, MountPath: campaignClassesDir}},
 					}},
 					Containers: []corev1.Container{{

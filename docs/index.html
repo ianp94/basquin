@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClosureJVM — find the availability bugs crash-only testing misses</title>
+<meta name="description" content="A persistent-JVM execution harness that treats latency, heap growth, and thread/executor leaks as first-class bug oracles — in unmodified JVM web apps.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html">
+      <svg class="logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="8" fill="#5b3df5"/>
+        <path d="M12 9c-3 0-4 2-4 4v2.2c0 1-.4 1.6-1.4 1.8 1 .2 1.4.8 1.4 1.8V23c0 2 1 4 4 4" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+        <path d="M20 9c3 0 4 2 4 4v2.2c0 1 .4 1.6 1.4 1.8-1 .2-1.4.8-1.4 1.8V23c0 2-1 4-4 4" stroke="#c4b3ff" stroke-width="2" stroke-linecap="round" fill="none"/>
+      </svg>
+      ClosureJVM
+    </a>
+    <nav class="nav-links">
+      <a href="index.html" class="active">Home</a>
+      <a href="getting-started.html">Get started</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
+      <a class="gh" href="https://github.com/ianp94/closureJVM">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <span class="kicker">persistent-JVM availability testing</span>
+      <h1>Find the availability bugs that crash-only testing misses.</h1>
+      <p class="lede">Most JVM web apps don't fall over with a <code>NullPointerException</code> — they
+        <strong>degrade</strong>: a pathological input takes 500ms instead of 5ms, a request leaks a
+        thread or holds an executor, memory creeps until a GC storm. ClosureJVM runs an app across
+        thousands of clean iterations and treats <strong>availability invariants</strong> — latency,
+        heap retention, thread/executor leaks — as first-class bug oracles, not just crashes.</p>
+      <div class="btn-row">
+        <a class="btn btn-primary" href="getting-started.html">Get started →</a>
+        <a class="btn btn-secondary" href="https://github.com/ianp94/closureJVM">GitHub repo</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <figure class="demo-figure">
+      <img src="demo.svg" alt="ClosureJVM live status screen driving JPetStore over HTTP">
+      <figcaption>The live status screen during a 200-iteration HTTP drive against an unmodified
+        <a href="https://github.com/mybatis/jpetstore-6">JPetStore</a>, flagging the app's real
+        per-request latency.</figcaption>
+    </figure>
+  </section>
+
+  <section class="section section-alt">
+    <div class="wrap">
+      <h2>Why it's different</h2>
+      <p class="lead">Fuzzers like Jazzer and JQF are excellent, but their oracle is
+        <em>"did it throw / crash."</em> ClosureJVM's oracle is availability.</p>
+      <div class="cards">
+        <div class="card">
+          <span class="ico">// oracle</span>
+          <h3>Availability is the bug</h3>
+          <p>An iteration is <em>interesting</em> if it exceeds a latency budget, grows the heap, or
+            leaks a thread/executor — not only if it throws.</p>
+        </div>
+        <div class="card">
+          <span class="ico">// isolation</span>
+          <h3>Cleanliness enforced, not assumed</h3>
+          <p>Each iteration runs inside strict begin/end boundaries; leaked non-daemon threads and
+            un-shut executors are detected and reported with stacks. Contamination becomes obvious.</p>
+        </div>
+        <div class="card">
+          <span class="ico">// unmodified</span>
+          <h3>Works on apps you can't change</h3>
+          <p>A Tomcat valve wraps every request of an unmodified third-party WAR — no code edits, no
+            repackaging — and one namespace-free jar runs on Tomcat 9 (<code>javax</code>) and 10+
+            (<code>jakarta</code>).</p>
+        </div>
+      </div>
+
+      <h3>Signal quality is the one rule</h3>
+      <p>The project has exactly one bar for what ships: a change has to improve
+        <strong>iteration cleanliness</strong>, <strong>reproducibility</strong>, or
+        <strong>signal quality</strong> — find real availability pathologies, faster. Crashes are
+        real crashes: a target declares its expected input rejections via a
+        <code>CrashClassifier</code>, so a parser throwing on bad input is counted as
+        <em>rejected</em>, not a crash. Only genuine faults — an unhandled exception, a 5xx — count.</p>
+    </div>
+  </section>
+
+  <section class="section wrap">
+    <h2>What it found in JPetStore, unmodified</h2>
+    <p>Running inside JPetStore's JVM via the valve, with no changes to the app:</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Signal</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td>Latency spike</td><td>cold first-catalog request <strong>531ms</strong> (budget 20ms)</td></tr>
+          <tr><td>Heap growth</td><td>up to <strong>44MB</strong> allocated on a single request</td></tr>
+          <tr><td>Per-request cost</td><td>steady multi-hundred-KB retention across catalog routes</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <figure class="demo-figure">
+      <img src="demo-explore.svg" alt="ClosureJVM exploration panel: execs/sec, corpus, finds, coverage">
+      <figcaption>Exploring an unmodified JPetStore over HTTP — 220 requests, <strong>0 crashes</strong>
+        (it's robust), <strong>48 invariant finds</strong> harvested server-side via the valve.</figcaption>
+    </figure>
+  </section>
+
+  <section class="section section-alt">
+    <div class="wrap">
+      <h2>What's in the box</h2>
+      <div class="cards">
+        <div class="card">
+          <span class="ico">// invariants</span>
+          <h3>Availability invariants</h3>
+          <p>Latency, heap-delta, and thread-delta thresholds, each with hard-fail or soft-signal
+            modes and stack evidence on violation.</p>
+        </div>
+        <div class="card">
+          <span class="ico">// exploration</span>
+          <h3>Coverage-guided exploration</h3>
+          <p>A JaCoCo agent runs in the target's JVM; the driver reads real coverage over the wire
+            and keeps the inputs that reach new code. Routes and value structure are data — a request
+            grammar, not code.</p>
+        </div>
+        <div class="card">
+          <span class="ico">// jvmti</span>
+          <h3>JVMTI native agent</h3>
+          <p>Event-driven thread lifecycle tracking (ThreadStart/ThreadEnd) — no polling, no
+            safepoint stack walks — with a <code>ThreadMXBean</code> fallback. One jar, JDK 17 &amp; 21.</p>
+        </div>
+        <div class="card">
+          <span class="ico">// valve</span>
+          <h3>Tomcat valve</h3>
+          <p>Wraps every request of an unmodified WAR. A single namespace-free jar runs on both
+            <code>javax.servlet</code> and <code>jakarta.servlet</code> Tomcat lines.</p>
+        </div>
+        <div class="card">
+          <span class="ico">// dashboard</span>
+          <h3>Decoupled web dashboard</h3>
+          <p>A standalone process — never embedded in a driver. Any number of drivers push status and
+            findings, keyed by campaign id, for a fleet view with drill-down. JDK
+            <code>httpserver</code>, binds 127.0.0.1 by default.</p>
+        </div>
+        <div class="card">
+          <span class="ico">// kubernetes</span>
+          <h3>Kubernetes demo</h3>
+          <p>One command runs the whole stack in a local kind cluster: the app as a pod with valve +
+            agents baked in, driven from outside. A namespaced injection operator is in progress.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section wrap" style="text-align:center; padding-top:48px;">
+    <h2 style="margin-top:0;">Point it at your app</h2>
+    <p class="lead" style="max-width:640px; margin:0 auto 28px;">Run the leak demo, drive embedded
+      Tomcat, or instrument your own WAR in Kubernetes. The getting-started guide has copy-pasteable
+      commands.</p>
+    <div class="btn-row">
+      <a class="btn btn-primary" href="getting-started.html">Get started →</a>
+      <a class="btn btn-secondary" href="kubernetes-tomcat.html">Run against your Tomcat in K8s</a>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap-wide footer-inner">
+    <div>ClosureJVM — availability-first testing for JVM web apps.</div>
+    <div class="links">
+      <a href="getting-started.html">Get started</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
+      <a href="https://github.com/ianp94/closureJVM">GitHub</a>
+    </div>
+    <div class="ai-note">Built with AI assistance (Anthropic's Claude / Claude Code), directed and reviewed by the author.</div>
+  </div>
+</footer>
+
+</body>
+</html>

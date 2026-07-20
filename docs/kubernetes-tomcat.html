@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run ClosureJVM against your Tomcat app in Kubernetes — ClosureJVM</title>
+<meta name="description" content="Bake the valve + ClosureJVM agent + JaCoCo agent into your Tomcat image, deploy it, and drive it with coverage-guided exploration and the dashboard.">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html">
+      <svg class="logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="8" fill="#5b3df5"/>
+        <path d="M12 9c-3 0-4 2-4 4v2.2c0 1-.4 1.6-1.4 1.8 1 .2 1.4.8 1.4 1.8V23c0 2 1 4 4 4" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+        <path d="M20 9c3 0 4 2 4 4v2.2c0 1 .4 1.6 1.4 1.8-1 .2-1.4.8-1.4 1.8V23c0 2-1 4-4 4" stroke="#c4b3ff" stroke-width="2" stroke-linecap="round" fill="none"/>
+      </svg>
+      ClosureJVM
+    </a>
+    <nav class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="getting-started.html">Get started</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="kubernetes-tomcat.html" class="active">K8s / Tomcat</a>
+      <a class="gh" href="https://github.com/ianp94/closureJVM">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <div class="breadcrumb">docs / kubernetes-tomcat</div>
+    <h1>Run ClosureJVM against your Tomcat app in Kubernetes</h1>
+    <p class="lead">Bake the valve, the ClosureJVM agent, and the JaCoCo coverage agent into a Tomcat
+      image, run your WAR as a pod, and drive it from outside with coverage-guided exploration and the
+      dashboard — every feature working in-cluster.</p>
+    <div class="tag-list">
+      <span class="pill">docker · kind · kubectl</span>
+      <span class="pill">Tomcat 9 (javax) or 10+ (jakarta)</span>
+    </div>
+  </div>
+
+  <p>This guide generalizes the repo's <code>deploy/k8s/</code> demo — which instruments an unmodified
+    <a href="https://github.com/mybatis/jpetstore-6">JPetStore</a> WAR — to <strong>your own
+    WAR</strong>. The approach is the same three agents baked into one Tomcat image, a
+    <code>ClusterIP</code> Service exposing the app and the coverage port, and a driver that reaches
+    the pod through <code>kubectl port-forward</code>.</p>
+
+  <h2>Try the reference demo first</h2>
+  <p>If you have a built JPetStore WAR, one command builds the agents, bakes the image, creates a kind
+    cluster, and deploys the pod:</p>
+  <pre><code>JPETSTORE_WAR=/abs/jpetstore.war deploy/k8s/up.sh</code></pre>
+  <p>When it finishes, the JPetStore pod is <code>Running</code> with port <strong>8080</strong> (the
+    app, every request wrapped by the valve) and <strong>6300</strong> (the JaCoCo coverage
+    tcpserver, scoped to <code>org.mybatis.jpetstore.*</code>). Full walkthrough:
+    <a href="https://github.com/ianp94/closureJVM/blob/main/deploy/k8s/README.md">deploy/k8s/README.md</a>.
+    The rest of this page shows what to change to point that same machinery at your app.</p>
+
+  <hr class="rule">
+
+  <h2>Instrumenting your WAR</h2>
+
+  <ol class="steps">
+    <li>
+      <h3>Match the servlet namespace to the Tomcat base image</h3>
+      <p>The valve jar is namespace-free — one artifact runs on both Tomcat lines — but the base image
+        must match your app's servlet namespace:</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>App servlet namespace</th><th>Tomcat base image</th></tr></thead>
+          <tbody>
+            <tr><td><code>javax.servlet</code></td><td><code>tomcat:9.0-jdk17-temurin</code></td></tr>
+            <tr><td><code>jakarta.servlet</code></td><td><code>tomcat:10.1-jdk17</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>To check an app, inspect its <code>WEB-INF/web.xml</code> root namespace:
+        <code>http://java.sun.com/...</code> and <code>javax.servlet.jsp.jstl</code> mean javax;
+        <code>jakarta.*</code> means jakarta. The reference demo uses Tomcat 9 because JPetStore is
+        <code>javax.servlet</code>.</p>
+    </li>
+
+    <li>
+      <h3>Build the three agents</h3>
+      <p>Same command the demo runs — it produces the fat agent jar, the valve jar, and stages the
+        JaCoCo agent:</p>
+      <pre><code>./gradlew jar :tomcat-valve:jar copyJacocoAgent</code></pre>
+      <p>That yields <code>build/libs/closurejvm-0.2.0.jar</code> (agent),
+        <code>tomcat-valve/build/libs/closurejvm-valve-0.1.0.jar</code> (valve), and
+        <code>build/jacoco/jacocoagent.jar</code>.</p>
+    </li>
+
+    <li>
+      <h3>Bake a self-contained image</h3>
+      <p>Copy your WAR in as <code>ROOT.war</code>, drop the valve into Tomcat's <code>lib/</code>, put
+        the agent and JaCoCo jars on disk, and mount the global <code>context.xml</code> that registers
+        the valve for every deployed app. This is the demo's <code>Dockerfile.jpetstore</code>
+        generalized — swap the base image and the WAR, and change the JaCoCo <code>includes</code>
+        filter and invariant flags to suit your app:</p>
+      <div class="codewrap"><div class="label">Dockerfile</div></div>
+      <pre><code><span class="c"># pick the base image to match your app's servlet namespace (step 1)</span>
+FROM tomcat:9.0-jdk17-temurin
+
+COPY your-app.war         /usr/local/tomcat/webapps/ROOT.war
+COPY closurejvm-agent.jar /usr/local/tomcat/closurejvm-agent.jar
+COPY closurejvm-valve.jar /usr/local/tomcat/lib/closurejvm-valve.jar
+COPY jacocoagent.jar      /jacocoagent.jar
+COPY context.xml          /usr/local/tomcat/conf/context.xml
+
+<span class="c"># JaCoCo tcpserver (scope includes to YOUR packages) + the ClosureJVM agent, both in the app JVM</span>
+ENV CATALINA_OPTS="-javaagent:/jacocoagent.jar=output=tcpserver,address=0.0.0.0,port=6300,<span class="s">includes=com.yourco.yourapp.*</span> \
+-javaagent:/usr/local/tomcat/closurejvm-agent.jar -Xbootclasspath/a:/usr/local/tomcat/closurejvm-agent.jar \
+-Dclosurejvm.invariant.mode=soft -Dclosurejvm.invariant.latency.maxMs=25 -Dclosurejvm.invariant.heapDelta.maxKb=256"
+
+EXPOSE 8080 6300</code></pre>
+      <div class="note">
+        <span class="tag">important</span>
+        <p>Scope the JaCoCo <code>includes</code> to <strong>your</strong> application packages. A
+          wildcard (<code>*</code>) also instruments Tomcat and your framework — it inflates the
+          coverage denominator and adds enough overhead to fake latency violations. Narrow-by-default
+          is the deliberate choice here.</p>
+      </div>
+      <p>Copy the source files ClosureJVM already ships alongside your WAR into the build context:
+        <code>closurejvm-agent.jar</code> and <code>closurejvm-valve.jar</code> from the build outputs
+        above, <code>jacocoagent.jar</code> from <code>build/jacoco/</code>, and
+        <code>context.xml</code> from <code>deploy/valve/context.xml</code>.</p>
+    </li>
+
+    <li>
+      <h3>Deploy: Deployment + ClusterIP Service</h3>
+      <p>Apply a Deployment for the pod and a Service exposing both ports. The Service is deliberately
+        <strong><code>ClusterIP</code></strong>, not <code>NodePort</code>: JaCoCo's remote-control
+        protocol is unauthenticated and lets any client dump <em>and reset</em> execution data, so port
+        6300 must never be reachable from outside the cluster. You reach both ports through a
+        port-forward instead.</p>
+      <div class="codewrap"><div class="label">yourapp.yaml — Service (ports)</div></div>
+      <pre><code>apiVersion: v1
+kind: Service
+metadata: { name: yourapp }
+spec:
+  type: ClusterIP            <span class="c"># never NodePort — port 6300 stays in-cluster</span>
+  selector: { app: yourapp }
+  ports:
+    - { name: http,   port: 8080, targetPort: 8080 }
+    - { name: jacoco, port: 6300, targetPort: 6300 }</code></pre>
+      <p>The demo's <code>deploy/k8s/up.sh</code> is worth copying wholesale — it builds the agents,
+        stages the image context, tags the image <strong>uniquely per build</strong> (a fixed
+        <code>:latest</code> makes <code>kubectl apply</code> a silent no-op that keeps a stale image),
+        loads it into kind, and pins every <code>kubectl</code> call to the kind context so a re-run
+        can't deploy into whatever cluster happens to be current.</p>
+    </li>
+
+    <li>
+      <h3>Port-forward and extract your classes</h3>
+      <p>Forward the app and coverage ports, then unzip your WAR's compiled classes so the coverage
+        analyzer can compute covered / total:</p>
+      <pre><code>kubectl --context kind-closurejvm port-forward svc/yourapp 8080:8080 6300:6300 &amp;
+
+<span class="c"># extract the app's classes for the coverage analyzer</span>
+D=$(mktemp -d); (cd "$D" &amp;&amp; unzip -q /abs/your-app.war 'WEB-INF/classes/*')</code></pre>
+    </li>
+
+    <li>
+      <h3>Drive it — coverage-guided, with the dashboard</h3>
+      <p>Start the standalone dashboard once, then run the coverage-guided driver against the
+        forwarded pod. Point <code>-Dclosurejvm.coverage.classes</code> at the classes you just
+        extracted and <code>-Dclosurejvm.grammar</code> at a request grammar for your routes:</p>
+      <pre><code><span class="c"># standalone dashboard on 127.0.0.1:7070 (its own process)</span>
+./gradlew runDashboard &amp;
+
+./gradlew runCoverageGuided \
+  <span class="f">-Dexamples.http.baseUrl</span>=<span class="s">http://localhost:8080</span> \
+  <span class="f">-Dclosurejvm.coverage.jacoco</span>=<span class="s">localhost:6300</span> \
+  <span class="f">-Dclosurejvm.coverage.classes</span>=<span class="s">$D/WEB-INF/classes</span> \
+  <span class="f">-Dclosurejvm.grammar</span>=<span class="s">examples/grammar/yourapp.grammar</span> \
+  <span class="f">-Dclosurejvm.invariant.latency.maxMs</span>=<span class="s">25</span> \
+  <span class="f">-Dclosurejvm.invariant.mode</span>=<span class="s">soft</span> \
+  <span class="f">-Dclosurejvm.dashboard.push</span>=<span class="s">localhost:7070</span></code></pre>
+      <p>Here <code>examples/grammar/yourapp.grammar</code> is a placeholder for your own routes — the
+        repo ships a real, working grammar at
+        <a href="https://github.com/ianp94/closureJVM/blob/main/examples/grammar/jpetstore.grammar"><code>examples/grammar/jpetstore.grammar</code></a>
+        you can copy and adapt. (Grammar syntax is covered in
+        <a href="how-it-works.html">How it works</a> and
+        <a href="https://github.com/ianp94/closureJVM/blob/main/docs/USAGE.md">USAGE.md</a>.)</p>
+      <p>The live panel shows execs, latency, invariant finds (harvested server-side from the pod via
+        the valve headers), and the coverage % of your app's code (pulled from the pod's JaCoCo agent).
+        Prefer coverage without guided mutation? Use <code>runHttpDriveCoverage</code>. No coverage at
+        all? Use <code>runHttpDrive</code>.</p>
+    </li>
+  </ol>
+
+  <h2>Scaling to replicas</h2>
+  <p>When one driver drives a Service backed by several pods, name every JaCoCo endpoint so coverage
+    reflects the whole fleet rather than the one pod your reader connected to. Pass an explicit list,
+    or a headless Service name that resolves to all pod IPs on its own:</p>
+  <pre><code><span class="c"># explicit list of pod endpoints...</span>
+-Dclosurejvm.coverage.jacoco=10.0.1.4:6300,10.0.1.5:6300,10.0.1.6:6300
+<span class="c"># ...or a headless Service name, which resolves to all pod IPs</span>
+-Dclosurejvm.coverage.jacoco=yourapp-jacoco.default.svc.cluster.local:6300</code></pre>
+  <p>Coverage is union-merged across replicas. The status panel shows <code>[N/M pods]</code> whenever
+    a replica is unreachable or more than one is expected, so an under-count from a restarting pod is
+    visible rather than mistaken for genuinely low coverage.</p>
+
+  <hr class="rule">
+
+  <div class="note soon">
+    <span class="tag">Coming soon: the operator</span>
+    <p><strong>Baking agents into every image is the demo path, not the goal.</strong> A namespaced
+      Kubernetes operator is in progress that instruments an <em>unmodified</em> app image at deploy
+      time. You would <code>kubectl apply</code> a <code>ClosureJVMTarget</code> custom resource naming
+      one Deployment; the operator copies the agents in via an init container + shared volume and
+      appends the assembled flags to the container's existing <code>CATALINA_OPTS</code> /
+      <code>JAVA_TOOL_OPTIONS</code> — no custom rebuild, revertible by deleting the CR.</p>
+    <p>It is an <strong>explicit-patch controller</strong>, not a mutating admission webhook: a
+      namespaced <code>Role</code> that only patches Deployments you name, never cluster-wide pod
+      mutation.</p>
+    <p><strong>Status — be precise:</strong> the design is settled and the operator is
+      <strong>in progress</strong>. The kubebuilder scaffold, CRD, and a no-op status-only controller
+      (P1) are merged; Deployment injection — copying the agents in and appending the flags (P2) — is
+      landing in an open PR. So <em>instrumenting</em> a target is arriving now. The operator does
+      <strong>not</strong> orchestrate runs today, though: launching the runner and dashboard against a
+      target (the <code>ClosureJVMCampaign</code> CRD that fires off a whole test — P5) is roadmap, not
+      built. Design details:
+      <a href="https://github.com/ianp94/closureJVM/blob/main/docs/OPERATOR-DESIGN.md">OPERATOR-DESIGN.md</a>.</p>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap-wide footer-inner">
+    <div>ClosureJVM — availability-first testing for JVM web apps.</div>
+    <div class="links">
+      <a href="index.html">Home</a>
+      <a href="getting-started.html">Get started</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="https://github.com/ianp94/closureJVM">GitHub</a>
+    </div>
+    <div class="ai-note">Built with AI assistance (Anthropic's Claude / Claude Code), directed and reviewed by the author.</div>
+  </div>
+</footer>
+
+</body>
+</html>

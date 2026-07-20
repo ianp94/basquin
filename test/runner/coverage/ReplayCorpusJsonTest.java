@@ -39,6 +39,29 @@ public class ReplayCorpusJsonTest {
     }
 
     @Test
+    public void combinedSummaryStaysUnderTheTerminationCap() throws Exception {
+        // writeSummary splices the corpus into the real metrics JSON; the whole thing rides the pod
+        // termination message (kubelet caps it at 4096 bytes). A huge corpus must be budgeted down so
+        // the merged write stays under the cap — otherwise kubelet truncation makes it un-parseable and
+        // the operator loses BOTH the corpus and the coverage/findings summary.
+        java.util.List<String> big = new java.util.ArrayList<>();
+        for (int i = 0; i < 500; i++) {
+            big.add(String.format("/actions/Catalog.action?categoryId=CAT%04d&productId=FI-SW-%04d", i, i));
+        }
+        CoverageGuidedRun.lastCorpus = big;
+        java.nio.file.Path tmp = java.nio.file.Files.createTempFile("summary", ".json");
+        tmp.toFile().deleteOnExit();
+        CoverageGuidedRun.writeSummary(tmp.toString());
+
+        byte[] written = java.nio.file.Files.readAllBytes(tmp);
+        assertTrue("summary must stay under kubelet's 4096-byte cap, was " + written.length, written.length < 4096);
+        String s = new String(written, java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue("single JSON object", s.startsWith("{") && s.endsWith("}"));
+        assertTrue("carries the metrics", s.contains("\"exploration\":"));
+        assertTrue("carries the replay corpus", s.contains("\"replayCorpus\":["));
+    }
+
+    @Test
     public void capsAtTheByteBudget() {
         // 200 distinct routes = ~4 KB of content; a 500-byte budget must truncate well under it.
         java.util.List<String> big = new java.util.ArrayList<>();

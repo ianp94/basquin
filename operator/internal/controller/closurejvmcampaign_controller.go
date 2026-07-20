@@ -63,7 +63,7 @@ type ClosureJVMCampaignReconciler struct {
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
-//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch
+//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update
 
 func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
@@ -201,20 +201,28 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 	// --- aggregate the Job's outcome -----------------------------------------------------------
 	if job.Status.Succeeded > 0 {
-		campaign.Status.Phase = closurejvmv1alpha1.CampaignCompleted
 		if s := r.readDriverSummary(ctx, &campaign); s != nil {
 			campaign.Status.CoveragePct = fmt.Sprintf("%.1f", s.Exploration.Coverage.Pct)
 			campaign.Status.Findings = s.Exploration.Corpus
 			// Persist the interesting "replay corpus" as a campaign-owned ConfigMap (DD-026 PR 1) —
 			// for reproducibility, the dashboard corpus view, and load-mode replay. The driver stays
 			// credential-less: it wrote the corpus into its summary (termination message); the operator,
-			// which already holds the RBAC, materializes the ConfigMap here.
+			// which already holds the RBAC, materializes the ConfigMap here. Emit BEFORE flipping to a
+			// terminal phase: a terminal campaign never reconciles again (top-of-func guard), so a
+			// transient failure here would otherwise permanently forfeit the corpus. On failure, stay
+			// Running and retry next reconcile (the create-or-update is idempotent).
 			if len(s.ReplayCorpus) > 0 {
 				if err := r.emitCorpusConfigMap(ctx, &campaign, s.ReplayCorpus); err != nil {
-					l.Error(err, "failed to emit replay-corpus ConfigMap") // non-fatal: the run still Completed
+					l.Error(err, "emitting replay-corpus ConfigMap; will retry")
+					campaign.Status.Phase = closurejvmv1alpha1.CampaignRunning
+					if uerr := r.Status().Update(ctx, &campaign); uerr != nil {
+						return ctrl.Result{}, uerr
+					}
+					return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 				}
 			}
 		}
+		campaign.Status.Phase = closurejvmv1alpha1.CampaignCompleted
 		now := metav1.Now()
 		campaign.Status.CompletionTime = &now
 		meta.SetStatusCondition(&campaign.Status.Conditions, metav1.Condition{

@@ -323,8 +323,11 @@ processes is effectively remote code execution on whatever it runs on. **Update 
     `spec.coverageService`; publishes `status.coverageEndpoint` (`<svc>.<ns>.svc.cluster.local:6300`)
     for the DD-023 union-coverage flag. `core/services` RBAC added. envtest (create/endpoint/toggle-off)
     + in-cluster e2e (headless, has-endpoint, endpoint-published) all green.
-  - [ ] **P4 — docs + demo.** Replace the bake-into-the-image path in `deploy/k8s` with an
-    apply-a-CR path; USAGE + ARCHITECTURE updates.
+  - [x] **P4 — docs + demo.** USAGE "Kubernetes: instrument any app with the operator" section
+    (install → apply a `ClosureJVMTarget` → read `status.coverageEndpoint` → revert), ARCHITECTURE
+    operator/control-plane section, and the `deploy/k8s` README points at the operator as preferred
+    (baked image kept as the no-install demo). **The operator injection track P1–P4 is complete; only
+    P5 (`ClosureJVMCampaign` orchestration, DD-025) remains.**
 - [x] **Web dashboard, decoupled (DD-013)**: `DashboardServer` is a standalone aggregator process
   (own port, no driving logic) that many drivers push to via `DashboardClient`
   (`-Dclosurejvm.dashboard.push=host:port`), keyed by campaign id (defaults to `HOSTNAME` — a pod's

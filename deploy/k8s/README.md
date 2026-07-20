@@ -1,5 +1,11 @@
 # ClosureJVM on Kubernetes (kind demo)
 
+> **Prefer the operator for real use.** This page bakes the agents into a **custom image**, which
+> means a bespoke rebuild per app. The [operator](../../docs/USAGE.md#kubernetes-instrument-any-app-with-the-operator)
+> instruments an *unmodified* Deployment at deploy time (apply a `ClosureJVMTarget`, revert by
+> deleting it) — see [`deploy/e2e/e2e.sh`](../e2e/) for the full in-cluster flow. Keep using this
+> baked path if you want a self-contained one-command JPetStore demo with no operator install.
+
 A one-command local Kubernetes demo: JPetStore runs as a **pod** with the full ClosureJVM
 stack baked in — the valve (iteration boundaries + invariants), the ClosureJVM agent, and the
 JaCoCo coverage agent — inside a [kind](https://kind.sigs.k8s.io/) (Kubernetes-in-Docker) cluster.

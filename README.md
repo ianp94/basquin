@@ -81,8 +81,9 @@ Details and the "why" behind each choice: [ARCHITECTURE](docs/ARCHITECTURE.md) �
 ## Exploration
 
 Coverage-guided fuzzing (JQF) runs each input through the same iteration boundaries and
-invariants, and the live status screen grows an **exploration panel** as a campaign progresses —
-execs/sec, corpus size, finds by classification (crash / invariant), and time-since-last-find.
+invariants, and the live status screen grows an **exploration panel** as a campaign progresses:
+execs/sec, corpus size, finds by classification (crash / invariant), time-since-last-find, and a
+**coverage %** row that lights up when a coverage source reports.
 
 ![ClosureJVM exploration panel during a JQF campaign](docs/demo-explore.svg)
 
@@ -90,8 +91,12 @@ execs/sec, corpus size, finds by classification (crash / invariant), and time-si
 ./gradlew runFuzzCalculatorJQF -DenableJQF=true -Dclosurejvm.status=true
 ```
 
-*Next (v0.10): coverage-guided over HTTP — a server-side coverage agent feeds the app-under-test's
-per-request coverage back to the client fuzzer. See [TODO](TODO.md).*
+The crash counter is consistent across every run path — the top `crashes` figure and the
+exploration `finds crash` count come from the same signal (a target exception), so they agree.
+
+*Next (v0.10): the coverage % is fed by a server-side coverage agent that reports the
+app-under-test's per-request coverage back to the client fuzzer over HTTP — a real
+"% of code explored." See [TODO](TODO.md).*
 
 ## Features
 

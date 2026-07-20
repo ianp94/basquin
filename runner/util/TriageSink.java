@@ -23,11 +23,12 @@ public final class TriageSink {
     private static final int CAPACITY = Integer.getInteger("closurejvm.triage.queueCapacity", 256);
     private static final ArrayBlockingQueue<Runnable> QUEUE = new ArrayBlockingQueue<>(CAPACITY);
     private static volatile boolean shutdown = false;
+    private static final Thread CONSUMER;
 
     static {
-        Thread consumer = new Thread(TriageSink::drainLoop, "ClosureJVM-TriageSink");
-        consumer.setDaemon(true);
-        consumer.start();
+        CONSUMER = new Thread(TriageSink::drainLoop, "ClosureJVM-TriageSink");
+        CONSUMER.setDaemon(true);
+        CONSUMER.start();
         Runtime.getRuntime().addShutdownHook(new Thread(TriageSink::flushRemaining, "ClosureJVM-TriageSink-Flush"));
     }
 
@@ -61,10 +62,20 @@ public final class TriageSink {
     }
 
     private static void flushRemaining() {
+        // No new tasks enter the queue once shutdown is set (submit() runs synchronously then).
         shutdown = true;
         Runnable task;
         while ((task = QUEUE.poll()) != null) {
             runSafely(task);
+        }
+        // The consumer may have take()n a task and be mid-write; interrupt it out of an idle
+        // take() and join so any in-flight write completes before the JVM exits. This is what
+        // makes "never drop a finding" hold for a finding already handed to the consumer.
+        CONSUMER.interrupt();
+        try {
+            CONSUMER.join(2000);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
         }
     }
 

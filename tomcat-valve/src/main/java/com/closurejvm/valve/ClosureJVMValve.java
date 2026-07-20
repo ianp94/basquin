@@ -47,28 +47,41 @@ public class ClosureJVMValve extends ValveBase {
     @Override
     public void invoke(Request request, Response response) throws IOException {
         ITERATION_LOCK.lock();
-        Agent.beginIteration();
         try {
+            // beginIteration is inside the try so that if it throws (it does GC, snapshots),
+            // the lock is still released by the outer finally — otherwise every later request
+            // would queue on the fair lock forever.
+            Agent.beginIteration();
+            Throwable pending = null;
             try {
                 getNext().invoke(request, response);
-            } catch (IOException | RuntimeException | Error e) {
-                throw e;
-            } catch (Throwable servletException) {
-                // ServletException (javax or jakarta) — re-raise without referencing the type.
-                sneakyThrow(servletException);
+            } catch (Throwable t) {
+                pending = t;
             }
-        } finally {
             try {
-                try {
-                    Agent.endIteration();
-                } finally {
-                    // Write headers before releasing the lock: the next iteration's begin
-                    // clears the Agent's last-violation state.
-                    writeInvariantHeaders(response);
+                Agent.endIteration();
+            } catch (Throwable endError) {
+                // A leak/invariant thrown by endIteration must not mask the application's own
+                // exception; attach it as suppressed instead of replacing it.
+                if (pending != null) {
+                    pending.addSuppressed(endError);
+                } else {
+                    pending = endError;
                 }
             } finally {
-                ITERATION_LOCK.unlock();
+                // Write headers before releasing the lock: the next iteration's begin clears
+                // the Agent's last-violation state.
+                writeInvariantHeaders(response);
             }
+            if (pending != null) {
+                if (pending instanceof IOException) throw (IOException) pending;
+                if (pending instanceof RuntimeException) throw (RuntimeException) pending;
+                if (pending instanceof Error) throw (Error) pending;
+                // Checked ServletException (javax or jakarta) — re-raise without naming the type.
+                sneakyThrow(pending);
+            }
+        } finally {
+            ITERATION_LOCK.unlock();
         }
     }
 

@@ -198,14 +198,23 @@ Java_agent_NativeThreadTracker_nativeNonDaemonThreads(JNIEnv *env, jclass cls) {
     (void) cls;
     pthread_mutex_lock(&g_nd_lock);
     int n = g_nd_len;
-    jobject *locals = (n > 0) ? malloc(n * sizeof(jobject)) : NULL;
+    jobject *locals = NULL;
+    if (n > 0) {
+        locals = malloc(n * sizeof(jobject));
+        if (locals == NULL) {
+            // Allocation failed: return NULL so the Java side falls back to enumeration rather
+            // than mistaking this for an empty (no-leak) result.
+            pthread_mutex_unlock(&g_nd_lock);
+            return NULL;
+        }
+    }
+    // Reserve enough local-ref slots up front (quiets -Xcheck:jni for large thread sets).
+    (*env)->EnsureLocalCapacity(env, n + 16);
     int m = 0;
-    if (locals != NULL) {
-        for (int i = 0; i < n; i++) {
-            jobject o = (*env)->NewLocalRef(env, g_nd_refs[i]);
-            if (o != NULL) {
-                locals[m++] = o;
-            }
+    for (int i = 0; i < n; i++) {
+        jobject o = (*env)->NewLocalRef(env, g_nd_refs[i]);
+        if (o != NULL) {
+            locals[m++] = o;
         }
     }
     pthread_mutex_unlock(&g_nd_lock);

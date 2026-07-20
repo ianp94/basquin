@@ -25,41 +25,62 @@ public class IterationFilter implements Filter {
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
         ITERATION_LOCK.lock();
-        Agent.beginIteration();
         try {
+            // beginIteration is inside the try so that if it throws, the lock is still
+            // released by the outer finally — otherwise every later request would queue
+            // on the fair lock forever.
+            Agent.beginIteration();
+            Throwable pending = null;
             try {
                 chain.doFilter(request, response);
             } catch (Throwable t) {
                 // Count crashes (5xx-producing exceptions)
                 ClosureJVMMetrics.incCrashes();
-                throw t;
+                pending = t;
             }
-        } finally {
             try {
-                try {
-                    Agent.endIteration();
-                } finally {
-                    // Headers read Agent's last-violation state, so they must be written
-                    // before the lock is released — otherwise the next request's
-                    // beginIteration() clears that state out from under us.
-                    try {
-                        ClosureJVMMetrics.incRequests();
-                        if (response instanceof HttpServletResponse) {
-                            HttpServletResponse resp = (HttpServletResponse) response;
-                            List<String> v = Agent.getLastInvariantViolations();
-                            if (v != null && !v.isEmpty()) {
-                                ClosureJVMMetrics.addInvariantCount(v.size());
-                                resp.setHeader("X-ClosureJVM-Invariant-Count", String.valueOf(v.size()));
-                                String first = v.get(0);
-                                if (first != null && first.length() > 200) first = first.substring(0, 200);
-                                resp.setHeader("X-ClosureJVM-Invariant-Detail", first);
-                            }
-                        }
-                    } catch (Throwable ignored) {}
+                Agent.endIteration();
+            } catch (Throwable endError) {
+                // A leak/invariant thrown by endIteration must not mask the application's
+                // own exception; attach it as suppressed instead of replacing it.
+                if (pending != null) {
+                    pending.addSuppressed(endError);
+                } else {
+                    pending = endError;
                 }
             } finally {
-                ITERATION_LOCK.unlock();
+                // Headers read Agent's last-violation state, so they must be written before
+                // the lock is released — otherwise the next request's begin clears it.
+                writeInvariantHeaders(response);
             }
+            if (pending != null) {
+                if (pending instanceof IOException) throw (IOException) pending;
+                if (pending instanceof ServletException) throw (ServletException) pending;
+                if (pending instanceof RuntimeException) throw (RuntimeException) pending;
+                if (pending instanceof Error) throw (Error) pending;
+                throw new ServletException(pending);
+            }
+        } finally {
+            ITERATION_LOCK.unlock();
+        }
+    }
+
+    private static void writeInvariantHeaders(ServletResponse response) {
+        try {
+            ClosureJVMMetrics.incRequests();
+            if (response instanceof HttpServletResponse) {
+                HttpServletResponse resp = (HttpServletResponse) response;
+                List<String> v = Agent.getLastInvariantViolations();
+                if (v != null && !v.isEmpty()) {
+                    ClosureJVMMetrics.addInvariantCount(v.size());
+                    resp.setHeader("X-ClosureJVM-Invariant-Count", String.valueOf(v.size()));
+                    String first = v.get(0);
+                    if (first != null && first.length() > 200) first = first.substring(0, 200);
+                    resp.setHeader("X-ClosureJVM-Invariant-Detail", first);
+                }
+            }
+        } catch (Throwable ignored) {
+            // Header reporting is best-effort; never let it fail a request.
         }
     }
 }

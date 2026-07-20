@@ -74,9 +74,13 @@ public class HttpRouteDriveTarget implements IterationTarget, InputReceiver {
                     "route=" + route + "\ncount=" + invCount + (detail != null ? "\ndetail=" + detail : ""));
         }
 
-        try (BufferedReader r = new BufferedReader(new InputStreamReader(
-                code >= 400 ? c.getErrorStream() : c.getInputStream(), StandardCharsets.UTF_8))) {
-            while (r.readLine() != null) { /* drain so the connection can be reused */ }
+        // getErrorStream() is null for a 4xx with no body; guard so that is not an NPE
+        // miscounted as a crash. Only a genuine 5xx (below) is a crash.
+        java.io.InputStream body = code >= 400 ? c.getErrorStream() : c.getInputStream();
+        if (body != null) {
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8))) {
+                while (r.readLine() != null) { /* drain so the connection can be reused */ }
+            }
         }
 
         if (code >= 500) {

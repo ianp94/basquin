@@ -102,8 +102,10 @@ public final class StatusReporter {
     }
 
     private static synchronized void render() {
-        long elapsedS = Math.max(0L, (System.nanoTime() - START_NANOS) / 1_000_000_000L);
-        double rate = elapsedS > 0 ? (double) iterations / elapsedS : 0.0;
+        long elapsedNanos = Math.max(0L, System.nanoTime() - START_NANOS);
+        long elapsedS = elapsedNanos / 1_000_000_000L;              // for the HH:MM:SS display
+        double elapsedSec = elapsedNanos / 1_000_000_000.0;         // fractional, for the rate
+        double rate = elapsedSec > 0.05 ? iterations / elapsedSec : 0.0;
         double meanLatency = iterations > 0 ? (double) sumLatencyMs / iterations : 0.0;
 
         if (!TTY) {

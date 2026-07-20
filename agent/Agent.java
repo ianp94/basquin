@@ -252,8 +252,11 @@ public class Agent {
     public static void endIteration() {
         IterationContext ctx = CURRENT.get();
         if (ctx == null) {
-            // Defensive: end without a matching begin. Synthesize an empty context so we
-            // still run the checks rather than NPE, but this signals a caller-ordering bug.
+            // Defensive: end without a matching begin. Synthesize a context so we still run the
+            // checks rather than NPE — but its metrics measure ~nothing, so warn loudly that
+            // this is a caller-ordering bug rather than reporting plausible all-zero numbers.
+            System.err.println("[ClosureJVM] endIteration() called without a matching beginIteration() "
+                    + "on this thread; this iteration's metrics are not meaningful (caller-ordering bug).");
             ctx = begin();
         }
         try {
@@ -275,9 +278,12 @@ public class Agent {
         // walk of every thread per iteration only to discard the stacks). Either way, stacks
         // are captured lazily below, only for threads that actually leaked.
         Map<Long, Thread> result = new HashMap<>();
-        Thread[] threads = NativeThreadTracker.isActive()
-                ? NativeThreadTracker.nonDaemonThreads()
-                : enumerateAllThreads();
+        // Native path returns null on an internal error (e.g. allocation failure); fall back to
+        // enumeration rather than treating it as "no leaked threads".
+        Thread[] threads = NativeThreadTracker.isActive() ? NativeThreadTracker.nonDaemonThreads() : null;
+        if (threads == null) {
+            threads = enumerateAllThreads();
+        }
         for (Thread t : threads) {
             if (t != null && t.isAlive() && !t.isDaemon()) {
                 result.put(t.getId(), t);

@@ -50,12 +50,13 @@ public final class NativeThreadTracker {
     }
 
     /**
-     * Live non-daemon Thread objects tracked from ThreadStart/ThreadEnd events —
-     * the leak-set source, with no thread enumeration. Never null when isActive().
+     * Live non-daemon Thread objects tracked from ThreadStart/ThreadEnd events — the leak-set
+     * source, with no thread enumeration. Returns null if the native side hit an internal error
+     * (e.g. allocation failure); callers should then fall back to enumeration rather than treat
+     * a null/empty result as "no leaked threads".
      */
     public static Thread[] nonDaemonThreads() {
-        Thread[] threads = nativeNonDaemonThreads();
-        return threads != null ? threads : new Thread[0];
+        return nativeNonDaemonThreads();
     }
 
     private static native boolean nativeAvailable();

@@ -109,6 +109,15 @@ public final class CoverageGuidedRun {
         // shutdown hook so it lands on a normal exit and a deadline-triggered one alike.
         String summaryOut = System.getProperty("closurejvm.summary.out");
         if (summaryOut != null && !summaryOut.isEmpty()) {
+            // The summary reuses StatusReporter's counters, which are all no-ops unless the status
+            // layer is enabled. Without it the summary would be valid JSON full of zeros — a silently
+            // wrong "clean run", worse than an error. Warn loudly (the operator campaign always sets
+            // -Dclosurejvm.status=true; this catches a hand-run misconfiguration).
+            if (!StatusReporter.isEnabled()) {
+                System.err.println("[ClosureJVM] WARNING: -Dclosurejvm.summary.out is set but "
+                        + "-Dclosurejvm.status is not — the summary will report ALL ZEROS. "
+                        + "Add -Dclosurejvm.status=true.");
+            }
             Runtime.getRuntime().addShutdownHook(new Thread(() -> writeSummary(summaryOut),
                     "ClosureJVM-Summary"));
         }

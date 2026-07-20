@@ -117,6 +117,9 @@ var _ = Describe("ClosureJVMTarget Controller (P2: injection)", func() {
 		if err := k8sClient.Get(ctx, deployKey, d); err == nil {
 			_ = k8sClient.Delete(ctx, d)
 		}
+		// envtest runs no GC controller, so the owner-referenced coverage Service won't be collected.
+		_ = k8sClient.Delete(ctx, &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name: deployName + coverageServiceSuffix, Namespace: namespace}})
 	})
 
 	It("injects the agents and APPENDS to (never replaces) jvmOptsVar", func() {
@@ -346,6 +349,52 @@ var _ = Describe("ClosureJVMTarget Controller (P2: injection)", func() {
 		err := k8sClient.Create(ctx, t)
 		Expect(err).To(HaveOccurred())
 		Expect(strings.ToLower(err.Error())).To(ContainSubstring("includes"))
+	})
+
+	// --- P3: coverage Service ---------------------------------------------------------------------
+
+	It("creates a headless coverage Service and publishes status.coverageEndpoint when enabled", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{Name: container, Image: "busybox"}))).To(Succeed())
+		t := newTarget()
+		t.Spec.CoverageService = true
+		Expect(k8sClient.Create(ctx, t)).To(Succeed())
+		reconcileN(2)
+
+		svc := &corev1.Service{}
+		svcKey := types.NamespacedName{Name: deployName + coverageServiceSuffix, Namespace: namespace}
+		Expect(k8sClient.Get(ctx, svcKey, svc)).To(Succeed())
+		Expect(svc.Spec.ClusterIP).To(Equal(corev1.ClusterIPNone), "must be headless so DNS returns all pod IPs (DD-023)")
+		Expect(svc.Spec.Selector).To(Equal(map[string]string{"app": deployName}), "selects the target's pods")
+		Expect(svc.Spec.Ports).To(HaveLen(1))
+		Expect(svc.Spec.Ports[0].Port).To(Equal(int32(6300)))
+		// owner-referenced to the target so it's GC'd when the target is deleted.
+		Expect(svc.OwnerReferences).To(ContainElement(And(
+			HaveField("Kind", "ClosureJVMTarget"), HaveField("Name", targetName))))
+
+		got := &closurejvmv1alpha1.ClosureJVMTarget{}
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(got.Status.CoverageEndpoint).To(Equal(
+			deployName + coverageServiceSuffix + "." + namespace + ".svc.cluster.local:6300"))
+	})
+
+	It("removes the coverage Service and clears the endpoint when coverageService is toggled off", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{Name: container, Image: "busybox"}))).To(Succeed())
+		t := newTarget()
+		t.Spec.CoverageService = true
+		Expect(k8sClient.Create(ctx, t)).To(Succeed())
+		reconcileN(2)
+		svcKey := types.NamespacedName{Name: deployName + coverageServiceSuffix, Namespace: namespace}
+		Expect(k8sClient.Get(ctx, svcKey, &corev1.Service{})).To(Succeed()) // created
+
+		Expect(k8sClient.Get(ctx, targetKey, t)).To(Succeed())
+		t.Spec.CoverageService = false
+		Expect(k8sClient.Update(ctx, t)).To(Succeed())
+		reconcileN(1)
+
+		Expect(k8sClient.Get(ctx, svcKey, &corev1.Service{})).NotTo(Succeed()) // deleted
+		got := &closurejvmv1alpha1.ClosureJVMTarget{}
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(got.Status.CoverageEndpoint).To(BeEmpty())
 	})
 })
 

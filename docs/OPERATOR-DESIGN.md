@@ -1,10 +1,12 @@
 # ClosureJVM injection operator — design + status
 
-**Status (2026-07-20):** approved and in build. **P1** (scaffold + CRD + observe-only controller) and
-**P2** (injection + idempotency + finalizer revert, **DD-024**) are merged/implemented; **P3–P4**
-(coverage Service, docs/demo) and **P5** (`ClosureJVMCampaign` orchestration, §10) are ahead. What P2
-does not yet cover: end-to-end against a real pod (needs the `closurejvm/agents` image built) and
-valve mounting (deferred — it needs a Tomcat `context.xml` entry, not a JVM flag).
+**Status (2026-07-20):** approved and in build. **P1** (scaffold + CRD + observe-only controller),
+**P2** (injection + idempotency + finalizer revert, **DD-024**), and **P3** (headless coverage
+Service + `status.coverageEndpoint`) are merged/implemented and **validated in-cluster**
+(`deploy/e2e/e2e.sh` instruments a raw JPetStore end-to-end, incl. the coverage Service). **P4**
+(docs/demo — replace the bake-into-the-image path with apply-a-CR) and **P5** (`ClosureJVMCampaign`
+orchestration, §10) are ahead. Still deferred: valve mounting (needs a Tomcat `context.xml` entry,
+not a JVM flag) and a multi-arch agents image.
 
 **Decision being proposed (2026-07-20):** an *explicit patch controller* — a namespaced operator
 that instruments only the Deployments you name in a `ClosureJVMTarget` custom resource. No mutating
@@ -234,8 +236,10 @@ privilege is bounded and inspectable, versus "mutate any pod at admission time."
   idempotency, finalizer-based exact revert (**DD-024**). Verified by envtest (patch shape, append,
   idempotency, revert, Injected phase). ✅ *(this PR)* — e2e against a real pod pending the
   `closurejvm/agents` image; valve mounting deferred.
-- **P3 — coverage Service + status.** Headless Service, `status.coverageEndpoint`, wire it to the
-  DD-023 driver flag end to end across replicas.
+- **P3 — coverage Service + status.** Headless Service (`clusterIP: None`) selecting the target's
+  pods on the coverage port, owner-referenced to the target (GC'd on delete), created/removed as
+  `spec.coverageService` toggles; `status.coverageEndpoint` = `<svc>.<ns>.svc.cluster.local:<port>`
+  for the DD-023 flag. ✅ *(this PR)* — envtest (create/endpoint/toggle-off) + in-cluster e2e.
 - **P4 — docs + demo.** Replace the bake-it-into-the-image path in `deploy/k8s` with an
   apply-a-CR path; USAGE + ARCHITECTURE updates.
 - **P5 — orchestration (`ClosureJVMCampaign`).** The second CRD that fires off a whole test —

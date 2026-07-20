@@ -22,6 +22,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,6 +57,7 @@ type ClosureJVMTargetReconciler struct {
 //+kubebuilder:rbac:groups=closurejvm.dev,resources=closurejvmtargets/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=closurejvm.dev,resources=closurejvmtargets/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile drives the referenced Deployment toward the target's desired instrumentation, and
 // reverts it on target deletion.
@@ -159,6 +161,11 @@ func (r *ClosureJVMTargetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		l.Info("injected agents into Deployment", "deployment", depKey.Name, "hash", wantHash)
 	}
 
+	// --- coverage Service (P3) ------------------------------------------------------------------
+	if err := r.reconcileCoverageService(ctx, &target, &deploy); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	// --- status ---------------------------------------------------------------------------------
 	desired := int32(1)
 	if deploy.Spec.Replicas != nil {
@@ -204,6 +211,51 @@ func (r *ClosureJVMTargetReconciler) revertDeployment(ctx context.Context, targe
 	}
 	revertInjection(&deploy)
 	return r.Update(ctx, &deploy)
+}
+
+// reconcileCoverageService ensures the headless coverage Service exists when spec.coverageService is
+// on (and coverage is enabled), or is removed otherwise, and sets status.coverageEndpoint. The
+// Service is owner-referenced to the target so it's garbage-collected when the target is deleted.
+func (r *ClosureJVMTargetReconciler) reconcileCoverageService(ctx context.Context,
+	target *closurejvmv1alpha1.ClosureJVMTarget, deploy *appsv1.Deployment) error {
+	key := types.NamespacedName{Namespace: target.Namespace, Name: coverageServiceName(target)}
+
+	if !target.Spec.CoverageService || !target.Spec.Agents.Coverage.Enabled {
+		// Not wanted (or toggled off): delete any Service we created, clear the endpoint.
+		var existing corev1.Service
+		if err := r.Get(ctx, key, &existing); err == nil {
+			if derr := r.Delete(ctx, &existing); derr != nil && !apierrors.IsNotFound(derr) {
+				return derr
+			}
+		} else if !apierrors.IsNotFound(err) {
+			return err
+		}
+		target.Status.CoverageEndpoint = ""
+		return nil
+	}
+
+	desired := desiredCoverageService(target, deploy)
+	if err := controllerutil.SetControllerReference(target, desired, r.Scheme); err != nil {
+		return err
+	}
+	var existing corev1.Service
+	switch err := r.Get(ctx, key, &existing); {
+	case apierrors.IsNotFound(err):
+		if cerr := r.Create(ctx, desired); cerr != nil {
+			return cerr
+		}
+	case err == nil:
+		// Reconcile the mutable fields only; clusterIP (headless) is immutable, leave it.
+		existing.Spec.Selector = desired.Spec.Selector
+		existing.Spec.Ports = desired.Spec.Ports
+		if uerr := r.Update(ctx, &existing); uerr != nil {
+			return uerr
+		}
+	default:
+		return err
+	}
+	target.Status.CoverageEndpoint = coverageEndpoint(target)
+	return nil
 }
 
 // targetsForDeployment maps a Deployment event to the ClosureJVMTargets in its namespace that

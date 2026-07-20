@@ -102,8 +102,10 @@ done
 kubectl -n closurejvm-system rollout status deploy/closurejvm-controller-manager --timeout=120s
 ```
 
-(The in-cluster e2e installs either way — `INSTALL=helm deploy/e2e/e2e.sh` exercises the chart end to
-end; the default uses kustomize.)
+The `kubectl patch` loop appends unconditionally — re-running it by hand duplicates the args. Guard
+each with a `grep -q -- '--agents-image'`-style check as `deploy/e2e/e2e.sh` does, or just use Helm,
+which wires the flags declaratively. (The in-cluster e2e installs either way — `INSTALL=helm
+deploy/e2e/e2e.sh` exercises the chart end to end; the default uses kustomize.)
 
 ## 3. Instrument an app (`ClosureJVMTarget`)
 

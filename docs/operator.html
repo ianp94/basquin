@@ -145,6 +145,9 @@ for arg in <span class="f">--agents-image</span>=<span class="s">closurejvm/agen
     -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"$arg\"}]"
 done
 kubectl -n closurejvm-system rollout status deploy/closurejvm-controller-manager --timeout=120s</code></pre>
+  <p>The <code>kubectl patch</code> loop appends unconditionally — re-running it by hand duplicates the
+    args (guard each with a <code>grep -q</code> check as <code>deploy/e2e/e2e.sh</code> does, or just
+    use Helm, which wires the flags declaratively).</p>
 
   <hr class="rule">
 

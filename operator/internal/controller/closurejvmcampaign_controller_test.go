@@ -220,6 +220,45 @@ var _ = Describe("ClosureJVMCampaign Controller (P5a)", func() {
 		Expect(got.Status.CompletionTime).NotTo(BeNil())
 	})
 
+	It("surfaces a failed initContainer's reason in campaign status (review #24)", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		Expect(k8sClient.Create(ctx, newCampaign())).To(Succeed())
+		_, err := reconcileOnce() // Job created, Running
+		Expect(err).NotTo(HaveOccurred())
+
+		// Simulate the Job failing (backoff exhausted) due to a verify-classes init failure.
+		job := &batchv1.Job{}
+		Expect(k8sClient.Get(ctx, jobKey, job)).To(Succeed())
+		job.Status.Failed = 3 // > BackoffLimit(2)
+		Expect(k8sClient.Status().Update(ctx, job)).To(Succeed())
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: campaignName + "-driver-xyz", Namespace: namespace,
+				Labels: map[string]string{"closurejvm.dev/campaign": campaignName, "app.kubernetes.io/component": "driver"}},
+			Spec: corev1.PodSpec{
+				InitContainers: []corev1.Container{{Name: "verify-classes", Image: runnerImg}},
+				Containers:     []corev1.Container{{Name: "driver", Image: runnerImg}}},
+		}
+		Expect(k8sClient.Create(ctx, pod)).To(Succeed())
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: namespace}, pod)).To(Succeed())
+		pod.Status.InitContainerStatuses = []corev1.ContainerStatus{{
+			Name: "verify-classes",
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+				ExitCode: 1, Message: "no .class files extracted into /closurejvm-classes — check spec.driver.classesPath"}},
+		}}
+		Expect(k8sClient.Status().Update(ctx, pod)).To(Succeed())
+
+		_, err = reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+		got := &closurejvmv1alpha1.ClosureJVMCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(closurejvmv1alpha1.CampaignFailed))
+		cond := meta.FindStatusCondition(got.Status.Conditions, "Ready")
+		Expect(cond.Reason).To(Equal("InitContainerFailed"))
+		Expect(cond.Message).To(ContainSubstring("verify-classes"))
+		Expect(cond.Message).To(ContainSubstring("no .class files"))
+	})
+
 	It("fails with TargetGone if the target is deleted mid-run", func() {
 		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
 		makeInjectedTarget()

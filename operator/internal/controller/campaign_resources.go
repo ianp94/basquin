@@ -161,12 +161,16 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 						Name:            "verify-classes",
 						Image:           runnerImage,
 						ImagePullPolicy: corev1.PullIfNotPresent,
+						// Write the reason to the termination message too (not just stdout) so the reconciler
+						// can surface it in campaign status — a fail-loud that's only in pod logs is half the win.
 						Command: []string{"sh", "-c",
 							"if [ -z \"$(find " + campaignClassesDir + " -name '*.class' -print -quit 2>/dev/null)\" ]; then " +
-								"echo 'closurejvm: no .class files extracted into " + campaignClassesDir +
+								"msg='no .class files extracted into " + campaignClassesDir +
 								" — check spec.driver.classesPath (war-only images expose classes only at runtime, not in the image)'; " +
-								"exit 1; fi"},
-						VolumeMounts: []corev1.VolumeMount{{Name: campaignClassesVol, MountPath: campaignClassesDir}},
+								"echo \"closurejvm: $msg\"; printf '%s' \"$msg\" > /dev/termination-log; exit 1; fi"},
+						TerminationMessagePath:   "/dev/termination-log",
+						TerminationMessagePolicy: corev1.TerminationMessageReadFile,
+						VolumeMounts:             []corev1.VolumeMount{{Name: campaignClassesVol, MountPath: campaignClassesDir}},
 					}},
 					Containers: []corev1.Container{{
 						Name:                     "driver",

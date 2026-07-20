@@ -214,6 +214,12 @@ func (r *ClosureJVMCampaignReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, r.Status().Update(ctx, &campaign)
 	}
 	if job.Status.Failed > 0 && jobBackoffExhausted(&job) {
+		// Surface a failed initContainer's reason (e.g. verify-classes: "no .class files extracted …")
+		// in campaign status, so the failure is legible in `kubectl get closurejvmcampaign`, not only in
+		// pod logs. Falls back to the generic reason for a driver-container crash (review #24).
+		if name, msg := r.failedInitContainer(ctx, &campaign); name != "" {
+			return r.fail(ctx, &campaign, "InitContainerFailed", fmt.Sprintf("%s: %s", name, msg))
+		}
 		return r.fail(ctx, &campaign, "DriverFailed", "the driver Job failed")
 	}
 
@@ -254,6 +260,29 @@ func (r *ClosureJVMCampaignReconciler) readDriverSummary(ctx context.Context, c 
 		}
 	}
 	return nil
+}
+
+// failedInitContainer finds a driver pod whose initContainer terminated non-zero and returns its name
+// and termination message (e.g. verify-classes explaining an empty class extract). Returns "","" if
+// no init container failed — the caller then reports the generic driver-failure reason.
+func (r *ClosureJVMCampaignReconciler) failedInitContainer(ctx context.Context, c *closurejvmv1alpha1.ClosureJVMCampaign) (string, string) {
+	var pods corev1.PodList
+	if err := r.List(ctx, &pods, client.InNamespace(c.Namespace),
+		client.MatchingLabels{"closurejvm.dev/campaign": c.Name, "app.kubernetes.io/component": "driver"}); err != nil {
+		return "", ""
+	}
+	for i := range pods.Items {
+		for _, cs := range pods.Items[i].Status.InitContainerStatuses {
+			if t := cs.State.Terminated; t != nil && t.ExitCode != 0 {
+				msg := t.Message
+				if msg == "" {
+					msg = fmt.Sprintf("exited %d (%s)", t.ExitCode, t.Reason)
+				}
+				return cs.Name, msg
+			}
+		}
+	}
+	return "", ""
 }
 
 // targetAppImage resolves the app container's image from the target's Deployment (the .class source).

@@ -269,12 +269,14 @@ and the dashboard) — decide once the boundaries are clear.
   finds, and live coverage % (281/6368 edges) all working against the pod. Demo `docs/demo-k8s.svg`.
 - [ ] **Auto-injection agent**: a mutating admission webhook (operator) that injects the
   `-javaagent` + valve into annotated pods automatically — likely its own repo.
-- [ ] **Web UI dashboard**: a browser dashboard over the k8s deployment — campaigns across pods,
-  live findings, coverage growth, corpus, invariant violations, triage bundles. The "product"
-  surface. Candidate separate repo.
-  - [ ] Surface the actual findings in the UI: per-finding crash detail (exception, message,
-    stack), invariant violations (kind, threshold, sampled stack), the saved input, and the
-    route/metrics — i.e. browse the triage bundles, not just counts.
+- [x] **Web dashboard (single-run foundation)**: `StatusServer` (JDK httpserver, no deps) serves
+  a live dashboard + API from any run (`-Dclosurejvm.dashboard`): metric cards, a coverage bar,
+  and a findings table. `/api/status` (live metrics) + `/api/findings` (triage bundles). Verified
+  live against the kind pod. Surfaces the actual findings (route + detail), not just counts.
+- [ ] **Web dashboard (cluster)**: aggregate campaigns across pods; the "product" surface over the
+  k8s deployment (coverage growth over time, corpus, per-pod status). Candidate separate repo.
+  - [x] Surface the actual findings in the UI (route/detail/classification/time) — done in the
+    single-run dashboard; extend with full crash stack / sampled stack drill-down.
   - [ ] Optional Claude-API-backed analysis: with a configured API key, let Claude analyze a
     finding (or a campaign) from the dashboard — cluster/dedupe findings, explain a stack, suggest
     a root cause / minimized repro. Opt-in; key stays server-side.

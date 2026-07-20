@@ -124,6 +124,20 @@ JPETSTORE_WAR=/abs/jpetstore.war deploy/k8s/up.sh
 
 Details: [deploy/k8s/README.md](deploy/k8s/README.md).
 
+## Web dashboard
+
+Any run started with `-Dclosurejvm.dashboard` serves a live browser dashboard (default
+`http://localhost:7070`): metric cards, a coverage bar of the app under test, and a findings
+table showing each invariant/crash with its route and detail — the triage bundles, not just
+counts. No extra dependency (JDK `httpserver`). It's the single-run foundation for a
+cluster-wide dashboard and optional Claude-API-backed finding analysis (see [TODO](TODO.md)).
+
+```bash
+./gradlew runCoverageGuided -Dclosurejvm.dashboard=true \
+  -Dexamples.http.baseUrl=http://localhost:8080 \
+  -Dclosurejvm.coverage.jacoco=localhost:6300 -Dclosurejvm.coverage.classes=<dir>/WEB-INF/classes
+```
+
 ## Features
 
 - Availability invariants (latency / heap / thread-delta) with hard-fail or soft-signal modes

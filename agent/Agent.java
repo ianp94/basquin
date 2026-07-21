@@ -45,6 +45,9 @@ public class Agent {
     // status servlet). Under serialized execution this reflects the just-finished iteration.
     private static volatile List<String> lastInvariantViolations = Collections.emptyList();
     private static volatile String lastInvariantStack = "";
+    private static volatile long lastLatencyMs = 0L;
+    private static volatile long lastHeapDeltaKb = 0L;
+    private static volatile int lastThreadDelta = 0;
 
     // Backs the legacy beginIteration()/endIteration() wrappers: the context for the
     // iteration in progress on this thread.
@@ -403,6 +406,9 @@ public class Agent {
     private static void publishInvariantEvidence(IterationContext ctx) {
         lastInvariantViolations = ctx.invariantViolations;
         lastInvariantStack = ctx.invariantStack;
+        lastLatencyMs = ctx.latencyMs;
+        lastHeapDeltaKb = ctx.heapDeltaBytes / 1024L;
+        lastThreadDelta = ctx.threadDelta;
     }
 
     public static java.util.List<String> getLastInvariantViolations() {
@@ -411,6 +417,12 @@ public class Agent {
 
     public static String getLastInvariantStack() {
         return lastInvariantStack;
+    }
+
+    /** The just-ended iteration's cost, "latencyMs,heapDeltaKb,threadDelta" (DD-031). Read under the
+     *  iteration lock (before the next begin() overwrites it) for per-request attributability. */
+    public static String lastCostCsv() {
+        return lastLatencyMs + "," + lastHeapDeltaKb + "," + lastThreadDelta;
     }
 
     /** Called by {@link Invariants} during evaluation to record evidence onto the context. */

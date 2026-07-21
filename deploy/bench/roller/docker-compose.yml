@@ -1,0 +1,29 @@
+# Apache Roller (javax) on Tomcat 9 + PostgreSQL, with the Basquin valve + agent.
+# Run setup.sh first (explodes roller.war -> webapp/, injects roller-custom.properties + pg driver).
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=roller
+      - POSTGRES_USER=roller
+      - POSTGRES_PASSWORD=roller
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roller"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  roller:
+    image: tomcat:9.0-jdk17-temurin
+    depends_on:
+      db: { condition: service_healthy }
+    ports:
+      - "${TOMCAT_HOST_PORT:-8091}:8080"
+    environment:
+      - CATALINA_OPTS=-javaagent:/usr/local/tomcat/basquin-agent.jar -Xbootclasspath/a:/usr/local/tomcat/basquin-agent.jar -Dbasquin.invariant.mode=${INVARIANT_MODE:-soft} -Dbasquin.invariant.latency.maxMs=${INVARIANT_LATENCY_MS:-25} -Dbasquin.invariant.latency.sample=true -Dbasquin.invariant.heapDelta.maxKb=${INVARIANT_HEAP_KB:-256} ${CATALINA_OPTS_EXTRA:-}
+    volumes:
+      - ./webapp:/usr/local/tomcat/webapps/ROOT:ro
+      - ./roller_data:/var/roller/data
+      - ./postgresql.jar:/usr/local/tomcat/lib/postgresql.jar:ro
+      - ../../../build/libs/basquin-0.2.0.jar:/usr/local/tomcat/basquin-agent.jar:ro
+      - ../../../tomcat-valve/build/libs/basquin-valve-0.2.0.jar:/usr/local/tomcat/lib/basquin-valve.jar:ro
+      - ../../../deploy/valve/context.xml:/usr/local/tomcat/conf/context.xml:ro

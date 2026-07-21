@@ -1,0 +1,11 @@
+# Built/downloaded app artifacts — large binaries, reproducible from documented URLs
+*.war
+*.tar.gz
+*.zip
+postgresql.jar
+apache-roller-*/
+# Exploded webapp dirs + runtime stores
+*/webapp/
+*/pages/
+*/work/
+*/roller_data/

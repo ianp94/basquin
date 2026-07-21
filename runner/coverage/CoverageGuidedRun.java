@@ -153,7 +153,7 @@ public final class CoverageGuidedRun {
                 !"false".equals(System.getProperty("basquin.cost.enabled", "true")));
         // Decay cadence for pheromone (DD-032): fixed, independent of which loop branch ran this
         // iteration (sequence/fresh branches `continue` before reaching the bottom of the loop).
-        int evaporateEvery = Integer.getInteger("basquin.pheromone.evaporateEvery", 50);
+        int evaporateEvery = Math.max(1, Integer.getInteger("basquin.pheromone.evaporateEvery", 50));
         CostCorpus corpus = new CostCorpus(seeds, costEnabled, pheromoneOn);
         // Publish the live corpus so the end-of-run summary can emit a capped "replay corpus" the
         // operator persists (DD-026 PR 1). Same object, populated as the run finds new coverage.

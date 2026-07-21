@@ -377,6 +377,12 @@ Notes:
   `emaAlpha`) on the explore driver; set `-Dbasquin.cost.enabled=false` for an A/B baseline that
   restores plain insertion-order replay. The top costs are printed to the explore driver's log
   (`[Basquin] replay cost-ranked (top N): ...`), not `status`.
+- **Cost-biased parent selection (DD-032, opt-in, driver-only).** `-Dbasquin.pheromone=on` additionally
+  biases *exploration* itself toward parents whose children turn out expensive (ε-greedy selection +
+  immediate-parent credit + evaporation), instead of only ranking the emitted replay corpus. It has
+  **no operator/CRD surface** — it's a driver flag, run against a bench target, not something a
+  `BasquinCampaign` can turn on yet — deliberately, until a bench A/B proves it beats uniform selection.
+  See [`docs/BENCH-AB.md`](BENCH-AB.md) for the protocol.
 
 Read the results from `status.load`:
 

@@ -1036,3 +1036,104 @@ replay inside `LoadRun` (proportional firing by cost) — needs a ConfigMap form
 combined coverage+cost fitness — blocked on JaCoCo's per-edge attribution, which doesn't exist today.
 
 See [`docs/superpowers/specs/2026-07-21-cost-guided-replay-design.md`](docs/superpowers/specs/2026-07-21-cost-guided-replay-design.md).
+
+---
+
+## DD-032: Cost-biased parent selection with credit assignment — opt-in "true pheromone" (2026-07-21)
+
+**Context.** DD-031 cost-ranked the *replay* corpus but left exploration parent selection uniform —
+deliberately, because cost-biasing selection risks fixating on one expensive region and trading away
+coverage, which is exploration's whole job. This DD adds the deferred piece: a real pheromone loop
+that biases *selection* toward parents whose mutated children turn out expensive. It is opt-in and
+bench-validated, not CI-validated, because its value (does it out-discover uniform?) is genuinely
+uncertain and must be proven, not assumed.
+
+**Decision.** Enabled only under `-Dbasquin.pheromone=on` (default **off** = today's exact behavior:
+uniform selection, no reinforcement, no evaporation, DD-031 cost-based eviction unchanged).
+
+1. **ε-greedy selection.** With probability ε, `CostCorpus.selectParent` draws a parent uniformly
+   (pure exploration); otherwise it draws by roulette weighted on `pheromone`. `ε=1.0` ≡ uniform — ε
+   is literally the kill-switch.
+2. **Immediate-parent credit assignment.** After a mutated child is fired and its cost measured, that
+   cost is deposited onto the *one* parent it was mutated from (`reinforce`) — before the child's own
+   `consider` call, so a freshly-reinforced parent can't be evicted by the very child that earned it.
+   Multi-hop lineage (crediting grandparents with decay) is deferred — see below.
+3. **Evaporation.** Every `evaporateEvery` iterations (default 50, fixed cadence, checked at the top
+   of the loop regardless of which branch a given iteration took), every entry's `pheromone *= decay`.
+
+**ε is the coverage guardrail, not the initial pheromone.** Real costs run in the hundreds-to-thousands
+(one invariant hit = 1000, a leaked thread = 500); inside the roulette branch a cheap coverage-find
+cannot compete with an 800+-pheromone entry — it is *selectable* but not *competitive*. The thing that
+actually keeps cheap/coverage-finding parents in rotation is the ε-uniform share of iterations, not the
+starting pheromone value. **New entries start at `pheromone = emaCost + cost`** — EMA-relative rather
+than a constant, so the starting value is scale-relative and cross-app meaningful (a constant `1.0`
+would be swamped on a ~5000-cost app and meaningless on a ~10-cost one) — but this is a *tie-breaker
+among cheap entries*, not a coverage protector. Cold start (EMA not warm, or the corpus's total
+pheromone weight is 0) falls back to uniform.
+
+**Sticky-spike defaults: `decay=0.7`, deposit cap `10×EMA`.** Deposits are raw child costs, so without
+bounds a single 5000-cost spike (one invariant hit) could dominate the roulette for an entire bench run
+— indistinguishable from "pheromone got stuck." Two guards: `deposit = min(childCost, depositCap ×
+emaCost)` caps how large one spike's deposit can be, and `decay=0.7` (chosen over the more obvious 0.9)
+means a capped 10×EMA spike decays to ~1×EMA in `0.7^k ≈ 0.1 → k≈6.5` evaporation cycles — **≈325
+iterations** at the default `evaporateEvery=50`, recoverable within a normal bench run rather than
+spanning it. These are the defaults the A/B in this record runs with.
+
+**Eviction becomes pheromone-aware when pheromone is on.** DD-031's `evictIfOverCap` evicts the
+cheapest-by-own-cost non-coverage entry; under credit assignment that fights reinforcement, since an
+entry with low own-cost but high pheromone is a *proven productive parent* — the one to keep. So with
+`pheromone=on`, eviction targets the min-`pheromone` non-coverage entry instead; with it off, DD-031's
+cost-based eviction is unchanged. Coverage-find entries are never evicted either way.
+
+**`pheromone=on` forces cost measurement on.** Reinforcement needs a measured cost, so `pheromone=on`
+overrides `-Dbasquin.cost.enabled=false` and logs that it did (`[Basquin] pheromone=on forces cost
+measurement on`) — no silent half-configured run that would poison an A/B comparison.
+
+**Two A/B-readout caveats — record verbatim so results aren't misread:**
+
+- **The uniform ("off") arm is not a pure-uniform strawman.** The loop already spends ~30% of
+  iterations on fresh/random expansion before ε-selection even applies, so roulette's real share of
+  iterations is ≈ `0.7 × (1 − ε)` — with a typical ε, ≈49% of iterations, not 100%. The "off" arm is
+  the *same* loop structure minus the roulette branch, not a differently-shaped baseline. Attribute
+  any effect size to that ~49%, not to the whole run.
+- **Winner-take-all inside the roulette is intended, not a bug.** A parent that is consistently
+  selected and consistently spawns expensive children has its pheromone converge toward
+  `deposit-per-cycle / (1 − decay)` — with the defaults above, tens of EMA multiples — bounded only by
+  ε's uniform share. Seeing one parent dominate a readout's cost-ranked top is the design working as
+  intended, not evidence of a stuck loop.
+
+**Performance stance — no new data structure.** Pheromone selection runs inside the driver's
+exploration loop, which is serialized and HTTP-round-trip-bound (one request at a time, milliseconds
+each); in-memory work over ≤`corpus.max` (1000) entries is microseconds against that. So the loop keeps
+a **running total pheromone weight, maintained incrementally** (O(1) on add/reinforce/evict) so
+`selectParent` never re-sums the corpus, and locates the drawn entry with a single **O(n) cumulative
+scan** — no per-draw recomputation, no per-iteration allocation. Evaporation is O(n) but only every
+`evaporateEvery` (50) iterations, scaling the running total in the same pass. A Fenwick/BIT-backed
+selection (O(log n) draw + point update) with lazy-scale evaporation (represent deposits relative to a
+growing global scale so evaporation is O(1), periodically renormalized) is **documented as the upgrade
+path, not built** — profiling the serialized, request-bound loop would not justify it today. The
+target-side `RequestBoundary` (the genuinely latency-critical, per-request path) is untouched by any
+of this.
+
+**Scope — bench-first; operator/CRD deferred.** v1 is driver-only, `-Dbasquin.pheromone=on` measured
+in the docker-compose bench path (protocol: [`docs/BENCH-AB.md`](BENCH-AB.md)). No CRD field, no
+operator change — a CRD field is a compat commitment that's awkward to walk back if the A/B says "kill
+it," and the driver-flag passthrough costs the same to add later, after the numbers earn it. Multi-hop
+lineage propagation (crediting grandparents with per-hop decay) is likewise deferred — immediate-parent
+credit is the correct v1; a genuine ant-trail needs parent links that don't exist yet.
+
+**Verified.** Bench-validated only (`docs/BENCH-AB.md`), not CI-validated: the in-cluster e2e only
+smoke-tests the default-off path (plumbing, not the pheromone-vs-uniform question), and unit tests
+cover `selectParent` (ε=0 dominated by the high-pheromone entry, ε=1 uniform, cold-start/zero-total
+uniform), `reinforce` (capped deposit, harmless no-op on an evicted parent), `evaporate` (decay applied,
+running total stays consistent, sticky-spike recovers within the computed cycle count), pheromone-aware
+eviction, and the kill-switch (`pheromone=off` ≡ DD-031/today byte-for-byte).
+
+**Rejected.** Multi-hop lineage propagation now (needs parent links exploration doesn't track yet —
+immediate-parent first); operator/CRD enablement now (a CRD field is a much bigger commitment than a
+driver flag, and premature before the A/B has a verdict); a constant initial pheromone (meaningless
+across apps whose typical costs differ by orders of magnitude); a Fenwick/lazy-scale structure now
+(unjustified for a serialized, HTTP-bound loop).
+
+See [`docs/superpowers/specs/2026-07-21-pheromone-selection-design.md`](docs/superpowers/specs/2026-07-21-pheromone-selection-design.md)
+and the bench protocol, [`docs/BENCH-AB.md`](BENCH-AB.md).

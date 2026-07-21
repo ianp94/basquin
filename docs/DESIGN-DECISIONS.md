@@ -923,4 +923,4 @@ app's heap/thread **drift** is sampled process-globally (absolute Runtime reads)
 thread on a pollable endpoint the driver reads. The driver toggles the target into load mode over
 the existing HTTP channel (target-wide for the campaign; the lock is all-or-nothing), not by an
 operator JVM-flag restart. Explore mode is untouched. Foundational for cost-guided (pheromone) load
-and clustered runners. Extends DD-026 (load mode); grounded in DD-005/DD-010 (why the lock exists).
+and clustered runners. Extends DD-026 (load mode); grounded in DD-005/DD-010 (why the lock exists). **Implemented 2026-07-21:** control+drift served as valve-intercepted /__basquin/* requests on the app port (resolving the open port question — no separate agent HTTP server, no operator change).

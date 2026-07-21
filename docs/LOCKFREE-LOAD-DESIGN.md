@@ -1,6 +1,6 @@
 # DD-029 — Lock-free load-mode instrumentation profile
 
-**Status:** accepted (2026-07-21), pending implementation. Extends [LOAD-MODE-DESIGN.md](LOAD-MODE-DESIGN.md)
+**Status:** implemented (2026-07-21) — agent LoadMode + valve two-state + LoadRun toggle/drift/5xx + e2e. Extends [LOAD-MODE-DESIGN.md](LOAD-MODE-DESIGN.md)
 (DD-026) and the concurrency decision in [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) DD-005/DD-010.
 
 ## Context — load mode can't actually load
@@ -87,6 +87,19 @@ Lock-free load is the concurrency substrate the rest of the distributed roadmap 
   combination that makes both features far more than the sum.
 - **Clustered runners** (roadmap): N concurrent drivers need a target that doesn't serialize — this
   removes the bottleneck they'd otherwise all queue behind.
+
+## Where it activates (important scoping — corrected during implementation)
+
+DD-029 operates on the **valve**. It is live wherever the valve is mounted — the docker-compose /
+manual path (where the benchmark ran and the 256ms serialization was measured, and where this was
+validated end-to-end). **The Kubernetes operator does not yet mount the valve** — it injects only the
+`-javaagent` agent; valve mounting via a Tomcat `context.xml` entry is a separate deferred backlog
+item (`injection.go`). So an operator-injected target has no valve to serialize (its load runs are
+already concurrent) and no `/__basquin` control surface; `LoadRun`'s toggle/drift calls there simply
+404 and no-op (drift reports 0, 5xx counting still works). **DD-029's operator-path benefit is
+therefore gated on the deferred "mount the valve via the operator" item** — that is the natural next
+step to make lock-free load truly operator-integrated. The feature itself is complete and correct
+for the valve path today.
 
 ## Non-goals / deferred
 

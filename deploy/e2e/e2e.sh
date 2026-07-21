@@ -420,6 +420,11 @@ YAML
     if [ "$lphase" != "Completed" ]; then
       echo "  (load phase=$lphase; driver logs:)"; $K -n "$NS" logs "job/$ljob" --tail=30 2>/dev/null | sed 's/^/    /' || true
     fi
+    # NOTE: DD-029's lock-free valve (the /__basquin control surface) is NOT asserted here — the
+    # operator injects only the -javaagent agent, NOT the Tomcat valve (valve mounting via the operator
+    # is a deferred backlog item, injection.go). So this operator target has no valve to serialize and
+    # no /__basquin endpoint; the load run is already concurrent. DD-029 is validated where the valve IS
+    # mounted (the docker-compose bench path); it activates in the operator path once valve mounting lands.
     check "load campaign reached Completed"                    "[ '$lphase' = 'Completed' ]"
     check "load run reported requests > 0"                     "[ '${lreq:-0}' -ge 1 ]"
     check "load run reported throughput + p99 latency"         "[ -n '$lrps' ] && [ -n '$lp99' ]"

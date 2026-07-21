@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.svg" width="88" alt="Basquin logo"></p>
+
 # Basquin
 
 **Kubernetes-native fuzz and load testing for JVM web apps — where the bug oracle is availability,

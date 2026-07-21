@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Basquin">
+  <title>Basquin</title>
+  <!-- Basquin's law plotted: the S-N curve, stress amplitude falling away with cycles-to-failure. -->
+  <rect x="1" y="1" width="30" height="30" rx="8" fill="#5b3df5"/>
+  <path d="M8.5 7.5V24H25" stroke="#c4b3ff" stroke-width="1.6" stroke-linecap="round" fill="none" opacity="0.75"/>
+  <path d="M10 10.5C14.5 10.5 15 20 24.5 21" stroke="#fff" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+</svg>

@@ -24,7 +24,4 @@ public final class CorpusEntry {
         this.invariantCount = invariantCount;
         this.coverageFind = coverageFind;
     }
-
-    /** Read-only accessor for the pheromone weight (writes stay inside CostCorpus). */
-    public double pheromone() { return pheromone; }
 }

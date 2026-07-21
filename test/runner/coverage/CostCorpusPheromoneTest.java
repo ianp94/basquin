@@ -1,7 +1,5 @@
-package test;
+package runner.coverage;
 
-import runner.coverage.CorpusEntry;
-import runner.coverage.CostCorpus;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
@@ -47,7 +45,7 @@ public class CostCorpusPheromoneTest {
     @Test public void pheromoneOffIsUniform() {
         CostCorpus c = new CostCorpus(Arrays.asList("/a", "/b"), true, false); // pheromone OFF
         c.reinforce(find(c, "/a"), 1000.0);          // no-op when off
-        Assert.assertEquals(0.0, find(c, "/a").pheromone(), 0.0);
+        Assert.assertEquals(0.0, find(c, "/a").pheromone, 0.0);
         Random rnd = new Random(3);
         int a = 0;
         for (int i = 0; i < 400; i++) if (c.selectParent(rnd).input.equals("/a")) a++;
@@ -71,7 +69,7 @@ public class CostCorpusPheromoneTest {
         for (int i = 0; i < 6; i++) c.consider("/t" + i, 10, 1, 0, 0, 0, false); // train emaCost -> ~10
         CorpusEntry s = find(c, "/s");                                            // seed, pheromone 0
         c.reinforce(s, 1000.0);                       // cap = 2.0 * ema(~10) = ~20, NOT 1000
-        Assert.assertTrue("deposit clamped to ~depositCap*EMA: " + s.pheromone(), s.pheromone() > 15 && s.pheromone() < 25);
+        Assert.assertTrue("deposit clamped to ~depositCap*EMA: " + s.pheromone, s.pheromone > 15 && s.pheromone < 25);
     }
 
     @Test public void evaporateDecaysPheromone() {
@@ -81,7 +79,7 @@ public class CostCorpusPheromoneTest {
         CorpusEntry a = find(c, "/a");
         c.reinforce(a, 100.0);                        // pheromone 100
         c.evaporate();
-        Assert.assertEquals(70.0, a.pheromone(), 0.001);
+        Assert.assertEquals(70.0, a.pheromone, 0.001);
     }
 
     @Test public void evictionUsesPheromoneNotCostWhenOn() {

@@ -77,6 +77,8 @@ public final class CostCorpus {
      */
     public synchronized void reinforce(CorpusEntry parent, double childCost) {
         if (!pheromone || parent == null) return;
+        // Cold start (emaCost==0, before the first non-coverage consider): cap falls back to childCost,
+        // i.e. effectively uncapped for that brief window until the EMA warms — intentional, not a bug.
         double cap = depositCap * (emaCost > 0 ? emaCost : childCost);
         double deposit = Math.min(childCost, cap);
         parent.pheromone += deposit;

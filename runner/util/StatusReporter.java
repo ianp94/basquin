@@ -18,6 +18,15 @@ public final class StatusReporter {
 
     private static final boolean ENABLED = Boolean.getBoolean("basquin.status");
     private static final long INTERVAL_MS = Long.getLong("basquin.status.intervalMs", 1000L);
+
+    // Opt-in CSV time-series sampler for headless benchmark capture: when -Dbasquin.sample.out is
+    // set, write one row of the live counters every SAMPLE_INTERVAL_MS. Runs independently of the
+    // TTY box (basquin.status) — but its presence flips TRACKING on so the counters actually advance.
+    private static final String SAMPLE_OUT = System.getProperty("basquin.sample.out", "");
+    private static final long SAMPLE_INTERVAL_MS = Long.getLong("basquin.sample.intervalMs", 5000L);
+    private static final AtomicBoolean SAMPLER_STARTED = new AtomicBoolean(false);
+    // Counters advance when EITHER the box or the sampler is active.
+    private static final boolean TRACKING = ENABLED || !SAMPLE_OUT.isEmpty();
     // Redraw in place when attached to a terminal; forceTty renders the box even when piped
     // (useful for capturing the rich view to a log).
     private static final boolean TTY =
@@ -60,27 +69,38 @@ public final class StatusReporter {
 
     private StatusReporter() {}
 
+    /**
+     * True when the reporter is tracking — the TTY box (basquin.status) OR the CSV sampler
+     * (basquin.sample.out) is active. Callers gate their record* calls on this, so returning true
+     * for the sampler-only case is what makes the counters (and thus the CSV) populate.
+     */
     public static boolean isEnabled() {
-        return ENABLED;
+        return TRACKING;
     }
 
-    /** Start the render thread once, before the first iteration baseline (runners call this). */
+    /** Start the render thread and/or CSV sampler once, before the first iteration baseline. */
     public static void ensureStarted() {
-        if (!ENABLED || !STARTED.compareAndSet(false, true)) {
-            return;
+        if (ENABLED && STARTED.compareAndSet(false, true)) {
+            Thread t = new Thread(StatusReporter::renderLoop, "Basquin-Status");
+            t.setDaemon(true);
+            t.start();
+            // Guarantee a final frame on exit for any run type (JQF, corpus, generic), not just the
+            // runners that call renderFinal() explicitly.
+            Runtime.getRuntime().addShutdownHook(new Thread(StatusReporter::renderFinal, "Basquin-Status-Final"));
         }
-        Thread t = new Thread(StatusReporter::renderLoop, "Basquin-Status");
-        t.setDaemon(true);
-        t.start();
-        // Guarantee a final frame on exit for any run type (JQF, corpus, generic), not just the
-        // runners that call renderFinal() explicitly.
-        Runtime.getRuntime().addShutdownHook(new Thread(StatusReporter::renderFinal, "Basquin-Status-Final"));
+        if (!SAMPLE_OUT.isEmpty() && SAMPLER_STARTED.compareAndSet(false, true)) {
+            Thread s = new Thread(StatusReporter::sampleLoop, "Basquin-Sampler");
+            s.setDaemon(true);
+            s.start();
+            // A final row on exit so the last interval (up to SAMPLE_INTERVAL_MS of the run) isn't lost.
+            Runtime.getRuntime().addShutdownHook(new Thread(StatusReporter::sampleFinal, "Basquin-Sampler-Final"));
+        }
     }
 
     /** Record one completed iteration's metrics and any violations/leak it carried. */
     public static synchronized void recordIteration(long latencyMs, long heapDeltaKb, int threads,
                                                     boolean leak, java.util.List<String> violations) {
-        if (!ENABLED) return;
+        if (!TRACKING) return;
         iterations++;
         lastLatencyMs = latencyMs;
         if (latencyMs > maxLatencyMs) maxLatencyMs = latencyMs;
@@ -98,17 +118,17 @@ public final class StatusReporter {
         }
     }
 
-    public static synchronized void recordCrash() { if (ENABLED) crashes++; }
-    public static synchronized void recordReset() { if (ENABLED) resets++; }
+    public static synchronized void recordCrash() { if (TRACKING) crashes++; }
+    public static synchronized void recordReset() { if (TRACKING) resets++; }
     /** An expected input rejection (a target's declared "bad input" exception), not a crash. */
-    public static synchronized void recordRejected() { if (ENABLED) rejected++; }
+    public static synchronized void recordRejected() { if (TRACKING) rejected++; }
 
     /**
      * Record a saved exploration finding (from the triage layer). {@code classification} is the
      * triage label, e.g. "Crash", "Invariant", "Invariant-Remote". Drives the exploration panel.
      */
     public static synchronized void recordSaved(String classification) {
-        if (!ENABLED) return;
+        if (!TRACKING) return;
         corpusSaved++;
         if (classification != null && classification.startsWith("Crash")) {
             findCrash++;
@@ -131,7 +151,7 @@ public final class StatusReporter {
 
     /** As above, plus how many coverage sources answered vs were expected (fleet under-reporting). */
     public static synchronized void recordCoverage(long covered, long total, int sourcesResponded, int sourcesExpected) {
-        if (!ENABLED) return;
+        if (!TRACKING) return;
         coveredEdges = covered;
         totalEdges = total;
         coverageSourcesResponded = sourcesResponded;
@@ -140,8 +160,72 @@ public final class StatusReporter {
 
     /** Render one final status frame — call when the run ends so the final tally always shows. */
     public static void renderFinal() {
-        if (ENABLED) {
+        if (ENABLED) { // the box only; a sampler-only run draws nothing to the terminal
             render();
+        }
+    }
+
+    // --- CSV time-series sampler (-Dbasquin.sample.out) ---
+
+    /** CSV header for the sampler; column order matches {@link #sampleLine(long)}. */
+    public static String sampleHeader() {
+        return "elapsedMs,iterations,itersPerSec,lastLatencyMs,meanLatencyMs,maxLatencyMs,"
+             + "lastHeapKb,maxHeapKb,threads,crashes,leaks,violLatency,violHeap,violThread,"
+             + "coveredEdges,totalEdges,coveragePct";
+    }
+
+    /** One CSV row of the live counters at {@code elapsedMs}. Locale-independent decimals (CSV-safe). */
+    public static synchronized String sampleLine(long elapsedMs) {
+        double secs = elapsedMs / 1000.0;
+        double ips = secs > 0 ? iterations / secs : 0.0;
+        long mean = iterations > 0 ? sumLatencyMs / iterations : 0L;
+        double covPct = totalEdges > 0 ? (coveredEdges * 100.0) / totalEdges : 0.0;
+        return elapsedMs + "," + iterations + "," + fmt2(ips) + ","
+             + lastLatencyMs + "," + mean + "," + maxLatencyMs + ","
+             + lastHeapKb + "," + maxHeapKb + "," + lastThreads + ","
+             + crashes + "," + leaks + "," + violLatency + "," + violHeap + "," + violThread + ","
+             + coveredEdges + "," + totalEdges + "," + fmt2(covPct);
+    }
+
+    // Root-locale so a decimal never renders as "3,14" and corrupts the CSV.
+    private static String fmt2(double v) {
+        return String.format(java.util.Locale.ROOT, "%.2f", v);
+    }
+
+    private static void sampleLoop() {
+        // Header once (truncate/create); a failure here disables sampling loudly but doesn't kill the run.
+        try (java.io.BufferedWriter w = java.nio.file.Files.newBufferedWriter(java.nio.file.Paths.get(SAMPLE_OUT))) {
+            w.write(sampleHeader());
+            w.write("\n");
+        } catch (java.io.IOException e) {
+            System.err.println("[Basquin] sampler: cannot write " + SAMPLE_OUT + ": " + e.getMessage());
+            return;
+        }
+        try {
+            while (true) {
+                Thread.sleep(SAMPLE_INTERVAL_MS);
+                appendSample();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static void appendSample() {
+        long elapsedMs = (System.nanoTime() - START_NANOS) / 1_000_000L;
+        try (java.io.BufferedWriter w = java.nio.file.Files.newBufferedWriter(java.nio.file.Paths.get(SAMPLE_OUT),
+                java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)) {
+            w.write(sampleLine(elapsedMs));
+            w.write("\n");
+        } catch (java.io.IOException ignored) {
+            // A transient append failure just drops one row; the next interval retries.
+        }
+    }
+
+    /** Shutdown-hook final row so the last partial interval of a run is captured. */
+    private static void sampleFinal() {
+        if (!SAMPLE_OUT.isEmpty()) {
+            appendSample();
         }
     }
 

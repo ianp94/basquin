@@ -135,7 +135,8 @@ public final class CoverageGuidedRun {
         JacocoCoverageProvider cov = new JacocoCoverageProvider(
                 JacocoCoverageProvider.parseEndpoints(jacoco), Paths.get(classes));
 
-        Random rnd = new Random(1);
+        long seed = Long.getLong("basquin.seed", 1L);
+        Random rnd = new Random(seed);
 
         // Input source, in order of preference:
         //  1. a request grammar (routes + parameter value space, both as data, with generators)
@@ -147,8 +148,13 @@ public final class CoverageGuidedRun {
         // relying on random discovery to stumble onto them. Cost-driven retention/eviction/ranking
         // (DD-031) is gated behind basquin.cost.enabled; disabled restores today's grow-only,
         // coverage-only, insertion-ordered behavior exactly.
-        boolean costEnabled = !"false".equals(System.getProperty("basquin.cost.enabled", "true"));
-        CostCorpus corpus = new CostCorpus(seeds, costEnabled);
+        boolean pheromoneOn = "on".equals(System.getProperty("basquin.pheromone", "off"));
+        boolean costEnabled = resolveCostEnabled(pheromoneOn,
+                !"false".equals(System.getProperty("basquin.cost.enabled", "true")));
+        // Decay cadence for pheromone (DD-032): fixed, independent of which loop branch ran this
+        // iteration (sequence/fresh branches `continue` before reaching the bottom of the loop).
+        int evaporateEvery = Math.max(1, Integer.getInteger("basquin.pheromone.evaporateEvery", 50));
+        CostCorpus corpus = new CostCorpus(seeds, costEnabled, pheromoneOn);
         // Publish the live corpus so the end-of-run summary can emit a capped "replay corpus" the
         // operator persists (DD-026 PR 1). Same object, populated as the run finds new coverage.
         lastCorpus = corpus;
@@ -167,6 +173,7 @@ public final class CoverageGuidedRun {
         int sequencePercent = Integer.getInteger("basquin.sequencePercent", 25);
 
         for (int i = 0; i < iterations; i++) {
+            if (pheromoneOn && i > 0 && i % evaporateEvery == 0) corpus.evaporate(); // fixed cadence, pre-continue
             if (deadlineNanos != 0L && System.nanoTime() >= deadlineNanos) break;  // clean time-box exit
             if (sessionsEnabled && i % epochLength == 0) {
                 boolean authenticated = (i / epochLength) % 2 == 0;
@@ -195,6 +202,10 @@ public final class CoverageGuidedRun {
                 continue;
             }
 
+            // Selected parent entry, tracked (not just its input string) so a fired child can credit
+            // it via reinforce() below (DD-032). Only set on the mutate branches; null otherwise —
+            // the seed and fresh-expansion branches don't mutate an existing entry.
+            CorpusEntry parent = null;
             String input;
             if (i < seeds.size()) {
                 // Deterministic first pass: hit every seed once so no endpoint is left to chance.
@@ -202,13 +213,20 @@ public final class CoverageGuidedRun {
             } else if (grammar != null) {
                 // Grammar-driven: 30% a fresh expansion of any route template, otherwise re-expand
                 // the template behind a corpus entry that previously found new coverage.
-                input = rnd.nextInt(100) < 30
-                        ? grammar.randomRequest()
-                        : grammar.mutate(corpus.randomParentInput(rnd));
+                if (rnd.nextInt(100) < 30) {
+                    input = grammar.randomRequest();
+                } else {
+                    parent = corpus.selectParent(rnd);
+                    input = grammar.mutate(parent != null ? parent.input : "/");
+                }
             } else {
                 boolean fresh = rnd.nextInt(100) < 30;
-                input = fresh ? seeds.get(rnd.nextInt(seeds.size()))
-                              : mutate(corpus.randomParentInput(rnd), rnd);
+                if (fresh) {
+                    input = seeds.get(rnd.nextInt(seeds.size()));
+                } else {
+                    parent = corpus.selectParent(rnd);
+                    input = mutate(parent != null ? parent.input : "/", rnd);
+                }
             }
 
             Agent.beginIteration();
@@ -238,13 +256,17 @@ public final class CoverageGuidedRun {
             if (coverageFind) StatusReporter.recordSaved("Coverage");
             // Offer the input to the pool: coverage finds always retained; when cost was measured,
             // the pool also retains notably-expensive inputs (cold-start + EMA gated) and evicts.
+            // Credit assignment (DD-032): a fired child's cost reinforces the parent it came from.
+            // BEFORE consider (the only evictor) so the parent is still live and the running total exact.
+            if (pheromoneOn && parent != null && measured) corpus.reinforce(parent, cost);
             if (coverageFind || measured) {
                 corpus.consider(input, cost, latMs, sample.heapDeltaKb, sample.threadDelta,
                         sample.invariantCount, coverageFind);
             }
         }
         StatusReporter.renderFinal();
-        System.out.printf("CoverageGuidedRun done: corpus=%d coverage=%d/%d%n", corpus.size(), best, total);
+        System.out.printf("CoverageGuidedRun done: corpus=%d coverage=%d/%d pheromone=%s seed=%d%n",
+                corpus.size(), best, total, pheromoneOn ? "on" : "off", seed);
         if (costEnabled) {
             StringBuilder top = new StringBuilder();
             int n = 0;
@@ -254,6 +276,20 @@ public final class CoverageGuidedRun {
             }
             System.out.println("[Basquin] replay cost-ranked (top " + Math.min(5, corpus.size()) + "): " + top);
         }
+    }
+
+    /**
+     * Whether cost measurement should be on: the raw {@code basquin.cost.enabled} property, forced
+     * true when pheromone selection is on (DD-032) — reinforcement needs a measured cost, so
+     * pheromone=on with cost measurement off would silently reinforce with nothing. Package-private
+     * for testing (this is the whole decision, extracted so it's checkable without booting the run).
+     */
+    static boolean resolveCostEnabled(boolean pheromoneOn, boolean rawCostEnabled) {
+        if (pheromoneOn && !rawCostEnabled) {
+            System.out.println("[Basquin] pheromone=on forces cost measurement on");
+            return true;   // reinforcement needs a measured cost — no silent partial state
+        }
+        return rawCostEnabled;
     }
 
     /**

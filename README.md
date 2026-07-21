@@ -235,6 +235,7 @@ Details and the "why" behind each choice: [ARCHITECTURE](docs/ARCHITECTURE.md) �
   [LOAD-MODE-DESIGN](docs/LOAD-MODE-DESIGN.md) (DD-026) — operator, campaign, and load/soak design
 - [ARCHITECTURE](docs/ARCHITECTURE.md) — how and why
 - [DESIGN-DECISIONS](docs/DESIGN-DECISIONS.md) — decision log with rejected alternatives
+- [BENCH-AB](docs/BENCH-AB.md) — pheromone selection (DD-032) bench "prove or kill" protocol
 - [THIRD-PARTY-APPS](docs/THIRD-PARTY-APPS.md) — running against unmodified WARs (JPetStore)
 - [deploy/k8s](deploy/k8s/README.md) — the pre-operator kind demo
 - [TODO](TODO.md) — roadmap and milestones

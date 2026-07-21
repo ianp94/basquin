@@ -44,14 +44,21 @@ public final class RequestBoundary {
 
     /** Before the wrapped invoke. Never throws. Stashes the phase in a thread-local for {@link #onExit}. */
     public static Decision onEnter(String uri, String query) {
-        // Control surface: /__basquin/* handled here, never reaches the app.
-        String control = LoadModeControl.handle(uri, query);
-        if (control != null) {
-            PHASE.set(Phase.CONTROL_HANDLED);
-            return new Decision(Phase.CONTROL_HANDLED, control);
-        }
-        // Load mode (DD-029): passthrough — no lock, no begin, run concurrently.
-        if (LoadMode.isLoad(System.currentTimeMillis())) {
+        try {
+            // Control surface: /__basquin/* handled here, never reaches the app.
+            String control = LoadModeControl.handle(uri, query);
+            if (control != null) {
+                PHASE.set(Phase.CONTROL_HANDLED);
+                return new Decision(Phase.CONTROL_HANDLED, control);
+            }
+            // Load mode (DD-029): passthrough — no lock, no begin, run concurrently.
+            if (LoadMode.isLoad(System.currentTimeMillis())) {
+                PHASE.set(Phase.LOAD_PASSTHROUGH);
+                return new Decision(Phase.LOAD_PASSTHROUGH, null);
+            }
+        } catch (Throwable t) {
+            // Never throw out of onEnter: an unexpected failure here degrades this one request to
+            // passthrough rather than failing the app request (no lock is held at this point).
             PHASE.set(Phase.LOAD_PASSTHROUGH);
             return new Decision(Phase.LOAD_PASSTHROUGH, null);
         }

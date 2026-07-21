@@ -420,19 +420,16 @@ YAML
     if [ "$lphase" != "Completed" ]; then
       echo "  (load phase=$lphase; driver logs:)"; $K -n "$NS" logs "job/$ljob" --tail=30 2>/dev/null | sed 's/^/    /' || true
     fi
-    # DD-029: the lock-free load-mode valve serves the /__basquin/drift control snapshot on the app's
-    # own port (proof the two-state valve is deployed + intercepting; the load run reverted to explore
-    # on exit, but control requests are handled in either mode). A 3-field CSV = heapKb,threads,epochMs.
-    ldrift=""
-    if [ -n "$apod" ]; then
-      ldrift="$($K -n "$NS" exec "$apod" -c jpetstore -- sh -c "curl -s http://localhost:8080/__basquin/drift" 2>/dev/null || true)"
-    fi
+    # NOTE: DD-029's lock-free valve (the /__basquin control surface) is NOT asserted here — the
+    # operator injects only the -javaagent agent, NOT the Tomcat valve (valve mounting via the operator
+    # is a deferred backlog item, injection.go). So this operator target has no valve to serialize and
+    # no /__basquin endpoint; the load run is already concurrent. DD-029 is validated where the valve IS
+    # mounted (the docker-compose bench path); it activates in the operator path once valve mounting lands.
     check "load campaign reached Completed"                    "[ '$lphase' = 'Completed' ]"
     check "load run reported requests > 0"                     "[ '${lreq:-0}' -ge 1 ]"
     check "load run reported throughput + p99 latency"         "[ -n '$lrps' ] && [ -n '$lp99' ]"
     check "load driver Job has NO coverage initContainers"     "echo ':$linit:' | grep -qv extract-classes"
-    check "DD-029: valve serves /__basquin/drift (3-field CSV)" "echo '$ldrift' | grep -qE '^[0-9]+,[0-9]+,[0-9]+$'"
-    echo "  (load: requests=${lreq:-<none>}, throughputRps=${lrps:-<none>}, p99=${lp99:-<none>}ms, drift=${ldrift:-<none>})"
+    echo "  (load: requests=${lreq:-<none>}, throughputRps=${lrps:-<none>}, p99=${lp99:-<none>}ms)"
     $K -n "$NS" delete basquincampaign jpetstore-load --ignore-not-found --timeout=60s >/dev/null 2>&1 || true
   fi
 

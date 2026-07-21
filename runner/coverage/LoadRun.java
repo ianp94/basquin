@@ -286,7 +286,7 @@ public final class LoadRun {
     }
 
     /** A single load snapshot (DD-033) — the same fields live and terminal, so they converge. */
-    public static final class LoadSnapshot {
+    static final class LoadSnapshot {
         public final double throughputRps; public final int p50, p90, p99, max;
         public final long heapDriftKb; public final int threadDrift; public final long serverErrors, requests;
         LoadSnapshot(double t, int p50, int p90, int p99, int max, long h, int td, long se, long req) {
@@ -297,9 +297,8 @@ public final class LoadRun {
 
     /** Compute a snapshot from the LIVE histogram + counters + a drift delta. Torn reads are acceptable
      *  (approximate live percentiles); the terminal call uses the same code so live converges to terminal.
-     *  Public so {@code test.LoadSnapshotTest} (package {@code test}, per DD-033) can reach it without a
-     *  server. */
-    public static LoadSnapshot computeLoadSnapshot(AtomicLongArray hist, long total, long serverErrors,
+     *  Package-private for testing (no server needed). */
+    static LoadSnapshot computeLoadSnapshot(AtomicLongArray hist, long total, long serverErrors,
             double windowSec, long heapDriftKb, int threadDrift) {
         double rps = total / Math.max(0.001, windowSec);
         return new LoadSnapshot(rps,

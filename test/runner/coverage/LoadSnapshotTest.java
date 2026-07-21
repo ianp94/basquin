@@ -1,6 +1,5 @@
-package test;
+package runner.coverage;
 
-import runner.coverage.LoadRun;
 import org.junit.Assert;
 import org.junit.Test;
 import java.util.concurrent.atomic.AtomicLongArray;

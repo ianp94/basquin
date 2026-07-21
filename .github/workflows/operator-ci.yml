@@ -41,6 +41,9 @@ jobs:
         with:
           path: operator/bin
           key: envtest-${{ runner.os }}-${{ hashFiles('operator/Makefile') }}
+          # Partial restore on a Makefile edit that didn't change tool versions (#51 review); the
+          # Makefile's versioned tool paths mean a stale binary can't be silently reused anyway.
+          restore-keys: envtest-${{ runner.os }}-
       - name: Build
         run: go build ./...
       - name: make test (manifests + generate + fmt + vet + envtest suite)

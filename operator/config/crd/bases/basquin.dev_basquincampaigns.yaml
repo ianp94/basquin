@@ -33,8 +33,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: BasquinCampaign is the Schema for the basquincampaigns
-          API
+        description: BasquinCampaign is the Schema for the basquincampaigns API
         properties:
           apiVersion:
             description: |-

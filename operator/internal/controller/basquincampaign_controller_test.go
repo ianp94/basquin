@@ -556,8 +556,8 @@ var _ = Describe("BasquinCampaign Controller (P5a)", func() {
 		Expect(err).NotTo(HaveOccurred())
 		got := &basquinv1alpha1.BasquinCampaign{}
 		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
-		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.CampaignRunning)) // not Provisioning
-		Expect(getJob(jobKey).Annotations[specHashAnnotation]).To(Equal(h1))   // same Job, same hash
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.CampaignRunning))  // not Provisioning
+		Expect(getJob(jobKey).Annotations[specHashAnnotation]).To(Equal(h1)) // same Job, same hash
 	})
 
 	// --- P5b: per-campaign dashboard ------------------------------------------------------------
@@ -591,6 +591,42 @@ var _ = Describe("BasquinCampaign Controller (P5a)", func() {
 		got := &basquinv1alpha1.BasquinCampaign{}
 		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
 		Expect(got.Status.DashboardURL).To(Equal("http://" + wantPush))
+
+		// Write-path auth (#43): the token Secret exists, is owner-ref'd to the campaign (GC'd with
+		// it), and BOTH pods source BASQUIN_DASHBOARD_TOKEN from it via SecretKeyRef, referenced
+		// through $(VAR) expansion inside JAVA_TOOL_OPTIONS.
+		secKey := types.NamespacedName{Name: campaignName + "-dashboard-token", Namespace: namespace}
+		sec := &corev1.Secret{}
+		Expect(k8sClient.Get(ctx, secKey, sec)).To(Succeed())
+		Expect(sec.OwnerReferences).To(ContainElement(HaveField("Name", campaignName)))
+		tok := string(sec.Data[dashboardTokenKey])
+		Expect(tok).To(HaveLen(64)) // 256 bits, hex-encoded
+
+		expectTokenEnv := func(env []corev1.EnvVar) {
+			GinkgoHelper()
+			for _, e := range env {
+				if e.Name == dashboardTokenEnvVar {
+					Expect(e.ValueFrom).NotTo(BeNil())
+					Expect(e.ValueFrom.SecretKeyRef).NotTo(BeNil())
+					Expect(e.ValueFrom.SecretKeyRef.Name).To(Equal(secKey.Name))
+					Expect(e.ValueFrom.SecretKeyRef.Key).To(Equal(dashboardTokenKey))
+					return
+				}
+			}
+			Fail(dashboardTokenEnvVar + " env var not found")
+		}
+		expectTokenEnv(dep.Spec.Template.Spec.Containers[0].Env)
+		Expect(envValue(dep.Spec.Template.Spec.Containers[0].Env, "JAVA_TOOL_OPTIONS")).
+			To(ContainSubstring("-Dbasquin.dashboard.token=$(" + dashboardTokenEnvVar + ")"))
+		expectTokenEnv(getJob(jobKey).Spec.Template.Spec.Containers[0].Env)
+		Expect(jto).To(ContainSubstring("-Dbasquin.dashboard.token=$(" + dashboardTokenEnvVar + ")"))
+
+		// A second reconcile must REUSE the Secret (get-or-create), never re-mint: rotation
+		// mid-campaign would leave a running dashboard and a running driver disagreeing.
+		_, err = reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient.Get(ctx, secKey, sec)).To(Succeed())
+		Expect(string(sec.Data[dashboardTokenKey])).To(Equal(tok))
 	})
 
 	It("uses externalPush and creates no dashboard of its own", func() {
@@ -607,6 +643,12 @@ var _ = Describe("BasquinCampaign Controller (P5a)", func() {
 		Expect(k8sClient.Get(ctx, dashKey(), &corev1.Service{})).NotTo(Succeed())
 		jto := envValue(getJob(jobKey).Spec.Template.Spec.Containers[0].Env, "JAVA_TOOL_OPTIONS")
 		Expect(jto).To(ContainSubstring("-Dbasquin.dashboard.push=fleet-dashboard.other.svc:7070"))
+
+		// Not our dashboard → no token Secret is minted and no token flag is sent (#43).
+		Expect(k8sClient.Get(ctx,
+			types.NamespacedName{Name: campaignName + "-dashboard-token", Namespace: namespace},
+			&corev1.Secret{})).NotTo(Succeed())
+		Expect(jto).NotTo(ContainSubstring("-Dbasquin.dashboard.token"))
 
 		got := &basquinv1alpha1.BasquinCampaign{}
 		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())

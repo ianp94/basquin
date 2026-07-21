@@ -390,10 +390,24 @@ grammar's `@`-value-file references — e.g. `@../corpus/jpetstore/values/itemId
 
 ## 6. Dashboard
 
+> **Security model — read this before a shared cluster.** The operator mints a random 256-bit token
+> per campaign into a `<campaign>-dashboard-token` Secret, mounts it into both the dashboard and its
+> driver, and the driver authenticates every push with it. So **writes are authenticated**: another
+> pod cannot POST spoofed status or findings into your campaign.
+>
+> **Reads are not.** `/api/campaign/…` and the HTML UI are deliberately unguarded, because a browser
+> reaching the dashboard through a port-forward cannot send a custom auth header. Any pod with
+> network reach to the ClusterIP can therefore *read* a campaign's findings. That is acceptable for a
+> single-tenant namespace (which is what the namespaced-by-design operator assumes) and is **not**
+> sufficient isolation on a shared multi-tenant cluster. Until read auth lands, restrict reach with a
+> `NetworkPolicy` — and note that some CNIs (including `kind`'s default) silently do not enforce
+> NetworkPolicy at all, so verify yours does before relying on it.
+
+
 By default every campaign gets its **own** dashboard — the operator creates a Deployment + Service
 (`<campaign>-dashboard`, ClusterIP on port **7070**), owner-referenced to the campaign so it's
-garbage-collected when the campaign is deleted. The URL is published to `status.dashboardURL`. It's a
-ClusterIP with **no auth**, so reach it with a port-forward:
+garbage-collected when the campaign is deleted. The URL is published to `status.dashboardURL`. Reach
+it with a port-forward:
 
 ```bash
 kubectl -n basquin-system get basquincampaign jpetstore-campaign -o jsonpath='{.status.dashboardURL}'

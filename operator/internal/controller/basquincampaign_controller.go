@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -64,6 +65,10 @@ type BasquinCampaignReconciler struct {
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update
+// The per-campaign dashboard token Secret. No delete verb: the Secret is owner-referenced to the
+// campaign, so Kubernetes GCs it when the campaign goes away. No update: the token is minted once
+// and never rotated mid-campaign.
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create
 
 func (r *BasquinCampaignReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
@@ -128,7 +133,7 @@ func (r *BasquinCampaignReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	// Resolve where the driver pushes status/findings: a per-campaign dashboard the operator brings
 	// up (default), an external/shared one, or nowhere (disabled). Sets status.dashboardURL as a
 	// side effect; the value is persisted by the Status().Update calls below.
-	dashboardPush, derr := r.ensureDashboard(ctx, &campaign)
+	dashboardPush, dashboardTokenSecret, derr := r.ensureDashboard(ctx, &campaign)
 	if derr != nil {
 		return ctrl.Result{}, derr
 	}
@@ -150,7 +155,7 @@ func (r *BasquinCampaignReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			}
 			campaign.Spec.Driver.GrammarKey = key // in-memory, consumed by buildDriverJob
 		}
-		desired := buildDriverJob(&campaign, appImage, target.Status.CoverageEndpoint, runnerImage, dashboardPush)
+		desired := buildDriverJob(&campaign, appImage, target.Status.CoverageEndpoint, runnerImage, dashboardPush, dashboardTokenSecret)
 		// Stamp the run-defining spec hash so a later spec edit is detected as a NEW run (§7c). Compute
 		// it from the spec as stored (before the in-memory GrammarKey resolution above), so the value
 		// matches what the job-exists branch recomputes from the unmutated spec on the next reconcile.
@@ -383,24 +388,25 @@ func (r *BasquinCampaignReconciler) targetAppImage(ctx context.Context, target *
 //   - disabled                → no dashboard, no push
 //   - externalPush set        → push to that shared dashboard; the operator creates nothing
 //   - enabled, no externalPush → create/own a per-campaign dashboard and push to it
-func (r *BasquinCampaignReconciler) ensureDashboard(ctx context.Context, c *basquinv1alpha1.BasquinCampaign) (string, error) {
+func (r *BasquinCampaignReconciler) ensureDashboard(ctx context.Context, c *basquinv1alpha1.BasquinCampaign) (string, string, error) {
 	// Default (nil) is enabled; only an explicit false disables it. If a per-campaign dashboard was
 	// created earlier and the spec later flips to disabled / externalPush, tear it down now (it's
 	// otherwise orphaned until the whole CR is deleted) — spec.dashboard isn't immutable, so a
 	// `kubectl apply` edit reaches these branches on the next reconcile.
 	if c.Spec.Dashboard.Enabled != nil && !*c.Spec.Dashboard.Enabled {
 		if err := r.deleteDashboard(ctx, c); err != nil {
-			return "", err
+			return "", "", err
 		}
 		c.Status.DashboardURL = ""
-		return "", nil
+		return "", "", nil
 	}
 	if push := c.Spec.Dashboard.ExternalPush; push != "" {
 		if err := r.deleteDashboard(ctx, c); err != nil {
-			return "", err
+			return "", "", err
 		}
 		c.Status.DashboardURL = "http://" + push
-		return push, nil
+		// externalPush: not our dashboard, so we have no token to authenticate with.
+		return push, "", nil
 	}
 
 	image := r.DashboardImage
@@ -408,19 +414,42 @@ func (r *BasquinCampaignReconciler) ensureDashboard(ctx context.Context, c *basq
 		image = defaultDashboardImage
 	}
 
+	// Token Secret FIRST: both the dashboard and the driver mount it, and a pod referencing a missing
+	// Secret stays stuck in CreateContainerConfigError. Get-or-create, never rotate: the dashboard
+	// reads the token once at JVM start, so re-generating it mid-campaign would leave a running
+	// dashboard and a running driver disagreeing about the shared secret.
+	tokenSecret := dashboardTokenSecretName(c)
+	var sec corev1.Secret
+	skey := types.NamespacedName{Namespace: c.Namespace, Name: tokenSecret}
+	if err := r.Get(ctx, skey, &sec); apierrors.IsNotFound(err) {
+		token, terr := newDashboardToken()
+		if terr != nil {
+			return "", "", terr
+		}
+		desired := buildDashboardTokenSecret(c, token)
+		if serr := controllerutil.SetControllerReference(c, desired, r.Scheme); serr != nil {
+			return "", "", serr
+		}
+		if cerr := r.Create(ctx, desired); cerr != nil && !apierrors.IsAlreadyExists(cerr) {
+			return "", "", cerr
+		}
+	} else if err != nil {
+		return "", "", err
+	}
+
 	// Deployment (create-if-missing; the read-only DashboardServer needs no spec-driven updates).
 	var dep appsv1.Deployment
 	dkey := types.NamespacedName{Namespace: c.Namespace, Name: dashboardName(c)}
 	if err := r.Get(ctx, dkey, &dep); apierrors.IsNotFound(err) {
-		desired := buildDashboardDeployment(c, image)
+		desired := buildDashboardDeployment(c, image, tokenSecret)
 		if serr := controllerutil.SetControllerReference(c, desired, r.Scheme); serr != nil {
-			return "", serr
+			return "", "", serr
 		}
 		if cerr := r.Create(ctx, desired); cerr != nil && !apierrors.IsAlreadyExists(cerr) {
-			return "", cerr
+			return "", "", cerr
 		}
 	} else if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// Service (create-if-missing).
@@ -428,23 +457,35 @@ func (r *BasquinCampaignReconciler) ensureDashboard(ctx context.Context, c *basq
 	if err := r.Get(ctx, dkey, &svc); apierrors.IsNotFound(err) {
 		desired := buildDashboardService(c)
 		if serr := controllerutil.SetControllerReference(c, desired, r.Scheme); serr != nil {
-			return "", serr
+			return "", "", serr
 		}
 		if cerr := r.Create(ctx, desired); cerr != nil && !apierrors.IsAlreadyExists(cerr) {
-			return "", cerr
+			return "", "", cerr
 		}
 	} else if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// In-cluster host:port; the driver posts to http://<host>/ingest/... (DashboardClient adds scheme).
 	push := fmt.Sprintf("%s.%s.svc.cluster.local:%d", dashboardName(c), c.Namespace, dashboardPort)
 	c.Status.DashboardURL = "http://" + push
-	return push, nil
+	return push, tokenSecret, nil
+}
+
+// newDashboardToken mints a 256-bit random shared secret for one campaign's dashboard.
+func newDashboardToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 // deleteDashboard removes a per-campaign dashboard Deployment + Service if present (idempotent). Used
 // when a campaign's dashboard config flips away from "own a dashboard" after one was already created.
+// The token Secret is deliberately NOT deleted here: RBAC grants no delete verb on secrets, and the
+// Secret is owner-referenced to the campaign so Kubernetes GCs it with the campaign — until then a
+// disabled/externalPush campaign keeps a consumer-less credential in the namespace (#43 review).
 func (r *BasquinCampaignReconciler) deleteDashboard(ctx context.Context, c *basquinv1alpha1.BasquinCampaign) error {
 	name := types.NamespacedName{Namespace: c.Namespace, Name: dashboardName(c)}
 	if err := r.Delete(ctx, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: name.Name, Namespace: name.Namespace}}); err != nil && !apierrors.IsNotFound(err) {

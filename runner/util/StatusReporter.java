@@ -136,9 +136,11 @@ public final class StatusReporter {
         loadRequests = requests; loadRecorded = true;
     }
 
-    /** The load block, or "" when no load snapshot has been recorded. */
+    /** The load block, or "" unless we're in load mode AND a load snapshot has been recorded. Gating on
+     *  the mode (not just loadRecorded) keeps the invariant explicit — a load block appears iff mode==load
+     *  — so an explore snapshot never carries a stale block (also removes a test-ordering dependency). */
     private static String loadBlockJson() {
-        if (!loadRecorded) return "";
+        if (!loadRecorded || !"load".equals(mode)) return "";
         return String.format(java.util.Locale.ROOT,
             ",\"load\":{\"throughputRps\":\"%.1f\",\"latencyMs\":{\"p50\":%d,\"p90\":%d,\"p99\":%d,\"max\":%d},"
           + "\"heapDriftKb\":%d,\"threadDrift\":%d,\"serverErrors\":%d,\"requests\":%d}",

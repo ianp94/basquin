@@ -214,7 +214,7 @@ async function tickFleet(){
         '<div style="display:flex;align-items:center;gap:8px"><span class="dot'+(c.alive?'':' dead')+'"></span>'+
         '<span>'+esc(c.id)+'</span></div>'+
         '<div class="s" style="margin-top:8px">iters '+c.iterations+' · crashes '+c.crashes+
-        ' · cov '+(c.coveragePct>=0?c.coveragePct+'%':'—')+' · '+(c.mode||'explore')+'</div>'+
+        ' · cov '+(c.coveragePct>=0?c.coveragePct+'%':'—')+' · '+esc(c.mode||'explore')+'</div>'+
         '<div class="s">last seen '+c.ageSec+'s ago</div>'+
       '</div>').join('')
       : '<div class="muted">No campaigns reporting yet. Start a driver with '+

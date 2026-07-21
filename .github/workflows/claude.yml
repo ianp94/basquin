@@ -16,13 +16,21 @@ on:
 
 jobs:
   claude:
-    # Gate on the @claude mention here (not just inside the action) so non-mention comments
-    # don't spin up a runner at all.
+    # Gate on the @claude mention AND the author's repo permission here (not just inside the action)
+    # so unauthorized/non-mention events don't spin up a runner at all. The action's own default
+    # write-access check already stops strangers from consuming the Claude token, but on a public
+    # repo comment/issue events fire immediately for ANY account (the "first-time contributor
+    # requires approval" net only covers pull_request-class events) — this gate stops the free-but-
+    # noisy runner spin-up before checkout.
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -911,3 +911,16 @@ finding: dashboard reads are token-gated when a token is configured — `X-Basqu
 scripts/drivers, or a one-time `?token=` handoff to a per-campaign `HttpOnly` cookie for browsers.
 `/healthz` stays unauthenticated for the readiness probe; comparisons are constant-time. Implemented
 in #55. NetworkPolicy kept as defense-in-depth documentation only (kind's CNI does not enforce it).
+
+## DD-029: Lock-free load-mode instrumentation profile (2026-07-21)
+
+Full design in [LOCKFREE-LOAD-DESIGN.md](LOCKFREE-LOAD-DESIGN.md). Load mode drives an Injected
+target whose valve serializes every request (DD-005's ITERATION_LOCK), capping concurrency at 1 —
+the 2026-07-21 benchmark proved it (k6 10-VU = 256ms of pure queueing, not throughput). Split
+instrumentation by what concurrency allows: in load mode the valve runs **lock-free/passthrough**
+(no per-request heap/thread deltas), latency + 5xx are measured client-side by the driver, and the
+app's heap/thread **drift** is sampled process-globally (absolute Runtime reads) by a cheap agent
+thread on a pollable endpoint the driver reads. The driver toggles the target into load mode over
+the existing HTTP channel (target-wide for the campaign; the lock is all-or-nothing), not by an
+operator JVM-flag restart. Explore mode is untouched. Foundational for cost-guided (pheromone) load
+and clustered runners. Extends DD-026 (load mode); grounded in DD-005/DD-010 (why the lock exists).

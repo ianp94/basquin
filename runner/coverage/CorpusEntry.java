@@ -11,9 +11,8 @@ public final class CorpusEntry {
     public final int invariantCount;
     /** true = retained because it hit new coverage (never evicted); false = retained purely for cost. */
     public final boolean coverageFind;
-    /** DD-032 selection weight. Public for test/replay visibility, but mutated ONLY by CostCorpus's
-     *  synchronized methods — production code outside this package must treat it as read-only. */
-    public double pheromone;
+    /** DD-032 selection weight. Package-private: written ONLY by CostCorpus's synchronized methods. */
+    double pheromone;
 
     public CorpusEntry(String input, double cost, long latencyMs, long heapDeltaKb,
                        int threadDelta, int invariantCount, boolean coverageFind) {
@@ -25,4 +24,7 @@ public final class CorpusEntry {
         this.invariantCount = invariantCount;
         this.coverageFind = coverageFind;
     }
+
+    /** Read-only accessor for the pheromone weight (writes stay inside CostCorpus). */
+    public double pheromone() { return pheromone; }
 }

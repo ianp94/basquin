@@ -28,10 +28,24 @@ The real load numbers only reach the pod termination message and `status.load` (
 
 2. **`LoadRun` feeds it live.** `setMode("load")` at start; a lightweight snapshotter thread (every
    `basquin.dashboard.pushIntervalMs`, default 2000ms) computes throughput-so-far, percentiles from the
-   **live** histogram (`hist` `AtomicLongArray`), current drift (poll `/__basquin/drift`), and 5xx, and
-   calls `StatusReporter.recordLoad(...)`. The **existing** `DashboardClient` loop (already started by
-   `CoverageGuidedRun.main`) carries it — so the dashboard updates **live during the soak**, not just at
-   the end. No new push mechanism, no second HTTP path.
+   **live** histogram (`hist` `AtomicLongArray`, via the existing `percentile(hist, total, q)`), current
+   drift, and 5xx, and calls `StatusReporter.recordLoad(...)`. The **existing** `DashboardClient` loop
+   (already started by `CoverageGuidedRun.main`) carries it — so the dashboard updates **live during the
+   soak**, not just at the end. No new push mechanism, no second HTTP path. Three semantics requirements:
+   - **Torn reads are acceptable; the terminal numbers are authoritative.** Each bucket read is atomic,
+     but scanning the `AtomicLongArray` while workers increment it is *not* a consistent snapshot — so
+     **live percentiles are approximate**, by design, for a 2s display. The end-of-run metrics (and
+     `status.load`) remain the authoritative record. Do **not** add a lock to the hot path to "fix" a
+     transient live/terminal discrepancy — that would defeat DD-029's lock-free load.
+   - **Live throughput uses the same post-warmup window as the terminal number**, so the live value
+     *converges to* the terminal one rather than diverging (otherwise the dashboard and `status.load`
+     disagree and it reads as a bug). Anchor the live window at the post-warmup mark, matching where the
+     baseline drift snapshot is taken today.
+   - **One drift poller, one source of truth.** The snapshotter owns drift polling; the terminal drift
+     reuses the snapshotter's last poll (or they share one poller) rather than keeping the current
+     independent post-warmup-baseline + terminal-poll pair as two separate paths. Note (verified): today
+     `/__basquin/drift` is control-handled in the boundary — no lock, never reaches the app — so a 2s
+     poll adds negligible load to the soak.
 
 3. **Dashboard UI load card** (`resources/dashboard.html`): read `st.mode`; when `load`, render a load
    card — **throughput req/s, p50/p90/p99 latency, heap/thread drift, 5xx** — in place of the explore
@@ -51,20 +65,32 @@ Each signal is defined by its **OTel-native type + a stable name + attributes**,
 OTLP exporter is a *thin adapter* over the same metric set — the bespoke JSON and a future exporter
 become two renderings of one well-typed model. **No OpenTelemetry dependency is added in this DD.**
 
-| Signal | OTel type | Name (intended) | Notes |
-|---|---|---|---|
-| Request latency | **histogram** | `basquin.load.latency` (ms) | already an `AtomicLongArray` histogram → maps directly; percentiles derive from it |
-| Throughput | counter (+rate) | `basquin.load.requests` | rate = counter / window |
-| Heap drift | **gauge** | `basquin.load.heap_drift` (KiB) | absolute over-time reading (DD-029) |
-| Thread drift | **gauge** | `basquin.load.thread_drift` | |
-| 5xx | counter | `basquin.load.server_errors` | |
-| Iterations | counter | `basquin.explore.iterations` | |
-| Coverage | gauge (ratio) | `basquin.explore.coverage` | |
-| Findings / crashes | counter | `basquin.explore.findings` / `.crashes` | |
+| Signal | OTel type | Name (intended) | Unit (UCUM) | Notes |
+|---|---|---|---|---|
+| Request latency | **histogram** | `basquin.load.request.duration` | `ms` | OTel convention is `*.duration` for latency histograms (cf. `http.server.request.duration`), NOT "latency" |
+| Throughput | counter (+rate) | `basquin.load.requests` | `{request}` | rate = counter / window |
+| Heap drift | **gauge** | `basquin.load.heap_drift` | `KiB` | absolute over-time reading (DD-029) |
+| Thread drift | **gauge** | `basquin.load.thread_drift` | `{thread}` | |
+| 5xx | counter | `basquin.load.server_errors` | `{error}` | |
+| Iterations | counter | `basquin.explore.iterations` | `{iteration}` | |
+| Coverage | gauge (ratio) | `basquin.explore.coverage` | `1` | ratio 0..1 |
+| Findings / crashes | counter | `basquin.explore.findings` / `.crashes` | `{finding}` / `{crash}` | |
 
-`mode` and the campaign id are **attributes**, not separate metrics. The `StatusReporter` JSON field
-names align with these intended metric names, and latency stays a histogram — so the future OTLP
-exporter (its own DD) reads the same registry and emits OTLP with zero re-modelling.
+Three contract commitments the exporter inherits (getting them right now keeps the future exporter thin):
+
+- **Unit is the UCUM `unit` field, not baked into the metric name** (`ms`, not `..._ms`). Recorded in the
+  table above.
+- **The histogram's bucket boundaries are part of the contract.** The `AtomicLongArray`'s 1 ms × 30 000
+  bucket layout (`MAX_MS`) becomes the **explicit-bucket-histogram boundaries** the exporter emits;
+  changing that resolution later is a *breaking* change to downstream dashboards, so the exporter must
+  emit these exact boundaries, not re-bucket.
+- **Attribute split: `campaign.id` is a RESOURCE attribute, `mode` is a METRIC attribute.** "Which
+  process/campaign produced this" is *identity* (resource); "what kind of measurement" is a *dimension*
+  (metric attribute). This split is what makes the future exporter a thin adapter.
+
+The `StatusReporter` JSON field names align with these intended metric names, and latency stays a
+histogram with the layout above — so the future OTLP exporter (its own DD) reads the same registry and
+emits OTLP with zero re-modelling.
 
 ## Roadmap item this DD adds (to TODO.md)
 
@@ -101,9 +127,14 @@ exporter (its own DD) reads the same registry and emits OTLP with zero re-modell
 - **One push path.** Load data flows through `StatusReporter` → the existing `DashboardClient` loop — no
   second pusher, no new endpoint.
 - **Live, not just terminal.** The load dashboard updates during the soak (mid-run snapshots from the
-  live histogram + periodic drift poll), not only at end-of-run.
-- **Metrics are OTel-typed** (the table above): latency = histogram, throughput/5xx/iterations/findings
-  = counters, drift/coverage = gauges, `mode`/id = attributes. **No OTel dependency is added.**
+  live histogram + periodic drift poll), not only at end-of-run. **Live percentiles are approximate
+  (torn reads); the terminal numbers / `status.load` are authoritative — never add a hot-path lock to
+  reconcile them.** Live throughput uses the **same post-warmup window** as the terminal number so it
+  converges to it. **One drift poller** (snapshotter-owned; terminal drift reuses it).
+- **Metrics are OTel-typed** (the table above): request latency = histogram named
+  `basquin.load.request.duration` with unit `ms` and the exact 1 ms × 30 000 bucket boundaries;
+  throughput/5xx/iterations/findings = counters; drift/coverage = gauges; **`campaign.id` = resource
+  attribute, `mode` = metric attribute**. **No OTel dependency is added.**
 - **Server stays schema-agnostic** — the `mode` scrape is a light regex like the existing ones; the
   server never schema-parses the payload.
 - **CLI:** a `MODE` column + a mode-aware metrics column; `cp.Status.Load` surfaced for load campaigns.

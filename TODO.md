@@ -437,9 +437,11 @@ the P1–P4 injection work (a campaign needs a working instrumented target). Des
         don't contend), then the four docker builds + cluster creation run concurrently, then the
         four `kind load`s. Per-build logs land in `/tmp/e2e-build-*.log` and are dumped on failure;
         the build.sh CRLF gradlew shim got a PID-unique name so parallel runs can't race on it.
-  - [ ] Docker layer caching for the operator image in CI (`docker buildx --cache-from/--cache-to
-        type=gha`) — the golang:1.21 multi-stage build re-downloads all Go modules every run *(~1 min warm;
-        needs a buildx docker-container builder + `--load`, so it's its own change)*
+  - [x] Docker layer caching for the operator image in CI — done: `operator-e2e.yml` pre-builds it
+        via `docker/build-push-action` with `cache-from/to type=gha` + `--load`, and `e2e.sh`
+        (`PREBUILT_OPERATOR=1`) skips its own uncached rebuild when the image is already in the
+        daemon (local runs without the env keep building as before). Warm runs skip the whole
+        `go mod download` + compile (~1 min).
   - [x] Cache the built JPetStore WAR keyed on `JPETSTORE_SHA` — done: the WAR artifact itself is
         cached (`~/jpetstore-war`); clone+mvn (and the Maven install + m2 cache steps) are skipped
         entirely on a hit.
@@ -449,6 +451,16 @@ the P1–P4 injection work (a campaign needs a working instrumented target). Des
 - [ ] Validating enforcement for `container` required-when-ambiguous (a CRD schema can't express "required only when the pod has >1 container") — pairs with P2
 - [ ] Namespaced metrics security: re-enable a metrics-protection approach that needs no cluster-scoped binding (the kube-rbac-proxy sidecar was dropped in P1 because it requires a `system:auth-delegator` ClusterRoleBinding)
 - [ ] **Multi-runtime profiles** (`runtimeProfile: jvm | node | …`) — the forward reason for Go: the CR/reconcile/inject/revert control plane is runtime-agnostic; a new profile supplies different agents/flags without touching the machinery
+
+### Project workflow / repo infra
+- [ ] **Bot profile as a GitHub App** (user, 2026-07-21 — tackle 2026-07-22): PRs are currently
+      authored by the owner's token, so the owner can't approve them and every merge needs an admin
+      bypass. Decision: a **full GitHub App** (not a machine-user account) — cleaner `app[bot]`
+      identity, no second account. Owner's part: create the app (contents + pull-requests write),
+      install it on the repo, hand over the app ID + private key. Claude's part: installation-token
+      minting plumbing (tokens expire hourly), wire git/gh to use it for branches/PRs/commits, and
+      the bot's commit identity — after which the protect-main required-approval flow works as
+      designed: bot authors, owner approves, auto-merge lands it.
 
 ### Calibration & real-app targets
 - [ ] WebGoat / OWASP Benchmark for guaranteed-findings calibration of triage output *(v0.5)*

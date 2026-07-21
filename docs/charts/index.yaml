@@ -3,7 +3,29 @@ entries:
   basquin-operator:
   - apiVersion: v2
     appVersion: 0.2.0
-    created: "2026-07-20T20:30:42.696370489-04:00"
+    created: "2026-07-21T02:48:42.764908252-04:00"
+    description: The Basquin Kubernetes operator — instrument an unmodified app with
+      a BasquinTarget and run bounded coverage-guided tests with a BasquinCampaign.
+      Namespaced by design (Role/RoleBinding in one namespace; install one release
+      per namespace you want to instrument).
+    digest: 568409bf46792fc10bd37659282a46313edc8118465726586860171b3894605e
+    home: https://ianp94.github.io/basquin/
+    keywords:
+    - testing
+    - availability
+    - fuzzing
+    - jvm
+    - operator
+    name: basquin-operator
+    sources:
+    - https://github.com/ianp94/basquin
+    type: application
+    urls:
+    - https://ianp94.github.io/basquin/charts/basquin-operator-0.2.0.tgz
+    version: 0.2.0
+  - apiVersion: v2
+    appVersion: 0.2.0
+    created: "2026-07-21T02:48:42.754476489-04:00"
     description: The Basquin Kubernetes operator — instrument an unmodified app with
       a BasquinTarget and run bounded coverage-guided tests with a BasquinCampaign.
       Namespaced by design (Role/RoleBinding in one namespace; install one release
@@ -23,4 +45,4 @@ entries:
     urls:
     - https://ianp94.github.io/basquin/charts/basquin-operator-0.1.0.tgz
     version: 0.1.0
-generated: "2026-07-20T20:30:42.686824631-04:00"
+generated: "2026-07-21T02:48:42.745463971-04:00"

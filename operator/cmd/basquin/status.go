@@ -106,16 +106,21 @@ func printStatus(ctx context.Context, c client.Client, ns string, out io.Writer)
 // campaignRow renders one tab-separated CAMPAIGN/TARGET/MODE/PHASE/METRICS/DASHBOARD row. METRICS is
 // mode-aware: explore shows coverage% / findings count (from the driver's end-of-run summary); load
 // shows throughput (rps) and p99 latency from cp.Status.Load (DD-026/DD-033), since coverage/findings
-// are meaningless for a load run (a fixed corpus replay, not a fuzz search).
+// are meaningless for a load run (a fixed corpus replay, not a fuzz search). A load campaign with no
+// Status.Load yet (still Running, no results published) renders "pending" rather than falling through
+// to the explore-shaped "0 finds", which would misleadingly imply a fuzz search found nothing.
 func campaignRow(cp *basquinv1alpha1.BasquinCampaign) string {
 	mode := cp.Spec.Mode
 	if mode == "" {
 		mode = "explore"
 	}
 	var metrics string
-	if mode == "load" && cp.Status.Load != nil {
+	switch {
+	case mode == "load" && cp.Status.Load != nil:
 		metrics = fmt.Sprintf("%s rps · p99 %dms", orNone(cp.Status.Load.ThroughputRps), cp.Status.Load.LatencyMs.P99)
-	} else {
+	case mode == "load":
+		metrics = "pending"
+	default:
 		metrics = fmt.Sprintf("%s · %d finds", orNone(cp.Status.CoveragePct), cp.Status.Findings)
 	}
 	return fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s", cp.Name, cp.Spec.TargetRef.Name, mode,

@@ -131,3 +131,31 @@ func TestCampaignRowLoad(t *testing.T) {
 		t.Errorf("load row should not show explore metrics:\n%s", row)
 	}
 }
+
+// TestCampaignRowLoadPending covers a load campaign still Running with no Status.Load published
+// yet — the mode=="load" + nil-Load path the other two tests don't exercise. A regression that
+// flips the nil-guard ordering (e.g. dereferencing Load before checking it, or falling through to
+// the explore branch) would pass both other tests but should fail this one.
+func TestCampaignRowLoadPending(t *testing.T) {
+	cp := &basquinv1alpha1.BasquinCampaign{
+		ObjectMeta: metav1.ObjectMeta{Name: "checkout-load"},
+		Spec: basquinv1alpha1.BasquinCampaignSpec{
+			TargetRef: basquinv1alpha1.TargetReference{Name: "jpetstore"},
+			Mode:      "load",
+		},
+		Status: basquinv1alpha1.BasquinCampaignStatus{
+			Phase: basquinv1alpha1.CampaignRunning,
+			Load:  nil,
+		},
+	}
+	row := campaignRow(cp) // must not panic on a nil Load
+	if !strings.Contains(row, "load") {
+		t.Errorf("expected row to show mode=load:\n%s", row)
+	}
+	if !strings.Contains(row, "pending") {
+		t.Errorf("expected row to show a load-appropriate pending placeholder:\n%s", row)
+	}
+	if strings.Contains(row, "finds") {
+		t.Errorf("pending load row should not show explore metrics:\n%s", row)
+	}
+}

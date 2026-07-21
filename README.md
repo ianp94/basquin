@@ -1,22 +1,22 @@
 # ClosureJVM
 
-**Find the availability bugs that crash-only testing misses — in real JVM web apps, unmodified.**
+**Kubernetes-native fuzz and load testing for JVM web apps — where the bug oracle is availability,
+not just crashes.**
 
-Most JVM web apps don't fall over because of a `NullPointerException`. They degrade: a
-pathological input takes 500ms instead of 5ms, a request leaks a thread or holds an executor,
-memory creeps across requests until a GC storm. These failures are input- and state-dependent,
-hard to reproduce, and invisible to tests that only check for exceptions. ClosureJVM runs an app
-across thousands of clean iterations and treats **availability invariants** — latency, heap
-retention, thread/executor leaks — as first-class bug oracles, not just crashes.
+Instrument an *unmodified* app with a `ClosureJVMTarget`, run a coverage-guided fuzz campaign to
+discover the inputs that stress it, then replay those exact inputs under load. Latency spikes, heap
+retention, and thread/executor leaks are first-class findings — not just exceptions.
 
 [![CI](https://github.com/ianp94/closureJVM/actions/workflows/ci.yml/badge.svg)](https://github.com/ianp94/closureJVM/actions/workflows/ci.yml)
+[![Operator e2e](https://github.com/ianp94/closureJVM/actions/workflows/operator-e2e.yml/badge.svg)](https://github.com/ianp94/closureJVM/actions/workflows/operator-e2e.yml)
 
-📖 **[Documentation, guides & demos → ianp94.github.io/closureJVM](https://ianp94.github.io/closureJVM/)** — how it works, getting started, and running against your own Tomcat app in Kubernetes.
+📖 **[Documentation, guides & demos → ianp94.github.io/closureJVM](https://ianp94.github.io/closureJVM/)**
 
-![ClosureJVM live status driving JPetStore](docs/demo.svg)
+![ClosureJVM full stack in a kind cluster](docs/demo-k8s.svg)
 
-*Above: the live status screen during a 200-iteration HTTP drive against an unmodified
-[JPetStore](https://github.com/mybatis/jpetstore-6), flagging the app's real per-request latency.*
+*Above: 250 requests against an unmodified [JPetStore](https://github.com/mybatis/jpetstore-6) pod —
+live **coverage %** (281/6368 edges of the pod's own code, pulled from its JaCoCo agent), **96
+invariant finds** harvested server-side through the valve, 0 crashes.*
 
 ## Built with AI assistance
 
@@ -24,23 +24,87 @@ Much of ClosureJVM's code and documentation was written by Anthropic's Claude (v
 with the author directing the design, making the architecture and semantic decisions, and reviewing
 the work. This is noted for transparency — the project is not presented as entirely hand-written.
 
-## Why it exists
+## The model: instrument once, then run campaigns
 
-Fuzzers like Jazzer and JQF are excellent, but their oracle is "did it throw / crash." The gap
-ClosureJVM fills:
+Two custom resources in group `closurejvm.dev/v1alpha1`:
 
-- **Availability is the oracle.** An iteration is *interesting* if it exceeds a latency budget,
-  grows the heap, or leaks a thread/executor — not only if it throws.
-- **Iteration cleanliness is enforced, not assumed.** Each iteration runs inside strict
-  begin/end boundaries; leaked non-daemon threads and un-shut executors are detected and reported
-  with stacks. Contamination becomes obvious instead of mysterious.
-- **It works on apps you can't change.** A Tomcat valve wraps every request of an *unmodified*
-  third-party WAR — no code edits, no repackaging — and a single namespace-free jar runs on both
-  Tomcat 9 (`javax`) and Tomcat 10+ (`jakarta`).
+- **`ClosureJVMTarget`** — *instrument a Deployment.* Long-lived. Patches an unmodified app
+  Deployment to load the agents (thread tracker, JaCoCo coverage) via an initContainer + shared
+  volume. Fully reversible — deleting it restores the Deployment byte-for-byte.
+- **`ClosureJVMCampaign`** — *run a bounded test.* Ephemeral. Drives the instrumented target and
+  aggregates results into status. One target, many campaigns over time.
+
+Campaigns run in one of two **modes**:
+
+| Mode | What it does | Bounded by |
+|------|--------------|------------|
+| `explore` (default) | Coverage-guided fuzzing — mutates requests, keeps inputs that reach new code, and emits the interesting ones as a corpus ConfigMap | `iterations` or `duration` |
+| `load` | Replays a saved corpus at a fixed concurrency, reporting throughput and latency percentiles | `duration` |
+
+*Fuzz to discover the interesting states, then hammer those states under load.*
+
+The operator is **namespaced by design**: it watches and mutates only its own namespace and refuses
+to start cluster-wide. The standing privilege is a `Role`/`RoleBinding`, never a `ClusterRole`.
+
+## Quick start (Kubernetes)
+
+Install the operator from the published Helm repo — real images from ghcr, nothing to build:
+
+```bash
+helm repo add closurejvm https://ianp94.github.io/closureJVM/charts
+helm repo update
+helm install closurejvm closurejvm/closurejvm-operator \
+  --namespace closurejvm-system --create-namespace --set fullnameOverride=closurejvm
+```
+
+Then drive it with the `closurejvm` CLI ([release binaries](https://github.com/ianp94/closureJVM/releases)
+for linux/macOS/Windows × amd64/arm64):
+
+```bash
+# 1. Instrument a running app — no rebuild, no image changes.
+closurejvm instrument -n closurejvm-system --deployment jpetstore \
+  --jvm-opts-var CATALINA_OPTS --coverage-includes 'org.mybatis.jpetstore.*' --coverage-service --wait
+
+# 2. Fuzz it: coverage-guided exploration, emitting a corpus of interesting inputs.
+closurejvm run -n closurejvm-system --target jpetstore \
+  --base-url http://jpetstore-app.closurejvm-system.svc.cluster.local:8080 \
+  --iterations 500 --grammar examples/grammar/jpetstore.grammar --watch
+
+# 3. Replay what it found, under load.
+closurejvm run -n closurejvm-system --name jpetstore-load --mode load --target jpetstore \
+  --base-url http://jpetstore-app.closurejvm-system.svc.cluster.local:8080 \
+  --duration 30m --concurrency 50 --corpus ./saved-corpus --watch
+
+# 4. Read results / open the per-campaign dashboard.
+closurejvm status -n closurejvm-system
+closurejvm dashboard -n closurejvm-system --campaign jpetstore-campaign   # then open :7070
+```
+
+Everything above is also plain YAML if you prefer — see
+**[OPERATOR-USAGE](docs/OPERATOR-USAGE.md)**, the task-oriented guide. The canonical, always-working
+reference is [`deploy/e2e/e2e.sh`](deploy/e2e/e2e.sh), which runs the entire flow (build → install →
+instrument → fuzz → load → dashboard) in an ephemeral kind cluster on every CI change.
+
+## Why it's different
+
+Fuzzers like Jazzer and JQF are excellent, but their oracle is "did it throw / crash." Load tools
+like k6 and Gatling measure throughput but know nothing about what's happening *inside* the JVM.
+ClosureJVM sits in the gap:
+
+- **Availability is the oracle.** An input is *interesting* if it exceeds a latency budget, grows
+  the heap, or leaks a thread/executor — not only if it throws. Most JVM web apps don't fall over
+  with a `NullPointerException`; they degrade.
+- **Iteration cleanliness is enforced, not assumed.** Each iteration runs inside strict begin/end
+  boundaries; leaked non-daemon threads and un-shut executors are detected and reported with stacks.
+- **It works on apps you can't change.** The operator instruments an unmodified image at deploy
+  time; a Tomcat valve wraps every request of an unmodified third-party WAR — one namespace-free jar
+  for both Tomcat 9 (`javax`) and 10+ (`jakarta`).
+- **The corpus carries over.** The inputs fuzzing found interesting become the load test's workload,
+  so you're loading the paths that actually stress the app, not a hand-written happy path.
 
 ## What it found in JPetStore (unmodified)
 
-Running inside JPetStore's JVM via the valve, with no changes to the app:
+Running inside JPetStore's JVM, with no changes to the app:
 
 | Signal | Example |
 |--------|---------|
@@ -51,7 +115,56 @@ Running inside JPetStore's JVM via the valve, with no changes to the app:
 These are exactly the input/state-dependent availability pathologies the project targets.
 Full walkthrough: [THIRD-PARTY-APPS](docs/THIRD-PARTY-APPS.md).
 
-## Quick start
+## How exploration works
+
+![ClosureJVM exploration panel driving JPetStore](docs/demo-explore.svg)
+
+*Above: exploring an unmodified JPetStore over HTTP — 220 requests, **0 crashes** (it's robust),
+**48 invariant finds** harvested server-side via the valve.*
+
+**Coverage comes from the app under test.** A JaCoCo agent runs in the target's JVM and the driver
+reads it over the wire, so the coverage % is a real "% of code explored" rather than anything
+measured in the harness. Coverage-*guided* mutation then keeps the inputs that reach new code.
+
+**The reachable surface is data, not code.** A [request grammar](docs/USAGE.md#writing-a-request-grammar)
+supplies route templates, the corpus supplies parameter values, and `~EST-[0-9]{1,4}`-style
+structural generation invents ids that *parse but don't exist* — which is how the deepest crashes
+were found. `@sequence` blocks run ordered, session-carrying transactions (sign on → add to cart →
+check out) to reach code a single request never can.
+
+**Crashes are real crashes.** A target declares its expected input rejections via `CrashClassifier`,
+so a parser throwing `IllegalArgumentException("bad char")` is counted as *rejected*, not a crash —
+only genuine faults (an unhandled `NoSuchElementException`, an `NPE`, a 5xx) count.
+
+## Load mode
+
+A `load` campaign replays a corpus — usually the one an `explore` run emitted — at a fixed
+concurrency for a duration, reporting into `status.load`:
+
+```json
+{"requests":1284003,"throughputRps":"713.4","latencyMs":{"p50":8,"p90":22,"p99":61,"max":240},
+ "heapDriftKb":1840,"threadDrift":0,"violations":{"latency":12,"heap":0,"thread":0}}
+```
+
+Latency is threshold-gated against the campaign's invariants; heap and threads are reported as
+end-to-end **drift**. A load run's driver is coverage-free (no JaCoCo, no class extraction).
+Design note: [LOAD-MODE-DESIGN](docs/LOAD-MODE-DESIGN.md) (DD-026).
+
+## Web dashboard
+
+A **standalone** dashboard process — never embedded in a driver, never near the app under test. The
+operator runs one per campaign and points the driver at it; drivers push status and findings keyed
+by campaign id. The page shows a fleet view of every reporting campaign, with drill-down into metric
+cards, a coverage bar, and a findings table (route/detail/classification, not just counts).
+
+It binds **127.0.0.1** by default and guards its ingest/analyze endpoints, since the analysis
+endpoint spends API credit — see [DD-013](docs/DESIGN-DECISIONS.md) for the decoupling and
+[DD-022](docs/DESIGN-DECISIONS.md) for the trust boundary.
+
+## Running it without Kubernetes
+
+The operator is the product, but the harness underneath runs standalone — useful for local
+development, for CI on a non-Kubernetes runner, or for driving an app you haven't containerized:
 
 ```bash
 ./gradlew build
@@ -67,10 +180,12 @@ Full walkthrough: [THIRD-PARTY-APPS](docs/THIRD-PARTY-APPS.md).
   -Dclosurejvm.invariant.latency.maxMs=50 -Dclosurejvm.invariant.mode=soft
 ```
 
-Point it at **your** app by implementing a three-method `IterationTarget` — see
-[USAGE](docs/USAGE.md#use-with-your-app).
+![ClosureJVM live status driving JPetStore](docs/demo.svg)
 
-## How it works
+Point it at **your** app by implementing a three-method `IterationTarget` — see
+[USAGE](docs/USAGE.md#use-with-your-app). Every flag is documented in [USAGE](docs/USAGE.md).
+
+## How it works underneath
 
 ```
 Inputs → Runner (begin/end iteration) → App entry → Metrics & invariants → Reset → repeat
@@ -78,122 +193,42 @@ Inputs → Runner (begin/end iteration) → App entry → Metrics & invariants �
 
 - **Runner** executes iterations within boundaries and orchestrates the checks.
 - **Agent** measures each iteration (latency, heap delta, thread/executor leaks) and evaluates
-  invariants; an optional **JVMTI native agent** tracks thread lifecycle via events (no polling,
-  no safepoint stack walks), with a `ThreadMXBean` fallback.
+  invariants; an optional **JVMTI native agent** tracks thread lifecycle via events (no polling, no
+  safepoint stack walks), with a `ThreadMXBean` fallback.
 - **Reset** prefers enforced cleanliness, falling back to a classloader swap.
 - **Triage** saves interesting inputs with classification, stacks, and metrics — off the hot path.
 
 Details and the "why" behind each choice: [ARCHITECTURE](docs/ARCHITECTURE.md) ·
 [DESIGN-DECISIONS](docs/DESIGN-DECISIONS.md).
 
-## Exploration
-
-Exploration (fuzzing / HTTP driving) runs each input through the same iteration boundaries and
-invariants, and the live status screen grows an **exploration panel**: execs/sec, corpus size,
-finds by classification (crash / invariant), **rejected** (expected input validations, not
-crashes), time-since-last-find, and a **coverage %** row that lights up when a coverage source
-reports.
-
-![ClosureJVM exploration panel driving JPetStore](docs/demo-explore.svg)
-
-*Above: exploring an unmodified JPetStore over HTTP — 220 requests, **0 crashes** (it's robust),
-**48 invariant finds** harvested server-side via the valve. Point it at a running app:*
-
-```bash
-./gradlew runHttpDrive -Dexamples.http.baseUrl=http://localhost:8080 \
-  -Dclosurejvm.invariant.latency.maxMs=25 -Dclosurejvm.invariant.mode=soft
-```
-
-**Crashes are real crashes.** A target declares its expected input rejections via
-`CrashClassifier`, so a parser throwing `IllegalArgumentException("bad char")` is counted as
-*rejected*, not a crash — only genuine faults (an unhandled `NoSuchElementException`, an `NPE`, a
-5xx) count. The top `crashes` figure and the exploration `finds crash` count come from that same
-signal, so they always agree.
-
-**Coverage comes from the app under test.** A JaCoCo agent runs in the target's JVM and the driver
-reads it over the wire, so the coverage % is a real "% of code explored" rather than anything
-measured in the harness. Coverage-*guided* mutation then keeps the inputs that reach new code:
-
-```bash
-./gradlew runCoverageGuided \
-  -Dexamples.http.baseUrl=http://localhost:8080 \
-  -Dclosurejvm.coverage.jacoco=localhost:6300 \
-  -Dclosurejvm.coverage.classes=<dir>/WEB-INF/classes \
-  -Dclosurejvm.grammar=examples/grammar/jpetstore.grammar
-```
-
-The reachable surface is **data, not code**: a [request grammar](docs/USAGE.md#writing-a-request-grammar)
-supplies route templates, the corpus supplies parameter values, and `~EST-[0-9]{1,4}`-style
-structural generation invents ids that *parse but don't exist* — which is how the deepest crashes
-were found. `@sequence` blocks run ordered, session-carrying transactions (sign on → add to cart →
-check out) to reach code that a single request never can.
-
-## Kubernetes demo (kind)
-
-One command runs the whole stack in a local Kubernetes cluster: JPetStore as a **pod** with the
-valve, the ClosureJVM agent, and the JaCoCo coverage agent baked in — then drive it from outside
-and watch every feature work in-cluster.
-
-![ClosureJVM full stack in a kind cluster](docs/demo-k8s.svg)
-
-*Above: 250 requests against the JPetStore pod — live **coverage %** (281/6368 edges of the pod's
-own code, pulled from its JaCoCo agent), **96 invariant finds** harvested server-side through the
-valve, 0 crashes.*
-
-```bash
-JPETSTORE_WAR=/abs/jpetstore.war deploy/k8s/up.sh
-```
-
-Details: [deploy/k8s/README.md](deploy/k8s/README.md).
-
-## Web dashboard
-
-A **standalone** dashboard process — never embedded in a driver, and never anywhere near the app
-under test. Run it once; any number of drivers (one per campaign, one per pod) push their status
-and findings to it, keyed by campaign id (defaults to `HOSTNAME`, a pod's name in Kubernetes). The
-page shows a fleet view of every reporting campaign, with drill-down into metric cards, a coverage
-bar, and a findings table (route/detail/classification, not just counts). This is the aggregation
-point the auto-injection operator (see [TODO](TODO.md)) would point every instrumented pod at.
-
-```bash
-./gradlew runDashboard &   # standalone, its own process/port (7070 by default)
-
-./gradlew runCoverageGuided -Dclosurejvm.dashboard.push=localhost:7070 \
-  -Dexamples.http.baseUrl=http://localhost:8080 \
-  -Dclosurejvm.coverage.jacoco=localhost:6300 -Dclosurejvm.coverage.classes=<dir>/WEB-INF/classes
-```
-
-No extra dependency (JDK `httpserver`) on either side. It binds **127.0.0.1** by default and
-guards its ingest/analyze endpoints, since the analysis endpoint spends API credit — see
-[DD-013](docs/DESIGN-DECISIONS.md) for the decoupling and [DD-022](docs/DESIGN-DECISIONS.md) for
-the trust boundary.
-
-Grammar, sequences, and every v0.10 flag are documented in [USAGE](docs/USAGE.md).
-
 ## Features
 
+- **Kubernetes operator**: two CRDs, namespaced RBAC, reversible in-place instrumentation of
+  unmodified app images, per-campaign dashboards, published multi-arch images
+- **Two campaign modes**: coverage-guided fuzzing (`explore`) and corpus replay under load (`load`),
+  with the corpus carrying from one to the other
+- **`closurejvm` CLI**: instrument / run / status / dashboard, for linux, macOS, and Windows
+- **Helm chart** published to a GitHub Pages Helm repo; images on ghcr.io
 - Availability invariants (latency / heap / thread-delta) with hard-fail or soft-signal modes
-- Thread, executor, and timer leak detection with stack evidence
-- Event-driven thread tracking via a JVMTI native agent (one jar, JDK 17 & 21)
+- Thread, executor, and timer leak detection with stack evidence, via a JVMTI native agent
 - **Coverage of the app under test**, read from its JaCoCo agent over the wire — and used to guide
-  input mutation
+  mutation
 - **Grammar-driven exploration**: routes and value structure as data, with multi-step
   session-carrying transactions
-- Crash findings carry the **app's** stack, not the harness's, so they're triageable as-is
-- Findings **clustered** by fingerprint (and across targets), so a systemic issue is one row
+- Crash findings carry the **app's** stack, not the harness's; findings clustered by fingerprint
 - Tomcat valve for unmodified third-party WARs — one jar for `javax` and `jakarta`
-- Standalone **web dashboard**: fleet view, run configuration, findings with the inputs that
-  produced them, optional Claude-backed analysis
-- Live AFL-style status screen for long runs
-- JQF fuzzing, corpus replay, and ddmin minimization
+- Standalone web dashboard with optional Claude-backed analysis; AFL-style live status screen
 
 ## Docs
 
-- [USAGE](docs/USAGE.md) — commands, flags, and every runnable task
-- [OPERATOR-USAGE](docs/OPERATOR-USAGE.md) — driving the Kubernetes operator (instrument an app, run a campaign, read results); install via the [Helm chart](deploy/helm/closurejvm-operator/README.md) or the `closurejvm` CLI
-- [CAMPAIGN-DESIGN](docs/CAMPAIGN-DESIGN.md) (DD-025) · [LOAD-MODE-DESIGN](docs/LOAD-MODE-DESIGN.md) (DD-026, proposed) — operator campaign + load/soak design notes
+- [OPERATOR-USAGE](docs/OPERATOR-USAGE.md) — **start here for Kubernetes**: instrument an app, run
+  explore/load campaigns, read results. Install via the
+  [Helm chart](deploy/helm/closurejvm-operator/README.md) or the `closurejvm` CLI
+- [USAGE](docs/USAGE.md) — the standalone harness: commands, flags, grammar, every runnable task
+- [OPERATOR-DESIGN](docs/OPERATOR-DESIGN.md) · [CAMPAIGN-DESIGN](docs/CAMPAIGN-DESIGN.md) (DD-025) ·
+  [LOAD-MODE-DESIGN](docs/LOAD-MODE-DESIGN.md) (DD-026) — operator, campaign, and load/soak design
 - [ARCHITECTURE](docs/ARCHITECTURE.md) — how and why
 - [DESIGN-DECISIONS](docs/DESIGN-DECISIONS.md) — decision log with rejected alternatives
 - [THIRD-PARTY-APPS](docs/THIRD-PARTY-APPS.md) — running against unmodified WARs (JPetStore)
-- [deploy/k8s](deploy/k8s/README.md) — the kind cluster demo
+- [deploy/k8s](deploy/k8s/README.md) — the pre-operator kind demo
 - [TODO](TODO.md) — roadmap and milestones · [agents.md](agents.md) — maintainer guardrails

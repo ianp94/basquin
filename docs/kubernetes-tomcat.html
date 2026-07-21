@@ -206,31 +206,32 @@ D=$(mktemp -d); (cd "$D" &amp;&amp; unzip -q /abs/your-app.war 'WEB-INF/classes/
 
   <hr class="rule">
 
-  <div class="note soon">
-    <span class="tag">Coming soon: the operator</span>
-    <p><strong>Baking agents into every image is the demo path, not the goal.</strong> A namespaced
-      Kubernetes operator is in progress that instruments an <em>unmodified</em> app image at deploy
-      time. You would <code>kubectl apply</code> a <code>ClosureJVMTarget</code> custom resource naming
-      one Deployment; the operator copies the agents in via an init container + shared volume and
-      appends the assembled flags to the container's existing <code>CATALINA_OPTS</code> /
-      <code>JAVA_TOOL_OPTIONS</code> — no custom rebuild, revertible by deleting the CR.</p>
+  <div class="note">
+    <span class="tag">You probably want the operator instead</span>
+    <p><strong>Baking agents into every image is the demo path, not the goal.</strong> The page above
+      shows the mechanics; in practice the <a href="operator.html">Kubernetes operator</a> does all of
+      it for you against an <em>unmodified</em> image. <code>kubectl apply</code> (or
+      <code>closurejvm instrument</code>) a <code>ClosureJVMTarget</code> naming one Deployment; the
+      operator copies the agents in via an init container + shared volume and appends the assembled
+      flags to the container's existing <code>CATALINA_OPTS</code> / <code>JAVA_TOOL_OPTIONS</code> —
+      no custom rebuild, and deleting the CR restores the Deployment byte-for-byte.</p>
     <p>It is an <strong>explicit-patch controller</strong>, not a mutating admission webhook: a
       namespaced <code>Role</code> that only patches Deployments you name, never cluster-wide pod
       mutation.</p>
-    <p><strong>Status — be precise:</strong> the design is settled and the operator is
-      <strong>in progress</strong>. The kubebuilder scaffold, CRD, and a no-op status-only controller
-      (P1) are merged; Deployment injection — copying the agents in and appending the flags (P2) — is
-      landing in an open PR. So <em>instrumenting</em> a target is arriving now. The operator does
-      <strong>not</strong> orchestrate runs today, though: launching the runner and dashboard against a
-      target (the <code>ClosureJVMCampaign</code> CRD that fires off a whole test — P5) is roadmap, not
-      built. Design details:
+    <p>Then a <code>ClosureJVMCampaign</code> runs a whole bounded test against that target — either
+      <code>explore</code> (coverage-guided fuzzing, emitting a corpus) or <code>load</code> (replaying
+      that corpus at a fixed concurrency) — launching the driver and a per-campaign dashboard and
+      aggregating results into status. Install it with Helm and drive it with the
+      <code>closurejvm</code> CLI: see the <a href="operator.html">operator guide</a>,
+      <a href="https://github.com/ianp94/closureJVM/blob/main/docs/OPERATOR-USAGE.md">OPERATOR-USAGE.md</a>,
+      and the design in
       <a href="https://github.com/ianp94/closureJVM/blob/main/docs/OPERATOR-DESIGN.md">OPERATOR-DESIGN.md</a>.</p>
   </div>
 </main>
 
 <footer class="footer">
   <div class="wrap-wide footer-inner">
-    <div>ClosureJVM — availability-first testing for JVM web apps.</div>
+    <div>ClosureJVM — Kubernetes-native fuzz and load testing for JVM web apps.</div>
     <div class="links">
       <a href="index.html">Home</a>
       <a href="getting-started.html">Get started</a>

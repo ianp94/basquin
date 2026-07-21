@@ -436,18 +436,23 @@ YAML
   downer="$($K -n "$NS" get deploy "$dname" -o jsonpath='{.metadata.ownerReferences[0].kind}' 2>/dev/null || true)"
   $K -n "$NS" rollout status deploy/"$dname" --timeout=90s || true
   davail="$($K -n "$NS" get deploy "$dname" -o jsonpath='{.status.availableReplicas}' 2>/dev/null || true)"
-  # Reachability + data: curl the dashboard Service from inside the cluster (the app pod has curl) and
-  # confirm the campaign id shows up — proof the driver's push actually landed during the run.
-  dapi=""
+  # Reachability + data: curl the dashboard Service from inside the cluster (the app pod has curl).
+  # Reads are token-gated (DD-028): a bare read must 401, a token-bearing read must return the
+  # campaign id — proof both that auth is enforced and that the driver's push actually landed.
+  dtok="$($K -n "$NS" get secret jpetstore-campaign-dashboard-token -o jsonpath='{.data.token}' 2>/dev/null | base64 -d || true)"
+  dapi=""; dunauth=""
   if [ -n "$apod" ]; then
+    dunauth="$($K -n "$NS" exec "$apod" -c jpetstore -- sh -c \
+      "curl -s -o /dev/null -w '%{http_code}' http://${dname}.${NS}.svc.cluster.local:7070/api/campaigns" 2>/dev/null || true)"
     dapi="$($K -n "$NS" exec "$apod" -c jpetstore -- sh -c \
-      "curl -s http://${dname}.${NS}.svc.cluster.local:7070/api/campaigns" 2>/dev/null || true)"
+      "curl -s -H 'X-Basquin-Token: ${dtok}' http://${dname}.${NS}.svc.cluster.local:7070/api/campaigns" 2>/dev/null || true)"
   fi
 
   check "status.dashboardURL points at the dashboard Service"  "echo '$durl' | grep -q '${dname}.*:7070'"
   check "dashboard Service exposes port 7070"                  "[ '$dsvc' = '7070' ]"
   check "operator owns the dashboard Deployment (GC wired)"    "[ '$downer' = 'BasquinCampaign' ]"
   check "dashboard Deployment is available"                    "[ '${davail:-0}' -ge 1 ]"
+  check "dashboard reads reject an unauthenticated request"    "[ '$dunauth' = '401' ]"
   check "dashboard is reachable and saw the campaign's pushes" "echo '$dapi' | grep -q 'jpetstore-campaign'"
   echo "  (dashboardURL=${durl:-<none>}; /api/campaigns=${dapi:-<none>})"
 else

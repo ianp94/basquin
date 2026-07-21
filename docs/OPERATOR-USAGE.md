@@ -395,13 +395,19 @@ grammar's `@`-value-file references — e.g. `@../corpus/jpetstore/values/itemId
 > driver, and the driver authenticates every push with it. So **writes are authenticated**: another
 > pod cannot POST spoofed status or findings into your campaign.
 >
-> **Reads are not.** `/api/campaign/…` and the HTML UI are deliberately unguarded, because a browser
-> reaching the dashboard through a port-forward cannot send a custom auth header. Any pod with
-> network reach to the ClusterIP can therefore *read* a campaign's findings. That is acceptable for a
-> single-tenant namespace (which is what the namespaced-by-design operator assumes) and is **not**
-> sufficient isolation on a shared multi-tenant cluster. Until read auth lands, restrict reach with a
-> `NetworkPolicy` — and note that some CNIs (including `kind`'s default) silently do not enforce
-> NetworkPolicy at all, so verify yours does before relying on it.
+> **Reads are authenticated too** (DD-028): with a token configured (always, for operator-managed
+> dashboards), `/api/…` and the HTML UI answer 401 without it. Scripts send `X-Basquin-Token`;
+> browsers authenticate once through the tokenized URL that `basquin dashboard` prints — the server
+> swaps `?token=…` for an `HttpOnly` session cookie and redirects so the token leaves the address
+> bar. The one unauthenticated endpoint is `/healthz` (the readiness probe; no campaign data).
+> Two residuals to know about: the token appears once in the URL (shell/browser history), and
+> browser cookies ignore ports — the session cookie rides to anything else the browser talks to on
+> `localhost`. Both are acceptable for a per-campaign throwaway token that dies with the campaign.
+> A `NetworkPolicy` remains sound defense-in-depth — but some CNIs (including `kind`'s default)
+> silently do not enforce NetworkPolicy, so verify yours does before relying on it.
+> This model assumes the dashboard stays on its default loopback/ClusterIP reach via `kubectl
+> port-forward` (an authenticated, encrypted tunnel); binding it wider without TLS in front sends
+> the token and cookie in plaintext.
 
 
 By default every campaign gets its **own** dashboard — the operator creates a Deployment + Service

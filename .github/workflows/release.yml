@@ -84,18 +84,25 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.21'
+      # Pure-Go (CGO_ENABLED=0), so cross-compiling every target is native and instant — no QEMU or
+      # buildx needed here, unlike the images (whose native .so forced the per-arch build, DD-027).
+      # -X main.version stamps the tag so `closurejvm version` identifies a downloaded binary.
       - name: Cross-compile the closurejvm CLI
         working-directory: operator
         run: |
           set -e
           T='${{ github.event.inputs.version || github.ref_name }}'; T="${T#v}"
           mkdir -p dist
-          for pair in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+          for pair in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
             os="${pair%/*}"; arch="${pair#*/}"
+            # Note: `[ x = y ] && ext=...` would abort the step under `set -e` when the test fails.
+            if [ "$os" = "windows" ]; then ext=".exe"; else ext=""; fi
             CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
-              go build -trimpath -ldflags="-s -w" -o "dist/closurejvm-$os-$arch" ./cmd/closurejvm
+              go build -trimpath -ldflags="-s -w -X main.version=$T" \
+                -o "dist/closurejvm-$os-$arch$ext" ./cmd/closurejvm
           done
           (cd dist && sha256sum closurejvm-* > checksums.txt)
+          ls -la dist/
       - name: Upload CLI assets to the release
         uses: softprops/action-gh-release@v2
         with:

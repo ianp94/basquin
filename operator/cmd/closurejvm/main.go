@@ -16,14 +16,28 @@ limitations under the License.
 
 // Command closurejvm is a thin CLI over the ClosureJVM operator's CRDs: it builds and applies real
 // typed custom resources (reusing the operator's api/v1alpha1 types + a controller-runtime client)
-// so you don't hand-write YAML + kubectl. The first cut ships `instrument`; `run`/`status`/`dashboard`
-// are planned (see TODO).
+// so you don't hand-write YAML + kubectl. Ships `instrument`, `run`, `status`, and `dashboard`.
 package main
 
 import (
 	"fmt"
 	"os"
+	"runtime"
 )
+
+// version is the release version, stamped at build time by release.yml via
+//
+//	-ldflags "-X main.version=<tag>"
+//
+// so a downloaded binary can identify which release it came from. Unstamped builds (a plain
+// `go build` / `go install` from a checkout) report "dev".
+var version = "dev"
+
+// versionString reports the release plus the platform and toolchain it was built for — the platform
+// matters because we publish six CLI binaries (linux/darwin/windows x amd64/arm64).
+func versionString() string {
+	return fmt.Sprintf("closurejvm %s (%s/%s, %s)", version, runtime.GOOS, runtime.GOARCH, runtime.Version())
+}
 
 const usage = `closurejvm — drive the ClosureJVM Kubernetes operator
 
@@ -35,6 +49,7 @@ Commands:
   run          Apply a ClosureJVMCampaign (with grammar/corpus ConfigMaps) and optionally tail it.
   status       Show the targets and campaigns in a namespace (optionally --watch).
   dashboard    Port-forward a campaign's dashboard to localhost.
+  version      Print the CLI version, platform, and Go toolchain.
   help         Show this help.
 
 Run "closurejvm <command> -h" for a command's flags.
@@ -68,6 +83,8 @@ func main() {
 			fmt.Fprintln(os.Stderr, "error: "+err.Error())
 			os.Exit(1)
 		}
+	case "version", "--version":
+		fmt.Println(versionString())
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:

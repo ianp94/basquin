@@ -219,11 +219,15 @@
   <section>
     <h2>The cold cliff</h2>
     <div class="callout">
-      <div class="big">8260 ms → 847 ms → 34 ms</div>
-      <p style="margin:.3rem 0 0">JSPWiki's front page on the first three hits after deploy. The
-        first-request-after-deploy cliff — JSP compilation plus cold-cache markup rendering — is an
+      <div class="big">8408 ms &amp; 10.7 MB on request #1 → ~33 ms steady</div>
+      <p style="margin:.3rem 0 0">The very first request of the soak (JSPWiki front page) took
+        <strong>8408 ms and allocated 10.7 MB</strong> — then the app settled to ~33 ms. The
+        first-request-after-deploy cliff (JSP compilation plus cold-cache markup rendering) is an
         availability pathology a warmed-up load test never sees and a crash test never flags. Basquin
         catches it on request #1.</p>
+      <p class="note" style="margin:.4rem 0 0">Source: <code>bench-results/jspwiki/findings-summary.txt</code>
+        (iteration 1: 8408 ms + 10713 KB) and the k6 steady-state median (33 ms). An earlier Phase-0
+        smoke run captured the fuller warm-up curve (8260 → 847 → 34 ms) in <code>deploy/bench/README.md</code>.</p>
     </div>
   </section>
 
@@ -257,6 +261,13 @@
         — findings are recorded, the run continues.</li>
       <li><strong>Driver:</strong> <code>HttpRouteDriveTarget</code>, single-flight, ~20 req/s, 12,000
         requests/app across a fixed route mix. Client latency from k6 at 1 VU.</li>
+      <li><strong>Two vantage points (why the committed files differ on "max").</strong> The heap and
+        latency <em>findings</em> (10.7 MB, 8.4 s) are measured <strong>server-side, inside the app JVM</strong>
+        by the valve — that's the app's true per-request cost (<code>findings-summary.txt</code>). The
+        <code>soak.csv</code> sampler runs in the <strong>client driver JVM</strong>, so its
+        <code>maxLatencyMs</code>/<code>maxHeapKb</code> columns are the driver's client-side view
+        (861 ms, ~2 MB) — smaller by design, and not the app's heap. The report's headline pathologies
+        are the server-side numbers.</li>
       <li><strong>Known gap:</strong> this pass ran the round-robin/load driver. Coverage-<em>guided</em>
         exploration (guided-vs-naive coverage climb) needs a JaCoCo agent in each app JVM and is a
         documented next addition — it would raise the finding counts, not lower them.</li>

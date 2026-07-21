@@ -79,3 +79,55 @@ func TestPrintStatusWithItems(t *testing.T) {
 		t.Errorf("should not show (none) when items exist:\n%s", out)
 	}
 }
+
+func TestCampaignRowExplore(t *testing.T) {
+	cp := &basquinv1alpha1.BasquinCampaign{
+		ObjectMeta: metav1.ObjectMeta{Name: "jpetstore-campaign"},
+		Spec: basquinv1alpha1.BasquinCampaignSpec{
+			TargetRef: basquinv1alpha1.TargetReference{Name: "jpetstore"},
+			// Mode left empty: defaults to explore.
+		},
+		Status: basquinv1alpha1.BasquinCampaignStatus{
+			Phase:       basquinv1alpha1.CampaignCompleted,
+			CoveragePct: "22.5",
+			Findings:    72,
+		},
+	}
+	row := campaignRow(cp)
+	if !strings.Contains(row, "explore") {
+		t.Errorf("expected row to show mode=explore:\n%s", row)
+	}
+	if !strings.Contains(row, "22.5") || !strings.Contains(row, "72 finds") {
+		t.Errorf("expected row to show coverage/findings metrics:\n%s", row)
+	}
+	if strings.Contains(row, "rps") {
+		t.Errorf("explore row should not show load metrics:\n%s", row)
+	}
+}
+
+func TestCampaignRowLoad(t *testing.T) {
+	cp := &basquinv1alpha1.BasquinCampaign{
+		ObjectMeta: metav1.ObjectMeta{Name: "checkout-load"},
+		Spec: basquinv1alpha1.BasquinCampaignSpec{
+			TargetRef: basquinv1alpha1.TargetReference{Name: "jpetstore"},
+			Mode:      "load",
+		},
+		Status: basquinv1alpha1.BasquinCampaignStatus{
+			Phase: basquinv1alpha1.CampaignCompleted,
+			Load: &basquinv1alpha1.LoadStatus{
+				ThroughputRps: "713.4",
+				LatencyMs:     basquinv1alpha1.LoadLatency{P50: 12, P90: 40, P99: 88, Max: 210},
+			},
+		},
+	}
+	row := campaignRow(cp)
+	if !strings.Contains(row, "load") {
+		t.Errorf("expected row to show mode=load:\n%s", row)
+	}
+	if !strings.Contains(row, "713.4") || !strings.Contains(row, "88") {
+		t.Errorf("expected row to show rps/p99 load metrics:\n%s", row)
+	}
+	if strings.Contains(row, "finds") {
+		t.Errorf("load row should not show explore metrics:\n%s", row)
+	}
+}

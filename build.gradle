@@ -17,6 +17,10 @@ repositories {
 
 dependencies {
     implementation 'net.bytebuddy:byte-buddy:1.14.12'
+    // Catalina API to compile TomcatBoundaryAdvice's connector-type refs; provided by the Tomcat
+    // runtime, NEVER bundled (the advice is inlined into StandardHostValve at instrumentation time).
+    // Same coordinates the tomcat-valve module compiles against; DD-011 keeps the bytecode namespace-free.
+    compileOnly 'org.apache.tomcat:tomcat-catalina:10.1.20'
     testImplementation 'junit:junit:4.13.2'
 }
 

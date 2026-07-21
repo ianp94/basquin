@@ -17,6 +17,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import net.bytebuddy.agent.builder.AgentBuilder;
+import net.bytebuddy.asm.Advice;
+import net.bytebuddy.matcher.ElementMatchers;
+
 /**
  * Core agent for Basquin - a persistent execution harness for JVM web applications
  * that uses coverage-guided exploration to discover availability, performance, and
@@ -56,7 +60,24 @@ public class Agent {
      */
     public static void premain(String agentArgs, java.lang.instrument.Instrumentation instrumentation) {
         System.out.println("Basquin Agent initialized");
-        // Agent initialization logic would go here
+        // Opt-in, default OFF: the bench path runs the valve AND this agent, and two boundaries would
+        // double-count. The operator sets -Dbasquin.boundary=agent (it mounts no valve); the bench path
+        // leaves it unset, so the valve stays the sole boundary there.
+        if (!"agent".equals(System.getProperty("basquin.boundary"))) {
+            return;
+        }
+        try {
+            new AgentBuilder.Default()
+                    .disableClassFormatChanges() // advice-only; no class-schema changes
+                    .type(ElementMatchers.named("org.apache.catalina.core.StandardHostValve"))
+                    .transform((builder, type, cl, module, pd) -> builder.visit(
+                            Advice.to(TomcatBoundaryAdvice.class).on(ElementMatchers.named("invoke"))))
+                    .installOn(instrumentation);
+            System.out.println("[Basquin] agent boundary installed on StandardHostValve");
+        } catch (Throwable t) {
+            // Degrade, don't break: an app whose Tomcat internals differ just runs uninstrumented.
+            System.err.println("[Basquin] agent boundary NOT installed: " + t);
+        }
     }
 
     // --- Explicit context API (preferred) ---

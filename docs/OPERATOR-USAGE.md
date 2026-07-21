@@ -227,6 +227,27 @@ basquin instrument -n basquin-system --deployment jpetstore \
 `basquin instrument -h` lists every flag. Running a campaign / reading status via the CLI is
 planned; for now the campaign is applied as YAML (next section).
 
+### Server-side oracle
+
+Instrumented targets now capture **server-side** heap/thread/latency findings (the availability
+oracle) — these come from the Tomcat app's own JVM, not the driver. This is enabled by
+`-Dbasquin.boundary=agent`, which the operator sets automatically. The server-side measurements
+include:
+
+- **Latency:** measured inside `StandardHostValve.invoke`, before and after the request.
+- **Heap delta:** captured per-request; configured with `invariants.heapDeltaMaxKb` on the target.
+- **Thread delta:** live non-daemon thread count at request start and end; configured with
+  `invariants.threadDelta` on the target.
+
+Violations are reported in response headers (`X-Basquin-Invariant-*`), which the driver harvests and
+records.
+
+> **In-cluster load control (`/__basquin`):** The instrumented app exposes an in-cluster-only control
+> surface on its own port. The load-mode driver toggles the valve into lock-free mode via
+> `/__basquin/mode` and reads the app's heap/thread drift via `/__basquin/drift`. These endpoints are
+> unauthenticated (in-cluster trust model, same as the JaCoCo coverage port; see DD-022); do not
+> expose the app's port outside the cluster. Hardening is tracked as a follow-up.
+
 ## 4. Run a test (`BasquinCampaign`)
 
 Once the target is `Injected`, a `BasquinCampaign` drives it. The operator gates on the target

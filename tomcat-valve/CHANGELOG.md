@@ -6,6 +6,7 @@ Release-level changelog: [`../CHANGELOG.md`](../CHANGELOG.md).
 ## [Unreleased]
 
 - **Lock-free load mode (DD-029):** the valve now branches on `LoadMode` — explore serializes (unchanged), load passes through lock-free — and intercepts `/__basquin/*` control requests (mode toggle / drift) on the app port. Still namespace-free (verified).
+- **Changed:** `BasquinValve` now delegates its boundary to the shared `agent.RequestBoundary` (behavior unchanged) (DD-030).
 
 
 ## [0.2.0] — 2026-07-21

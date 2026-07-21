@@ -431,14 +431,18 @@ the P1–P4 injection work (a campaign needs a working instrumented target). Des
       that catches what envtest can't), but reclaim the ~3 min that is build plumbing, not testing
       (analysis from step timings of run 29791523687, 2026-07-21: ~1 min setup incl. 45s WAR build +
       409s e2e.sh). No test-semantics changes:
-  - [ ] Parallelize the four image builds + kind cluster creation in `e2e.sh` (`&`/`wait` — all
-        five are independent; builds are sequential today) *(~1–1.5 min)*
+  - [x] Parallelize the four image builds + kind cluster creation in `e2e.sh` — done: one up-front
+        gradle invocation stages every jar (so the build.sh gradle calls are up-to-date no-ops and
+        don't contend), then the four docker builds + cluster creation run concurrently, then the
+        four `kind load`s. Per-build logs land in `/tmp/e2e-build-*.log` and are dumped on failure;
+        the build.sh CRLF gradlew shim got a PID-unique name so parallel runs can't race on it.
   - [ ] Docker layer caching for the operator image in CI (`docker buildx --cache-from/--cache-to
-        type=gha`) — the golang:1.21 multi-stage build re-downloads all Go modules every run *(~1 min warm)*
-  - [ ] Cache the built JPetStore WAR keyed on `JPETSTORE_SHA` (not just `~/.m2`) — the upstream
-        commit is pinned, so skip the mvn build entirely on cache hit *(~45s)*
-  - [ ] `concurrency: cancel-in-progress` on `operator-e2e.yml` so push-after-push doesn't queue
-        stale 8-min runs
+        type=gha`) — the golang:1.21 multi-stage build re-downloads all Go modules every run *(~1 min warm;
+        needs a buildx docker-container builder + `--load`, so it's its own change)*
+  - [x] Cache the built JPetStore WAR keyed on `JPETSTORE_SHA` — done: the WAR artifact itself is
+        cached (`~/jpetstore-war`); clone+mvn (and the Maven install + m2 cache steps) are skipped
+        entirely on a hit.
+  - [x] `concurrency: cancel-in-progress` on `operator-e2e.yml` — done (group `operator-e2e-<ref>`).
   - Optional, mild signal trade-off (only if the above isn't enough): explore `iterations: 200`→100
     (assertion is only non-zero coverage) *(~30–60s)*; load `duration: 45s`→30s *(~15s)*
 - [ ] Validating enforcement for `container` required-when-ambiguous (a CRD schema can't express "required only when the pod has >1 container") — pairs with P2

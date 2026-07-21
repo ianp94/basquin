@@ -48,21 +48,43 @@ command -v docker >/dev/null || die "docker not found"
 command -v kind   >/dev/null || die "kind not found"
 command -v kubectl >/dev/null || die "kubectl not found"
 
-say "Ensure kind cluster '$CLUSTER'"
-kind get clusters | grep -qx "$CLUSTER" || kind create cluster --name "$CLUSTER"
+# --- build everything in parallel with cluster creation (pipeline-speed, TODO "E2e pipeline speed").
+# One gradle invocation stages every jar up front, so the build.sh scripts' own gradle calls are
+# up-to-date no-ops and the four docker builds are genuinely independent.
+say "Pre-build all jars (single gradle invocation)"
+(
+  cd "$ROOT"
+  GRADLEW=./gradlew
+  if head -1 ./gradlew | grep -q $'\r'; then
+    tr -d '\r' < ./gradlew > .gradlew.e2e.lf && chmod +x .gradlew.e2e.lf && GRADLEW=./.gradlew.e2e.lf
+  fi
+  "$GRADLEW" stageAgents copyJacocoAgent runnerJar jar -q
+  rm -f .gradlew.e2e.lf
+)
 
-say "Build + load agents image ($AGENTS_IMAGE)"
-bash "$ROOT/deploy/agents-image/build.sh" "$TAG" "$CLUSTER"
+say "Ensure kind cluster '$CLUSTER' (parallel with image builds)"
+( kind get clusters | grep -qx "$CLUSTER" || kind create cluster --name "$CLUSTER" ) \
+  > /tmp/e2e-cluster.log 2>&1 & cluster_pid=$!
 
-say "Build + load operator image ($OPERATOR_IMAGE)"
-docker build -t "$OPERATOR_IMAGE" "$ROOT/operator"
-kind load docker-image "$OPERATOR_IMAGE" --name "$CLUSTER"
+say "Build images in parallel (agents, operator, runner, dashboard)"
+bash "$ROOT/deploy/agents-image/build.sh"    "$TAG" > /tmp/e2e-build-agents.log    2>&1 & agents_pid=$!
+docker build -t "$OPERATOR_IMAGE" "$ROOT/operator"  > /tmp/e2e-build-operator.log  2>&1 & operator_pid=$!
+bash "$ROOT/deploy/runner-image/build.sh"    "$TAG" > /tmp/e2e-build-runner.log    2>&1 & runner_pid=$!
+bash "$ROOT/deploy/dashboard-image/build.sh" "$TAG" > /tmp/e2e-build-dashboard.log 2>&1 & dashboard_pid=$!
+for pair in "agents:$agents_pid" "operator:$operator_pid" "runner:$runner_pid" "dashboard:$dashboard_pid"; do
+  name="${pair%%:*}"; pid="${pair#*:}"
+  wait "$pid" || { echo "--- $name image build failed; full log: ---"; cat "/tmp/e2e-build-$name.log"; die "$name image build failed"; }
+done
+wait "$cluster_pid" || { cat /tmp/e2e-cluster.log; die "kind cluster create failed"; }
 
-say "Build + load runner image ($RUNNER_IMAGE)"
-bash "$ROOT/deploy/runner-image/build.sh" "$TAG" "$CLUSTER"
-
-say "Build + load dashboard image ($DASHBOARD_IMAGE)"
-bash "$ROOT/deploy/dashboard-image/build.sh" "$TAG" "$CLUSTER"
+say "Load images into kind (parallel)"
+load_pids=()
+for img in "$AGENTS_IMAGE" "$OPERATOR_IMAGE" "$RUNNER_IMAGE" "$DASHBOARD_IMAGE"; do
+  kind load docker-image "$img" --name "$CLUSTER" & load_pids+=($!)
+done
+for pid in "${load_pids[@]}"; do
+  wait "$pid" || die "kind load failed"
+done
 
 say "Ensure raw app image ($RAW_APP_IMAGE)"
 if ! docker image inspect "$RAW_APP_IMAGE" >/dev/null 2>&1; then

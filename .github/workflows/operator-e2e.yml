@@ -38,11 +38,21 @@ on:
       - 'gradle/**'
       - '.github/workflows/operator-e2e.yml'
 
+# A newer push to the same ref supersedes the ~8-min run in flight — don't queue stale runs.
+concurrency:
+  group: operator-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   e2e:
     name: In-cluster e2e (Helm install)
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      # Pin the upstream commit: jpetstore-6 is the one dependency this workflow can't control, and an
+      # unpinned master could break CI (new build tooling requirements) with no change in this repo.
+      # Bump JPETSTORE_SHA deliberately when you want a newer upstream — the WAR cache keys off it.
+      JPETSTORE_SHA: c8f62cc76b8ac08066bb79618cf5824144f24e03
     steps:
       - uses: actions/checkout@v4
       - run: chmod +x gradlew
@@ -63,23 +73,29 @@ jobs:
           curl -fsSLo ./kind https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
           chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
           kind version
+      # The WAR is a pure function of the pinned SHA, so cache the artifact itself and skip the
+      # entire clone+mvn build (~45s) on a hit. The m2 cache below only matters on a miss.
+      - name: Cache the built JPetStore WAR (keyed on the pinned upstream SHA)
+        id: war-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/jpetstore-war
+          key: jpetstore-war-${{ env.JPETSTORE_SHA }}
       - name: Set up Maven 3.9 (JPetStore-6 needs 3.9+)
+        if: steps.war-cache.outputs.cache-hit != 'true'
         run: |
           set -e
           curl -fsSL https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz \
             | tar xz -C /opt
           echo "/opt/apache-maven-3.9.9/bin" >> "$GITHUB_PATH"
       - name: Cache Maven (for the JPetStore WAR build)
+        if: steps.war-cache.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository
           key: m2-jpetstore-${{ runner.os }}
       - name: Build the JPetStore WAR (the un-instrumented target app under test)
-        # Pin the upstream commit: jpetstore-6 is the one dependency this workflow can't control, and an
-        # unpinned master could break CI (new build tooling requirements) with no change in this repo.
-        # Bump JPETSTORE_SHA deliberately when you want a newer upstream.
-        env:
-          JPETSTORE_SHA: c8f62cc76b8ac08066bb79618cf5824144f24e03
+        if: steps.war-cache.outputs.cache-hit != 'true'
         run: |
           set -e
           mvn -version
@@ -88,7 +104,10 @@ jobs:
           git -C /tmp/jpetstore-6 checkout -q FETCH_HEAD
           # JPetStore-6's build plugins gate on newer tooling; skip the gates (see docs/THIRD-PARTY-APPS.md).
           mvn -q -f /tmp/jpetstore-6/pom.xml -DskipTests -Denforcer.skip=true -Dmaven.gitcommitid.skip=true package
-          echo "JPETSTORE_WAR=/tmp/jpetstore-6/target/jpetstore.war" >> "$GITHUB_ENV"
+          mkdir -p ~/jpetstore-war
+          cp /tmp/jpetstore-6/target/jpetstore.war ~/jpetstore-war/
+      - name: Point the e2e at the (built or cached) WAR
+        run: echo "JPETSTORE_WAR=$HOME/jpetstore-war/jpetstore.war" >> "$GITHUB_ENV"
       - name: Run the in-cluster e2e (builds every image, Helm-installs the operator, drives it)
         run: INSTALL=helm bash deploy/e2e/e2e.sh
       - name: Operator logs on failure

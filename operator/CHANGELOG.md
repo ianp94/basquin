@@ -30,7 +30,6 @@ First published release (`ghcr.io/ianp94/basquin-operator`; CLI binaries on the 
   explore + load campaigns, dashboard, zero RBAC errors).
 
 ### Known limitations
-- `driver.corpusConfigMap` is accepted but not yet mounted into the driver (grammar structure
-  only reaches the app).
-- Campaign spec edits mid-`Running` are a silent no-op (driver-Job spec-hash idempotency pending).
-- War-only target images yield coverage 0 silently (fail-loud pending).
+- War-only target images: the coverage-classes initContainer needs an exploded `WEB-INF/classes`
+  in the target image; an unexploded `ROOT.war` fails loud (`verify-classes`) rather than
+  reporting a silent 0%. Workaround: explode the war at image-build time.

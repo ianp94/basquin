@@ -41,8 +41,8 @@ repo (`https://ianp94.github.io/basquin/charts`).
 - arm64 images are **build-validated only** (the native `.so` has not yet been loaded by a real
   arm64 JVM; a bad `-agentpath` library is fatal at JVM startup).
 - Dashboard **reads** are unauthenticated (writes are token-authenticated) — single-tenant only.
-- Campaign `driver.corpusConfigMap` seed values are not yet mounted into the driver.
-- War-only target images yield coverage 0 (the coverage-classes initContainer needs an exploded
-  `WEB-INF/classes`).
+- War-only target images: the coverage-classes initContainer needs an exploded `WEB-INF/classes`
+  in the target image; an unexploded `ROOT.war` fails loud (`verify-classes`) rather than
+  reporting a silent 0%. Workaround: explode the war at image-build time.
 
 [0.2.0]: https://github.com/ianp94/basquin/releases/tag/v0.2.0

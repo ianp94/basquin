@@ -21,11 +21,23 @@ All run **unmodified** via the namespace-free Tomcat valve (DD-009/DD-011).
 |-----|------|---------------------|---------|--------|
 | **JPetStore-6** (MyBatis) | proven baseline; re-run for comparable data | `javax` / Tomcat 9 | in-memory HSQLDB | done (docs/THIRD-PARTY-APPS.md) |
 | **Apache JSPWiki** | core new CMS target | TBD (verify 2.11 `javax` vs 2.12 `jakarta`) | filesystem page store (no external DB) | **verify in Phase 0** |
-| **Apache Roller** *(stretch)* | blog CMS | TBD | needs embedded DB (Derby) | **stretch — only if Phase 0 build is clean** |
+| **Apache Roller** *(stretch)* | blog CMS with a real backend | TBD | orchestrated DB container (Derby/MySQL/Postgres) or embedded Derby | **stretch — only if Phase 0 stands it up cleanly** |
 
-**Fallback:** if Roller won't build cleanly within a bounded effort, swap for a lighter CMS-shaped
-app (candidate pool: Apache Guacamole client, a JSP-based CMS, or drop to 2 apps) and document the
-swap. Never let a fighting build block the campaign.
+**A backed-by-a-real-DB target is a feature, not just a tolerance.** Real CMS apps run against a
+database; standing one up lets the campaign surface **DB-driven pathologies** — query-latency
+spikes, connection-pool exhaustion/queuing under load, per-request heap tied to result sets —
+through the full stack. That's precisely the production pain a CMS provider feels, so a DB-backed
+target *strengthens* the pitch rather than merely being accommodated.
+
+**Backend orchestration is on the table (user-approved).** For an app needing a backend, scaffold a
+**Docker-Compose or kind** setup (app WAR on Tomcat + valve + agent, alongside a DB container) so
+the app runs realistically. This makes Roller (and other DB-backed CMS apps) genuinely viable
+rather than blocked on "needs a DB."
+
+**Fallback order:** (1) if Roller specifically fights its build within a bounded effort, swap for a
+**lighter DB-backed CMS** and orchestrate its backend the same way; (2) failing that, a lighter
+file-store CMS; (3) worst case, ship the 2-app report (JPetStore + JSPWiki is already a complete
+story) and note the swap. Never let a fighting build block the campaign.
 
 Every app version is pinned to a commit/release (like `JPETSTORE_SHA`) and recorded in the report.
 
@@ -98,8 +110,10 @@ fabricated.** Contents:
 
 ## Phasing (de-risk before burning hours)
 
-- **Phase 0 — de-risk builds.** Build each WAR, deploy with the valve, confirm findings flow on a
-  ~2-min smoke run. Decide Roller in/out here. No long runs until this is green per app.
+- **Phase 0 — de-risk builds.** Build each WAR, deploy with the valve (scaffolding a
+  Compose/kind + DB-container setup where the app needs a backend), confirm findings flow on a
+  ~2-min smoke run. Decide Roller (or its DB-backed substitute) in/out here. No long runs until
+  this is green per app.
 - **Phase 1 — instrument.** Per-app grammar + seed corpus; the periodic sampler; a short guided run
   confirming coverage climbs and findings land.
 - **Phase 2 — timed runs.** The ~1-hour baseline/guided/soak sequence per app (background).

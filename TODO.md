@@ -369,6 +369,20 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 - [ ] Pull the server-side stack snippet into Docker/valve fuzz triage metadata *(v0.4 P3)*
 
 ### Exploration & coverage
+- [ ] **Cost-guided ("pheromone") exploration — a second objective alongside coverage** *(user idea, 2026-07-21; design-note first)*.
+  Today the coverage-guided loop keeps an input iff it reached **new code**. Add a parallel signal that keeps/reinforces
+  inputs by the **invariant cost they induced** — latency ms, heap-delta KB, thread/executor growth — so the search
+  climbs a *pathology* gradient, not just a coverage one. Framed as **ant pheromones**: each input carries a cost score;
+  expensive inputs get reinforced (higher selection/mutation weight), cheap ones evaporate over time (decay so the search
+  doesn't ossify on one hot spot). Design questions to settle in the note: (a) cost function + normalization across
+  latency/heap/threads (per-invariant weights, or Pareto-keep on any axis); (b) how it composes with coverage — union
+  ("interesting = new code OR new-high cost"), weighted blend, or a switchable objective; (c) evaporation/decay schedule
+  to keep exploring; (d) not just rediscovering the globally-most-expensive route — reward *marginal* cost increase like
+  coverage rewards *marginal* edges. **Why it matters most for load mode:** a dynamic load test wants to concentrate load
+  where it hurts — replay weighted by cost-pheromone so the soak hammers the states that grow heap / stall latency /
+  leak, surfacing degradation faster than uniform replay. Directly extends DD-026 (load) and the coverage-guided
+  `CoverageGuidedRun`; the harness already measures every input's latency/heap/thread cost (the invariant layer), so the
+  signal is *already computed* — this is about feeding it back into selection. Likely its own DD.
 - [ ] POST support with form bodies — several JPetStore handlers are POST-only in real usage *(v0.10)*
 - [ ] Session affinity for multi-pod sequences (`sessionAffinity: ClientIP` or per-pod addressing) — a round-robin Service breaks `@sequence` transactions *(v0.10, DD-020 limit)*
 - [ ] Per-instance finding attribution — valve stamps `HOSTNAME` into a response header the driver already parses, so "one sick pod" ≠ "systemic" *(v0.10, DD-020 limit)*

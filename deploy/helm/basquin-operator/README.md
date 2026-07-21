@@ -117,10 +117,11 @@ tag is the only version input. `deploy/helm/publish.sh` remains for a manual/boo
 
 | Value | Default | Purpose |
 |-------|---------|---------|
-| `image.repository` / `image.tag` | `basquin/operator` / `0.2.0` | the controller image |
-| `images.agents` | `basquin/agents:0.2.0` | `--agents-image` (injection initContainer) |
-| `images.runner` | `basquin/runner:0.2.0` | `--runner-image` (campaign driver Job) |
-| `images.dashboard` | `basquin/dashboard:0.2.0` | `--dashboard-image` (per-campaign dashboard) |
+| `imageTag` | `""` (= the chart's `appVersion`) | the single version every image below resolves to |
+| `image.repository` | `ghcr.io/ianp94/basquin-operator` | the controller image |
+| `images.agents` | `ghcr.io/ianp94/basquin-agents` | `--agents-image` (injection initContainer) |
+| `images.runner` | `ghcr.io/ianp94/basquin-runner` | `--runner-image` (campaign driver Job) |
+| `images.dashboard` | `ghcr.io/ianp94/basquin-dashboard` | `--dashboard-image` (per-campaign dashboard) |
 | `leaderElect` | `true` | leader election (adds a namespaced leader-election Role) |
 | `resources` | 10m/64Mi → 500m/128Mi | controller resource requests/limits |
 
@@ -135,6 +136,12 @@ left in place. Keep `crds/` and the RBAC in step with the operator's generated m
 
 ## Notes
 
+- All four images are **multi-arch manifest lists** (`linux/amd64` + `linux/arm64`), so an arm64
+  cluster (Graviton, Apple-Silicon `kind`) pulls the right variant automatically.
+  ⚠️ **arm64 is build-validated only:** CI compiles the native agent's `.so` for arm64 under
+  emulation, but no arm64 runner has yet *loaded* it in a real JVM. A bad `-agentpath` library is
+  fatal at JVM startup rather than degrading gracefully — so treat arm64 as unproven until a real
+  arm64 functional run lands.
 - RBAC is **Roles + RoleBindings** (namespaced), not ClusterRoles — matching the operator's
   namespaced design. The rules mirror `operator/config/rbac/role.yaml`.
 - One `imageTag` value (default: the chart's `appVersion`) sets all four image tags, so a release is

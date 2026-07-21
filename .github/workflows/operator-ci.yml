@@ -1,0 +1,58 @@
+name: Operator CI
+
+# Fast Go-side gate for the operator: build, vet, fmt, envtest suite, and a drift check that the
+# committed generated artifacts (CRDs, RBAC, deepcopy) match what `make manifests generate` emits.
+# Complements the kind e2e (operator-e2e.yml), which is the slow in-cluster truth — this catches
+# compile errors, test regressions, and forgotten `make manifests` in ~2 min instead of ~5-6.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'operator/**'
+      - '.github/workflows/operator-ci.yml'
+  pull_request:
+    paths:
+      - 'operator/**'
+      - '.github/workflows/operator-ci.yml'
+
+concurrency:
+  group: operator-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: build + vet + envtest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: operator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache-dependency-path: operator/go.sum
+      # setup-envtest downloads the kubebuilder control-plane binaries (~40MB) into operator/bin;
+      # cache them so warm runs skip the download. Keyed on the Makefile since it pins both the
+      # envtest tool version and ENVTEST_K8S_VERSION.
+      - name: Cache envtest assets + tools
+        uses: actions/cache@v4
+        with:
+          path: operator/bin
+          key: envtest-${{ runner.os }}-${{ hashFiles('operator/Makefile') }}
+          # Partial restore on a Makefile edit that didn't change tool versions (#51 review); the
+          # Makefile's versioned tool paths mean a stale binary can't be silently reused anyway.
+          restore-keys: envtest-${{ runner.os }}-
+      - name: Build
+        run: go build ./...
+      - name: make test (manifests + generate + fmt + vet + envtest suite)
+        run: make test
+      # make test just re-ran controller-gen and go fmt over the tree. If that produced any diff,
+      # a generated artifact (CRD/RBAC/deepcopy) or formatting was committed stale — fail loud here
+      # instead of letting the chart's hand-synced copies drift further downstream.
+      - name: Generated artifacts + formatting are committed (no drift)
+        working-directory: .
+        run: |
+          git diff --exit-code -- operator/ \
+            || { echo "::error::make manifests/generate/fmt produced a diff — run 'make -C operator test' and commit the result"; exit 1; }

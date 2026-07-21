@@ -61,6 +61,10 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
+	# Fetch the assets as an explicit step so a failed download fails THIS target loudly — the
+	# $(shell ...) below swallows errors into an empty KUBEBUILDER_ASSETS, which surfaces later as
+	# a baffling `exec: "etcd": executable file not found` from envtest (seen on first-run CI).
+	$(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path >/dev/null
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 # Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
@@ -164,7 +168,10 @@ GOLANGCI_LINT = $(LOCALBIN)/golangci-lint-$(GOLANGCI_LINT_VERSION)
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.3.0
 CONTROLLER_TOOLS_VERSION ?= v0.14.0
-ENVTEST_VERSION ?= release-0.17
+# release-0.17's setup-envtest still downloads from the retired GCS bucket (401s on any machine
+# without pre-cached assets); release-0.19+ uses the current release index. The TOOL version is
+# independent of the controller-runtime library version the tests link against.
+ENVTEST_VERSION ?= release-0.19
 GOLANGCI_LINT_VERSION ?= v1.57.2
 
 .PHONY: kustomize

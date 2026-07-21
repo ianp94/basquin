@@ -58,6 +58,29 @@ public final class LoadRun {
         // DD-029: put the target's valve in lock-free load mode for the run (+ slack) so it can be driven
         // concurrently. The TTL auto-reverts if this driver dies mid-run; we also revert explicitly below.
         setTargetMode(baseUrl, "load", warmupMs + durationMs + 30_000L);
+        runner.util.StatusReporter.setMode("load");
+
+        // DD-033: the snapshotter owns the ONE drift poller (both live pushes and the terminal
+        // number reuse its last poll) and stores it here so the terminal path doesn't poll again.
+        final java.util.concurrent.atomic.AtomicReference<Drift> lastDrift = new java.util.concurrent.atomic.AtomicReference<>();
+        Thread snapshotter = new Thread(() -> {
+            long intervalMs = Long.getLong("basquin.dashboard.pushIntervalMs", 2000L);
+            while (System.nanoTime() < deadlineNanos) {
+                try { Thread.sleep(intervalMs); } catch (InterruptedException e) { break; }
+                if (System.nanoTime() < measureFromNanos || !baselined.get()) continue; // not measuring yet
+                long total = requests.get();
+                double windowSec = (System.nanoTime() - measureFromNanos) / 1e9; // SAME window as terminal
+                Drift cur = pollDrift(baseUrl);                                   // the ONE poller
+                if (cur != null) lastDrift.set(cur);
+                DriftDelta d = driftDelta(baselineDrift.get(), cur);
+                LoadSnapshot s = computeLoadSnapshot(hist, total, serverError.get(), windowSec,
+                        d.heapDriftKb, d.threadDrift);
+                runner.util.StatusReporter.recordLoad(s.throughputRps, s.p50, s.p90, s.p99, s.max,
+                        s.heapDriftKb, s.threadDrift, s.serverErrors, s.requests);
+            }
+        }, "Basquin-Load-Snapshot");
+        snapshotter.setDaemon(true);
+        snapshotter.start();
 
         Thread[] workers = new Thread[Math.max(1, concurrency)];
         for (int w = 0; w < workers.length; w++) {
@@ -90,6 +113,10 @@ public final class LoadRun {
             t.join();
         }
 
+        // DD-033: stop the snapshotter now that the workers are done pushing metrics.
+        snapshotter.interrupt();
+        try { snapshotter.join(3000); } catch (InterruptedException ignored) { }
+
         long total = requests.get();
         // Actual measured window (warmup-end → now), not the configured duration — a worker's in-flight
         // request can finish past the deadline, so the real window is slightly longer; using it keeps
@@ -97,10 +124,20 @@ public final class LoadRun {
         double measuredSec = Math.max(0.001, (System.nanoTime() - measureFromNanos) / 1e9);
         // DD-029: drift is the TARGET's heap/threads (polled over /__basquin/drift), first→last — not the
         // driver JVM's. Then leave load mode so the target serializes again for any later explore run.
-        DriftDelta drift = driftDelta(baselineDrift.get(), pollDrift(baseUrl));
-        setTargetMode(baseUrl, "explore", 0);
+        // DD-033: the terminal drift reuses the snapshotter's last poll (one source of truth) instead of
+        // polling again; fall back to a single poll only if the snapshotter never ran.
+        Drift terminalDrift = lastDrift.get();
+        if (terminalDrift == null) terminalDrift = pollDrift(baseUrl);
+        DriftDelta drift = driftDelta(baselineDrift.get(), terminalDrift);
         long heapDrift = drift.heapDriftKb;
         int threadDrift = drift.threadDrift;
+
+        // DD-033: push the terminal snapshot to the dashboard before reverting the target's mode, so the
+        // authoritative numbers land there too.
+        LoadSnapshot fin = computeLoadSnapshot(hist, total, serverError.get(), measuredSec, drift.heapDriftKb, drift.threadDrift);
+        runner.util.StatusReporter.recordLoad(fin.throughputRps, fin.p50, fin.p90, fin.p99, fin.max,
+                fin.heapDriftKb, fin.threadDrift, fin.serverErrors, fin.requests);
+        setTargetMode(baseUrl, "explore", 0);
 
         String json = String.format(java.util.Locale.ROOT,
                 "{\"load\":{\"requests\":%d,\"throughputRps\":\"%.1f\","
@@ -246,5 +283,28 @@ public final class LoadRun {
             if (hist.get(ms) > 0) return ms;
         }
         return 0;
+    }
+
+    /** A single load snapshot (DD-033) — the same fields live and terminal, so they converge. */
+    public static final class LoadSnapshot {
+        public final double throughputRps; public final int p50, p90, p99, max;
+        public final long heapDriftKb; public final int threadDrift; public final long serverErrors, requests;
+        LoadSnapshot(double t, int p50, int p90, int p99, int max, long h, int td, long se, long req) {
+            this.throughputRps = t; this.p50 = p50; this.p90 = p90; this.p99 = p99; this.max = max;
+            this.heapDriftKb = h; this.threadDrift = td; this.serverErrors = se; this.requests = req;
+        }
+    }
+
+    /** Compute a snapshot from the LIVE histogram + counters + a drift delta. Torn reads are acceptable
+     *  (approximate live percentiles); the terminal call uses the same code so live converges to terminal.
+     *  Public so {@code test.LoadSnapshotTest} (package {@code test}, per DD-033) can reach it without a
+     *  server. */
+    public static LoadSnapshot computeLoadSnapshot(AtomicLongArray hist, long total, long serverErrors,
+            double windowSec, long heapDriftKb, int threadDrift) {
+        double rps = total / Math.max(0.001, windowSec);
+        return new LoadSnapshot(rps,
+            percentile(hist, total, 0.50), percentile(hist, total, 0.90),
+            percentile(hist, total, 0.99), maxBucket(hist),
+            heapDriftKb, threadDrift, serverErrors, total);
     }
 }

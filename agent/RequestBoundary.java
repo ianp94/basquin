@@ -29,7 +29,7 @@ public final class RequestBoundary {
         public boolean skipApp() { return phase == Phase.CONTROL_HANDLED; }
     }
 
-    /** onExit's result: invariant headers to set (never null; may be empty) + throwable to propagate. */
+    /** onExit's result: invariant + cost headers to set (never null; may be empty) + throwable to propagate. */
     public static final class ExitResult {
         public final Map<String, String> headers;
         public final Throwable toThrow; // null if clean

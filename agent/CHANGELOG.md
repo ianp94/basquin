@@ -7,6 +7,7 @@ Release-level changelog: [`../CHANGELOG.md`](../CHANGELOG.md).
 
 - **Lock-free load mode (DD-029):** `LoadMode` flag (serialized explore vs lock-free load, TTL auto-revert) + a `/__basquin/drift` absolute-`Runtime` snapshot for target-side heap/thread drift; `LoadModeControl` handles the control requests.
 - **Server-side request boundary (DD-030):** installed by `premain` via ByteBuddy (`-Dbasquin.boundary=agent`), sharing `RequestBoundary` with the valve; brings the availability oracle to the operator path.
+- **`X-Basquin-Cost` header (DD-031):** `RequestBoundary.onExit` adds `X-Basquin-Cost: <latencyMs>,<heapDeltaKb>,<threadDelta>` on the `EXPLORE_BEGAN` path, read from `Agent` statics before `ITERATION_LOCK` releases (same attributability point as the invariant header); best-effort, unconditional, and inert for consumers that don't read it — feeds the runner's cost-ranked replay corpus.
 
 
 ## [0.2.0] — 2026-07-21

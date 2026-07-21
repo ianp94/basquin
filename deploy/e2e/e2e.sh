@@ -403,6 +403,23 @@ YAML
   check "DD-030: agent boundary serves /__basquin/mode control"          "[ '$smode' = 'ok:explore' ]"
   echo "  (server-side boundary: drift=${sdrift:-<none>}, mode-toggle=${smode:-<none>})"
 
+  # DD-031: cost-ranked replay corpus. (a) the target-side boundary emits the per-request cost channel
+  # (X-Basquin-Cost: latencyMs,heapDeltaKb,threadDelta) on the same explore boundary path exercised
+  # above — proof the cost signal is live in-cluster via the DD-030 boundary, agent or valve alike.
+  scost=""
+  if [ -n "$apod" ]; then
+    scost="$($K -n "$NS" exec "$apod" -c jpetstore -- sh -c "curl -s -D - -o /dev/null http://localhost:8080/ | tr -d '\r' | awk -F': ' '/^X-Basquin-Cost/{print \$2}'" 2>/dev/null || true)"
+  fi
+  check "DD-031: boundary emits X-Basquin-Cost (latency,heap,thread) in-cluster" "echo '$scost' | grep -qE '^[0-9-]+,[0-9-]+,[0-9-]+$'"
+  echo "  (cost header: ${scost:-<none>})"
+
+  # (b) the explore driver Job (its pod persists until campaign GC) logged the cost-ranked replay
+  # summary (Task 6): proof the corpus was actually ranked by cost, not just that the header exists.
+  # $cjob is status.driverJob, captured above right after the campaign reached Completed.
+  dcost="$($K -n "$NS" logs "job/$cjob" 2>/dev/null | grep -m1 'replay cost-ranked' || true)"
+  check "DD-031: driver emitted a cost-ranked replay (top routes + costs)" "echo '$dcost' | grep -qE 'replay cost-ranked \(top [0-9]+\): .+='"
+  echo "  ($dcost)"
+
   # --- DD-026 PR 2: replay that corpus as a LOAD campaign, watch invariants under sustained traffic --
   if [ -n "$ccorpus" ]; then
     say "Apply a mode:load BasquinCampaign replaying the emitted corpus"

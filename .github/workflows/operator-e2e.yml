@@ -53,6 +53,9 @@ jobs:
       # unpinned master could break CI (new build tooling requirements) with no change in this repo.
       # Bump JPETSTORE_SHA deliberately when you want a newer upstream — the WAR cache keys off it.
       JPETSTORE_SHA: c8f62cc76b8ac08066bb79618cf5824144f24e03
+      # Single source for the image tag: the prebuild step tags with it AND e2e.sh receives it, so
+      # the two can't silently drift apart (a mismatch would quietly forfeit the prebuild cache win).
+      TAG: 0.2.0
     steps:
       - uses: actions/checkout@v4
       - run: chmod +x gradlew
@@ -113,18 +116,17 @@ jobs:
       # The operator image is the one docker build whose layers are worth caching across runs: a
       # golang:1.21 multi-stage build whose `go mod download` + compile dominate (~1 min+). Ephemeral
       # runners have no local layer cache, so pre-build here with the gha cache backend and --load it
-      # into the daemon; e2e.sh (PREBUILT_OPERATOR=1) then skips its own uncached rebuild. The tag
-      # must match e2e.sh's default OPERATOR_IMAGE (basquin/operator:${TAG:-0.2.0}).
+      # into the daemon; e2e.sh (PREBUILT_OPERATOR=1) then skips its own uncached rebuild.
       - name: Pre-build the operator image (gha layer cache)
         uses: docker/build-push-action@v6
         with:
           context: operator
-          tags: basquin/operator:0.2.0
+          tags: basquin/operator:${{ env.TAG }}
           load: true
           cache-from: type=gha,scope=operator-image
           cache-to: type=gha,mode=max,scope=operator-image
       - name: Run the in-cluster e2e (builds every image, Helm-installs the operator, drives it)
-        run: INSTALL=helm PREBUILT_OPERATOR=1 bash deploy/e2e/e2e.sh
+        run: INSTALL=helm PREBUILT_OPERATOR=1 TAG="$TAG" bash deploy/e2e/e2e.sh
       - name: Operator logs on failure
         if: failure()
         run: |

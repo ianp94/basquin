@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Releases — Basquin</title>
+<meta name="description" content="Basquin releases: the latest version, live build status, install instructions, and changelogs for every component.">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css">
+<style>
+  .status-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 18px 0 6px; }
+  .status-row img { height: 20px; display: block; }
+  .rel-card {
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel);
+    box-shadow: var(--shadow); padding: 18px 20px; margin: 14px 0;
+  }
+  .rel-card h3 { margin: 0 0 4px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .rel-card .date { color: var(--text-muted); font-size: .85rem; font-weight: 400; }
+  .rel-card .latest-tag {
+    font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px;
+  }
+  .rel-assets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .rel-assets a {
+    font-family: var(--mono); font-size: .78rem; border: 1px solid var(--border);
+    border-radius: 8px; padding: 4px 10px; color: var(--text);
+  }
+  .rel-assets a:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+  .muted { color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html">
+      <svg class="logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="8" fill="#5b3df5"/>
+        <path d="M8.5 7.5V24H25" stroke="#c4b3ff" stroke-width="1.6" stroke-linecap="round" fill="none" opacity="0.75"/>
+        <path d="M10 10.5C14.5 10.5 15 20 24.5 21" stroke="#fff" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+      </svg>
+      Basquin
+    </a>
+    <nav class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="getting-started.html">Get started</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
+      <a href="operator.html">Operator</a>
+      <a href="releases.html" class="active">Releases</a>
+      <a class="gh" href="https://github.com/ianp94/basquin">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <span class="kicker">releases &amp; status</span>
+      <h1>Releases</h1>
+      <p class="lede">One git tag versions everything — the four container images on ghcr, the
+        <code>basquin</code> CLI binaries, and the Helm chart. This page reads the latest release and
+        build status <strong>live</strong> from GitHub.</p>
+      <div class="status-row">
+        <a href="https://github.com/ianp94/basquin/releases/latest"><img
+          src="https://img.shields.io/github/v/release/ianp94/basquin?label=latest%20release&color=5b3df5"
+          alt="Latest release"></a>
+        <a href="https://github.com/ianp94/basquin/actions/workflows/ci.yml"><img
+          src="https://github.com/ianp94/basquin/actions/workflows/ci.yml/badge.svg"
+          alt="CI status"></a>
+        <a href="https://github.com/ianp94/basquin/actions/workflows/operator-e2e.yml"><img
+          src="https://github.com/ianp94/basquin/actions/workflows/operator-e2e.yml/badge.svg"
+          alt="Operator e2e status"></a>
+        <a href="https://github.com/ianp94/basquin/actions/workflows/release.yml"><img
+          src="https://github.com/ianp94/basquin/actions/workflows/release.yml/badge.svg"
+          alt="Release workflow status"></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section wrap">
+    <h2>Latest release</h2>
+    <div id="latest" class="rel-card">
+      <p class="muted" style="margin:0;">Loading the latest release from GitHub…
+        <noscript>JavaScript is off — see
+        <a href="https://github.com/ianp94/basquin/releases">the releases on GitHub</a>.</noscript></p>
+    </div>
+
+    <h2>Install</h2>
+    <p>Install the operator from the Helm repo (images pull from
+      <code>ghcr.io/ianp94/basquin-*</code>):</p>
+<pre><span class="p">$</span> helm repo add basquin https://ianp94.github.io/basquin/charts
+<span class="p">$</span> helm repo update
+<span class="p">$</span> helm install basquin basquin/basquin-operator <span class="f">--namespace</span> basquin-system <span class="f">--create-namespace</span> <span class="f">--set</span> <span class="s">fullnameOverride=basquin</span></pre>
+    <p>Or grab a <code>basquin</code> CLI binary (linux / macOS / Windows, amd64 + arm64) from the
+      release assets above, then <code>basquin instrument</code> / <code>basquin run</code> — see the
+      <a href="operator.html">operator guide</a>.</p>
+  </section>
+
+  <section class="section section-alt">
+    <div class="wrap">
+      <h2>Changelogs</h2>
+      <p class="lead">The <a
+        href="https://github.com/ianp94/basquin/blob/main/CHANGELOG.md">release-level changelog</a>
+        covers each tag; every component keeps its own detailed changelog:</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Component</th><th>Changelog</th></tr></thead>
+          <tbody>
+            <tr><td>Java agent (in-JVM measurement)</td>
+              <td><a href="https://github.com/ianp94/basquin/blob/main/agent/CHANGELOG.md"><code>agent/CHANGELOG.md</code></a></td></tr>
+            <tr><td>Runner (drivers, fuzzing, load, dashboard)</td>
+              <td><a href="https://github.com/ianp94/basquin/blob/main/runner/CHANGELOG.md"><code>runner/CHANGELOG.md</code></a></td></tr>
+            <tr><td>Native JVMTI agent</td>
+              <td><a href="https://github.com/ianp94/basquin/blob/main/native/CHANGELOG.md"><code>native/CHANGELOG.md</code></a></td></tr>
+            <tr><td>Tomcat valve</td>
+              <td><a href="https://github.com/ianp94/basquin/blob/main/tomcat-valve/CHANGELOG.md"><code>tomcat-valve/CHANGELOG.md</code></a></td></tr>
+            <tr><td>Kubernetes operator + CLI</td>
+              <td><a href="https://github.com/ianp94/basquin/blob/main/operator/CHANGELOG.md"><code>operator/CHANGELOG.md</code></a></td></tr>
+            <tr><td>Helm chart</td>
+              <td><a href="https://github.com/ianp94/basquin/blob/main/deploy/helm/basquin-operator/CHANGELOG.md"><code>deploy/helm/basquin-operator/CHANGELOG.md</code></a></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section wrap">
+    <h2>All releases</h2>
+    <div id="all-releases">
+      <p class="muted">Loading releases…
+        <noscript><a href="https://github.com/ianp94/basquin/releases">See them on GitHub.</a></noscript></p>
+    </div>
+    <p><a href="https://github.com/ianp94/basquin/releases">Full release history on GitHub →</a></p>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap-wide footer-inner">
+    <div>Basquin — Kubernetes-native fuzz and load testing for JVM web apps.</div>
+    <div class="links">
+      <a href="getting-started.html">Get started</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
+      <a href="operator.html">Operator</a>
+      <a href="releases.html">Releases</a>
+      <a href="https://github.com/ianp94/basquin">GitHub</a>
+    </div>
+    <div class="ai-note">Built with AI assistance (Anthropic's Claude / Claude Code), directed and reviewed by the author.</div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var API = 'https://api.github.com/repos/ianp94/basquin/releases';
+  var esc = function (s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+  var fmtDate = function (iso) {
+    try {
+      return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch (e) { return iso; }
+  };
+  var relCard = function (r, isLatest) {
+    var assets = (r.assets || []).map(function (a) {
+      return '<a href="' + esc(a.browser_download_url) + '">' + esc(a.name) + '</a>';
+    }).join('');
+    // First paragraph of the notes as a plain-text teaser (full notes live on GitHub).
+    var teaser = (r.body || '').split(/\r?\n\r?\n/).map(function (p) { return p.trim(); })
+      .filter(function (p) { return p && p.charAt(0) !== '#'; })[0] || '';
+    return '<div class="rel-card">' +
+      '<h3><a href="' + esc(r.html_url) + '">' + esc(r.name || r.tag_name) + '</a>' +
+      (isLatest ? ' <span class="latest-tag">latest</span>' : '') +
+      ' <span class="date">' + esc(fmtDate(r.published_at)) + '</span></h3>' +
+      (teaser ? '<p style="margin:6px 0 0;">' + esc(teaser) + '</p>' : '') +
+      (assets ? '<div class="rel-assets">' + assets + '</div>' : '') +
+      '<p style="margin:10px 0 0;"><a href="' + esc(r.html_url) + '">Full release notes →</a></p>' +
+      '</div>';
+  };
+  var fail = function (el) {
+    el.innerHTML = '<p class="muted" style="margin:0;">Couldn’t reach the GitHub API — see ' +
+      '<a href="https://github.com/ianp94/basquin/releases">the releases on GitHub</a>.</p>';
+  };
+  var latestEl = document.getElementById('latest');
+  var allEl = document.getElementById('all-releases');
+  fetch(API + '?per_page=20').then(function (res) {
+    if (!res.ok) throw new Error(res.status);
+    return res.json();
+  }).then(function (rels) {
+    rels = (rels || []).filter(function (r) { return !r.draft; });
+    if (!rels.length) {
+      latestEl.innerHTML = '<p class="muted" style="margin:0;">No releases published yet.</p>';
+      allEl.innerHTML = '';
+      return;
+    }
+    latestEl.outerHTML = relCard(rels[0], true);
+    allEl.innerHTML = rels.map(function (r, i) { return relCard(r, i === 0); }).join('');
+  }).catch(function () { fail(latestEl); fail(allEl); });
+})();
+</script>
+
+</body>
+</html>

@@ -68,7 +68,8 @@ closurejvm instrument -n closurejvm-system --deployment jpetstore \
 # 2. Fuzz it: coverage-guided exploration, emitting a corpus of interesting inputs.
 closurejvm run -n closurejvm-system --target jpetstore \
   --base-url http://jpetstore-app.closurejvm-system.svc.cluster.local:8080 \
-  --iterations 500 --grammar examples/grammar/jpetstore.grammar --watch
+  --iterations 500 --grammar examples/grammar/jpetstore.grammar \
+  --corpus examples/corpus/jpetstore --watch
 
 # 3. Replay what it found, under load.
 closurejvm run -n closurejvm-system --name jpetstore-load --mode load --target jpetstore \
@@ -231,4 +232,4 @@ Details and the "why" behind each choice: [ARCHITECTURE](docs/ARCHITECTURE.md) �
 - [DESIGN-DECISIONS](docs/DESIGN-DECISIONS.md) — decision log with rejected alternatives
 - [THIRD-PARTY-APPS](docs/THIRD-PARTY-APPS.md) — running against unmodified WARs (JPetStore)
 - [deploy/k8s](deploy/k8s/README.md) — the pre-operator kind demo
-- [TODO](TODO.md) — roadmap and milestones · [agents.md](agents.md) — maintainer guardrails
+- [TODO](TODO.md) — roadmap and milestones

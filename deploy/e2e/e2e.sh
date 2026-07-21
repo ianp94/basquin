@@ -390,6 +390,19 @@ YAML
   check "replay-corpus ConfigMap owned by the campaign (GC)" "[ '$cowner2' = 'BasquinCampaign' ]"
   echo "  (corpusConfigMap=${ccorpus:-<none>}; ${ccount} route(s))"
 
+  # DD-030: the agent-installed boundary (no valve mounted by the operator) intercepts requests on the
+  # app's own port. Proof it's live in-cluster: the /__basquin control surface responds. A 3-field CSV
+  # (heapKb,threads,epochMs) from /__basquin/drift is only possible if premain instrumented
+  # StandardHostValve — i.e. the same code path that runs Agent.begin/end server-side in explore.
+  sdrift=""; smode=""
+  if [ -n "$apod" ]; then
+    sdrift="$($K -n "$NS" exec "$apod" -c jpetstore -- sh -c "curl -s http://localhost:8080/__basquin/drift" 2>/dev/null || true)"
+    smode="$($K -n "$NS" exec "$apod" -c jpetstore -- sh -c "curl -s 'http://localhost:8080/__basquin/mode?to=explore'" 2>/dev/null || true)"
+  fi
+  check "DD-030: agent boundary serves /__basquin/drift in-cluster (CSV)" "echo '$sdrift' | grep -qE '^[0-9]+,[0-9]+,[0-9]+$'"
+  check "DD-030: agent boundary serves /__basquin/mode control"          "[ '$smode' = 'ok:explore' ]"
+  echo "  (server-side boundary: drift=${sdrift:-<none>}, mode-toggle=${smode:-<none>})"
+
   # --- DD-026 PR 2: replay that corpus as a LOAD campaign, watch invariants under sustained traffic --
   if [ -n "$ccorpus" ]; then
     say "Apply a mode:load BasquinCampaign replaying the emitted corpus"
@@ -420,11 +433,8 @@ YAML
     if [ "$lphase" != "Completed" ]; then
       echo "  (load phase=$lphase; driver logs:)"; $K -n "$NS" logs "job/$ljob" --tail=30 2>/dev/null | sed 's/^/    /' || true
     fi
-    # NOTE: DD-029's lock-free valve (the /__basquin control surface) is NOT asserted here — the
-    # operator injects only the -javaagent agent, NOT the Tomcat valve (valve mounting via the operator
-    # is a deferred backlog item, injection.go). So this operator target has no valve to serialize and
-    # no /__basquin endpoint; the load run is already concurrent. DD-029 is validated where the valve IS
-    # mounted (the docker-compose bench path); it activates in the operator path once valve mounting lands.
+    # The agent-installed boundary (Task: DD-030) now serves /__basquin on the operator target — asserted
+    # above. Here we only assert the load run's own client-side outputs.
     check "load campaign reached Completed"                    "[ '$lphase' = 'Completed' ]"
     check "load run reported requests > 0"                     "[ '${lreq:-0}' -ge 1 ]"
     check "load run reported throughput + p99 latency"         "[ -n '$lrps' ] && [ -n '$lp99' ]"

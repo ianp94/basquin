@@ -6,6 +6,7 @@ Release-level changelog: [`../CHANGELOG.md`](../CHANGELOG.md).
 ## [Unreleased]
 
 - **Lock-free load mode (DD-029):** `LoadMode` flag (serialized explore vs lock-free load, TTL auto-revert) + a `/__basquin/drift` absolute-`Runtime` snapshot for target-side heap/thread drift; `LoadModeControl` handles the control requests.
+- **Server-side request boundary (DD-030):** installed by `premain` via ByteBuddy (`-Dbasquin.boundary=agent`), sharing `RequestBoundary` with the valve; brings the availability oracle to the operator path.
 
 
 ## [0.2.0] — 2026-07-21

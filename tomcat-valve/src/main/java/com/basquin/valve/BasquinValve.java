@@ -1,15 +1,12 @@
 package com.basquin.valve;
 
-import agent.Agent;
-import agent.LoadMode;
-import agent.LoadModeControl;
+import agent.RequestBoundary;
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
 import org.apache.catalina.valves.ValveBase;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.Map;
 
 /**
  * Tomcat Valve that wraps every request in a Basquin iteration boundary, for ANY web
@@ -33,99 +30,53 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * <p>Iterations are SERIALIZED (a fair lock): the Agent's heap/thread deltas are process-global,
  * so they are only meaningful when one request owns the iteration window. The harness measures
- * iteration cleanliness, not throughput under load (DD-005).
+ * iteration cleanliness, not throughput under load (DD-005). The boundary itself now lives in
+ * {@link RequestBoundary}, shared with the agent's own bytecode-installed boundary
+ * (TomcatBoundaryAdvice); this valve is only Catalina glue over it.
  */
 public class BasquinValve extends ValveBase {
-
-    private static final ReentrantLock ITERATION_LOCK = new ReentrantLock(true);
 
     public BasquinValve() {
         // Valve participates in async request processing.
         super(true);
     }
 
-    // Narrowed throws (no ServletException): a legal override, and it keeps the servlet
-    // namespace out of this method's signature and bytecode.
+    // Narrowed throws (no ServletException): a legal override that keeps the servlet namespace out of
+    // this method's signature and bytecode (DD-011). All boundary logic lives in RequestBoundary, shared
+    // with the agent-installed boundary (TomcatBoundaryAdvice); this method is only Catalina glue.
     @Override
     public void invoke(Request request, Response response) throws IOException {
-        // DD-029 control requests (mode toggle / drift snapshot) on the app's own port: handled here,
-        // never locked, never passed to the app. A stray /__basquin/* path returns an error body, not
-        // the app, so it can't leak through.
-        String control = LoadModeControl.handle(request.getRequestURI(), request.getQueryString());
-        if (control != null) {
+        RequestBoundary.Decision decision =
+                RequestBoundary.onEnter(request.getRequestURI(), request.getQueryString());
+        if (decision.skipApp()) {
+            // /__basquin control request: write the plaintext result, never reach the app.
             response.setStatus(200);
             response.setContentType("text/plain");
-            response.getWriter().print(control);
+            response.getWriter().print(decision.controlBody);
             return;
         }
-        // DD-029 load mode: run lock-free/passthrough so the target can be driven concurrently. The
-        // per-request heap/thread deltas the lock protects are given up; the app's drift is read
-        // absolutely via /__basquin/drift instead. Explore mode (below) is unchanged.
-        if (LoadMode.isLoad(System.currentTimeMillis())) {
-            try {
-                getNext().invoke(request, response);
-            } catch (Throwable t) {
-                // Re-raise the next valve's exception namespace-free (checked ServletException too).
-                if (t instanceof IOException) throw (IOException) t;
-                if (t instanceof RuntimeException) throw (RuntimeException) t;
-                if (t instanceof Error) throw (Error) t;
-                sneakyThrow(t);
-            }
-            return;
-        }
-        // explore (default): serialize every request and capture per-request deltas (DD-005/DD-010).
-        ITERATION_LOCK.lock();
+        Throwable appError = null;
         try {
-            // beginIteration is inside the try so that if it throws (it does GC, snapshots),
-            // the lock is still released by the outer finally — otherwise every later request
-            // would queue on the fair lock forever.
-            Agent.beginIteration();
-            Throwable pending = null;
-            try {
-                getNext().invoke(request, response);
-            } catch (Throwable t) {
-                pending = t;
-            }
-            try {
-                Agent.endIteration();
-            } catch (Throwable endError) {
-                // A leak/invariant thrown by endIteration must not mask the application's own
-                // exception; attach it as suppressed instead of replacing it.
-                if (pending != null) {
-                    pending.addSuppressed(endError);
-                } else {
-                    pending = endError;
-                }
-            } finally {
-                // Write headers before releasing the lock: the next iteration's begin clears
-                // the Agent's last-violation state.
-                writeInvariantHeaders(response);
-            }
-            if (pending != null) {
-                if (pending instanceof IOException) throw (IOException) pending;
-                if (pending instanceof RuntimeException) throw (RuntimeException) pending;
-                if (pending instanceof Error) throw (Error) pending;
-                // Checked ServletException (javax or jakarta) — re-raise without naming the type.
-                sneakyThrow(pending);
-            }
-        } finally {
-            ITERATION_LOCK.unlock();
+            getNext().invoke(request, response);
+        } catch (Throwable t) {
+            appError = t;
         }
-    }
-
-    private static void writeInvariantHeaders(Response response) {
+        RequestBoundary.ExitResult r = RequestBoundary.onExit(appError);
         try {
-            List<String> violations = Agent.getLastInvariantViolations();
-            if (violations != null && !violations.isEmpty() && !response.isCommitted()) {
-                response.setHeader("X-Basquin-Invariant-Count", String.valueOf(violations.size()));
-                String first = violations.get(0);
-                if (first != null && first.length() > 200) {
-                    first = first.substring(0, 200);
+            if (!r.headers.isEmpty() && !response.isCommitted()) {
+                for (Map.Entry<String, String> h : r.headers.entrySet()) {
+                    response.setHeader(h.getKey(), h.getValue());
                 }
-                response.setHeader("X-Basquin-Invariant-Detail", first);
             }
         } catch (Throwable ignored) {
-            // Header reporting is best-effort; never let it fail a request.
+            // header reporting is best-effort; never let it fail a request
+        }
+        if (r.toThrow != null) {
+            if (r.toThrow instanceof IOException) throw (IOException) r.toThrow;
+            if (r.toThrow instanceof RuntimeException) throw (RuntimeException) r.toThrow;
+            if (r.toThrow instanceof Error) throw (Error) r.toThrow;
+            // Checked ServletException (javax or jakarta) — re-raise without naming the type.
+            sneakyThrow(r.toThrow);
         }
     }
 

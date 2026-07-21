@@ -17,6 +17,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
+
 /**
  * Core agent for Basquin - a persistent execution harness for JVM web applications
  * that uses coverage-guided exploration to discover availability, performance, and
@@ -56,7 +57,27 @@ public class Agent {
      */
     public static void premain(String agentArgs, java.lang.instrument.Instrumentation instrumentation) {
         System.out.println("Basquin Agent initialized");
-        // Agent initialization logic would go here
+        // Opt-in, default OFF: the bench path runs the valve AND this agent, and two boundaries would
+        // double-count. The operator sets -Dbasquin.boundary=agent (it mounts no valve); the bench path
+        // leaves it unset, so the valve stays the sole boundary there.
+        if (!"agent".equals(System.getProperty("basquin.boundary"))) {
+            return;
+        }
+        // Install reflectively so THIS class names no net.bytebuddy.* type: the coverage-driver ("runner")
+        // image carries the agent classes but not ByteBuddy, and a direct reference here would make merely
+        // loading Agent fail there with NoClassDefFoundError. BoundaryInstaller (and ByteBuddy) load only
+        // when the boundary is actually installed — a target JVM, whose agent jar bundles ByteBuddy.
+        try {
+            Class.forName("agent.BoundaryInstaller")
+                    .getMethod("install", java.lang.instrument.Instrumentation.class)
+                    .invoke(null, instrumentation);
+        } catch (Throwable t) {
+            // Degrade, don't break: an app whose Tomcat internals differ just runs uninstrumented. Unwrap
+            // the reflection wrapper so the real cause is visible.
+            Throwable cause = (t instanceof java.lang.reflect.InvocationTargetException && t.getCause() != null)
+                    ? t.getCause() : t;
+            System.err.println("[Basquin] agent boundary NOT installed: " + cause);
+        }
     }
 
     // --- Explicit context API (preferred) ---

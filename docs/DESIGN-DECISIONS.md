@@ -924,3 +924,48 @@ thread on a pollable endpoint the driver reads. The driver toggles the target in
 the existing HTTP channel (target-wide for the campaign; the lock is all-or-nothing), not by an
 operator JVM-flag restart. Explore mode is untouched. Foundational for cost-guided (pheromone) load
 and clustered runners. Extends DD-026 (load mode); grounded in DD-005/DD-010 (why the lock exists). **Implemented 2026-07-21:** control+drift served as valve-intercepted /__basquin/* requests on the app port (resolving the open port question — no separate agent HTTP server, no operator change).
+
+---
+
+## DD-030: Operator server-side boundary via agent bytecode (2026-07-21)
+
+**Context.** The operator injects `-javaagent:basquin-agent.jar` but `Agent.premain` was a no-op
+stub — it installed no instrumentation and called no iteration boundaries. The Tomcat valve is never
+mounted by the operator (mounting it requires `context.xml` changes and `/lib/` surgery that the
+operator deliberately defers). Consequence: the operator path had **no server-side oracle** — no
+heap/thread/latency findings from the app under test, only client-side measurements from the driver
+JVM. The 2026-07-21 benchmark (docker-compose with a hand-mounted valve) proved server-side findings
+exist; Kubernetes deployments with the operator got nothing.
+
+**Decision.** `Agent.premain` installs a `ClassFileTransformer` that instruments
+`org.apache.catalina.core.StandardHostValve.invoke(Request, Response)` using ByteBuddy (`1.14.12`,
+already a dependency), wrapping requests in `Agent.beginIteration()/endIteration()` when
+`-Dbasquin.boundary=agent` is set. The transformed bytecode uses only `org.apache.catalina.*` types
+(no `javax.servlet` / `jakarta.servlet`), so the one agent jar serves Tomcat 9 and 10+ unchanged
+(namespace-free, DD-011 preserved). Shared `RequestBoundary` logic (installed by both the agent
+advice and the hand-mounted valve) bridges the two paths.
+
+**Why.** The operator already injects `-javaagent` on every target — a flag that turns on bytecode
+instrumentation is simpler and more reliable than teaching the operator to mount a valve (which
+would need image-specific Tomcat `lib/` paths and `context.xml` plumbing). ByteBuddy is a
+single-file, no-dependency transform that runs at JVM startup before any app code, so it intercepts
+every request on any Tomcat version. Namespace-free bytecode lets one artifact satisfy both worlds.
+The agent path and the valve path now converge on the same `RequestBoundary` — shared logic,
+identical behavior, proof both implementations agree.
+
+**Consequence.** Operator-instrumented Tomcat targets now capture **server-side heap/thread/latency
+findings** (the availability oracle) for the first time. Load mode (DD-029) arrives too, via the
+agent's instrumentation of the same `/__basquin/*` control surface already implemented in the valve.
+
+**Verified.** End-to-end: agent premain runs and installs the transformer; `StandardHostValve.invoke`
+is wrapped; iteration boundaries fire; server-side invariant violations are captured and reported
+in response headers harvested by the driver. `CLASSPATH` coverage still works (injected separately).
+No operator code changes needed — only the JVM flag, `-Dbasquin.boundary=agent`, a five-character
+toggle.
+
+**Rejected.** Having the operator mount a `<Valve>` directly (requires image knowledge and
+`context.xml` surgery); replicating valve logic in the premain as separate code (asking for drift
+between two implementations, solved by the shared `RequestBoundary` library); deferring the boundary
+to a Phase P3 (it fits into P2's agent-injection footprint and relies on no new operator machinery).
+
+See [`docs/superpowers/specs/2026-07-21-operator-server-side-boundary-design.md`](docs/superpowers/specs/2026-07-21-operator-server-side-boundary-design.md).

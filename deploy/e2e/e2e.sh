@@ -457,6 +457,23 @@ YAML
     check "load run reported throughput + p99 latency"         "[ -n '$lrps' ] && [ -n '$lp99' ]"
     check "load driver Job has NO coverage initContainers"     "echo ':$linit:' | grep -qv extract-classes"
     echo "  (load: requests=${lreq:-<none>}, throughputRps=${lrps:-<none>}, p99=${lp99:-<none>}ms)"
+
+    # DD-033: the load campaign's own per-campaign dashboard (jpetstore-load-dashboard, same
+    # naming/token scheme as the explore dashboard asserted below) received a mode:load push with a
+    # non-empty load block — proof the live snapshotter's terminal push actually landed on the
+    # dashboard, not just that status.load populated on the CR (checked just above). Query it now,
+    # before the campaign (and its dashboard, GC'd with it) is deleted.
+    ldash="jpetstore-load-dashboard"
+    ldtok="$($K -n "$NS" get secret "${ldash}-token" -o jsonpath='{.data.token}' 2>/dev/null | base64 -d || true)"
+    dstatus=""
+    if [ -n "$apod" ]; then
+      dstatus="$($K -n "$NS" exec "$apod" -c jpetstore -- sh -c \
+        "curl -s -H 'X-Basquin-Token: ${ldtok}' http://${ldash}.${NS}.svc.cluster.local:7070/api/campaign/jpetstore-load/status" 2>/dev/null || true)"
+    fi
+    check "DD-033: dashboard received load-mode status" "echo '$dstatus' | grep -q '\"mode\":\"load\"'"
+    check "DD-033: dashboard has a non-empty load block" "echo '$dstatus' | grep -qE '\"load\":\\{\"throughputRps\"'"
+    echo "  (dashboard load status: $(echo "$dstatus" | head -c 120))"
+
     $K -n "$NS" delete basquincampaign jpetstore-load --ignore-not-found --timeout=60s >/dev/null 2>&1 || true
   fi
 

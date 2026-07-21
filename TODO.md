@@ -338,6 +338,28 @@ mode where the interesting availability signals land, and it's the one the dashb
 - Ties in: **clustered runners** (aggregating load across N runners — merge histograms/t-digests, don't
   average percentiles) and the **pheromone/cost** work (load is where cost-concentration shows up).
 
+### Optional OTLP metrics export — off by default, alongside the dashboard *(roadmap, user 2026-07-21)*
+DD-033 types every load/explore signal in OTel-native terms (histogram/counter/gauge, stable names,
+units, attributes — `docs/DESIGN-DECISIONS.md`) but ships no exporter. The next step: an **optional**
+OTLP metrics exporter, off by default, emitting exactly that set — `basquin.load.request.duration`
+(histogram, unit `ms`, the 1ms × 30000-bucket layout as a hard contract), `basquin.load.requests` /
+`.server_errors` (counters), `basquin.load.heap_drift` / `.thread_drift` (gauges),
+`basquin.explore.iterations` / `.findings` / `.crashes` (counters), `basquin.explore.coverage`
+(gauge) — `campaign.id` as a resource attribute, `mode` as a metric attribute — so adopters' existing
+Prometheus/Grafana/Datadog stacks consume Basquin's numbers directly, with zero re-modelling (the
+exporter is a thin adapter over the registry DD-033 already typed).
+
+- [ ] **Alongside, never replacing, the bespoke dashboard.** Grafana can't express the fuzzing-domain
+  UX (input viewer, finding clusters, triage) — the dashboard stays the primary surface; OTLP is an
+  additional, opt-in output for teams that already run observability stacks.
+- [ ] **Ties directly into clustered runners** (above): once N runners drive one campaign, summing
+  throughput is trivial, but **percentiles don't average** — OTel histogram aggregation (explicit-
+  bucket merge across runners) is what makes a cross-runner p99 honest instead of an
+  average-of-averages lie.
+- [ ] Its own DD before building (per DD-033's deferral): exporter config (endpoint, protocol), which
+  attributes travel as OTel resource vs. metric attributes in practice, and whether it runs
+  in-process or as a sidecar/agent.
+
 ### Dashboard as a control plane (needs a decision before building)
 Currently the dashboard is strictly read-only: drivers push, it displays (DD-013). Making it
 *launch runs* or *reject corpus entries* reverses that and is a real architectural fork, not just

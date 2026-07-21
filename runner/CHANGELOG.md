@@ -8,6 +8,7 @@ Release-level changelog: [`../CHANGELOG.md`](../CHANGELOG.md).
 - **Lock-free load mode (DD-029):** `LoadRun` toggles the target lock-free for the run, polls `/__basquin/drift` for the app's real heap/thread drift, counts 5xx (`fire()` returns status), and reverts on exit.
 - **Cost-ranked replay corpus (DD-031):** `CostModel` scores each fired input from the boundary's `X-Basquin-Cost` header (driver's own round-trip latency is the always-available floor); `CostCorpus`/`CorpusEntry` retain coverage finds plus EMA/cold-start-gated expensive inputs, never evict a coverage find, and emit the replay ConfigMap sorted by cost descending instead of insertion order. Driver-side kill-switch `-Dbasquin.cost.enabled=false` restores today's insertion-order behavior (A/B baseline). Top costs are logged (`[Basquin] replay cost-ranked (top N): ...`), not added to the termination summary JSON (kubelet's ~4KB budget is shared with the corpus).
 - **Added (DD-032):** opt-in `-Dbasquin.pheromone=on` ε-greedy cost-biased selection with immediate-parent credit assignment + evaporation; `-Dbasquin.seed`.
+- **Added (DD-033):** live load-mode dashboard (throughput/percentiles/drift/5xx) + mode-aware CLI status; metrics typed for a future OTLP export.
 
 
 ## [0.2.0] — 2026-07-21

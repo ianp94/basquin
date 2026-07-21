@@ -27,6 +27,16 @@ standalone laptop case — reads stay open, exactly as today.
 - Residual: the token appears once in the URL (shell history / browser history until the
   redirect). Threat-model-appropriate for a test-tooling dashboard; the token dies with the
   campaign anyway (owner-referenced Secret).
+- Residual (#52 review): browser cookies are **not port-scoped** (RFC 6265 ignores the port), so a
+  cookie set on `localhost:<port>` rides along to anything else the browser talks to on
+  `localhost`. `HttpOnly` blocks script access but not that fan-out; documented, not fixable at
+  this layer. The related *collision* problem — two concurrently port-forwarded campaigns
+  overwriting each other's cookie — IS fixable and is designed out below (per-campaign cookie
+  name).
+- Assumption: the handoff and cookie travel in plaintext HTTP, which is only acceptable because
+  the dashboard binds loopback and is reached via `kubectl port-forward` (an authenticated,
+  encrypted tunnel). `-Dbasquin.dashboard.bind` is configurable — the docs must state that binding
+  beyond loopback without TLS in front voids this model.
 
 **B. NetworkPolicy only.** Zero code: ship a policy restricting ingress on the dashboard Service to
 the driver pods + document it. Rejected as the *primary* control: policy enforcement depends on the
@@ -47,9 +57,12 @@ writes then share one hardened comparison path.
 ## Implementation sketch
 
 1. `DashboardServer`: extract token comparison into one constant-time helper; add cookie
-   issue/verify (`basquin_dash` cookie, value = the token itself — no server-side session state,
-   the server stays stateless and restart-safe); guard all read handlers when a token is
-   configured; `?token=` handoff endpoint with 302 redirect.
+   issue/verify (cookie named **per campaign** — `basquin_dash_<campaign>` — so two concurrently
+   port-forwarded dashboards on different local ports can't overwrite each other's cookie, since
+   cookies ignore ports; value = the token itself — no server-side session state, the server stays
+   stateless and restart-safe); guard all read handlers when a token is configured; `?token=`
+   handoff endpoint with 302 redirect. The server must **never log full request URIs** (the query
+   string can carry `?token=`) — log path-only.
 2. `basquin dashboard` CLI: fetch the token Secret, print the tokenized URL (and a bare URL +
    token separately, for header-based tooling).
 3. e2e: after the campaign completes, assert an unauthenticated read gets 401/403 and a

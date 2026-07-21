@@ -180,6 +180,7 @@ package test;
 
 import runner.coverage.CorpusEntry;
 import runner.coverage.CostCorpus;
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -189,11 +190,23 @@ import java.util.Random;
 
 public class CostCorpusTest {
 
+    @After public void clearProps() {
+        // CostCorpus reads these once per instance; clear so tests don't order-couple through globals.
+        for (String k : new String[]{"basquin.cost.minSamples", "basquin.cost.retainFactor",
+                "basquin.corpus.max", "basquin.cost.emaAlpha"}) {
+            System.clearProperty(k);
+        }
+    }
+
     private static CostCorpus enabled(String... seeds) {
         System.setProperty("basquin.cost.minSamples", "3");
         System.setProperty("basquin.cost.retainFactor", "2.0");
         System.setProperty("basquin.corpus.max", "5");
-        System.setProperty("basquin.cost.emaAlpha", "0.5");
+        // Small alpha => a SLOW baseline that stays near the cold-start cost (~5), so the six expensive
+        // entries (50..100) all clear the 2x threshold and force evictions. A large alpha would let the
+        // EMA chase the rising costs, reject the later entries, and the corpus would never reach the cap
+        // — a miscalibration that would tempt an implementer to "fix" correct code. Keep this small.
+        System.setProperty("basquin.cost.emaAlpha", "0.01");
         return new CostCorpus(Arrays.asList(seeds), true);
     }
 
@@ -545,7 +558,18 @@ Update the OTHER callers of `request()` (`login`, `runSequence`, any warm-up) to
 ```
   (a sequence coverage-find; cost of a whole sequence isn't a single request, so record it as a coverage-find with zero cost — retained, never evicted.)
 - Parent reads (`~line 204` and `~line 208`): replace both `corpus.get(rnd.nextInt(corpus.size()))` with `corpus.randomParentInput(rnd)`.
-- Final `printf` (`~line 258`): `corpus.size()` still works (method exists).
+- Final `printf` (`~line 258`): `corpus.size()` still works (method exists). Immediately after it, add the **cost-ranked top log line** (spec item 6 observability — a stdout line, NOT JSON, so it costs nothing against kubelet's 4 KB termination budget). This is also the driver-side proof the e2e asserts (Task 7 (b)):
+```java
+        if (costEnabled) {
+            StringBuilder top = new StringBuilder();
+            int n = 0;
+            for (CorpusEntry e : corpus.snapshotByCost()) {
+                if (n++ >= 5) break;
+                top.append(n == 1 ? "" : ", ").append(e.input).append('=').append(String.format("%.0f", e.cost));
+            }
+            System.out.println("[Basquin] replay cost-ranked (top " + Math.min(5, corpus.size()) + "): " + top);
+        }
+```
 
 - [ ] **Step 3: Capture cost in the fire block and drive retention through `CostCorpus`**
 
@@ -618,9 +642,22 @@ Run: `./gradlew test` — all green. If an existing test referenced `lastCorpus`
 ```
 (A request to `/` runs the explore boundary; the header is present regardless of whether a violation fired. If the app never serializes a plain `/` through the boundary in this campaign, assert instead against a corpus route already used by the existing checks.)
 
+Then add assertion (b) — driver-side proof the replay was cost-ranked (spec e2e (b)). Grep the explore driver Job's logs for the Task-6 log line (use the existing driver-pod/job reference in the e2e; the pod persists until campaign GC, so read it right after the campaign reaches Completed):
+
+```bash
+  dlog="$($K -n "$NS" logs job/$JPETSTORE_CAMPAIGN_DRIVER_JOB 2>/dev/null | grep -m1 'replay cost-ranked' || true)"
+  check "DD-031: driver emitted a cost-ranked replay (top routes + costs)" "echo '$dlog' | grep -qE 'replay cost-ranked \(top [0-9]+\): .+='"
+  echo "  ($dlog)"
+```
+(Replace `$JPETSTORE_CAMPAIGN_DRIVER_JOB` with whatever the e2e already uses to reference the explore driver Job/pod. If the driver pod name isn't already captured, capture it near where the campaign is created.)
+
 - [ ] **Step 2: Syntax check** — `bash -n deploy/e2e/e2e.sh && echo OK`.
 
-- [ ] **Step 3: Docs** — add a DD-031 record to `docs/DESIGN-DECISIONS.md` (cost-ranked replay; why not true pheromone yet; the `-D` knobs + kill-switch A/B; references the spec). Add a short note to the usage guide that load now hammers the most expensive discovered states, tunable via `basquin.cost.*`. CHANGELOG Unreleased entries for `agent` (X-Basquin-Cost header) and `runner` (CostModel/CostCorpus, cost-ranked replay).
+- [ ] **Step 3: Docs** — add a DD-031 record to `docs/DESIGN-DECISIONS.md` (cost-ranked replay; why not true pheromone yet; the `-D` knobs + kill-switch A/B; references the spec). It MUST also record two facts so they aren't later mistaken for bugs:
+  - **`topCost` observability is a stdout log line, not a summary JSON field** — the summary shares kubelet's ~4 KB termination budget with the replay corpus, so cost visibility is emitted to the driver log (`[Basquin] replay cost-ranked (top N): …`) and asserted via driver logs, deliberately NOT added to the termination JSON.
+  - **The `X-Basquin-Cost` header's `latencyMs` field is emitted but the driver does not read it** — the driver uses its own round-trip latency (the always-available cost floor, per the spec); the header's latency is included for completeness/other consumers only. Not dead code, by design.
+
+  Add a short note to the usage guide that load now hammers the most expensive discovered states, tunable via `basquin.cost.*` (and `basquin.cost.enabled=false` for an A/B baseline). CHANGELOG Unreleased entries for `agent` (X-Basquin-Cost header) and `runner` (CostModel/CostCorpus, cost-ranked replay).
 
 - [ ] **Step 4: Commit** — `git add deploy/e2e/e2e.sh docs/ agent/CHANGELOG.md runner/CHANGELOG.md && git commit -m "test(e2e)+docs: assert X-Basquin-Cost in-cluster; record DD-031"`
 
@@ -632,6 +669,6 @@ Run: `./gradlew test` — all green. If an existing test referenced `lastCorpus`
 
 ## Self-Review notes (author)
 
-- **Spec coverage:** cost header (T4/T5), CostModel (T1), CorpusEntry (T2), CostCorpus with cold-start/EMA/eviction/concurrency/kill-switch (T3), integration + cost-ranked replay (T6), e2e + docs (T7). All spec sections tasked.
+- **Spec coverage:** cost header (T4/T5), CostModel (T1), CorpusEntry (T2), CostCorpus with cold-start/EMA/eviction/concurrency/kill-switch (T3), integration + cost-ranked replay (T6), spec item 6 `topCost` observability as a driver stdout log line + e2e assertion (b) driver-side proof (T6/T7), e2e + docs (T7). All spec sections tasked.
 - **Constraint coverage:** uniform selection preserved (T6 uses `randomParentInput`, no weighting); concurrency handled by `CostCorpus` synchronization (T3, T6 removes bare reads); cold-start + EMA in `consider` (T3); attributability — cost read in `exitHeaders()` before unlock (T5); kill-switch driver-side (`costEnabled` gates cost compute + `CostCorpus(enabled=false)` gates retention/evict/ordering) (T3/T6); coverage-finds never evicted (T3 `evictIfOverCap`); ConfigMap unchanged (T6 keeps `replayCorpusJson` + plain lines).
 - **Type consistency:** `CostSample(heapDeltaKb, threadDelta, invariantCount)`, `CostModel.score(latencyMs, heapDeltaKb, threadDelta, invariantCount)`, `CostCorpus.consider(input, cost, latencyMs, heapDeltaKb, threadDelta, invariantCount, coverageFind)`, `snapshotByCost()→List<CorpusEntry>` — consistent across T1/T2/T3/T6. `Agent.lastCostCsv()` shape matches the header parsed in T6.

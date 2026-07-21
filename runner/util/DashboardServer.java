@@ -100,7 +100,7 @@ public final class DashboardServer {
             ex.sendResponseHeaders(405, -1);
             return;
         }
-        if (!guarded(ex)) return;
+        if (!guarded(ex, false)) return;
         String id = queryParam(ex, "id");
         if (id == null || id.isEmpty()) {
             ex.sendResponseHeaders(400, -1);
@@ -120,7 +120,7 @@ public final class DashboardServer {
     /** Config is immutable per run, so it is pushed once rather than on every interval. */
     private static void ingestConfig(HttpExchange ex) throws IOException {
         if (!"POST".equals(ex.getRequestMethod())) { ex.sendResponseHeaders(405, -1); return; }
-        if (!guarded(ex)) return;
+        if (!guarded(ex, false)) return;
         String id = queryParam(ex, "id");
         if (id == null || id.isEmpty()) { ex.sendResponseHeaders(400, -1); return; }
         Campaign c = CAMPAIGNS.computeIfAbsent(id, k -> new Campaign());
@@ -186,7 +186,7 @@ public final class DashboardServer {
             ex.sendResponseHeaders(405, -1);
             return;
         }
-        if (!guarded(ex)) return;
+        if (!guarded(ex, true)) return;
         if (!isLoopbackBind() && TOKEN.isEmpty()) {
             respond(ex, "application/json",
                 "{\"error\":\"analysis disabled: dashboard is bound to a non-loopback address"
@@ -247,18 +247,22 @@ public final class DashboardServer {
         }
     }
 
-    /** Enforce the CSRF guard header, and the shared token when one is configured. */
-    private static boolean guarded(HttpExchange ex) throws IOException {
+    /**
+     * Enforce the CSRF guard header, and the shared token when one is configured.
+     * allowCookie widens token acceptance to the DD-028 session cookie — ONLY for the browser-facing
+     * analyze endpoint (whose JS cannot know the token and was silently 401ing since #43). The
+     * driver-only /ingest/* writes stay header-only: only drivers call them and they always have the
+     * header, so the browser session gains no write path it doesn't need (#55 review).
+     */
+    private static boolean guarded(HttpExchange ex, boolean allowCookie) throws IOException {
         if (ex.getRequestHeaders().getFirst(GUARD_HEADER) == null) {
             respond(ex, "application/json", "{\"error\":\"missing " + GUARD_HEADER + " header\"}");
             return false;
         }
-        // Header (drivers/scripts) OR the DD-028 session cookie (the browser UI — which cannot
-        // know the token, and was silently 401ing on Analyze since the token landed in #43). The
-        // custom GUARD_HEADER above still blocks cross-origin CSRF even with the cookie present.
-        if (!TOKEN.isEmpty()
-            && !tokenMatches(ex.getRequestHeaders().getFirst("X-Basquin-Token"))
-            && !tokenMatches(cookieValue(ex, cookieName(TOKEN)))) {
+        boolean ok = TOKEN.isEmpty()
+            || tokenMatches(ex.getRequestHeaders().getFirst("X-Basquin-Token"))
+            || (allowCookie && tokenMatches(cookieValue(ex, cookieName(TOKEN))));
+        if (!ok) {
             respond(ex, "application/json", "{\"error\":\"bad or missing X-Basquin-Token\"}");
             return false;
         }
@@ -270,7 +274,7 @@ public final class DashboardServer {
      * itself, which is per-campaign — because browser cookies ignore ports: two concurrently
      * port-forwarded dashboards on localhost would otherwise overwrite a shared cookie name.
      */
-    static String cookieName(String token) {
+    public static String cookieName(String token) {
         try {
             byte[] h = java.security.MessageDigest.getInstance("SHA-256")
                 .digest(token.getBytes(StandardCharsets.UTF_8));
@@ -283,16 +287,25 @@ public final class DashboardServer {
     }
 
     /** Constant-time token comparison (#43 review) — shared by the write and read guards. */
-    static boolean tokenMatches(String candidate) {
-        return candidate != null && java.security.MessageDigest.isEqual(
-            TOKEN.getBytes(StandardCharsets.UTF_8), candidate.getBytes(StandardCharsets.UTF_8));
+    private static boolean tokenMatches(String candidate) {
+        return tokensEqual(TOKEN, candidate);
     }
 
-    /** Parse one cookie value out of the Cookie header(s); null if absent. */
-    static String cookieValue(HttpExchange ex, String name) {
-        List<String> headers = ex.getRequestHeaders().get("Cookie");
-        if (headers == null) return null;
-        for (String header : headers) {
+    /** Pure, testable core of {@link #tokenMatches}: constant-time equality. */
+    public static boolean tokensEqual(String expected, String candidate) {
+        return candidate != null && java.security.MessageDigest.isEqual(
+            expected.getBytes(StandardCharsets.UTF_8), candidate.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String cookieValue(HttpExchange ex, String name) {
+        return cookieValue(ex.getRequestHeaders().get("Cookie"), name);
+    }
+
+    /** Parse one cookie value out of the Cookie header(s); null if absent. Pure for testability. */
+    public static String cookieValue(List<String> cookieHeaders, String name) {
+        if (cookieHeaders == null) return null;
+        for (String header : cookieHeaders) {
+            if (header == null) continue;
             for (String part : header.split(";")) {
                 int i = part.indexOf('=');
                 if (i > 0 && part.substring(0, i).trim().equals(name)) {

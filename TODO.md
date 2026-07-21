@@ -283,6 +283,37 @@ and the dashboard) — decide once the boundaries are clear.
 > Remaining multi-instance limits (session affinity for sequences; per-instance finding attribution)
 > are in the **Backlog** (Exploration & coverage).
 
+### Clustered runners (N drivers, one campaign) — distributed load + exploration *(roadmap, user 2026-07-21)*
+The complementary distributed axis to "multi-instance **targets**" above: that scales the app under
+test (one driver → N app pods); this scales the **driver/runner side** (one campaign → N coordinated
+runner pods). Today the operator launches a **single** driver Job per campaign (`buildDriverJob`),
+so a campaign's load and exploration are bounded by one pod. Clustered runners lift both ceilings.
+Design-note first (likely its own DD); phased.
+
+- [ ] **Distributed load generation (load mode).** `driver.replicas`/`parallelism` on `BasquinCampaign`
+  → the operator runs N runner pods (Job `parallelism`, or a Deployment) each driving a share of the
+  target concurrency, so aggregate RPS scales past one pod — the standard distributed-load-tool shape
+  (Locust/k6 workers). Extends DD-026 (load mode). Aggregation is *mostly already there*: many drivers
+  already push to one dashboard keyed by campaign id (DD-013) — the new work is summing throughput/
+  latency-percentiles across runners honestly (percentiles don't average — merge histograms or t-digests).
+- [ ] **Distributed exploration (explore mode) with corpus sync.** N runners explore different slices
+  of the input space and **cross-pollinate**: an interesting input (new coverage, or high cost) found
+  by one runner seeds the others — distributed fuzzing (AFL `-M`/`-S`, ClusterFuzz). Needs a shared
+  corpus channel: a shared volume/ConfigMap, or the dashboard as the shared brain (it already receives
+  every runner's finds). Open: dedup + coverage **union across runners** (DD-023 unions coverage across
+  *target* replicas; this unions across *driver* replicas — different merge point), and finding
+  attribution per runner.
+- [ ] **Work partitioning.** How N runners divide the job without overlap or gaps: shard by route
+  subset, seed subset, grammar `@sequence`, or session-epoch; vs. a shared work-queue (pull model).
+  Session-affinity interplay with the DD-020 `@sequence` limit (a sharded runner owning whole sessions
+  sidesteps the round-robin-Service breakage).
+- [ ] **Ties into the pheromone idea** (Exploration & coverage backlog): a **shared cost-pheromone
+  corpus** lets the whole cluster converge load onto the expensive states — distributed *cost-guided*
+  load, the strongest version of "concentrate the fleet where it hurts."
+- Open decisions for the note: coordination mechanism (leaderless + shared corpus store, or a
+  coordinator); Job `parallelism` vs a Deployment of runners; how the dashboard distinguishes
+  per-runner vs aggregate views; back-pressure so N runners don't overwhelm a small target unintentionally.
+
 ### Dashboard as a control plane (needs a decision before building)
 Currently the dashboard is strictly read-only: drivers push, it displays (DD-013). Making it
 *launch runs* or *reject corpus entries* reverses that and is a real architectural fork, not just

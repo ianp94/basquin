@@ -17,9 +17,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import net.bytebuddy.agent.builder.AgentBuilder;
-import net.bytebuddy.asm.Advice;
-import net.bytebuddy.matcher.ElementMatchers;
 
 /**
  * Core agent for Basquin - a persistent execution harness for JVM web applications
@@ -66,17 +63,20 @@ public class Agent {
         if (!"agent".equals(System.getProperty("basquin.boundary"))) {
             return;
         }
+        // Install reflectively so THIS class names no net.bytebuddy.* type: the coverage-driver ("runner")
+        // image carries the agent classes but not ByteBuddy, and a direct reference here would make merely
+        // loading Agent fail there with NoClassDefFoundError. BoundaryInstaller (and ByteBuddy) load only
+        // when the boundary is actually installed — a target JVM, whose agent jar bundles ByteBuddy.
         try {
-            new AgentBuilder.Default()
-                    .disableClassFormatChanges() // advice-only; no class-schema changes
-                    .type(ElementMatchers.named("org.apache.catalina.core.StandardHostValve"))
-                    .transform((builder, type, cl, module, pd) -> builder.visit(
-                            Advice.to(TomcatBoundaryAdvice.class).on(ElementMatchers.named("invoke"))))
-                    .installOn(instrumentation);
-            System.out.println("[Basquin] agent boundary installed on StandardHostValve");
+            Class.forName("agent.BoundaryInstaller")
+                    .getMethod("install", java.lang.instrument.Instrumentation.class)
+                    .invoke(null, instrumentation);
         } catch (Throwable t) {
-            // Degrade, don't break: an app whose Tomcat internals differ just runs uninstrumented.
-            System.err.println("[Basquin] agent boundary NOT installed: " + t);
+            // Degrade, don't break: an app whose Tomcat internals differ just runs uninstrumented. Unwrap
+            // the reflection wrapper so the real cause is visible.
+            Throwable cause = (t instanceof java.lang.reflect.InvocationTargetException && t.getCause() != null)
+                    ? t.getCause() : t;
+            System.err.println("[Basquin] agent boundary NOT installed: " + cause);
         }
     }
 

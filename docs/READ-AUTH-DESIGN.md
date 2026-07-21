@@ -1,6 +1,10 @@
 # DD-028 — Dashboard read-path authentication (design note)
 
-Status: **proposed** (2026-07-21). Implements the open half of the #21/#43 review finding.
+Status: **implemented** (#55, 2026-07-21; designed and accepted the same day in #52). Two additions
+surfaced during implementation: an unauthenticated `/healthz` (the readiness probe previously hit
+`/api/campaigns`, which would have deadlocked readiness against auth), and the session cookie is
+accepted by the browser-facing `/api/analyze/` guard only — the driver-only `/ingest/*` writes stay
+header-only (#55 review). Closes the open half of the #21/#43 review finding.
 
 ## Context
 

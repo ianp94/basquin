@@ -1,9 +1,11 @@
 # Changelog — Helm chart
 
-`basquin-operator` chart. The chart `version` tracks chart changes; `appVersion` tracks the
-operator/image release. Release-level changelog: [`../../../CHANGELOG.md`](../../../CHANGELOG.md).
+`basquin-operator` chart. The **published** chart version is the release tag: `release.yml` packages
+with `--version <tag> --app-version <tag>`, overriding `Chart.yaml` — so chart version and
+`appVersion` always equal the release. (`Chart.yaml`'s own `version` field only applies to local
+installs from a checkout.) Release-level changelog: [`../../../CHANGELOG.md`](../../../CHANGELOG.md).
 
-## [0.1.0] — 2026-07-21 (appVersion 0.2.0)
+## [0.2.0] — 2026-07-21
 
 First published chart (`helm repo add basquin https://ianp94.github.io/basquin/charts`).
 

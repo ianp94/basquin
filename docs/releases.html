@@ -143,7 +143,6 @@
       <a href="how-it-works.html">How it works</a>
       <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
       <a href="operator.html">Operator</a>
-      <a href="releases.html">Releases</a>
       <a href="https://github.com/ianp94/basquin">GitHub</a>
     </div>
     <div class="ai-note">Built with AI assistance (Anthropic's Claude / Claude Code), directed and reviewed by the author.</div>
@@ -179,14 +178,17 @@
       '<p style="margin:10px 0 0;"><a href="' + esc(r.html_url) + '">Full release notes →</a></p>' +
       '</div>';
   };
-  var fail = function (el) {
-    el.innerHTML = '<p class="muted" style="margin:0;">Couldn’t reach the GitHub API — see ' +
+  var fail = function (el, status) {
+    // 403 from api.github.com is (nearly always) the anonymous 60 req/hr rate limit, not an outage.
+    var why = status === 403 ? 'GitHub API rate limit reached — try again shortly, or see '
+                             : 'Couldn’t reach the GitHub API — see ';
+    el.innerHTML = '<p class="muted" style="margin:0;">' + why +
       '<a href="https://github.com/ianp94/basquin/releases">the releases on GitHub</a>.</p>';
   };
   var latestEl = document.getElementById('latest');
   var allEl = document.getElementById('all-releases');
   fetch(API + '?per_page=20').then(function (res) {
-    if (!res.ok) throw new Error(res.status);
+    if (!res.ok) { var e = new Error(res.status); e.status = res.status; throw e; }
     return res.json();
   }).then(function (rels) {
     rels = (rels || []).filter(function (r) { return !r.draft; });
@@ -197,7 +199,7 @@
     }
     latestEl.outerHTML = relCard(rels[0], true);
     allEl.innerHTML = rels.map(function (r, i) { return relCard(r, i === 0); }).join('');
-  }).catch(function () { fail(latestEl); fail(allEl); });
+  }).catch(function (e) { fail(latestEl, e && e.status); fail(allEl, e && e.status); });
 })();
 </script>
 

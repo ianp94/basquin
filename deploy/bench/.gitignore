@@ -1,0 +1,6 @@
+# Built/downloaded app WARs — large binaries, reproducible from documented URLs/builds
+*.war
+# Exploded webapp dirs + runtime page/work stores
+*/webapp/
+*/pages/
+*/work/

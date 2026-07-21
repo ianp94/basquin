@@ -186,6 +186,8 @@ Field notes:
   violations (DD-022); the CRD's CEL rule rejects an empty/omitted `includes` at apply time.
 - **`agents.valve`** (Tomcat server-side invariant valve, default true in the schema) exists but valve
   *mounting* is deferred — it needs a `context.xml` entry, not a JVM flag — so leave it as is for now.
+  The operator delivers server-side oracle via the injected agent's bytecode (`-Dbasquin.boundary=agent`),
+  so the hand-mounted valve remains unnecessary for the operator path.
 - **`jvmOptsVar`** is an enum: only `CATALINA_OPTS` or `JAVA_TOOL_OPTIONS`. The original value is
   stashed so revert is exact.
 - **`dashboardPush`** (`host:port`) — optional; push server-side status/findings to a standalone

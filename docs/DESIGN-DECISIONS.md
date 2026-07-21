@@ -955,7 +955,7 @@ identical behavior, proof both implementations agree.
 
 **Consequence.** Operator-instrumented Tomcat targets now capture **server-side heap/thread/latency
 findings** (the availability oracle) for the first time. Load mode (DD-029) arrives too, via the
-agent's instruction of the same `/__basquin/*` control surface already implemented in the valve.
+agent's instrumentation of the same `/__basquin/*` control surface already implemented in the valve.
 
 **Verified.** End-to-end: agent premain runs and installs the transformer; `StandardHostValve.invoke`
 is wrapped; iteration boundaries fire; server-side invariant violations are captured and reported

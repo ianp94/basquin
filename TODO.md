@@ -314,7 +314,7 @@ Design-note first (likely its own DD); phased.
   coordinator); Job `parallelism` vs a Deployment of runners; how the dashboard distinguishes
   per-runner vs aggregate views; back-pressure so N runners don't overwhelm a small target unintentionally.
 
-### Mode-aware dashboard (load campaigns are blank today) *(roadmap, user 2026-07-21)*
+### Mode-aware dashboard (load campaigns are blank today) — ✅ delivered by DD-033 *(roadmap, user 2026-07-21)*
 The per-campaign dashboard is hard-coded to **explore** metrics — it is not mode-aware. `LoadRun`
 (load mode) never calls `StatusReporter`/`DashboardClient`, and `CoverageGuidedRun.main` starts the 2s
 push loop *before* branching into the load path — so a load campaign's dashboard shows `iterations=0`,
@@ -326,13 +326,18 @@ that half was never implemented — design/implementation drift, not merely an o
 more now: DD-026 load + DD-029 lock-free + DD-031 cost-ranked + DD-032 pheromone all make **load** the
 mode where the interesting availability signals land, and it's the one the dashboard can't show.
 
-- [ ] **`LoadRun` pushes to the dashboard.** Start `DashboardClient` in the load path and push the load
+**Done: DD-033** (`docs/DESIGN-DECISIONS.md`) — `StatusReporter`/`LoadRun` push mode-aware load
+status through the existing one push path, the dashboard renders a load card, the campaign list
+scrapes `mode`, and the CLI status table is mode-aware. e2e-asserted in-cluster
+(`deploy/e2e/e2e.sh`).
+
+- [x] **`LoadRun` pushes to the dashboard.** Start `DashboardClient` in the load path and push the load
   JSON (throughput/percentiles/drift/5xx) to `/ingest/status`. The server is schema-agnostic (opaque
   blob + a light scrape, DD-013), so this is a driver-side change — no server change.
-- [ ] **A load view in the UI.** `resources/dashboard.html` renders explore fields only (iterations,
+- [x] **A load view in the UI.** `resources/dashboard.html` renders explore fields only (iterations,
   crashes, coverage%, corpus, invariant finds). Add a load card (throughput, p50/p90/p99, heap/thread
   drift, 5xx), selected off a `mode` field the driver includes in its status payload.
-- [ ] **`mode` in the data model.** Thread the campaign `mode` through the status payload so the
+- [x] **`mode` in the data model.** Thread the campaign `mode` through the status payload so the
   dashboard — and the `/api/campaigns` list scrape (which today greps `iterations`/`crashes`/`pct`) —
   distinguishes explore vs load at a glance.
 - Ties in: **clustered runners** (aggregating load across N runners — merge histograms/t-digests, don't

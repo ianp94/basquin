@@ -1204,8 +1204,9 @@ OpenTelemetry dependency is added by this DD:
 
 Three contract commitments a future exporter inherits: **unit is the UCUM `unit` field**, never baked
 into the name (`ms`, not `..._ms`); **the histogram's bucket boundaries are part of the contract** —
-the `AtomicLongArray`'s 1 ms × 30 000 bucket layout becomes the explicit-bucket-histogram boundaries
-the exporter must emit verbatim (re-bucketing later is a breaking change to downstream dashboards);
+the `AtomicLongArray`'s layout (1 ms buckets from 0..30000 ms (`MAX_MS`), plus one overflow bucket for
+anything slower) becomes the explicit-bucket-histogram boundaries the exporter must emit verbatim
+(re-bucketing later is a breaking change to downstream dashboards);
 and **`campaign.id` is a resource attribute, `mode` is a metric attribute** (identity vs. dimension —
 what makes the future exporter thin, not a re-model).
 
@@ -1213,10 +1214,11 @@ what makes the future exporter thin, not a re-model).
 `load` block only after `setMode("load")`+`recordLoad(...)`, explore fields unaffected; `LoadRun`'s
 live-histogram percentile snapshot matches the end-of-run computation for the same histogram state;
 Go CLI table renders `MODE` + mode-aware metrics column, alignment holds for both explore and load
-rows. In-cluster e2e (`deploy/e2e/e2e.sh`): the load campaign's own per-campaign dashboard is queried
-at `/api/campaign/{id}/status` right after the campaign reaches `Completed` (before its GC'd delete),
-asserting `"mode":"load"` and a non-empty `"load":{"throughputRps"...}` block — closing the loop
-in-cluster, not just at the unit level.
+rows. In-cluster: `deploy/e2e/e2e.sh` **asserts** the load campaign's own per-campaign dashboard,
+queried at `/api/campaign/{id}/status` right after the campaign reaches `Completed` (before its GC'd
+delete), received `"mode":"load"` and a non-empty `"load":{"throughputRps"...}` block — closing the
+loop in-cluster, not just at the unit level; **CI executes this e2e in a kind cluster on every
+change.**
 
 **Rejected.** A second push mechanism for load (violates "one push path"; the existing
 `DashboardClient` loop already carries whatever `StatusReporter` emits); a hot-path lock to make live

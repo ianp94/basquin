@@ -147,6 +147,7 @@ var _ = Describe("BasquinTarget Controller (P2: injection)", func() {
 		Expect(opts).To(HavePrefix(origOpts + " "))
 		Expect(opts).To(ContainSubstring("-agentpath:" + agentsMountPath + "/libbasquinjvmti.so"))
 		Expect(opts).To(ContainSubstring("-javaagent:" + agentsMountPath + "/basquin-agent.jar"))
+		Expect(opts).To(ContainSubstring("-Dbasquin.boundary=agent"))
 		Expect(opts).To(ContainSubstring("jacocoagent.jar=output=tcpserver"))
 		Expect(opts).To(ContainSubstring("includes=com.example.*"))
 		Expect(opts).To(ContainSubstring("-Dbasquin.invariant.mode=soft"))

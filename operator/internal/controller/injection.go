@@ -94,9 +94,11 @@ func jvmOptsVarName(spec *basquinv1alpha1.BasquinTargetSpec) string {
 
 // buildAgentArgs assembles the JVM flags appended to jvmOptsVar. Order is deliberate: the native
 // JVMTI agent first, then the Java agent (+ bootclasspath so its classes are visible to
-// bootstrap-loaded code), then the JaCoCo coverage agent, then the -D config. The valve is NOT a
-// JVM flag (it needs a Tomcat context.xml Valve entry) and is handled separately (deferred; see the
-// backlog) — enabling agents.valve alone does not add anything here.
+// bootstrap-loaded code), then the JaCoCo coverage agent, then the -D config. The Tomcat valve is
+// not mounted by the operator; instead the injected -javaagent installs the server-side request
+// boundary itself via bytecode (-Dbasquin.boundary=agent, see agent.Agent.premain /
+// RequestBoundary), so the operator path gets the availability oracle on any Tomcat image with no
+// context.xml / lib surgery.
 func buildAgentArgs(spec *basquinv1alpha1.BasquinTargetSpec) string {
 	var args []string
 	if spec.Agents.ThreadTracker == nil || *spec.Agents.ThreadTracker { // nil = default (on)
@@ -106,6 +108,11 @@ func buildAgentArgs(spec *basquinv1alpha1.BasquinTargetSpec) string {
 	args = append(args,
 		"-javaagent:"+agentsMountPath+"/basquin-agent.jar",
 		"-Xbootclasspath/a:"+agentsMountPath+"/basquin-agent.jar")
+	// Turn on the agent-installed server-side request boundary (RequestBoundary via ByteBuddy in
+	// premain). Default-off in the agent, so the bench path (valve + agent) stays single-boundary; the
+	// operator mounts no valve, so it opts in here. This is what gives the operator path its server-side
+	// heap/thread/latency oracle + DD-029 /__basquin control surface.
+	args = append(args, "-Dbasquin.boundary=agent")
 
 	if spec.Agents.Coverage.Enabled {
 		port := spec.Agents.Coverage.Port

@@ -71,7 +71,7 @@ pre.raw{margin:6px 0 0;white-space:pre-wrap;color:#8b949e;font-size:11px;backgro
 
   <div id="campaignView" style="display:none">
     <div class="cards" id="cards"></div>
-    <div class="card" style="margin-top:12px">
+    <div class="card" id="covCard" style="margin-top:12px">
       <div class="k">coverage of app under test</div>
       <div class="v" id="covv">&mdash;</div>
       <div class="bar"><div id="covbar"></div></div>
@@ -214,7 +214,7 @@ async function tickFleet(){
         '<div style="display:flex;align-items:center;gap:8px"><span class="dot'+(c.alive?'':' dead')+'"></span>'+
         '<span>'+esc(c.id)+'</span></div>'+
         '<div class="s" style="margin-top:8px">iters '+c.iterations+' · crashes '+c.crashes+
-        ' · cov '+(c.coveragePct>=0?c.coveragePct+'%':'—')+'</div>'+
+        ' · cov '+(c.coveragePct>=0?c.coveragePct+'%':'—')+' · '+(c.mode||'explore')+'</div>'+
         '<div class="s">last seen '+c.ageSec+'s ago</div>'+
       '</div>').join('')
       : '<div class="muted">No campaigns reporting yet. Start a driver with '+
@@ -244,36 +244,51 @@ async function tick(){
     const st = await getJson('/api/campaign/'+encodeURIComponent(current)+'/status');
     if(gen !== generation) return;
     lastStatus = st;
-    document.getElementById('sub').textContent = 'campaign: '+current+' — '+fmtDur(st.elapsedSec||0)+' · '+((st.rate||0).toFixed(1))+'/s';
     const inv = st.invariants||{latency:0,heap:0,thread:0};
     const ex = st.exploration||{};
 
     const cl = await getJson('/api/campaign/'+encodeURIComponent(current)+'/clusters');
     if(gen !== generation) return;
-    // Invariants come from two different places and conflating them is misleading: the harness
-    // measures some in ITS OWN jvm (latency/heap/thread of the driver), while the app's agent
-    // reports its own via response headers, which arrive as Invariant-Remote findings. Showing
-    // only the former made this card read 0 while the findings table was full of heapDelta.
-    const appInv = {};
-    cl.filter(c => (c.classification||'').startsWith('Invariant'))
-      .forEach(c => { appInv[c.kind] = (appInv[c.kind]||0) + c.count; });
-    const appInvTotal = Object.values(appInv).reduce((a,b)=>a+b, 0);
-    const appInvSub = Object.keys(appInv).length
-      ? Object.entries(appInv).map(([k,v]) => k+' '+v).join(' · ') : 'none reported';
 
-    document.getElementById('cards').innerHTML =
-      card('iterations', st.iterations||0, ((st.rate||0).toFixed(1))+'/s') +
-      card('crashes', st.crashes||0) +
-      card('leaks', st.leaks||0) +
-      card('app invariants', appInvTotal, appInvSub) +
-      card('harness invariants', (inv.latency+inv.heap+inv.thread),
-           'lat '+inv.latency+' · heap '+inv.heap+' · thr '+inv.thread) +
-      card('latency ms', st.latencyMs?st.latencyMs.last:0, st.latencyMs?('mean '+st.latencyMs.mean+' · max '+st.latencyMs.max):'') +
-      card('corpus', ex.corpus||0, (ex.rejected||0)+' rejected');
-    const cv = ex.coverage||{total:0};
-    const pct = cv.total>0?cv.pct:0;
-    document.getElementById('covv').textContent = cv.total>0 ? (pct.toFixed(1)+'%  ('+cv.covered+'/'+cv.total+' edges)') : 'no coverage source';
-    document.getElementById('covbar').style.width = pct+'%';
+    const ld = st.load;
+    if (st.mode === 'load' && ld) {
+      const lm = ld.latencyMs || {};
+      document.getElementById('cards').innerHTML =
+        card('throughput', (ld.throughputRps||'0')+'/s', ld.requests+' reqs') +
+        card('p50 / p90 / p99', (lm.p50||0)+' / '+(lm.p90||0)+' / '+(lm.p99||0)+' ms', 'max '+(lm.max||0)+'ms') +
+        card('heap drift', (ld.heapDriftKb||0)+' KiB', 'over the soak') +
+        card('thread drift', ld.threadDrift||0) +
+        card('5xx', ld.serverErrors||0, 'server errors');
+      document.getElementById('sub').textContent = 'campaign: '+current+' — load · '+(ld.throughputRps||0)+'/s';
+      document.getElementById('covCard').style.display = 'none';
+    } else {
+      document.getElementById('sub').textContent = 'campaign: '+current+' — '+fmtDur(st.elapsedSec||0)+' · '+((st.rate||0).toFixed(1))+'/s';
+      // Invariants come from two different places and conflating them is misleading: the harness
+      // measures some in ITS OWN jvm (latency/heap/thread of the driver), while the app's agent
+      // reports its own via response headers, which arrive as Invariant-Remote findings. Showing
+      // only the former made this card read 0 while the findings table was full of heapDelta.
+      const appInv = {};
+      cl.filter(c => (c.classification||'').startsWith('Invariant'))
+        .forEach(c => { appInv[c.kind] = (appInv[c.kind]||0) + c.count; });
+      const appInvTotal = Object.values(appInv).reduce((a,b)=>a+b, 0);
+      const appInvSub = Object.keys(appInv).length
+        ? Object.entries(appInv).map(([k,v]) => k+' '+v).join(' · ') : 'none reported';
+
+      document.getElementById('cards').innerHTML =
+        card('iterations', st.iterations||0, ((st.rate||0).toFixed(1))+'/s') +
+        card('crashes', st.crashes||0) +
+        card('leaks', st.leaks||0) +
+        card('app invariants', appInvTotal, appInvSub) +
+        card('harness invariants', (inv.latency+inv.heap+inv.thread),
+             'lat '+inv.latency+' · heap '+inv.heap+' · thr '+inv.thread) +
+        card('latency ms', st.latencyMs?st.latencyMs.last:0, st.latencyMs?('mean '+st.latencyMs.mean+' · max '+st.latencyMs.max):'') +
+        card('corpus', ex.corpus||0, (ex.rejected||0)+' rejected');
+      const cv = ex.coverage||{total:0};
+      const pct = cv.total>0?cv.pct:0;
+      document.getElementById('covv').textContent = cv.total>0 ? (pct.toFixed(1)+'%  ('+cv.covered+'/'+cv.total+' edges)') : 'no coverage source';
+      document.getElementById('covbar').style.width = pct+'%';
+      document.getElementById('covCard').style.display = '';
+    }
 
     const total = cl.reduce((a,c)=>a+c.count,0);
     document.getElementById('findsSub').textContent = cl.length+' unique / '+total+' total';

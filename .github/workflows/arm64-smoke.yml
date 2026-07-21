@@ -55,6 +55,10 @@ jobs:
           EOF
           javac -cp build/classes/java/main -d /tmp /tmp/Arm64Smoke.java
           # -agentpath failing IS the advertised risk: it kills the JVM at startup, failing this step.
+          # BOTH flags are load-bearing (#56 review): -agentpath runs Agent_OnLoad (the JVMTI hooks),
+          # and -Dbasquin.native.lib is what makes NativeThreadTracker System.load() the same file and
+          # report isActive()=true — dropping it would false-negative this assertion even though the
+          # agent loaded fine.
           java "-agentpath:$PWD/build/native/libbasquinjvmti.so" \
                "-Dbasquin.native.lib=$PWD/build/native/libbasquinjvmti.so" \
                -cp "build/classes/java/main:/tmp" Arm64Smoke

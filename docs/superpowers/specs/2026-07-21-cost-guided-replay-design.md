@@ -48,6 +48,10 @@ X-Basquin-Cost: <latencyMs>,<heapDeltaKb>,<threadDelta>
   (from `ctx.latencyMs`, `ctx.heapDeltaBytes/1024`, `ctx.threadDelta`) and a getter.
 - **RequestBoundary** reads them in `onExit` (only for `EXPLORE_BEGAN`) and adds the header alongside
   the invariant header, through the same best-effort `Map<String,String>` the callers already write.
+  **Read the cost statics *before* `ITERATION_LOCK` is released** — same point the invariant header is
+  computed — so the numbers still belong to *this* request; the next iteration's `begin()` overwrites
+  them. This attributability is the whole reason the deltas are trustworthy (DD-010) and gets an
+  explicit test.
 - Written by the shared boundary, so it works on **both** the valve (bench) and the agent advice
   (operator, DD-030) — the operator path gets real target heap/thread cost for the first time.
 - **Best-effort delivery** (DD-029 noted some apps flush early and drop late headers). The driver's own
@@ -91,14 +95,25 @@ public final class CorpusEntry {
    `cost = CostModel.score(latencyMs, heapDeltaKb, threadDelta, invariantCount)`, and return it to the
    loop (today `request()` does not surface a per-input value; it returns the cost via a small result
    object or out-field so retention can use it).
-3. **Expanded retention:** add a `CorpusEntry` when **coverage increased** (`coverageFind=true`, as
-   today) **OR** the input is notably expensive — `cost > retainFactor × runningMeanCost`
-   (`basquin.cost.retainFactor`, default 3.0), `coverageFind=false`. The running mean is maintained
-   over all measured costs.
-4. **Bounded corpus, coverage-preserving eviction:** cap at `basquin.corpus.max` (default 1000). When
-   over cap, evict the **lowest-cost `coverageFind=false`** entry; never evict a `coverageFind` entry
-   (they are the coverage backbone that keeps exploration diverse). If only coverage-finds remain, stop
-   adding cost-finds. This bounds memory and keeps the pool focused without harming coverage behavior.
+3. **Expanded retention (with a cold-start gate):** add a `CorpusEntry` when **coverage increased**
+   (`coverageFind=true`, as today) **OR** the input is notably expensive — `cost > retainFactor × baseline`
+   (`basquin.cost.retainFactor`, default 3.0). **Cold-start guard:** cost-retention is disabled until at
+   least `basquin.cost.minSamples` (default 20) costs have been observed — `cost > 3 × mean` is
+   meaningless on the first handful of requests. **Baseline is an EMA, not a cumulative mean:** latency
+   is heavy-tailed and a running mean drifts upward over a long run, steadily raising the bar and
+   starving retention late; an exponential moving average (`baseline = α·cost + (1−α)·baseline`, α default
+   0.1, `basquin.cost.emaAlpha`) tracks "typical recent cost" instead. Coverage-retention is never gated.
+4. **Bounded corpus, coverage-preserving eviction — and it must be concurrency-safe.** Cap at
+   `basquin.corpus.max` (default 1000). When over cap, evict the **lowest-cost `coverageFind=false`**
+   entry; never evict a `coverageFind` entry (the coverage backbone). If only coverage-finds remain,
+   stop adding cost-finds. **Critical:** eviction is the corpus's first *removal* — today the list is
+   grow-only, and the mutation-parent reads (`corpus.get(rnd.nextInt(corpus.size()))`,
+   `CoverageGuidedRun.java:204-208`) are **unsynchronized**; grow-only made that quasi-safe, but
+   shrink-on-evict turns it into an `IndexOutOfBoundsException` race (size read, then a concurrent evict,
+   then a stale-index get). The plan **must** bring those reads under the same monitor as add/evict (a
+   brief `synchronized (corpus)` around the size+get pair), or swap the list reference atomically
+   (copy-on-write) so readers always see a consistent snapshot. Bounds memory and keeps the pool focused
+   without harming coverage behavior.
 5. **Cost-ranked replay emission:** `replayCorpusJson`/`writeSummary` sorts entries by `cost` **desc**
    (was `LinkedHashSet` insertion order), dedups by input, and appends within the existing
    `REPLAY_CORPUS_MAX_BYTES` budget — so the most expensive states survive truncation instead of the
@@ -123,10 +138,15 @@ the mutate pool — a mild, intentional "explore around expensive states" effect
 | `basquin.cost.heapWeight` | `0.0625` | per KB (≈ per 16 KB = 1) |
 | `basquin.cost.threadWeight` | `500` | per leaked thread |
 | `basquin.cost.invariantWeight` | `1000` | per invariant violation |
-| `basquin.cost.retainFactor` | `3.0` | retain a non-coverage input if `cost > factor × meanCost` |
+| `basquin.cost.retainFactor` | `3.0` | retain a non-coverage input if `cost > factor × baseline` |
+| `basquin.cost.minSamples` | `20` | costs observed before cost-retention activates (cold-start guard) |
+| `basquin.cost.emaAlpha` | `0.1` | EMA smoothing for the cost baseline |
 | `basquin.corpus.max` | `1000` | corpus size cap (evict cheapest cost-find) |
 
-`basquin.cost.enabled=false` gives a clean baseline for measuring the feature's effect.
+**`basquin.cost.enabled=false` must gate the *entire* feature** — header emission (boundary), cost
+computation, expanded retention, eviction, and cost-ranked replay all revert to today's behavior
+(insertion-order replay, no `X-Basquin-Cost` read). This is the A/B baseline, so any one of them leaking
+through would corrupt the comparison. The plan tests the kill-switch explicitly.
 
 ## Testing
 
@@ -165,3 +185,13 @@ the mutate pool — a mild, intentional "explore around expensive states" effect
 - Coverage-find corpus entries are **never evicted** — coverage diversity must not regress.
 - Works on both the valve (bench) and the agent boundary (operator) since the header lives in the
   shared `RequestBoundary`.
+- **Concurrency:** eviction is the first corpus *removal*; the mutation-parent reads at
+  `CoverageGuidedRun.java:204-208` are currently unsynchronized (safe only because the list was
+  grow-only). They **must** be synchronized with add/evict (or the list swapped copy-on-write) — a
+  shrink during `size()`→`get()` is an `IndexOutOfBoundsException` race.
+- **Cold start:** cost-retention activates only after `minSamples` (default 20) observations; the cost
+  baseline is an **EMA** (α=0.1), not a cumulative mean (heavy-tailed latency drifts a mean upward).
+- **Attributability:** the cost statics are read inside `onExit` **before** `ITERATION_LOCK` is
+  released (where the invariant header is already computed) — the next `begin()` overwrites them.
+- **Kill-switch totality:** `basquin.cost.enabled=false` reverts header emission, cost computation,
+  retention, eviction, and replay ordering to today's behavior — nothing leaks through.

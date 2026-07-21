@@ -888,3 +888,26 @@ image's other payloads (`basquin-agent.jar`, `jacocoagent.jar`, `basquin-valve.j
 build path is untouched. Follow-up: a native arm64 runner (`ubuntu-24.04-arm`) to *run* the arm64 agents
 image and prove the emulation-compiled `.so` loads, and multi-arch for the raw-app e2e fixtures if we ever
 test on arm64 CI.
+
+## DD-025: BasquinCampaign CRD — the operator owns the whole test run (2026-07-20)
+
+Full design in [CAMPAIGN-DESIGN.md](CAMPAIGN-DESIGN.md). A second CRD (`BasquinCampaign`) that,
+gated on an Injected `BasquinTarget`, launches the coverage-guided driver Job and a per-campaign
+dashboard, and aggregates coverage/findings/load into `status`. Shipped as operator phase **P5**
+(P5a driver Job; P5b per-campaign dashboard). Implemented.
+
+## DD-026: Load / soak mode — replay the interesting corpus under sustained load (2026-07-20)
+
+Full design in [LOAD-MODE-DESIGN.md](LOAD-MODE-DESIGN.md). `spec.mode: explore|load` on the same
+`BasquinCampaign` (fuzz and load differ in objective, not infra); the explore corpus is persisted to
+a ConfigMap and `runner.coverage.LoadRun` replays it at a fixed concurrency for a duration, reporting
+throughput / latency percentiles / heap+thread drift into `status.load`. Shipped as two PRs
+(producer, then consumer). Implemented.
+
+## DD-028: Dashboard read-path authentication — token-to-cookie handoff (2026-07-21)
+
+Full design in [READ-AUTH-DESIGN.md](READ-AUTH-DESIGN.md). Closes the read half of the #21/#43
+finding: dashboard reads are token-gated when a token is configured — `X-Basquin-Token` for
+scripts/drivers, or a one-time `?token=` handoff to a per-campaign `HttpOnly` cookie for browsers.
+`/healthz` stays unauthenticated for the readiness probe; comparisons are constant-time. Implemented
+in #55. NetworkPolicy kept as defense-in-depth documentation only (kind's CNI does not enforce it).

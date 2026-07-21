@@ -317,8 +317,9 @@ basquin run --name jpetstore-load --mode load --target jpetstore --base-url http
   <h2>Dashboard</h2>
   <p>By default every campaign gets its <strong>own</strong> dashboard — the operator creates a
     Deployment + Service (<code>&lt;campaign&gt;-dashboard</code>, ClusterIP on port <strong>7070</strong>),
-    owner-referenced to the campaign so it's garbage-collected when the campaign is deleted. It's a
-    ClusterIP with <strong>no auth</strong>, so reach it with a port-forward:</p>
+    owner-referenced to the campaign so it's garbage-collected when the campaign is deleted. Reads
+    are token-gated (DD-028): the operator mints a per-campaign token, and <code>basquin
+    dashboard</code> prints a tokenized URL. Reach it with a port-forward:</p>
   <pre><code>kubectl -n basquin-system get basquincampaign jpetstore-campaign -o jsonpath='{.status.dashboardURL}'
 <span class="c"># http://jpetstore-campaign-dashboard.basquin-system.svc.cluster.local:7070</span>
 

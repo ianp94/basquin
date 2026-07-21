@@ -299,7 +299,7 @@ processes is effectively remote code execution on whatever it runs on. **Update 
   one-command `up.sh`. Verified in-cluster: valve invariant headers, 96 server-side invariant
   finds, and live coverage % (281/6368 edges) all working against the pod. Demo `docs/demo-k8s.svg`.
 - [ ] **Auto-injection operator** — design **approved** and merged
-  ([`docs/OPERATOR-DESIGN.md`](OPERATOR-DESIGN.md), PR #6). An **explicit patch controller**: a
+  ([`docs/OPERATOR-DESIGN.md`](docs/OPERATOR-DESIGN.md), PR #6). An **explicit patch controller**: a
   namespaced `BasquinTarget` CR that instruments only the Deployments you name via an
   initContainer + shared volume, revertible by deleting the CR — deliberately *not* a mutating
   admission webhook, for a bounded, auditable trust boundary. Built in **Go / kubebuilder** as its
@@ -359,7 +359,7 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 
 ### Signal & triage quality
 - [ ] Structured invariant summary line (key=val pairs) in output *(v0.2)*
-- [ ] Reset smoke test: induce a failure, trigger a classloader reset, run another clean iteration *(v0.2)*
+- [x] Reset smoke test: induce a failure, trigger a classloader reset, run another clean iteration — done in `test/ResetClassLoaderTest.java` (subprocess fails iteration 1, resets, succeeds iteration 2; asserts "Performed classloader reset" + "Iteration 2"). *(v0.2; 2026-07-21 reconciliation — was a stale leftover)*
 - [ ] Unify JQF coverage-interesting inputs (`-Djqf.ei.DIRECTORY`) with the harness triage format *(v0.3)*
 - [ ] Triage handoff payload carries the IterationContext snapshot (DD-006) — the bounded handoff **queue itself is already built** (`runner/util/TriageSink.java`: `ArrayBlockingQueue` + daemon consumer, `-Dbasquin.triage.queueCapacity`, synchronous fallback, shutdown flush; wired into FuzzIO/GenericRunner/CorpusRunner/CoverageGuidedRun/JQFIterationHarness). Result fields are exposed on IterationContext; wiring the context *snapshot* into the enqueued payload is the remaining step *(v0.6)*
 - [ ] IterationFilter/valve move to explicit `begin()/end(ctx)` — cleanup only; still serialized (Option A's lock stays), and the ThreadLocal wrapper already makes them per-thread correct *(v0.6)*
@@ -376,15 +376,17 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 
 ### Load / soak mode — replay the interesting corpus under load *(post-v0.11 idea, user 2026-07-20)*
 **Managing the fuzz-vs-load split (planned decomposition, user 2026-07-20):** design-note first, then two PRs along the producer/consumer seam.
-- [x] **PR 0 — design note ([DD-026](LOAD-MODE-DESIGN.md)).** Decided (user 2026-07-20): **`mode: explore|load` on `BasquinCampaign`** (not a separate CRD — fuzz/load differ in objective, not infra) + **ConfigMap-emitted corpus** (`status.corpusConfigMap`, consumed via the existing corpus path). Load metrics = throughput/latency-percentiles/heap-thread-drift. Producer→consumer PR split.
+- [x] **PR 0 — design note ([DD-026](docs/LOAD-MODE-DESIGN.md)).** Decided (user 2026-07-20): **`mode: explore|load` on `BasquinCampaign`** (not a separate CRD — fuzz/load differ in objective, not infra) + **ConfigMap-emitted corpus** (`status.corpusConfigMap`, consumed via the existing corpus path). Load metrics = throughput/latency-percentiles/heap-thread-drift. Producer→consumer PR split.
 - [x] **PR 1 — persist the corpus (producer).** Merged (#33). The driver splices a byte-capped `replayCorpus` into the summary it already writes to the termination message (no sidecar / driver credentials); the operator materializes a campaign-owned `<campaign>-corpus-out` ConfigMap + `status.corpusConfigMap`. Validated in-cluster (24-route corpus emitted). Closes "corpus vanishes on teardown"; unblocks the dashboard **corpus view** + load replay.
 - [x] **PR 2 — load/soak mode (consumer).** `spec.mode: load` + `driver.concurrency`/`warmup`; `runner.coverage.LoadRun` replays the corpus at a fixed concurrency for a duration (keep-alive, warmup-excluded), reporting throughput + latency percentiles + heap/thread drift → `status.load`. Coverage-free driver Job in load mode; CLI `--mode load`. Validated envtest + in-cluster (replayed the emitted corpus → Completed with load metrics). Follow-ups: periodic drift sampling; target-side heap/thread; concurrency ramp.
-- [ ] Report load-mode-specific stats (throughput/RPS, latency percentiles under sustained load, heap/thread drift over the soak) distinct from exploration stats (coverage %, corpus growth).
+- [ ] Surface `status.load` in the CLI `status` / `run --watch` output — the backend is DONE (`LoadRun` computes throughput/RPS, p50/p90/p99/max latency, heap+thread drift → `status.load` via the reconciler, and the `Ready` condition message carries a human summary); the only gap is `operator/cmd/basquin/status.go`'s table showing just COVERAGE/FINDINGS, so a load-mode row is blank in those columns. *(narrowed 2026-07-21 — was "report load stats", mostly built)*
 
 ### Dashboard
 - [ ] Dismiss/mute a cluster (dashboard-local hide; no control channel, safe to build now — distinct from removing it from a driver's corpus, which conflicts with DD-006/DD-014 "never drop a finding") *(v0.10)*
 - [ ] Persistence / eviction beyond in-memory (TTL or small store) for real deployments *(v0.10)*
-- [ ] Full crash / sampled-stack drill-down in the findings view (currently a text excerpt) *(v0.10)*
+<!-- removed 2026-07-21: duplicate of the checked "Rich input viewer" v0.10 item — resources/dashboard.html
+     already parses exception/message/detail/stack sections and renders the full stack + a raw-record toggle. -->
+
 - [ ] Exercise the Claude analysis path against a live key — the `verifyClaude` smoke check is merged (PR #5); one real `[claude-check] OK` run closes it *(v0.10, DD-015)*
 - [ ] Periodic machine-readable status line (JSON) on stdout for external tooling (distinct from the dashboard push) *(v0.7)*
 - [ ] **Corpus view in the dashboard** — surface the accumulated coverage-guided corpus (the interesting inputs that reached new coverage), not just status/coverage/findings. The driver already holds the corpus in-memory; push a sample (or all) to the dashboard and render a browsable/searchable list. Pairs with the load/soak-mode idea (persist + replay the interesting corpus) above. *(user 2026-07-20)*
@@ -392,8 +394,8 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 ### Operator orchestration — P5 (confirmed 2026-07-20: two CRDs, after P2–P4)
 The operator owns the whole test, not just injection. Two-CRD shape confirmed; built as **P5** after
 the P1–P4 injection work (a campaign needs a working instrumented target). Design in full first
-(likely DD-025). See §10 of [`docs/OPERATOR-DESIGN.md`](OPERATOR-DESIGN.md).
-- [ ] **`BasquinCampaign` (test) CRD** — a second CRD that fires off a complete test run (DD-025, [`docs/CAMPAIGN-DESIGN.md`](CAMPAIGN-DESIGN.md)). Phased P5a–P5d.
+(likely DD-025). See §10 of [`docs/OPERATOR-DESIGN.md`](docs/OPERATOR-DESIGN.md).
+- [ ] **`BasquinCampaign` (test) CRD** — a second CRD that fires off a complete test run (DD-025, [`docs/CAMPAIGN-DESIGN.md`](docs/CAMPAIGN-DESIGN.md)). Phased P5a–P5d.
   - [x] **P5a — runner flags** (`-Dbasquin.run.duration`, `-Dbasquin.summary.out`) — merged (#18).
   - [x] **P5a — CRD + driver-Job reconciler** — gate on Injected target, launch driver Job (coverage-classes initContainer from the target's image, coverage endpoint, summary via terminationMessage), phase machine + TargetGone. envtest 22/22.
   - [x] **P5a — runner image + in-cluster campaign e2e** — built `basquin/runner` (`runnerJar` task + `deploy/runner-image/`), extended `deploy/e2e/e2e.sh` to apply a `BasquinCampaign` and assert a **non-zero coverage %** end to end.
@@ -409,12 +411,12 @@ the P1–P4 injection work (a campaign needs a working instrumented target). Des
           throughout; the session cookie also fixed the latent #43 Analyze-button 401. e2e asserts
           the 401/200 pair in-cluster; unit tests cover the parsing helpers. NetworkPolicy demoted
           to defense-in-depth docs (kind's CNI doesn't enforce it).
-    - [ ] Token-auth hardening nits from the #43 review: `DashboardServer.guarded()` compares the token with `String.equals` (not constant-time — a minor timing oracle); and the operator Role's `secrets: get;list;watch` is namespace-wide, not scoped to `*-dashboard-token` (consistent with the existing trust model, and `resourceNames` can't express a prefix — revisit if the operator ever shares a namespace with sensitive app Secrets).
+    - [ ] Token-auth RBAC-scope nit from the #43 review: the operator Role's `secrets: get;list;watch` is namespace-wide, not scoped to `*-dashboard-token` (consistent with the existing trust model, and `resourceNames` can't express a prefix — revisit if the operator ever shares a namespace with sensitive app Secrets). *(The `String.equals` timing-oracle half is DONE — #55 made all token comparisons `MessageDigest.isEqual` on both the read and write guards.)*
   - [x] **Wire `corpusConfigMap` → the driver (seed values)** — done (was already merged; this item was stale). `buildDriverJob` mounts the corpus ConfigMap flat at `/basquin-corpus` and sets `-Dbasquin.corpusDir`; `RequestGrammar.readValues` falls back to `<corpusDir>/<basename>` when a grammar-relative `@`-ref misses (basenames must stay globally unique across the corpus tree, enforced by the CLI's dup check — DD-018). Hardened by the #22 review (empty primary value file must not mask the fallback). The e2e creates the corpus ConfigMap incl. `values/` and asserts a `resolved values … via corpusDir` line in the driver log. *(2026-07-21 reconciliation)*
-- [ ] Operator launches the **driver** as a Job (the coverage-guided runner) pointed at the target Service + JaCoCo endpoints + dashboard push
-- [ ] Operator launches/ensures the **dashboard** (aggregator Deployment + Service) and wires the driver's push at it
-- [ ] Campaign lifecycle: owner refs + finalizer tear the driver/dashboard down on delete; status aggregates run state, finds, and coverage onto the Campaign
-- [ ] Package the **runner** and **dashboard** images the operator launches (alongside the `basquin/agents` image below)
+- [x] Operator launches the **driver** as a Job — done (P5a): `buildDriverJob` launches it pointed at the target/coverage endpoints + dashboard push.
+- [x] Operator launches/ensures the **dashboard** — done (P5b): `ensureDashboard` creates the Deployment/Service, mints the token Secret, wires the driver's push, sets `status.dashboardURL`.
+- [x] Campaign lifecycle — done: owner refs on the driver Job, dashboard Deployment/Service, and corpus ConfigMap drive k8s GC on campaign delete (no finalizer needed — the campaign holds no external state to revert, unlike BasquinTarget); status aggregates `Phase`/`CoveragePct`/`Findings`/`Load`/`Conditions`.
+- [x] Package the **runner** and **dashboard** images — done: `deploy/runner-image/` + `deploy/dashboard-image/`, built + pushed to ghcr by `release.yml`.
 
 ### Operator (post-P1 platform work — beyond the P2–P4 checklist)
 - [x] Build the versioned `basquin/agents:<tag>` image the operator's initContainer copies from — `deploy/agents-image/` (Dockerfile + `build.sh` staging the agent/valve/jacoco jars + native `.so` onto busybox). Built `basquin/agents:0.2.0` + `:latest`, loaded into the `basquin` kind cluster, verified contents + the initContainer `cp` + ELF arch.
@@ -427,7 +429,7 @@ the P1–P4 injection work (a campaign needs a working instrumented target). Des
           `native/**`/`agent/**` change. Living-doc caveats retired; the v0.2.0 images themselves
           predate the check (QEMU-cross-compiled from the same source) — the first post-#56 release
           ships images backed by it.
-  - [ ] `docker push` / registry publish flow for the agents image (build.sh loads into kind only) — *(surfaced building the image)*
+  - [x] `docker push` / registry publish flow for the agents image — done: `release.yml` buildx-builds + `--push`es all four images (incl. agents) to `ghcr.io/ianp94/basquin-*` on every `v*` tag. (`build.sh` remains the local dev path that loads into kind only.) *(2026-07-21 reconciliation)*
 - [x] **Helm chart to deploy the operator** — `deploy/helm/basquin-operator/`: CRDs + namespaced RBAC (Roles, not ClusterRoles) + controller Deployment, with the three images wired from values onto the controller args (no manual patching). `INSTALL=helm deploy/e2e/e2e.sh` exercises it end to end (injection + campaign + dashboard, 0 RBAC forbidden). **Publishing + tag-driven release (done 2026-07-20):** a **release is just a `v*` git tag** — `.github/workflows/release.yml` builds + pushes the four images to **ghcr.io** (`ghcr.io/ianp94/basquin-*`, chart defaults point there), cross-builds the **CLI** + attaches it + the packaged chart to the GitHub Release, and its `pages` job repackages the chart into `docs/charts/` + reindexes + commits to main so the **GitHub Pages Helm repo** self-updates (`helm repo add basquin https://ianp94.github.io/basquin/charts`). **Single-source version:** one chart value `imageTag` (default appVersion) drives all four image tags; `helm package --app-version <tag>` makes the tag the only version input. `deploy/helm/publish.sh` remains for a manual/bootstrap Pages refresh. Remaining follow-ups: cut the first real tag to verify the CI publish end-to-end; a CI check that the chart RBAC hasn't drifted from `make manifests`; multi-arch images (agents `.so` is amd64-only); OCI-registry chart push as an alternative.
 - [~] **CLI to launch tests** — a thin Go `basquin` CLI (reuses the operator's api/v1alpha1 types + controller-runtime client → applies real typed CRs). `make -C operator cli`.
   - [x] `instrument` — apply a `BasquinTarget` from flags (--deployment, --container, --jvm-opts-var, --coverage-includes, --coverage-port, --coverage-service, --invariant-*, --thread-tracker), `--wait` for Injected. Unit-tested + validated against the kind cluster.
@@ -436,7 +438,7 @@ the P1–P4 injection work (a campaign needs a working instrumented target). Des
   - [x] `dashboard` — self-contained client-go port-forward to the campaign's dashboard pod, prints the local URL. Validated against kind (forwarded + served live `/api/campaigns`).
   - [x] Distribution: `.github/workflows/release.yml` cross-builds the CLI (**linux/darwin/windows × amd64/arm64** — six binaries, `.exe` on Windows) → GitHub Release assets on a version tag, with the tag stamped via `-X main.version` and surfaced by `basquin version`. Follow-ups: a `kubectl basquin` plugin alias; a `version --short` (bare `0.2.0`, no platform/parens) so install scripts asserting a minimum version don't have to parse the human-readable form *(#39 review)*.
 - [ ] **Keep the operator usage docs current** — refresh `docs/` (CRD reference: target + campaign fields, dashboard, grammar/corpus ConfigMaps, spec-edit rerun) as the operator surface grows; a recurring pass, not one-and-done. *(user 2026-07-20)*
-- [ ] Operator CI: `go build` / `go vet` / `gofmt` (and envtest when assets are cached) in the pipeline — today only the Java build is in CI
+- [x] Operator CI: `go build` / `go vet` / `gofmt` / envtest in the pipeline — done (#51): `.github/workflows/operator-ci.yml` runs `go build` then `make test` (manifests + generate + fmt + vet + cached-envtest suite) plus a generated-artifact drift check. *(2026-07-21)*
 - [ ] Field indexer on `spec.deploymentRef.name` so the Deployment mapping-watch does a targeted lookup instead of a namespace-wide list+filter (PR #11 review; fine at current scale, optimization for high target-count/churn namespaces)
 - [x] **Deeper content-drift detection** — `injectionApplied` now verifies the agent flags in the target container's `jvmOptsVar` AND the shared volume mount, not just the annotation + initContainer, so a stripped/edited env (agents silently stop loading) is re-healed rather than read as steady-state Injected. envtest covers the env-strip drift case. *(surfaced by the in-cluster e2e)*
 - [x] Operator e2e in CI — `.github/workflows/operator-e2e.yml` builds the JPetStore WAR (mvn) + every image, Helm-installs the operator into an ephemeral kind cluster, and runs the full `deploy/e2e/e2e.sh` (injection + campaign + load + dashboard) on operator/deploy/runner/agent changes. Guards the in-cluster path (RBAC, real images, agent loading) beyond envtest.

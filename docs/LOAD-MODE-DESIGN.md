@@ -1,8 +1,8 @@
 # Load / soak mode — design proposal (DD-026)
 
-**Status:** proposed, under review. Not yet implemented. On approval this becomes **DD-026** and lands
-as two implementation PRs (producer, then consumer) behind a `spec.mode` field on the existing
-`BasquinCampaign`. Extends [CAMPAIGN-DESIGN.md](CAMPAIGN-DESIGN.md) (DD-025).
+**Status:** **accepted and implemented (DD-026)** — shipped as two PRs (producer: corpus persisted
+to a ConfigMap; consumer: `runner.coverage.LoadRun` + `spec.mode: load`) behind a `spec.mode` field
+on the existing `BasquinCampaign`. Extends [CAMPAIGN-DESIGN.md](CAMPAIGN-DESIGN.md) (DD-025).
 
 Two crux decisions are **already settled** (user, 2026-07-20):
 - **A `mode: explore | load` field on `BasquinCampaign`** — *not* a separate `BasquinLoadTest`

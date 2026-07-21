@@ -1,6 +1,11 @@
-# Built/downloaded app WARs — large binaries, reproducible from documented URLs/builds
+# Built/downloaded app artifacts — large binaries, reproducible from documented URLs
 *.war
-# Exploded webapp dirs + runtime page/work stores
+*.tar.gz
+*.zip
+postgresql.jar
+apache-roller-*/
+# Exploded webapp dirs + runtime stores
 */webapp/
 */pages/
 */work/
+*/roller_data/

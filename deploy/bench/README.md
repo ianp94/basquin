@@ -26,7 +26,20 @@ Reproducible setups for the benchmarking campaign
   clips a 25ms budget. **JSPWiki is IN as the core CMS target.** (Phase 2 will add a warmup phase so
   steady-state metrics aren't dominated by the one-time JSP compile — the cold cliff is captured separately.)
 
-## Roller — stretch (DB-backed) — Task 0.2, pending
+## Roller — stretch (DB-backed) — attempted thoroughly, OUT (2026-07-21)
 
-TBD in Phase 0. Fallback order (spec): lighter DB-backed CMS (e.g. the JSPWiki JDBC variant above) →
-file-store CMS → ship 2 apps.
+Apache Roller **6.1.5** (prebuilt WAR from the binary dist; `javax`/Servlet 4.0 → Tomcat 9). Got a
+long way: stood up on Tomcat 9 with the valve+agent + a **PostgreSQL 16** container, Roller's
+`DatabaseProvider` connected successfully, and I loaded its bundled `dbscripts/postgresql/createdb.sql`
+(33 tables). **But** the ROOT context's Spring/Struts listeners fail to start on init
+(`StandardContext ... One or more listeners failed to start`) even with the schema present — a
+Roller bootstrap issue in this environment (heavy Spring Security + Struts Tiles + JPA stack, ~158s
+deploy). Chasing the exact listener exception is the multi-iteration rabbit hole the spec's
+bounded-effort fallback exists to avoid, so per the plan: **Roller is out.**
+
+**Decision: ship the 2-app campaign (JPetStore + JSPWiki).** It is already complete, framework-diverse,
+and covers the DB dimension honestly — **JPetStore exercises a real SQL/JDBC path** (MyBatis over
+HSQLDB), so "surfaces DB-driven pathologies" is demonstrated without Roller. A networked-DB CMS
+(Roller, or the JSPWiki-JDBC variant against Postgres) is a **documented future extension**; the
+`deploy/bench/roller/` compose is kept as a resumable starting point (KNOWN ISSUE: context-listener
+init failure).

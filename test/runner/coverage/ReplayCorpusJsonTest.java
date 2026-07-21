@@ -48,7 +48,7 @@ public class ReplayCorpusJsonTest {
         for (int i = 0; i < 500; i++) {
             big.add(String.format("/actions/Catalog.action?categoryId=CAT%04d&productId=FI-SW-%04d", i, i));
         }
-        CoverageGuidedRun.lastCorpus = big;
+        CoverageGuidedRun.lastCorpus = new CostCorpus(big, false);
         java.nio.file.Path tmp = java.nio.file.Files.createTempFile("summary", ".json");
         tmp.toFile().deleteOnExit();
         CoverageGuidedRun.writeSummary(tmp.toString());

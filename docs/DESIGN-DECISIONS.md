@@ -969,3 +969,70 @@ between two implementations, solved by the shared `RequestBoundary` library); de
 to a Phase P3 (it fits into P2's agent-injection footprint and relies on no new operator machinery).
 
 See [`docs/superpowers/specs/2026-07-21-operator-server-side-boundary-design.md`](docs/superpowers/specs/2026-07-21-operator-server-side-boundary-design.md).
+
+---
+
+## DD-031: Cost-ranked replay corpus — cost-guided exploration, phase 1 (2026-07-21)
+
+**Context.** Exploration keeps an input only if it increased coverage, and mutates parents by uniform
+random draw; the replay corpus that load mode later consumes is emitted in *insertion order*, truncated
+by a byte budget. Which states get load-tested was therefore an accident of discovery order, not of how
+expensive they are — and no per-input cost (latency / heap growth / thread leak) was computed or stored
+anywhere. With DD-029 (lock-free load) and DD-030 (the operator now measures the server) both merged,
+the missing piece was a per-input cost signal and a way to steer load with it.
+
+**Decision.** Steer **load**, not exploration — exploration stays coverage-driven (its job is diverse
+discovery; cost-biasing selection risks trading away coverage). The shared `RequestBoundary` (DD-030)
+adds a per-request cost channel, `X-Basquin-Cost: <latencyMs>,<heapDeltaKb>,<threadDelta>`, read on the
+`EXPLORE_BEGAN` path before `ITERATION_LOCK` releases (same attributability point as the invariant
+header, DD-010). `runner.coverage.CostModel` scores each fired input from that header (coefficients
+`-D`-overridable); `CoverageGuidedRun` retains an input if it increased coverage **or** its cost clears
+an EMA-tracked baseline (cold-start gated so the bar means something), evicts the cheapest non-coverage
+entry once the corpus is over its cap (coverage-find entries are never evicted), and emits the replay
+ConfigMap sorted by cost descending instead of insertion order — so the most expensive discovered states
+survive byte-budget truncation and get replayed under load first. The replay ConfigMap format itself is
+unchanged (plain route lines); no operator or `LoadRun` change was needed.
+
+**Why not "true pheromone" (evaporation + reinforcement) now.** In the current loop each corpus entry is
+fired exactly once (seeds in the first pass; a coverage/cost find when added) — entries are never
+re-fired, only their *mutated children* are, as new entries. So an entry carries a single measured cost;
+there is nothing to evaporate or reinforce. Real pheromone dynamics need **credit assignment** (a
+child's cost flowing back along the mutation lineage to bias parent *selection*) — a genuine future
+feature, valuable only once selection is cost-biased. This phase deliberately stops at cost-ranked
+replay; the richer pheromone stays a documented roadmap extension.
+
+**Config (`-D`, all defaulted):** `basquin.cost.latencyWeight` (1.0), `.heapWeight` (0.0625, ≈per-16KB),
+`.threadWeight` (500), `.invariantWeight` (1000) tune `CostModel.score`; `basquin.cost.retainFactor`
+(3.0) and `basquin.cost.minSamples` (20, cold-start guard) gate cost-based retention;
+`basquin.cost.emaAlpha` (0.1) smooths the "typical recent cost" baseline; `basquin.corpus.max` (1000)
+caps corpus size. **`basquin.cost.enabled=false` is the kill-switch, and it lives driver-side, not on
+the boundary:** the boundary always emits `X-Basquin-Cost` unconditionally (a target property — one
+target can serve many campaigns, so it can't know a given campaign's cost intent; the header is cheap
+and inert if unread). With `enabled=false` the *driver* skips reading the header, skips cost
+computation, retention, and eviction, and emits the replay corpus in today's insertion order — a clean
+A/B baseline against this feature, restoring pre-DD-031 behavior exactly.
+
+**Two things that look like bugs but are not:**
+- **`topCost` observability is a driver stdout log line, not a summary JSON field.** The termination
+  summary shares the kubelet's ~4 KB termination-message budget with the replay corpus itself (see
+  `REPLAY_CORPUS_MAX_BYTES` in `CoverageGuidedRun`); adding a `topCost` array to that JSON would compete
+  with corpus entries for the same tight budget. Cost visibility is instead printed to the driver's
+  stdout log — `[Basquin] replay cost-ranked (top N): <route>=<cost>, ...` — and asserted via `kubectl
+  logs` in the e2e (DD-031 assertion (b)), not via `status`/summary JSON. This is deliberate, not an
+  oversight.
+- **The `X-Basquin-Cost` header's `latencyMs` field is emitted but the driver does not read it.** The
+  driver computes cost from its own round-trip latency — the always-available floor per the spec, since
+  the header is best-effort and can be dropped by apps that flush early (DD-029 noted this). The header
+  still carries `latencyMs` for completeness / other consumers (e.g. a future dashboard reading the raw
+  channel), but the driver deliberately ignores it in favor of its own measurement. Not dead code.
+
+**Verified.** In-cluster e2e (`deploy/e2e/e2e.sh`): (a) the target serves `X-Basquin-Cost` as a
+`latency,heap,thread` CSV on a request through the explore boundary; (b) the explore campaign's driver
+Job logs the `replay cost-ranked (top N): ...` line, proving the corpus was actually cost-ordered, not
+just that the header exists.
+
+**Rejected.** True pheromone (cost-biased selection + credit assignment) — deferred, see above; weighted
+replay inside `LoadRun` (proportional firing by cost) — needs a ConfigMap format change, a follow-up;
+combined coverage+cost fitness — blocked on JaCoCo's per-edge attribution, which doesn't exist today.
+
+See [`docs/superpowers/specs/2026-07-21-cost-guided-replay-design.md`](docs/superpowers/specs/2026-07-21-cost-guided-replay-design.md).

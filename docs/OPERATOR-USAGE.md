@@ -369,6 +369,14 @@ Notes:
 - The corpus can be any corpus ConfigMap — the one an explore run emitted (`status.corpusConfigMap`),
   or one you build yourself (route strings, one per line).
 - A load run's driver Job is **coverage-free** (no JaCoCo, no class extraction).
+- **Cost-ranked replay (DD-031).** The corpus an explore run emits is no longer insertion-ordered — it's
+  sorted by a per-input **cost** (latency / heap growth / thread leak, from the explore boundary's
+  `X-Basquin-Cost` header) descending, so load now hammers the most expensive discovered states first
+  when the corpus gets truncated by the ConfigMap byte budget. Tune it with `-Dbasquin.cost.*`
+  (`latencyWeight`, `heapWeight`, `threadWeight`, `invariantWeight`, `retainFactor`, `minSamples`,
+  `emaAlpha`) on the explore driver; set `-Dbasquin.cost.enabled=false` for an A/B baseline that
+  restores plain insertion-order replay. The top costs are printed to the explore driver's log
+  (`[Basquin] replay cost-ranked (top N): ...`), not `status`.
 
 Read the results from `status.load`:
 

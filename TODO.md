@@ -461,6 +461,13 @@ the P1–P4 injection work (a campaign needs a working instrumented target). Des
       minting plumbing (tokens expire hourly), wire git/gh to use it for branches/PRs/commits, and
       the bot's commit identity — after which the protect-main required-approval flow works as
       designed: bot authors, owner approves, auto-merge lands it.
+      **Must also fix the release pages job**: its direct chart-commit push to main is blocked by
+      protect-main, and the GitHub Actions app **cannot** be a ruleset bypass actor on a personal
+      repo (API: "must be part of the ruleset source or owner organization" — verified 2026-07-21;
+      the v0.2.0 pages job failed twice on this, chart was published manually via #47). Fix: the
+      pages job pushes with the bot app's installation token, and the bot app goes on the ruleset
+      bypass list (user-owned apps are accepted there). Also revisit the two app integrations
+      currently on the bypass list — added while debugging this; keep only what's intended.
 
 ### Calibration & real-app targets
 - [ ] WebGoat / OWASP Benchmark for guaranteed-findings calibration of triage output *(v0.5)*

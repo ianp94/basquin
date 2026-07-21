@@ -6,9 +6,9 @@
 <circle cx="20" cy="17" r="6" fill="#ff5f56"/>
 <circle cx="40" cy="17" r="6" fill="#ffbd2e"/>
 <circle cx="60" cy="17" r="6" fill="#27c93f"/>
-<text x="233" y="22" fill="#8b949e" font-size="12" text-anchor="middle">closurejvm — HTTP drive vs JPetStore</text>
+<text x="233" y="22" fill="#8b949e" font-size="12" text-anchor="middle">basquin — HTTP drive vs JPetStore</text>
 <g class="f f0">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:00                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   0  (0.0/s)                        │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>
@@ -21,7 +21,7 @@
 <text xml:space="preserve" x="18" y="260" fill="#8b949e">└───────────────────────────────────────────────┘</text>
 </g>
 <g class="f f1">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:00                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   13  (0.0/s)                       │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>
@@ -34,7 +34,7 @@
 <text xml:space="preserve" x="18" y="260" fill="#8b949e">└───────────────────────────────────────────────┘</text>
 </g>
 <g class="f f2">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:01                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   28  (28.0/s)                      │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>
@@ -47,7 +47,7 @@
 <text xml:space="preserve" x="18" y="260" fill="#8b949e">└───────────────────────────────────────────────┘</text>
 </g>
 <g class="f f3">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:02                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   43  (21.5/s)                      │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>
@@ -60,7 +60,7 @@
 <text xml:space="preserve" x="18" y="260" fill="#8b949e">└───────────────────────────────────────────────┘</text>
 </g>
 <g class="f f4">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:03                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   58  (19.3/s)                      │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>
@@ -73,7 +73,7 @@
 <text xml:space="preserve" x="18" y="260" fill="#8b949e">└───────────────────────────────────────────────┘</text>
 </g>
 <g class="f f5">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:04                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   74  (18.5/s)                      │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>
@@ -86,7 +86,7 @@
 <text xml:space="preserve" x="18" y="260" fill="#8b949e">└───────────────────────────────────────────────┘</text>
 </g>
 <g class="f f6">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:04                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   89  (22.3/s)                      │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>
@@ -99,7 +99,7 @@
 <text xml:space="preserve" x="18" y="260" fill="#8b949e">└───────────────────────────────────────────────┘</text>
 </g>
 <g class="f f7">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:05                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   104  (20.8/s)                     │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>
@@ -112,7 +112,7 @@
 <text xml:space="preserve" x="18" y="260" fill="#8b949e">└───────────────────────────────────────────────┘</text>
 </g>
 <g class="f f8">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:06                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   120  (20.0/s)                     │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>
@@ -125,7 +125,7 @@
 <text xml:space="preserve" x="18" y="260" fill="#8b949e">└───────────────────────────────────────────────┘</text>
 </g>
 <g class="f f9">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:07                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   135  (19.3/s)                     │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>
@@ -138,7 +138,7 @@
 <text xml:space="preserve" x="18" y="260" fill="#8b949e">└───────────────────────────────────────────────┘</text>
 </g>
 <g class="f f10">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:08                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   150  (18.8/s)                     │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>
@@ -151,7 +151,7 @@
 <text xml:space="preserve" x="18" y="260" fill="#8b949e">└───────────────────────────────────────────────┘</text>
 </g>
 <g class="f f11">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:08                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   166  (20.8/s)                     │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>
@@ -164,7 +164,7 @@
 <text xml:space="preserve" x="18" y="260" fill="#8b949e">└───────────────────────────────────────────────┘</text>
 </g>
 <g class="f f12">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:09                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   181  (20.1/s)                     │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>
@@ -177,7 +177,7 @@
 <text xml:space="preserve" x="18" y="260" fill="#8b949e">└───────────────────────────────────────────────┘</text>
 </g>
 <g class="f f13">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:10                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   196  (19.6/s)                     │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>
@@ -190,7 +190,7 @@
 <text xml:space="preserve" x="18" y="260" fill="#8b949e">└───────────────────────────────────────────────┘</text>
 </g>
 <g class="f f14">
-<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ ClosureJVM ──────────────────────────────────┐</text>
+<text xml:space="preserve" x="18" y="60" fill="#3fb950">┌─ Basquin ─────────────────────────────────────┐</text>
 <text xml:space="preserve" x="18" y="80" fill="#c9d1d9">│ run time     00:00:10                          │</text>
 <text xml:space="preserve" x="18" y="100" fill="#c9d1d9">│ iterations   200  (20.0/s)                     │</text>
 <text xml:space="preserve" x="18" y="120" fill="#f85149">│ crashes      0                                 │</text>

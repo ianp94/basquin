@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# End-to-end test of the ClosureJVM operator IN-CLUSTER (kind): build + load every image, deploy the
+# End-to-end test of the Basquin operator IN-CLUSTER (kind): build + load every image, deploy the
 # operator as a real pod with its scoped RBAC, deploy a RAW (un-instrumented) app, apply a
-# ClosureJVMTarget, and assert the operator injects the agents and the app comes up with them loaded.
-# Then apply a ClosureJVMCampaign and assert the operator drives a coverage run to a non-zero %,
+# BasquinTarget, and assert the operator injects the agents and the app comes up with them loaded.
+# Then apply a BasquinCampaign and assert the operator drives a coverage run to a non-zero %,
 # brings up a per-campaign dashboard (P5b), and the driver's pushes land on it.
 #
 # This is the test that envtest structurally can't do: it exercises the built operator image, the
@@ -13,22 +13,22 @@
 # Usage:
 #   deploy/e2e/e2e.sh [--teardown]
 # Env (all optional):
-#   CLUSTER=closurejvm            kind cluster name (created if missing)
-#   NS=closurejvm-system          namespace for the operator + target
+#   CLUSTER=basquin            kind cluster name (created if missing)
+#   NS=basquin-system          namespace for the operator + target
 #   TAG=0.2.0                     image tag for agents + operator
-#   RAW_APP_IMAGE=closurejvm/jpetstore-raw:0.2.0   raw app image (built if absent, see below)
+#   RAW_APP_IMAGE=basquin/jpetstore-raw:0.2.0   raw app image (built if absent, see below)
 #   JPETSTORE_WAR=/path/to.war    used to build the raw image if RAW_APP_IMAGE isn't present;
-#                                 falls back to extracting ROOT.war from closurejvm/jpetstore-demo.
+#                                 falls back to extracting ROOT.war from basquin/jpetstore-demo.
 set -euo pipefail
 
-CLUSTER="${CLUSTER:-closurejvm}"
-NS="${NS:-closurejvm-system}"
+CLUSTER="${CLUSTER:-basquin}"
+NS="${NS:-basquin-system}"
 TAG="${TAG:-0.2.0}"
-RAW_APP_IMAGE="${RAW_APP_IMAGE:-closurejvm/jpetstore-raw:0.2.0}"
-AGENTS_IMAGE="closurejvm/agents:${TAG}"
-OPERATOR_IMAGE="closurejvm/operator:${TAG}"
-RUNNER_IMAGE="closurejvm/runner:${TAG}"
-DASHBOARD_IMAGE="closurejvm/dashboard:${TAG}"
+RAW_APP_IMAGE="${RAW_APP_IMAGE:-basquin/jpetstore-raw:0.2.0}"
+AGENTS_IMAGE="basquin/agents:${TAG}"
+OPERATOR_IMAGE="basquin/operator:${TAG}"
+RUNNER_IMAGE="basquin/runner:${TAG}"
+DASHBOARD_IMAGE="basquin/dashboard:${TAG}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 K="kubectl --context kind-${CLUSTER}"
 
@@ -37,8 +37,8 @@ die() { printf '\033[1;31mFAIL: %s\033[0m\n' "$*" >&2; exit 1; }
 
 if [ "${1:-}" = "--teardown" ]; then
   say "Tearing down"
-  $K delete closurejvmcampaign --all -n "$NS" --ignore-not-found --timeout=60s || true
-  $K delete closurejvmtarget --all -n "$NS" --ignore-not-found --timeout=60s || true
+  $K delete basquincampaign --all -n "$NS" --ignore-not-found --timeout=60s || true
+  $K delete basquintarget --all -n "$NS" --ignore-not-found --timeout=60s || true
   $K delete -f "$ROOT/operator/config/crd/bases" --ignore-not-found || true
   $K delete namespace "$NS" --ignore-not-found --timeout=90s || true
   echo "Done."; exit 0
@@ -69,9 +69,9 @@ if ! docker image inspect "$RAW_APP_IMAGE" >/dev/null 2>&1; then
   tmp="$(mktemp -d)"
   if [ -n "${JPETSTORE_WAR:-}" ]; then
     cp "$JPETSTORE_WAR" "$tmp/jpetstore.war"
-  elif docker image inspect closurejvm/jpetstore-demo:latest >/dev/null 2>&1; then
-    echo "  (extracting ROOT.war from closurejvm/jpetstore-demo:latest)"
-    cid="$(docker create closurejvm/jpetstore-demo:latest)"
+  elif docker image inspect basquin/jpetstore-demo:latest >/dev/null 2>&1; then
+    echo "  (extracting ROOT.war from basquin/jpetstore-demo:latest)"
+    cid="$(docker create basquin/jpetstore-demo:latest)"
     docker cp "$cid:/usr/local/tomcat/webapps/ROOT.war" "$tmp/jpetstore.war"; docker rm "$cid" >/dev/null
   else
     die "no raw app image and no way to build it: set JPETSTORE_WAR=/path/to/jpetstore.war"
@@ -102,17 +102,17 @@ if [ "${INSTALL:-kustomize}" = "helm" ]; then
   # makes the RoleBinding roleRef immutable-incompatible anyway. Remove the kustomize-owned operator
   # resources (by name — labels aren't on all of them) so Helm gets a clean install. A prior *Helm*
   # release is handled by `upgrade --install`; skip the wipe if this namespace is already Helm-owned.
-  if [ "$($K -n "$NS" get sa closurejvm-controller-manager -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null)" = "kustomize" ]; then
-    $K -n "$NS" delete deploy,sa,role,rolebinding closurejvm-controller-manager closurejvm-manager-rolebinding \
-      closurejvm-leader-election-role closurejvm-leader-election-rolebinding --ignore-not-found >/dev/null 2>&1 || true
-    $K delete clusterrole closurejvm-manager-role --ignore-not-found >/dev/null 2>&1 || true
+  if [ "$($K -n "$NS" get sa basquin-controller-manager -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null)" = "kustomize" ]; then
+    $K -n "$NS" delete deploy,sa,role,rolebinding basquin-controller-manager basquin-manager-rolebinding \
+      basquin-leader-election-role basquin-leader-election-rolebinding --ignore-not-found >/dev/null 2>&1 || true
+    $K delete clusterrole basquin-manager-role --ignore-not-found >/dev/null 2>&1 || true
   fi
   # Helm installs CRDs from crds/ but NEVER upgrades them (documented caveat). Apply them explicitly so
   # an iterating e2e picks up CRD changes (new fields like spec.mode) instead of strict-decoding errors.
   $K apply -f "$ROOT/operator/config/crd/bases/"
-  helm --kube-context "kind-${CLUSTER}" upgrade --install closurejvm "$ROOT/deploy/helm/closurejvm-operator" \
+  helm --kube-context "kind-${CLUSTER}" upgrade --install basquin "$ROOT/deploy/helm/basquin-operator" \
     --namespace "$NS" --create-namespace \
-    --set fullnameOverride=closurejvm \
+    --set fullnameOverride=basquin \
     --set imageTag="$TAG" \
     --set image.repository="${OPERATOR_IMAGE%:*}" \
     --set images.agents="${AGENTS_IMAGE%:*}" \
@@ -121,12 +121,12 @@ if [ "${INSTALL:-kustomize}" = "helm" ]; then
     --wait --timeout=150s
   # Same image tag across runs => the Deployment spec is unchanged => helm won't restart the pod, so a
   # freshly `kind load`ed image wouldn't be picked up. Force a restart (the kustomize path does too).
-  $K -n "$NS" rollout restart deploy/closurejvm-controller-manager
-  $K -n "$NS" rollout status  deploy/closurejvm-controller-manager --timeout=120s
+  $K -n "$NS" rollout restart deploy/basquin-controller-manager
+  $K -n "$NS" rollout status  deploy/basquin-controller-manager --timeout=120s
 else
   say "Install CRDs + deploy operator (kustomize, namespaced RBAC) into '$NS'"
-  $K apply -f "$ROOT/operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml"
-  $K apply -f "$ROOT/operator/config/crd/bases/closurejvm.dev_closurejvmcampaigns.yaml"
+  $K apply -f "$ROOT/operator/config/crd/bases/basquin.dev_basquintargets.yaml"
+  $K apply -f "$ROOT/operator/config/crd/bases/basquin.dev_basquincampaigns.yaml"
   $K create namespace "$NS" --dry-run=client -o yaml | $K apply -f -
   install="$(mktemp)"
   $K kustomize "$ROOT/operator/config/default" | sed "s#image: controller:latest#image: ${OPERATOR_IMAGE}#" > "$install"
@@ -134,25 +134,25 @@ else
   # Tell the operator which agents image to inject (fixed tag => initContainer uses the kind-loaded
   # one). Idempotent: only append the flag if it isn't already there, so repeated runs (without
   # --teardown) don't accumulate duplicate --agents-image args.
-  if ! $K -n "$NS" get deploy closurejvm-controller-manager \
+  if ! $K -n "$NS" get deploy basquin-controller-manager \
         -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--agents-image'; then
-    $K -n "$NS" patch deploy closurejvm-controller-manager --type=json \
+    $K -n "$NS" patch deploy basquin-controller-manager --type=json \
       -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--agents-image=${AGENTS_IMAGE}\"}]"
   fi
   # Likewise pin the runner image the campaign driver Job runs (fixed tag => kind-loaded one).
-  if ! $K -n "$NS" get deploy closurejvm-controller-manager \
+  if ! $K -n "$NS" get deploy basquin-controller-manager \
         -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--runner-image'; then
-    $K -n "$NS" patch deploy closurejvm-controller-manager --type=json \
+    $K -n "$NS" patch deploy basquin-controller-manager --type=json \
       -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--runner-image=${RUNNER_IMAGE}\"}]"
   fi
   # ...and the per-campaign dashboard image (P5b).
-  if ! $K -n "$NS" get deploy closurejvm-controller-manager \
+  if ! $K -n "$NS" get deploy basquin-controller-manager \
         -o jsonpath='{.spec.template.spec.containers[0].args}' 2>/dev/null | grep -q -- '--dashboard-image'; then
-    $K -n "$NS" patch deploy closurejvm-controller-manager --type=json \
+    $K -n "$NS" patch deploy basquin-controller-manager --type=json \
       -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"--dashboard-image=${DASHBOARD_IMAGE}\"}]"
   fi
-  $K -n "$NS" rollout restart deploy/closurejvm-controller-manager
-  $K -n "$NS" rollout status  deploy/closurejvm-controller-manager --timeout=120s
+  $K -n "$NS" rollout restart deploy/basquin-controller-manager
+  $K -n "$NS" rollout status  deploy/basquin-controller-manager --timeout=120s
 fi
 
 say "Clean slate (revert+remove any prior target, then the app) so each run starts from RAW"
@@ -160,9 +160,9 @@ say "Clean slate (revert+remove any prior target, then the app) so each run star
 # Without this, re-applying a raw manifest over an already-injected Deployment leaves the operator's
 # annotations + initContainer but resets the env, which reads as 'already injected' and isn't re-fixed.
 # Delete the campaign first so its owned driver Job is GC'd before the target it depends on goes away.
-$K -n "$NS" delete closurejvmcampaign jpetstore-campaign jpetstore-load --ignore-not-found --timeout=60s
+$K -n "$NS" delete basquincampaign jpetstore-campaign jpetstore-load --ignore-not-found --timeout=60s
 $K -n "$NS" delete configmap jpetstore-grammar jpetstore-corpus --ignore-not-found
-$K -n "$NS" delete closurejvmtarget jpetstore --ignore-not-found --timeout=60s
+$K -n "$NS" delete basquintarget jpetstore --ignore-not-found --timeout=60s
 $K -n "$NS" delete deploy jpetstore --ignore-not-found --timeout=90s
 
 say "Deploy RAW app (no agents; CATALINA_OPTS set, to prove append-not-replace)"
@@ -196,10 +196,10 @@ spec:
   ports: [{ port: 8080, targetPort: 8080 }]
 YAML
 
-say "Apply ClosureJVMTarget"
+say "Apply BasquinTarget"
 $K apply -f - <<YAML
-apiVersion: closurejvm.dev/v1alpha1
-kind: ClosureJVMTarget
+apiVersion: basquin.dev/v1alpha1
+kind: BasquinTarget
 metadata: { name: jpetstore, namespace: ${NS} }
 spec:
   deploymentRef: { name: jpetstore }
@@ -216,17 +216,17 @@ say "Wait for injection to roll out"
 # just-applied raw template hasn't been re-injected yet. Then wait for that generation to roll out.
 for i in $(seq 1 60); do
   ic="$($K -n "$NS" get deploy jpetstore -o jsonpath='{.spec.template.spec.initContainers[0].name}' 2>/dev/null || true)"
-  [ "$ic" = "closurejvm-agents" ] && break
+  [ "$ic" = "basquin-agents" ] && break
   sleep 3
 done
-[ "$ic" = "closurejvm-agents" ] || die "operator did not inject the initContainer within timeout"
+[ "$ic" = "basquin-agents" ] || die "operator did not inject the initContainer within timeout"
 $K -n "$NS" rollout status deploy/jpetstore --timeout=180s
 
 say "ASSERT"
 fail=0
 check() { if eval "$2"; then printf '  \033[1;32mPASS\033[0m %s\n' "$1"; else printf '  \033[1;31mFAIL\033[0m %s\n' "$1"; fail=1; fi; }
 
-phase="$($K -n "$NS" get closurejvmtarget jpetstore -o jsonpath='{.status.phase}')"
+phase="$($K -n "$NS" get basquintarget jpetstore -o jsonpath='{.status.phase}')"
 initc="$($K -n "$NS" get deploy jpetstore -o jsonpath='{.spec.template.spec.initContainers[0].image}')"
 opts="$($K -n "$NS" get deploy jpetstore -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="CATALINA_OPTS")].value}')"
 # Newest Running operator pod — a rollout-restart can leave the previous one briefly Terminating,
@@ -245,32 +245,32 @@ for i in $(seq 1 20); do
   [ -n "$apod" ] || { sleep 3; continue; }
   cmdline="$($K -n "$NS" exec "$apod" -c jpetstore -- sh -c 'cat /proc/1/cmdline | tr "\0" " "' 2>/dev/null || true)"
   http="$($K -n "$NS" exec "$apod" -c jpetstore -- sh -c 'curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/' 2>/dev/null || true)"
-  if echo "$cmdline" | grep -q libclosurejvmti.so && [ "$http" = "200" ]; then break; fi
+  if echo "$cmdline" | grep -q libbasquinjvmti.so && [ "$http" = "200" ]; then break; fi
   sleep 3
 done
 
-endpoint="$($K -n "$NS" get closurejvmtarget jpetstore -o jsonpath='{.status.coverageEndpoint}')"
+endpoint="$($K -n "$NS" get basquintarget jpetstore -o jsonpath='{.status.coverageEndpoint}')"
 svcip="$($K -n "$NS" get svc jpetstore-cjvm-jacoco -o jsonpath='{.spec.clusterIP}' 2>/dev/null || true)"
 epaddr="$($K -n "$NS" get endpoints jpetstore-cjvm-jacoco -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)"
 
 check "target status is Injected"                         "[ '$phase' = 'Injected' ]"
-check "operator injected the agents initContainer"        "echo '$initc' | grep -q 'closurejvm/agents'"
-check "CATALINA_OPTS appended, original -Xmx512m kept"    "echo '$opts' | grep -q '^-Xmx512m ' && echo '$opts' | grep -q closurejvm-agent.jar"
+check "operator injected the agents initContainer"        "echo '$initc' | grep -q 'basquin/agents'"
+check "CATALINA_OPTS appended, original -Xmx512m kept"    "echo '$opts' | grep -q '^-Xmx512m ' && echo '$opts' | grep -q basquin-agent.jar"
 check "operator ran with NO RBAC forbidden errors"        "[ '${forbidden:-0}' = '0' ]"
-check "agents loaded on the live app JVM"                 "echo '$cmdline' | grep -q 'agentpath:/closurejvm/libclosurejvmti.so' && echo '$cmdline' | grep -q 'javaagent:/closurejvm/closurejvm-agent.jar'"
+check "agents loaded on the live app JVM"                 "echo '$cmdline' | grep -q 'agentpath:/basquin/libbasquinjvmti.so' && echo '$cmdline' | grep -q 'javaagent:/basquin/basquin-agent.jar'"
 check "app serves HTTP 200 with agents loaded"            "[ '$http' = '200' ]"
 check "coverage Service is headless (clusterIP None)"    "[ '$svcip' = 'None' ]"
 check "coverage Service has the pod as an endpoint"      "[ -n '$epaddr' ]"
 check "status.coverageEndpoint published (DD-023 flag)"  "echo '$endpoint' | grep -q 'jpetstore-cjvm-jacoco.*:6300'"
 
 # ---------------------------------------------------------------------------------------------------
-# Campaign (P5a): now that the target is Injected and exporting coverage, run a real ClosureJVMCampaign
+# Campaign (P5a): now that the target is Injected and exporting coverage, run a real BasquinCampaign
 # end-to-end — the operator launches the driver Job (runner image), which drives HTTP traffic through
 # the app's routes and reads live coverage back from the target's JaCoCo Service, then writes a summary
 # the operator surfaces as status.coveragePct. Only meaningful once the injection checks above pass.
 # ---------------------------------------------------------------------------------------------------
 if [ "$phase" = "Injected" ] && [ -n "$endpoint" ]; then
-  say "Create grammar + corpus ConfigMaps + apply ClosureJVMCampaign (drives traffic, reads coverage)"
+  say "Create grammar + corpus ConfigMaps + apply BasquinCampaign (drives traffic, reads coverage)"
   $K -n "$NS" create configmap jpetstore-grammar \
     --from-file=jpetstore.grammar="$ROOT/examples/grammar/jpetstore.grammar" \
     --dry-run=client -o yaml | $K apply -f -
@@ -282,8 +282,8 @@ if [ "$phase" = "Injected" ] && [ -n "$endpoint" ]; then
     --from-file="$ROOT/examples/corpus/jpetstore/values/" \
     --dry-run=client -o yaml | $K apply -f -
   $K apply -f - <<YAML
-apiVersion: closurejvm.dev/v1alpha1
-kind: ClosureJVMCampaign
+apiVersion: basquin.dev/v1alpha1
+kind: BasquinCampaign
 metadata: { name: jpetstore-campaign, namespace: ${NS} }
 spec:
   targetRef: { name: jpetstore }
@@ -298,12 +298,12 @@ YAML
   say "Wait for the campaign to reach a terminal phase"
   cphase=""
   for i in $(seq 1 120); do   # up to ~6 min: driver Job build + 200 coverage-guided iterations
-    cphase="$($K -n "$NS" get closurejvmcampaign jpetstore-campaign -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+    cphase="$($K -n "$NS" get basquincampaign jpetstore-campaign -o jsonpath='{.status.phase}' 2>/dev/null || true)"
     case "$cphase" in Completed|Failed) break;; esac
     sleep 3
   done
-  cpct="$($K -n "$NS" get closurejvmcampaign jpetstore-campaign -o jsonpath='{.status.coveragePct}' 2>/dev/null || true)"
-  cjob="$($K -n "$NS" get closurejvmcampaign jpetstore-campaign -o jsonpath='{.status.driverJob}' 2>/dev/null || true)"
+  cpct="$($K -n "$NS" get basquincampaign jpetstore-campaign -o jsonpath='{.status.coveragePct}' 2>/dev/null || true)"
+  cjob="$($K -n "$NS" get basquincampaign jpetstore-campaign -o jsonpath='{.status.driverJob}' 2>/dev/null || true)"
   cowner="$($K -n "$NS" get job "$cjob" -o jsonpath='{.metadata.ownerReferences[0].kind}' 2>/dev/null || true)"
   if [ "$cphase" != "Completed" ]; then
     echo "  (campaign phase=$cphase; driver Job logs for triage:)"
@@ -320,7 +320,7 @@ YAML
   valresolved="$(grep -q 'resolved values .* via corpusDir' "$dlog" && echo yes || echo no)"
   valsmissing="$(grep -q 'values file not found' "$dlog" && echo yes || echo no)"
   check "campaign reached Completed"                         "[ '$cphase' = 'Completed' ]"
-  check "operator owns the driver Job (GC wired)"            "[ '$cowner' = 'ClosureJVMCampaign' ]"
+  check "operator owns the driver Job (GC wired)"            "[ '$cowner' = 'BasquinCampaign' ]"
   check "campaign reported non-zero coverage %"              "[ '$cpos' = 'yes' ]"
   check "grammar resolved corpus value files via corpusDir"  "[ '$valresolved' = 'yes' ]"
   check "no corpus value file was missing"                   "[ '$valsmissing' = 'no' ]"
@@ -328,7 +328,7 @@ YAML
   rm -f "$dlog"
 
   # --- DD-026 PR 1: the run emits its interesting "replay corpus" as a campaign-owned ConfigMap ---
-  ccorpus="$($K -n "$NS" get closurejvmcampaign jpetstore-campaign -o jsonpath='{.status.corpusConfigMap}' 2>/dev/null || true)"
+  ccorpus="$($K -n "$NS" get basquincampaign jpetstore-campaign -o jsonpath='{.status.corpusConfigMap}' 2>/dev/null || true)"
   ccount=0; cowner2=""
   if [ -n "$ccorpus" ]; then
     ccount="$($K -n "$NS" get configmap "$ccorpus" -o jsonpath='{.data.corpus\.txt}' 2>/dev/null | grep -c '^/' || true)"
@@ -336,15 +336,15 @@ YAML
   fi
   check "campaign emitted status.corpusConfigMap"            "echo '$ccorpus' | grep -q 'jpetstore-campaign-corpus-out'"
   check "replay-corpus ConfigMap has route entries"          "[ '${ccount:-0}' -ge 1 ]"
-  check "replay-corpus ConfigMap owned by the campaign (GC)" "[ '$cowner2' = 'ClosureJVMCampaign' ]"
+  check "replay-corpus ConfigMap owned by the campaign (GC)" "[ '$cowner2' = 'BasquinCampaign' ]"
   echo "  (corpusConfigMap=${ccorpus:-<none>}; ${ccount} route(s))"
 
   # --- DD-026 PR 2: replay that corpus as a LOAD campaign, watch invariants under sustained traffic --
   if [ -n "$ccorpus" ]; then
-    say "Apply a mode:load ClosureJVMCampaign replaying the emitted corpus"
+    say "Apply a mode:load BasquinCampaign replaying the emitted corpus"
     $K apply -f - <<YAML
-apiVersion: closurejvm.dev/v1alpha1
-kind: ClosureJVMCampaign
+apiVersion: basquin.dev/v1alpha1
+kind: BasquinCampaign
 metadata: { name: jpetstore-load, namespace: ${NS} }
 spec:
   mode: load
@@ -357,14 +357,14 @@ spec:
 YAML
     lphase=""
     for i in $(seq 1 60); do   # 45s run + build/startup
-      lphase="$($K -n "$NS" get closurejvmcampaign jpetstore-load -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+      lphase="$($K -n "$NS" get basquincampaign jpetstore-load -o jsonpath='{.status.phase}' 2>/dev/null || true)"
       case "$lphase" in Completed|Failed) break;; esac
       sleep 3
     done
-    lreq="$($K -n "$NS" get closurejvmcampaign jpetstore-load -o jsonpath='{.status.load.requests}' 2>/dev/null || true)"
-    lrps="$($K -n "$NS" get closurejvmcampaign jpetstore-load -o jsonpath='{.status.load.throughputRps}' 2>/dev/null || true)"
-    lp99="$($K -n "$NS" get closurejvmcampaign jpetstore-load -o jsonpath='{.status.load.latencyMs.p99}' 2>/dev/null || true)"
-    ljob="$($K -n "$NS" get closurejvmcampaign jpetstore-load -o jsonpath='{.status.driverJob}' 2>/dev/null || true)"
+    lreq="$($K -n "$NS" get basquincampaign jpetstore-load -o jsonpath='{.status.load.requests}' 2>/dev/null || true)"
+    lrps="$($K -n "$NS" get basquincampaign jpetstore-load -o jsonpath='{.status.load.throughputRps}' 2>/dev/null || true)"
+    lp99="$($K -n "$NS" get basquincampaign jpetstore-load -o jsonpath='{.status.load.latencyMs.p99}' 2>/dev/null || true)"
+    ljob="$($K -n "$NS" get basquincampaign jpetstore-load -o jsonpath='{.status.driverJob}' 2>/dev/null || true)"
     linit="$($K -n "$NS" get job "$ljob" -o jsonpath='{.spec.template.spec.initContainers[*].name}' 2>/dev/null || true)"
     if [ "$lphase" != "Completed" ]; then
       echo "  (load phase=$lphase; driver logs:)"; $K -n "$NS" logs "job/$ljob" --tail=30 2>/dev/null | sed 's/^/    /' || true
@@ -374,12 +374,12 @@ YAML
     check "load run reported throughput + p99 latency"         "[ -n '$lrps' ] && [ -n '$lp99' ]"
     check "load driver Job has NO coverage initContainers"     "echo ':$linit:' | grep -qv extract-classes"
     echo "  (load: requests=${lreq:-<none>}, throughputRps=${lrps:-<none>}, p99=${lp99:-<none>}ms)"
-    $K -n "$NS" delete closurejvmcampaign jpetstore-load --ignore-not-found --timeout=60s >/dev/null 2>&1 || true
+    $K -n "$NS" delete basquincampaign jpetstore-load --ignore-not-found --timeout=60s >/dev/null 2>&1 || true
   fi
 
   # --- P5b: the operator brought up a per-campaign dashboard and the driver pushed to it ---------
   say "Assert the per-campaign dashboard (P5b)"
-  durl="$($K -n "$NS" get closurejvmcampaign jpetstore-campaign -o jsonpath='{.status.dashboardURL}' 2>/dev/null || true)"
+  durl="$($K -n "$NS" get basquincampaign jpetstore-campaign -o jsonpath='{.status.dashboardURL}' 2>/dev/null || true)"
   dname="jpetstore-campaign-dashboard"
   dsvc="$($K -n "$NS" get svc "$dname" -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || true)"
   downer="$($K -n "$NS" get deploy "$dname" -o jsonpath='{.metadata.ownerReferences[0].kind}' 2>/dev/null || true)"
@@ -395,7 +395,7 @@ YAML
 
   check "status.dashboardURL points at the dashboard Service"  "echo '$durl' | grep -q '${dname}.*:7070'"
   check "dashboard Service exposes port 7070"                  "[ '$dsvc' = '7070' ]"
-  check "operator owns the dashboard Deployment (GC wired)"    "[ '$downer' = 'ClosureJVMCampaign' ]"
+  check "operator owns the dashboard Deployment (GC wired)"    "[ '$downer' = 'BasquinCampaign' ]"
   check "dashboard Deployment is available"                    "[ '${davail:-0}' -ge 1 ]"
   check "dashboard is reachable and saw the campaign's pushes" "echo '$dapi' | grep -q 'jpetstore-campaign'"
   echo "  (dashboardURL=${durl:-<none>}; /api/campaigns=${dapi:-<none>})"

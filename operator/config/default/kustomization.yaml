@@ -1,14 +1,14 @@
 # Adds namespace to all resources. The operator is namespaced (docs/OPERATOR-DESIGN.md §6): this is
 # the namespace it runs in AND the only namespace it has permissions in (see the RoleBinding in
 # config/rbac). Install a second copy in another namespace to instrument targets there.
-namespace: closurejvm-system
+namespace: basquin-system
 
 # Value of this field is prepended to the
 # names of all resources, e.g. a deployment named
 # "wordpress" becomes "alices-wordpress".
 # Note that it should also match with the prefix (text before '-') of the namespace
 # field above.
-namePrefix: closurejvm-
+namePrefix: basquin-
 
 # Labels to add to all resources and selectors.
 #labels:

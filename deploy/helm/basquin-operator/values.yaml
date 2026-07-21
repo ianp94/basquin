@@ -1,0 +1,62 @@
+# Default values for basquin-operator.
+
+# Single source of the image VERSION: imageTag (empty => the chart's appVersion). All four images
+# below share it, so a release is just a git tag — `helm package --app-version X.Y.Z` (release.yml
+# does this) makes every image resolve to X.Y.Z with no per-image edits. Override for a pinned tag.
+imageTag: ""
+
+# The operator controller image repository (published to GitHub Container Registry by release.yml).
+image:
+  repository: ghcr.io/ianp94/basquin-operator
+  pullPolicy: IfNotPresent
+
+# The three image REPOSITORIES the operator launches or injects (tag = imageTag/appVersion, above).
+# Each maps to a controller flag; an empty repository makes the operator fall back to its built-in
+# default. Default to the published ghcr repos.
+images:
+  agents: ghcr.io/ianp94/basquin-agents       # --agents-image (target injection initContainer)
+  runner: ghcr.io/ianp94/basquin-runner       # --runner-image (campaign driver Job)
+  dashboard: ghcr.io/ianp94/basquin-dashboard # --dashboard-image (per-campaign dashboard Deployment)
+
+# The operator is NAMESPACED BY DESIGN: it watches and mutates only its own namespace (WATCH_NAMESPACE
+# is set from the release namespace via the downward API, and the operator refuses to start if empty).
+# Install one release per namespace you want to instrument. There is no cluster-wide mode.
+
+replicaCount: 1
+leaderElect: true
+
+# imagePullSecrets for private registries, e.g. [{ name: regcred }].
+imagePullSecrets: []
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+serviceAccount:
+  # Created by the chart. Set a name to use/override; empty uses the fullname.
+  name: ""
+  annotations: {}
+
+# Pod-level knobs.
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Security context mirrors the kustomize manifest (non-root, drop ALL caps, no privilege escalation).
+podSecurityContext:
+  runAsNonRoot: true
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+# Name overrides (kept short so resources read like the kustomize install, e.g. basquin-controller-manager).
+nameOverride: ""
+fullnameOverride: ""

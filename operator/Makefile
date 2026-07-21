@@ -83,8 +83,8 @@ build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
 
 .PHONY: cli
-cli: fmt vet ## Build the closurejvm CLI binary (bin/closurejvm).
-	go build -o bin/closurejvm ./cmd/closurejvm
+cli: fmt vet ## Build the basquin CLI binary (bin/basquin).
+	go build -o bin/basquin ./cmd/basquin
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.

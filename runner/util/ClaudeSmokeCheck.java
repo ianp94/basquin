@@ -20,7 +20,7 @@ public final class ClaudeSmokeCheck {
     public static void main(String[] args) {
         if (!ClaudeAnalyzer.isConfigured()) {
             System.err.println("[claude-check] no key: set ANTHROPIC_API_KEY (or "
-                    + "-Dclosurejvm.claude.apiKey). Nothing sent.");
+                    + "-Dbasquin.claude.apiKey). Nothing sent.");
             System.exit(1);
         }
         System.out.println("[claude-check] model=" + ClaudeAnalyzer.model() + " -> sending a minimal prompt…");

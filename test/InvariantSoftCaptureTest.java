@@ -23,8 +23,8 @@ public class InvariantSoftCaptureTest {
         cmd.add(javaBin);
         cmd.add("-cp");
         cmd.add(cp);
-        cmd.add("-Dclosurejvm.invariant.heapDelta.maxKb=64");
-        cmd.add("-Dclosurejvm.invariant.mode=soft");
+        cmd.add("-Dbasquin.invariant.heapDelta.maxKb=64");
+        cmd.add("-Dbasquin.invariant.mode=soft");
         cmd.add("runner.CorpusRunner");
         cmd.add("examples.targets.HeapFuzzTarget");
         cmd.add("examples/corpus/heap");

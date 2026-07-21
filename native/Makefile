@@ -1,6 +1,6 @@
-# Builds the ClosureJVM JVMTI native agent.
+# Builds the Basquin JVMTI native agent.
 #
-#   make            # builds ../build/native/libclosurejvmti.so
+#   make            # builds ../build/native/libbasquinjvmti.so
 #   make clean
 #
 # JAVA_HOME must point at a JDK (for jvmti.h / jni.h). Falls back to deriving it
@@ -11,10 +11,10 @@ OS        := $(shell uname -s)
 
 OUT_DIR := ../build/native
 ifeq ($(OS),Darwin)
-  LIB := $(OUT_DIR)/libclosurejvmti.dylib
+  LIB := $(OUT_DIR)/libbasquinjvmti.dylib
   MD  := darwin
 else
-  LIB := $(OUT_DIR)/libclosurejvmti.so
+  LIB := $(OUT_DIR)/libbasquinjvmti.so
   MD  := linux
 endif
 
@@ -24,10 +24,10 @@ CFLAGS := -O2 -fPIC -shared -Wall \
 .PHONY: all clean
 all: $(LIB)
 
-$(LIB): closurejvmti.c
+$(LIB): basquinjvmti.c
 	@mkdir -p $(OUT_DIR)
-	$(CC) $(CFLAGS) closurejvmti.c -o $(LIB)
+	$(CC) $(CFLAGS) basquinjvmti.c -o $(LIB)
 	@echo "Built $(LIB)"
 
 clean:
-	rm -f $(OUT_DIR)/libclosurejvmti.so $(OUT_DIR)/libclosurejvmti.dylib
+	rm -f $(OUT_DIR)/libbasquinjvmti.so $(OUT_DIR)/libbasquinjvmti.dylib

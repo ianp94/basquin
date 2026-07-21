@@ -1,4 +1,4 @@
-module github.com/ianp94/closureJVM/operator
+module github.com/ianp94/basquin/operator
 
 go 1.21
 

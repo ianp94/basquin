@@ -26,8 +26,8 @@ go.work
 *.swo
 *~
 
-# CLI binary from a bare `go build ./cmd/closurejvm` (Makefile uses bin/)
-/closurejvm
+# CLI binary from a bare `go build ./cmd/basquin` (Makefile uses bin/)
+/basquin
 
 # CLI cross-build output (release workflow)
 /dist/

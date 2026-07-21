@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the closurejvm/runner image the operator's campaign driver Job runs (docs/CAMPAIGN-DESIGN.md,
+# Build the basquin/runner image the operator's campaign driver Job runs (docs/CAMPAIGN-DESIGN.md,
 # DD-025). Stages the `runnerJar` fat jar from the Gradle build into ./, then docker-builds the image.
 # Optionally loads it into a kind cluster for local e2e.
 #
@@ -9,15 +9,15 @@
 #     KIND_CLUSTER  if set, `kind load docker-image` into that cluster after building.
 #
 # Examples:
-#   deploy/runner-image/build.sh                     # closurejvm/runner:<version> + :latest
-#   deploy/runner-image/build.sh 0.2.0 closurejvm    # ...and load into the `closurejvm` kind cluster
+#   deploy/runner-image/build.sh                     # basquin/runner:<version> + :latest
+#   deploy/runner-image/build.sh 0.2.0 basquin    # ...and load into the `basquin` kind cluster
 set -euo pipefail
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CTX="$(dirname "${BASH_SOURCE[0]}")"
-IMAGE="closurejvm/runner"
+IMAGE="basquin/runner"
 
 cd "$REPO_ROOT"
 
@@ -37,10 +37,10 @@ TAG="${1:-${VERSION:-dev}}"
 KIND_CLUSTER="${2:-}"
 
 echo "==> Staging runner jar into $CTX/"
-JAR="build/libs/closurejvm-${VERSION:-0.2.0}-runner.jar"
+JAR="build/libs/basquin-${VERSION:-0.2.0}-runner.jar"
 [ -f "$JAR" ] || JAR="$(ls build/libs/*-runner.jar 2>/dev/null | head -1)"
 [ -n "$JAR" ] && [ -f "$JAR" ] || die "runner jar not built (expected build/libs/*-runner.jar)"
-cp "$JAR" "$CTX/closurejvm-runner.jar"
+cp "$JAR" "$CTX/basquin-runner.jar"
 
 # STAGE_ONLY=1: stage the jar and stop, so a caller (release.yml) can drive `docker buildx` for a
 # multi-arch push itself (the jar is arch-independent, so no per-arch work here). Leaves the staged
@@ -54,7 +54,7 @@ fi
 echo "==> docker build $IMAGE:$TAG (+ :latest)"
 docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" "$CTX"
 # The staged jar is a build product; don't leave it in the source tree.
-rm -f "$CTX/closurejvm-runner.jar"
+rm -f "$CTX/basquin-runner.jar"
 
 if [ -n "$KIND_CLUSTER" ]; then
   echo "==> kind load docker-image $IMAGE:$TAG into cluster '$KIND_CLUSTER'"

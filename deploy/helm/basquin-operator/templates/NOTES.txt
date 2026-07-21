@@ -1,0 +1,23 @@
+basquin-operator {{ .Chart.AppVersion }} installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+The operator is NAMESPACED BY DESIGN — it manages only namespace "{{ .Release.Namespace }}".
+Install one release per namespace you want to instrument.
+
+Images it launches/injects (override with --set images.*):
+{{- $tag := .Values.imageTag | default .Chart.AppVersion }}
+  agents     {{ with .Values.images.agents }}{{ . }}:{{ $tag }}{{ else }}(built-in default){{ end }}
+  runner     {{ with .Values.images.runner }}{{ . }}:{{ $tag }}{{ else }}(built-in default){{ end }}
+  dashboard  {{ with .Values.images.dashboard }}{{ . }}:{{ $tag }}{{ else }}(built-in default){{ end }}
+
+1. Check the controller is up:
+     kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "basquin-operator.controllerName" . }}
+
+2. Instrument an app, then run a test (full guide: docs/OPERATOR-USAGE.md):
+     kubectl -n {{ .Release.Namespace }} apply -f your-basquintarget.yaml
+     kubectl -n {{ .Release.Namespace }} get basquintargets      # wait for PHASE=Injected
+     kubectl -n {{ .Release.Namespace }} apply -f your-basquincampaign.yaml
+     kubectl -n {{ .Release.Namespace }} get basquincampaigns    # PHASE, COVERAGE, FINDINGS
+
+CRDs are installed from the chart's crds/ directory. NOTE: Helm does not upgrade or delete CRDs — on
+`helm upgrade`, re-apply changed CRDs manually; on `helm uninstall`, CRDs (and any remaining
+Target/Campaign CRs) are left in place.

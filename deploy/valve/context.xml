@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Global Tomcat context that attaches the ClosureJVM valve to every deployed web
+  Global Tomcat context that attaches the Basquin valve to every deployed web
   application, including unmodified third-party WARs (see docs/THIRD-PARTY-APPS.md).
-  Mount this over /usr/local/tomcat/conf/context.xml and put closurejvm-valve.jar in
+  Mount this over /usr/local/tomcat/conf/context.xml and put basquin-valve.jar in
   Tomcat's lib/. The agent JAR is injected via CATALINA_OPTS (-javaagent + classpath).
 -->
 <Context>
@@ -10,5 +10,5 @@
     <WatchedResource>WEB-INF/tomcat-web.xml</WatchedResource>
     <WatchedResource>${catalina.base}/conf/web.xml</WatchedResource>
 
-    <Valve className="com.closurejvm.valve.ClosureJVMValve"/>
+    <Valve className="com.basquin.valve.BasquinValve"/>
 </Context>

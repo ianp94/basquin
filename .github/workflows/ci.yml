@@ -80,14 +80,14 @@ jobs:
         shell: bash
         run: |
           set -e
-          LIB="$(pwd)/build/native/libclosurejvmti.so"
+          LIB="$(pwd)/build/native/libbasquinjvmti.so"
           test -f "$LIB" || { echo "native lib not built" >&2; exit 1; }
           ./gradlew jar --no-daemon --warning-mode all
           # Run a short proper-mode loop with the agent injected; must complete cleanly.
-          java -agentpath:"$LIB" -Dclosurejvm.native.lib="$LIB" \
-            -Dclosurejvm.target=examples.targets.ThreadLeakTarget \
+          java -agentpath:"$LIB" -Dbasquin.native.lib="$LIB" \
+            -Dbasquin.target=examples.targets.ThreadLeakTarget \
             -Dexamples.mode=proper -Dexamples.sleepMs=1 -Dexamples.threads=2 \
-            -cp build/libs/closurejvm-0.2.0.jar runner.GenericRunner 20 examples.targets.ThreadLeakTarget
+            -cp build/libs/basquin-0.2.0.jar runner.GenericRunner 20 examples.targets.ThreadLeakTarget
 
   leak-demo:
     runs-on: ubuntu-latest

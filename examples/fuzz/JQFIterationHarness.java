@@ -10,7 +10,7 @@ import runner.api.InputReceiver;
 
 /**
  * JQF fuzz harness that feeds byte[] inputs into a configured IterationTarget.
- * Specify the target with -Dclosurejvm.target=<FQCN> implementing IterationTarget,
+ * Specify the target with -Dbasquin.target=<FQCN> implementing IterationTarget,
  * and optionally InputReceiver to consume fuzz inputs.
  */
 @RunWith(JQF.class)
@@ -26,9 +26,9 @@ public class JQFIterationHarness {
             // Start the triage consumer and status reporter before the first iteration baseline
             runner.util.TriageSink.ensureStarted();
             runner.util.StatusReporter.ensureStarted();
-            String cls = System.getProperty("closurejvm.target");
+            String cls = System.getProperty("basquin.target");
             if (cls == null || cls.isBlank()) {
-                throw new IllegalStateException("closurejvm.target not set for JQF harness");
+                throw new IllegalStateException("basquin.target not set for JQF harness");
             }
             try {
                 Class<?> c = Class.forName(cls);
@@ -39,7 +39,7 @@ public class JQFIterationHarness {
                 target = (IterationTarget) o;
                 target.initialize();
                 // Optional: pre-seed from a corpus directory deterministically before fuzzing
-                String preseed = System.getProperty("closurejvm.fuzz.preseedDir");
+                String preseed = System.getProperty("basquin.fuzz.preseedDir");
                 if (preseed != null && !preseed.isBlank()) {
                     java.nio.file.Path dir = java.nio.file.Paths.get(preseed);
                     if (java.nio.file.Files.exists(dir)) {
@@ -68,7 +68,7 @@ public class JQFIterationHarness {
                                 count++;
                             }
                         }
-                        System.out.println("[ClosureJVM][Fuzz] Pre-seeded " + count + " input(s) from " + preseed);
+                        System.out.println("[Basquin][Fuzz] Pre-seeded " + count + " input(s) from " + preseed);
                     }
                 }
                 initialized = true;

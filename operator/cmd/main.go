@@ -35,8 +35,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	closurejvmv1alpha1 "github.com/ianp94/closureJVM/operator/api/v1alpha1"
-	"github.com/ianp94/closureJVM/operator/internal/controller"
+	basquinv1alpha1 "github.com/ianp94/basquin/operator/api/v1alpha1"
+	"github.com/ianp94/basquin/operator/internal/controller"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -48,7 +48,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(closurejvmv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(basquinv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -60,7 +60,7 @@ func main() {
 	var enableHTTP2 bool
 	var agentsImage string
 	flag.StringVar(&agentsImage, "agents-image", "",
-		"Image the injected initContainer copies the ClosureJVM agents from (empty uses the built-in default).")
+		"Image the injected initContainer copies the Basquin agents from (empty uses the built-in default).")
 	var runnerImage string
 	flag.StringVar(&runnerImage, "runner-image", "",
 		"Image the campaign driver Job runs the coverage-guided runner from (empty uses the built-in default).")
@@ -130,7 +130,7 @@ func main() {
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "9bb24fbd.closurejvm.dev",
+		LeaderElectionID:       "9bb24fbd.basquin.dev",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -148,21 +148,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.ClosureJVMTargetReconciler{
+	if err = (&controller.BasquinTargetReconciler{
 		Client:      mgr.GetClient(),
 		Scheme:      mgr.GetScheme(),
 		AgentsImage: agentsImage,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ClosureJVMTarget")
+		setupLog.Error(err, "unable to create controller", "controller", "BasquinTarget")
 		os.Exit(1)
 	}
-	if err = (&controller.ClosureJVMCampaignReconciler{
+	if err = (&controller.BasquinCampaignReconciler{
 		Client:         mgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
 		RunnerImage:    runnerImage,
 		DashboardImage: dashboardImage,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ClosureJVMCampaign")
+		setupLog.Error(err, "unable to create controller", "controller", "BasquinCampaign")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

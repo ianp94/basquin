@@ -10,7 +10,7 @@ import java.util.concurrent.ArrayBlockingQueue;
  * Guarantees (see docs/DESIGN-DECISIONS.md DD-006):
  * - Findings are never dropped: if the queue is full or the sink is shutting down,
  *   the write runs synchronously in the caller (backpressure over loss).
- * - Bounded: capacity via -Dclosurejvm.triage.queueCapacity (default 256), so the
+ * - Bounded: capacity via -Dbasquin.triage.queueCapacity (default 256), so the
  *   harness that hunts leaks cannot itself grow without bound.
  * - Shutdown flush: a shutdown hook drains remaining tasks before JVM exit.
  *
@@ -20,16 +20,16 @@ import java.util.concurrent.ArrayBlockingQueue;
  */
 public final class TriageSink {
 
-    private static final int CAPACITY = Integer.getInteger("closurejvm.triage.queueCapacity", 256);
+    private static final int CAPACITY = Integer.getInteger("basquin.triage.queueCapacity", 256);
     private static final ArrayBlockingQueue<Runnable> QUEUE = new ArrayBlockingQueue<>(CAPACITY);
     private static volatile boolean shutdown = false;
     private static final Thread CONSUMER;
 
     static {
-        CONSUMER = new Thread(TriageSink::drainLoop, "ClosureJVM-TriageSink");
+        CONSUMER = new Thread(TriageSink::drainLoop, "Basquin-TriageSink");
         CONSUMER.setDaemon(true);
         CONSUMER.start();
-        Runtime.getRuntime().addShutdownHook(new Thread(TriageSink::flushRemaining, "ClosureJVM-TriageSink-Flush"));
+        Runtime.getRuntime().addShutdownHook(new Thread(TriageSink::flushRemaining, "Basquin-TriageSink-Flush"));
     }
 
     private TriageSink() {}
@@ -83,7 +83,7 @@ public final class TriageSink {
         try {
             task.run();
         } catch (Throwable t) {
-            System.err.println("[ClosureJVM][Triage] Write task failed: " + t);
+            System.err.println("[Basquin][Triage] Write task failed: " + t);
         }
     }
 }

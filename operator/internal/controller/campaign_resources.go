@@ -25,7 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	closurejvmv1alpha1 "github.com/ianp94/closureJVM/operator/api/v1alpha1"
+	basquinv1alpha1 "github.com/ianp94/basquin/operator/api/v1alpha1"
 )
 
 // P5a (docs/CAMPAIGN-DESIGN.md, DD-025). The driver Job runs the coverage-guided runner against an
@@ -36,31 +36,31 @@ import (
 // for the first cut; it's size-capped at ~4 KiB, ample for the one-line summary).
 
 const (
-	defaultRunnerImage = "closurejvm/runner:latest"
+	defaultRunnerImage = "basquin/runner:latest"
 
-	campaignClassesVol = "closurejvm-classes"
-	campaignClassesDir = "/closurejvm-classes"
-	campaignGrammarVol = "closurejvm-grammar"
-	campaignGrammarDir = "/closurejvm-grammar"
+	campaignClassesVol = "basquin-classes"
+	campaignClassesDir = "/basquin-classes"
+	campaignGrammarVol = "basquin-grammar"
+	campaignGrammarDir = "/basquin-grammar"
 	campaignGrammarKey = "grammar" // the grammar is projected into the volume under this fixed filename
 
-	campaignCorpusVol = "closurejvm-corpus"
-	campaignCorpusDir = "/closurejvm-corpus"
+	campaignCorpusVol = "basquin-corpus"
+	campaignCorpusDir = "/basquin-corpus"
 )
 
-func driverJobName(c *closurejvmv1alpha1.ClosureJVMCampaign) string { return c.Name + "-driver" }
+func driverJobName(c *basquinv1alpha1.BasquinCampaign) string { return c.Name + "-driver" }
 
 // buildDriverJob builds the coverage-guided driver Job. appImage is the target's app-container image
 // (source of the .class files); coverageEndpoint is the target's status.coverageEndpoint;
 // dashboardPush is the resolved dashboard host:port to push status/findings to ("" = don't push).
-func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverageEndpoint, runnerImage, dashboardPush string) *batchv1.Job {
+func buildDriverJob(c *basquinv1alpha1.BasquinCampaign, appImage, coverageEndpoint, runnerImage, dashboardPush string) *batchv1.Job {
 	d := &c.Spec.Driver
 	load := c.Spec.Mode == "load"
 
 	props := []string{
 		"-Dexamples.http.baseUrl=" + c.Spec.BaseURL,
-		"-Dclosurejvm.summary.out=/dev/termination-log", // operator reads this back as the pod's termination message
-		"-Dclosurejvm.status=true",
+		"-Dbasquin.summary.out=/dev/termination-log", // operator reads this back as the pod's termination message
+		"-Dbasquin.status=true",
 	}
 	if load {
 		// Load/soak mode (DD-026): replay the corpus at volume; no coverage sampling / classes needed.
@@ -68,33 +68,33 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 		if conc == 0 {
 			conc = 10
 		}
-		props = append(props, "-Dclosurejvm.mode=load", fmt.Sprintf("-Dclosurejvm.concurrency=%d", conc))
+		props = append(props, "-Dbasquin.mode=load", fmt.Sprintf("-Dbasquin.concurrency=%d", conc))
 		if d.Warmup != "" {
-			props = append(props, "-Dclosurejvm.warmup="+d.Warmup)
+			props = append(props, "-Dbasquin.warmup="+d.Warmup)
 		}
 	} else {
 		props = append(props,
-			"-Dclosurejvm.coverage.jacoco="+coverageEndpoint,
-			"-Dclosurejvm.coverage.classes="+campaignClassesDir)
+			"-Dbasquin.coverage.jacoco="+coverageEndpoint,
+			"-Dbasquin.coverage.classes="+campaignClassesDir)
 	}
 	if d.Duration != "" {
-		props = append(props, "-Dclosurejvm.run.duration="+d.Duration)
+		props = append(props, "-Dbasquin.run.duration="+d.Duration)
 	}
 	if d.Invariants.Mode != "" {
-		props = append(props, "-Dclosurejvm.invariant.mode="+d.Invariants.Mode)
+		props = append(props, "-Dbasquin.invariant.mode="+d.Invariants.Mode)
 	}
 	if d.Invariants.LatencyMaxMs > 0 {
-		props = append(props, fmt.Sprintf("-Dclosurejvm.invariant.latency.maxMs=%d", d.Invariants.LatencyMaxMs))
+		props = append(props, fmt.Sprintf("-Dbasquin.invariant.latency.maxMs=%d", d.Invariants.LatencyMaxMs))
 	}
 	if d.Invariants.HeapDeltaMaxKb > 0 {
-		props = append(props, fmt.Sprintf("-Dclosurejvm.invariant.heapDelta.maxKb=%d", d.Invariants.HeapDeltaMaxKb))
+		props = append(props, fmt.Sprintf("-Dbasquin.invariant.heapDelta.maxKb=%d", d.Invariants.HeapDeltaMaxKb))
 	}
 	// Push status/findings to the resolved dashboard (per-campaign or external; "" when disabled).
 	// The id groups this campaign's pushes under /api/campaign/<name>/… on the dashboard.
 	if dashboardPush != "" {
 		props = append(props,
-			"-Dclosurejvm.dashboard.push="+dashboardPush,
-			"-Dclosurejvm.dashboard.id="+c.Name)
+			"-Dbasquin.dashboard.push="+dashboardPush,
+			"-Dbasquin.dashboard.id="+c.Name)
 	}
 
 	// The shared classes volume + extract/verify initContainers are for JaCoCo coverage — explore only.
@@ -116,7 +116,7 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 				Items:                []corev1.KeyToPath{{Key: d.GrammarKey, Path: campaignGrammarKey}},
 			}}})
 		mounts = append(mounts, corev1.VolumeMount{Name: campaignGrammarVol, MountPath: campaignGrammarDir})
-		props = append(props, "-Dclosurejvm.grammar="+campaignGrammarDir+"/"+campaignGrammarKey)
+		props = append(props, "-Dbasquin.grammar="+campaignGrammarDir+"/"+campaignGrammarKey)
 	}
 	if d.CorpusConfigMap != "" {
 		// Flat corpus mount: every ConfigMap key becomes a file under campaignCorpusDir (keys are
@@ -126,7 +126,7 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 			ConfigMap: &corev1.ConfigMapVolumeSource{
 				LocalObjectReference: corev1.LocalObjectReference{Name: d.CorpusConfigMap}}}})
 		mounts = append(mounts, corev1.VolumeMount{Name: campaignCorpusVol, MountPath: campaignCorpusDir})
-		props = append(props, "-Dclosurejvm.corpusDir="+campaignCorpusDir)
+		props = append(props, "-Dbasquin.corpusDir="+campaignCorpusDir)
 	}
 
 	var args []string
@@ -164,7 +164,7 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 				"if [ -z \"$(find " + campaignClassesDir + " -name '*.class' -print -quit 2>/dev/null)\" ]; then " +
 					"msg='no .class files extracted into " + campaignClassesDir +
 					" — check spec.driver.classesPath (war-only images expose classes only at runtime, not in the image)'; " +
-					"echo \"closurejvm: $msg\"; printf '%s' \"$msg\" > /dev/termination-log; exit 1; fi"},
+					"echo \"basquin: $msg\"; printf '%s' \"$msg\" > /dev/termination-log; exit 1; fi"},
 			TerminationMessagePath:   "/dev/termination-log",
 			TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 			VolumeMounts:             []corev1.VolumeMount{{Name: campaignClassesVol, MountPath: campaignClassesDir}},
@@ -176,17 +176,17 @@ func buildDriverJob(c *closurejvmv1alpha1.ClosureJVMCampaign, appImage, coverage
 			Name:      driverJobName(c),
 			Namespace: c.Namespace,
 			Labels: map[string]string{
-				"app.kubernetes.io/managed-by": "closurejvm-operator",
-				"closurejvm.dev/campaign":      c.Name,
+				"app.kubernetes.io/managed-by": "basquin-operator",
+				"basquin.dev/campaign":      c.Name,
 			},
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoff,
 			Template: corev1.PodTemplateSpec{
 				// component=driver distinguishes these from the per-campaign dashboard pod, which shares
-				// the closurejvm.dev/campaign label — so the rerun pod-cleanup can target driver pods only.
+				// the basquin.dev/campaign label — so the rerun pod-cleanup can target driver pods only.
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
-					"closurejvm.dev/campaign":     c.Name,
+					"basquin.dev/campaign":     c.Name,
 					"app.kubernetes.io/component": "driver",
 				}},
 				Spec: corev1.PodSpec{

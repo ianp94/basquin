@@ -1,4 +1,4 @@
-# ClosureJVM v0.1 Tasks
+# Basquin v0.1 Tasks
 
 ## Milestone: "Make leaks obvious"
 
@@ -25,7 +25,7 @@
 - [x] Add CI workflow: build, test, proper demo; leak demo expected to fail
 
 ### Operational Notes
-- Leak demo can hang the JVM due to non-daemon threads; use `-Dclosurejvm.forceExitOnLeak=true` in demos/CI to force fast termination on leak detection.
+- Leak demo can hang the JVM due to non-daemon threads; use `-Dbasquin.forceExitOnLeak=true` in demos/CI to force fast termination on leak detection.
 
 ### Next Up (v0.1 hardening)
 - [x] Add simple metrics snapshot (thread count, heap delta) at iteration boundaries (print-only)
@@ -39,7 +39,7 @@
 Goal: Turn findings into enforceable guarantees.
 
 ### Deliverables
-- [x] Configurable invariants (latency, heap delta, thread delta) via `-Dclosurejvm.invariant.*`
+- [x] Configurable invariants (latency, heap delta, thread delta) via `-Dbasquin.invariant.*`
 - [x] Hard failure vs soft signal modes (global and per-invariant)
 - [x] First reset strategy: hard-reset fallback (ClassLoader swap)
 
@@ -52,9 +52,9 @@ Goal: Turn findings into enforceable guarantees.
    - [x] Implement child-first ClassLoader for target package; keep Agent/Runner in parent
    - [x] Load `runner.api.IterationTarget` via child loader; re-instantiate on reset
    - [x] Flags:
-       - `-Dclosurejvm.reset=classloader` (enable)
-       - `-Dclosurejvm.reset.onFailure=true` (reset after hard invariant/leak)
-       - `-Dclosurejvm.reset.maxResets=3` (cap)
+       - `-Dbasquin.reset=classloader` (enable)
+       - `-Dbasquin.reset.onFailure=true` (reset after hard invariant/leak)
+       - `-Dbasquin.reset.maxResets=3` (cap)
 
 3) Docs & DX
    - [x] README: document invariant flags and reset flags/behavior
@@ -137,12 +137,12 @@ Goal: Make the measurement layer trustworthy and cheap enough to point at real a
 
 ### Measurement quality (done)
 - [x] Latency measured before the end-of-iteration grace sleep (was inflating all readings ~25ms)
-- [x] Opt-in `-Dclosurejvm.heap.gcBeforeMeasure` so heap delta measures retention, not allocation noise
+- [x] Opt-in `-Dbasquin.heap.gcBeforeMeasure` so heap delta measures retention, not allocation noise
 - [x] Hot path: `ThreadMXBean` + stack-free enumeration instead of `getAllStackTraces()`; stacks captured lazily on violation only
 - [x] Soak validated: 10k/10k clean (latency p50=1ms p99=2ms) — retires v0.1 Definition of Success
 
 ### Native agent (JVMTI)
-- [x] Event-driven thread *counts* via ThreadStart/ThreadEnd (`native/closurejvmti.c`), `ThreadMXBean` fallback when not loaded
+- [x] Event-driven thread *counts* via ThreadStart/ThreadEnd (`native/basquinjvmti.c`), `ThreadMXBean` fallback when not loaded
 - [x] Event-driven leak *set*: weak global refs to non-daemon Thread objects tracked at ThreadStart/ThreadEnd; leak oracle needs no enumeration (verified: leak demo still names leaked threads; proper mode clean)
 - [x] JDK 17 + 21 CI matrix; bytecode targets 17
 
@@ -186,14 +186,14 @@ concurrency correctness stops depending on a serialization lock.
 
 Goal: Make a running harness legible at a glance, AFL-style.
 
-- [x] Live in-place CLI status screen (`-Dclosurejvm.status`): elapsed, iterations, iters/sec,
+- [x] Live in-place CLI status screen (`-Dbasquin.status`): elapsed, iterations, iters/sec,
   crashes, invariants by kind (latency/heap/thread), leaks, latency last/mean/max, heap delta,
   threads, resets. `StatusReporter` fed once per iteration from `Agent.end`.
 - [x] TTY-aware: in-place box on a terminal, one-line summaries when piped/CI;
-  `-Dclosurejvm.status.forceTty` to force the box; `renderFinal()` guarantees a final tally.
+  `-Dbasquin.status.forceTty` to force the box; `renderFinal()` guarantees a final tally.
 - [x] Suppresses per-iteration metrics spam when active.
 - [x] HTTP driver target (`examples.targets.HttpRouteDriveTarget`, task `runHttpDrive`):
-  client-side latency + 5xx-as-crash, harvests server-side `X-ClosureJVM-Invariant-*` headers.
+  client-side latency + 5xx-as-crash, harvests server-side `X-Basquin-Invariant-*` headers.
 - [x] Animated demo (`docs/demo.svg`) from real frames, embedded in the rewritten README.
 
 ---
@@ -220,7 +220,7 @@ Goal: See coverage-guided exploration running, with exploration progress in the 
 - [x] Exploration metrics in `StatusReporter`: execs/sec, corpus size, finds by classification
   (crash / invariant), time-since-last-find — fed from the triage layer (FuzzIO.recordSaved) so
   they cover both the JQF path and corpus replay. Panel appears when finds arrive.
-- [x] Forward `-Dclosurejvm.status*` through the JQF fuzz task so the panel shows during a run;
+- [x] Forward `-Dbasquin.status*` through the JQF fuzz task so the panel shows during a run;
   StatusReporter render started in the JQF harness + a shutdown-hook final frame for all run types.
 - [x] Live demo of a JQF campaign with the exploration panel; captured as `docs/demo-explore.svg`,
   embedded in the README Exploration section.
@@ -229,7 +229,7 @@ Goal: See coverage-guided exploration running, with exploration progress in the 
 
 ## Milestone: v0.10.0 — "Deploy & distributed exploration"
 
-Goal: Run ClosureJVM against apps in a cluster, and make exploration coverage-guided by the
+Goal: Run Basquin against apps in a cluster, and make exploration coverage-guided by the
 app's own execution over HTTP. Some of this may live in a **separate repo** (the operator/agent
 and the dashboard) — decide once the boundaries are clear.
 
@@ -247,7 +247,7 @@ and the dashboard) — decide once the boundaries are clear.
   - [x] The plateau was NOT "GET-only reach" as first assumed — it was a hardcoded route list
     reaching 7 of JPetStore's 21 handlers (DD-016). Fixed by making the surface data:
     seed corpus `examples/corpus/jpetstore/` (all 21 handlers) -> **17.3%**, then a request
-    grammar `examples/grammar/jpetstore.grammar` (`-Dclosurejvm.grammar=`) that also supplies the
+    grammar `examples/grammar/jpetstore.grammar` (`-Dbasquin.grammar=`) that also supplies the
     parameter value space with fuzzing generators (`<int> <string> <long> <empty>`) -> **17.7%**,
     and distinct crash sites found in the app's own code went 4 -> 6 (DD-017).
   - [x] **Input viewer**: dashboard cluster rows expand to show the concrete inputs behind a
@@ -275,7 +275,7 @@ and the dashboard) — decide once the boundaries are clear.
 ### Multi-instance targets (one driver, N replicas behind a Service) — DD-020 known limits
 - [x] **Coverage merge across replicas.** JaCoCo's tcpserver connection lands on one pod while
   requests load-balance across all of them, so coverage reflects ~1/N of what ran. Poll every
-  replica and merge `ExecutionDataStore`s. *(DD-023: `-Dclosurejvm.coverage.jacoco` takes a
+  replica and merge `ExecutionDataStore`s. *(DD-023: `-Dbasquin.coverage.jacoco` takes a
   comma-separated endpoint list; a headless Service name expands to all pod IPs via
   `getAllByName`; every responder OR-merges into one store for true union coverage; the panel
   shows `[N/M pods]` when a replica is missing.)*
@@ -295,19 +295,19 @@ processes is effectively remote code execution on whatever it runs on. **Update 
 > dismiss/mute of a cluster; optional in-process JQF coverage %) are in the **Backlog**.
 
 - [x] **Kubernetes deploy**: `kind` demo environment (`deploy/k8s/`): JPetStore as a pod with
-  valve + JaCoCo + ClosureJVM agent baked into a self-contained image, ClusterIP Service,
+  valve + JaCoCo + Basquin agent baked into a self-contained image, ClusterIP Service,
   one-command `up.sh`. Verified in-cluster: valve invariant headers, 96 server-side invariant
   finds, and live coverage % (281/6368 edges) all working against the pod. Demo `docs/demo-k8s.svg`.
 - [ ] **Auto-injection operator** — design **approved** and merged
   ([`docs/OPERATOR-DESIGN.md`](OPERATOR-DESIGN.md), PR #6). An **explicit patch controller**: a
-  namespaced `ClosureJVMTarget` CR that instruments only the Deployments you name via an
+  namespaced `BasquinTarget` CR that instruments only the Deployments you name via an
   initContainer + shared volume, revertible by deleting the CR — deliberately *not* a mutating
   admission webhook, for a bounded, auditable trust boundary. Built in **Go / kubebuilder** as its
   own `operator/` module (the control plane is runtime-agnostic; keeps the door open to non-JVM
   runtime profiles). Becomes **DD-024** when P2 lands the actual injection. Phased delivery, each its
   own PR:
   - [x] **P1 — scaffold + CRD + no-op controller.** `kubebuilder init` under `operator/` (Go module,
-    controller-runtime 0.17), `ClosureJVMTarget` CRD (group `closurejvm.dev/v1alpha1`, spec/status
+    controller-runtime 0.17), `BasquinTarget` CRD (group `basquin.dev/v1alpha1`, spec/status
     per the design, `includes` required-when-coverage-enabled), a reconciler that only *observes* the
     named Deployment and writes `status` (never patches a workload; `instrumentedReplicas` always 0),
     and **namespaced** RBAC — one `ClusterRole` bound via `RoleBinding` (no `ClusterRoleBinding`,
@@ -317,20 +317,20 @@ processes is effectively remote code execution on whatever it runs on. **Update 
     `jvmOptsVar` + coverage port), spec-hash idempotency, finalizer-based exact revert, Deployment
     mapping-watch (no owner refs — they'd GC the Deployment). envtest verifies patch shape / append /
     idempotency / exact revert / Injected phase (7/7). *Remaining:* e2e against a real pod needs the
-    `closurejvm/agents` image (Backlog); valve mounting deferred (needs Tomcat `context.xml`).
+    `basquin/agents` image (Backlog); valve mounting deferred (needs Tomcat `context.xml`).
   - [x] **P3 — coverage Service + status.** Operator creates a headless Service (`clusterIP: None`)
     selecting the target's pods on the coverage port, owner-ref'd (GC'd on delete), toggled by
     `spec.coverageService`; publishes `status.coverageEndpoint` (`<svc>.<ns>.svc.cluster.local:6300`)
     for the DD-023 union-coverage flag. `core/services` RBAC added. envtest (create/endpoint/toggle-off)
     + in-cluster e2e (headless, has-endpoint, endpoint-published) all green.
   - [x] **P4 — docs + demo.** USAGE "Kubernetes: instrument any app with the operator" section
-    (install → apply a `ClosureJVMTarget` → read `status.coverageEndpoint` → revert), ARCHITECTURE
+    (install → apply a `BasquinTarget` → read `status.coverageEndpoint` → revert), ARCHITECTURE
     operator/control-plane section, and the `deploy/k8s` README points at the operator as preferred
     (baked image kept as the no-install demo). **The operator injection track P1–P4 is complete; only
-    P5 (`ClosureJVMCampaign` orchestration, DD-025) remains.**
+    P5 (`BasquinCampaign` orchestration, DD-025) remains.**
 - [x] **Web dashboard, decoupled (DD-013)**: `DashboardServer` is a standalone aggregator process
   (own port, no driving logic) that many drivers push to via `DashboardClient`
-  (`-Dclosurejvm.dashboard.push=host:port`), keyed by campaign id (defaults to `HOSTNAME` — a pod's
+  (`-Dbasquin.dashboard.push=host:port`), keyed by campaign id (defaults to `HOSTNAME` — a pod's
   name in k8s). Fleet view (campaign cards, alive/stale) + drill-down into one campaign's metric
   cards, coverage bar, and findings table (route/detail/classification/time). Verified live: two
   independent processes, dashboard showed the driver's real numbers via push. Task: `runDashboard`.
@@ -361,7 +361,7 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 - [ ] Structured invariant summary line (key=val pairs) in output *(v0.2)*
 - [ ] Reset smoke test: induce a failure, trigger a classloader reset, run another clean iteration *(v0.2)*
 - [ ] Unify JQF coverage-interesting inputs (`-Djqf.ei.DIRECTORY`) with the harness triage format *(v0.3)*
-- [ ] Triage handoff payload carries the IterationContext snapshot (DD-006) — the bounded handoff **queue itself is already built** (`runner/util/TriageSink.java`: `ArrayBlockingQueue` + daemon consumer, `-Dclosurejvm.triage.queueCapacity`, synchronous fallback, shutdown flush; wired into FuzzIO/GenericRunner/CorpusRunner/CoverageGuidedRun/JQFIterationHarness). Result fields are exposed on IterationContext; wiring the context *snapshot* into the enqueued payload is the remaining step *(v0.6)*
+- [ ] Triage handoff payload carries the IterationContext snapshot (DD-006) — the bounded handoff **queue itself is already built** (`runner/util/TriageSink.java`: `ArrayBlockingQueue` + daemon consumer, `-Dbasquin.triage.queueCapacity`, synchronous fallback, shutdown flush; wired into FuzzIO/GenericRunner/CorpusRunner/CoverageGuidedRun/JQFIterationHarness). Result fields are exposed on IterationContext; wiring the context *snapshot* into the enqueued payload is the remaining step *(v0.6)*
 - [ ] IterationFilter/valve move to explicit `begin()/end(ctx)` — cleanup only; still serialized (Option A's lock stays), and the ThreadLocal wrapper already makes them per-thread correct *(v0.6)*
 - [ ] Triage bundles: input + route + classification + stack/thread-dump + metrics in one artifact *(v0.4 P3)*
 - [ ] Pool/queue sampling (servlet thread pool size, executor queues) + preset invariants *(v0.4 P3)*
@@ -376,7 +376,7 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 
 ### Load / soak mode — replay the interesting corpus under load *(post-v0.11 idea, user 2026-07-20)*
 **Managing the fuzz-vs-load split (planned decomposition, user 2026-07-20):** design-note first, then two PRs along the producer/consumer seam.
-- [x] **PR 0 — design note ([DD-026](LOAD-MODE-DESIGN.md)).** Decided (user 2026-07-20): **`mode: explore|load` on `ClosureJVMCampaign`** (not a separate CRD — fuzz/load differ in objective, not infra) + **ConfigMap-emitted corpus** (`status.corpusConfigMap`, consumed via the existing corpus path). Load metrics = throughput/latency-percentiles/heap-thread-drift. Producer→consumer PR split.
+- [x] **PR 0 — design note ([DD-026](LOAD-MODE-DESIGN.md)).** Decided (user 2026-07-20): **`mode: explore|load` on `BasquinCampaign`** (not a separate CRD — fuzz/load differ in objective, not infra) + **ConfigMap-emitted corpus** (`status.corpusConfigMap`, consumed via the existing corpus path). Load metrics = throughput/latency-percentiles/heap-thread-drift. Producer→consumer PR split.
 - [x] **PR 1 — persist the corpus (producer).** Merged (#33). The driver splices a byte-capped `replayCorpus` into the summary it already writes to the termination message (no sidecar / driver credentials); the operator materializes a campaign-owned `<campaign>-corpus-out` ConfigMap + `status.corpusConfigMap`. Validated in-cluster (24-route corpus emitted). Closes "corpus vanishes on teardown"; unblocks the dashboard **corpus view** + load replay.
 - [x] **PR 2 — load/soak mode (consumer).** `spec.mode: load` + `driver.concurrency`/`warmup`; `runner.coverage.LoadRun` replays the corpus at a fixed concurrency for a duration (keep-alive, warmup-excluded), reporting throughput + latency percentiles + heap/thread drift → `status.load`. Coverage-free driver Job in load mode; CLI `--mode load`. Validated envtest + in-cluster (replayed the emitted corpus → Completed with load metrics). Follow-ups: periodic drift sampling; target-side heap/thread; concurrency ramp.
 - [ ] Report load-mode-specific stats (throughput/RPS, latency percentiles under sustained load, heap/thread drift over the soak) distinct from exploration stats (coverage %, corpus growth).
@@ -393,33 +393,33 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 The operator owns the whole test, not just injection. Two-CRD shape confirmed; built as **P5** after
 the P1–P4 injection work (a campaign needs a working instrumented target). Design in full first
 (likely DD-025). See §10 of [`docs/OPERATOR-DESIGN.md`](OPERATOR-DESIGN.md).
-- [ ] **`ClosureJVMCampaign` (test) CRD** — a second CRD that fires off a complete test run (DD-025, [`docs/CAMPAIGN-DESIGN.md`](CAMPAIGN-DESIGN.md)). Phased P5a–P5d.
-  - [x] **P5a — runner flags** (`-Dclosurejvm.run.duration`, `-Dclosurejvm.summary.out`) — merged (#18).
+- [ ] **`BasquinCampaign` (test) CRD** — a second CRD that fires off a complete test run (DD-025, [`docs/CAMPAIGN-DESIGN.md`](CAMPAIGN-DESIGN.md)). Phased P5a–P5d.
+  - [x] **P5a — runner flags** (`-Dbasquin.run.duration`, `-Dbasquin.summary.out`) — merged (#18).
   - [x] **P5a — CRD + driver-Job reconciler** — gate on Injected target, launch driver Job (coverage-classes initContainer from the target's image, coverage endpoint, summary via terminationMessage), phase machine + TargetGone. envtest 22/22.
-  - [x] **P5a — runner image + in-cluster campaign e2e** — built `closurejvm/runner` (`runnerJar` task + `deploy/runner-image/`), extended `deploy/e2e/e2e.sh` to apply a `ClosureJVMCampaign` and assert a **non-zero coverage %** end to end.
+  - [x] **P5a — runner image + in-cluster campaign e2e** — built `basquin/runner` (`runnerJar` task + `deploy/runner-image/`), extended `deploy/e2e/e2e.sh` to apply a `BasquinCampaign` and assert a **non-zero coverage %** end to end.
   - [ ] Campaign driver-Job **spec-hash idempotency** — a spec edit mid-`Running` is currently a silent no-op (Job is create-if-missing); hash the spec so an edit deletes+recreates the Job (a new run), per DD-025 §7c. *(surfaced in the #19 review)*
   - [ ] **Driver coverage-classes: handle war-only target images** — the driver initContainer copies `WEB-INF/classes` **out of the target image** (§7b), but a war-packaged app ships `ROOT.war` with the exploded dir only existing at runtime, so the copy finds nothing and coverage is 0. The e2e works around this by exploding the war into `ROOT/` at image-build time. Operator options: extract classes from the war/lib jars, or copy from the *running* target pod instead of the image. As part of this, make the empty-classes case **fail loud** (initContainer errors, or a distinct campaign status condition) instead of silently reporting `coveragePct=0`, which is indistinguishable from a genuinely low run. *(surfaced by the campaign e2e + #20 review)*
-  - [x] **P5b — per-campaign dashboard** — `closurejvm/dashboard` image + operator brings up a per-campaign dashboard Deployment+Service (owner-ref'd/GC'd), sets `status.dashboardURL`, and wires the driver's `-Dclosurejvm.dashboard.push/.id` at it (or an `externalPush`, or nothing when disabled). envtest 25/25 + in-cluster e2e.
-  - [ ] **Per-campaign dashboard auth for multi-tenant** — the P5b dashboard is ClusterIP-only with no token wired, and `guarded()` only checks a static CSRF header, not access control. Any pod with network reach to the Service can read another campaign's findings or POST spoofed status. Acceptable for a single-tenant first cut (not internet-facing); before a shared/multi-tenant cluster, wire the already-supported `-Dclosurejvm.dashboard.token` from a per-campaign Secret (dashboard env + driver push header) and/or add a NetworkPolicy. *(surfaced in the #21 review)*
-  - [ ] **Wire `corpusConfigMap` → the driver (seed values)** — the `corpusConfigMap` spec field is declared but **inert**: `buildDriverJob` never mounts it and never sets `-Dclosurejvm.corpusDir`, so campaigns run with grammar *structure* only — the grammar's `@../corpus/...` value-file refs resolve to a non-existent dir (`readValues` warns, returns empty) and each `@file` alternative degrades to `~pattern`/`<string>` generators. Only structural values reach the app; real seed values never do (this is why the e2e sits ~22%). Fixing it means projecting the corpus *tree* from a ConfigMap at a path consistent with the grammar's relative refs (or rewriting the refs / setting `corpusDir`) — fiddlier than the single grammar file because corpus is a directory of many `@file`s (DD-018). *(surfaced answering "how does grammar/corpus propagate")*
+  - [x] **P5b — per-campaign dashboard** — `basquin/dashboard` image + operator brings up a per-campaign dashboard Deployment+Service (owner-ref'd/GC'd), sets `status.dashboardURL`, and wires the driver's `-Dbasquin.dashboard.push/.id` at it (or an `externalPush`, or nothing when disabled). envtest 25/25 + in-cluster e2e.
+  - [ ] **Per-campaign dashboard auth for multi-tenant** — the P5b dashboard is ClusterIP-only with no token wired, and `guarded()` only checks a static CSRF header, not access control. Any pod with network reach to the Service can read another campaign's findings or POST spoofed status. Acceptable for a single-tenant first cut (not internet-facing); before a shared/multi-tenant cluster, wire the already-supported `-Dbasquin.dashboard.token` from a per-campaign Secret (dashboard env + driver push header) and/or add a NetworkPolicy. *(surfaced in the #21 review)*
+  - [ ] **Wire `corpusConfigMap` → the driver (seed values)** — the `corpusConfigMap` spec field is declared but **inert**: `buildDriverJob` never mounts it and never sets `-Dbasquin.corpusDir`, so campaigns run with grammar *structure* only — the grammar's `@../corpus/...` value-file refs resolve to a non-existent dir (`readValues` warns, returns empty) and each `@file` alternative degrades to `~pattern`/`<string>` generators. Only structural values reach the app; real seed values never do (this is why the e2e sits ~22%). Fixing it means projecting the corpus *tree* from a ConfigMap at a path consistent with the grammar's relative refs (or rewriting the refs / setting `corpusDir`) — fiddlier than the single grammar file because corpus is a directory of many `@file`s (DD-018). *(surfaced answering "how does grammar/corpus propagate")*
 - [ ] Operator launches the **driver** as a Job (the coverage-guided runner) pointed at the target Service + JaCoCo endpoints + dashboard push
 - [ ] Operator launches/ensures the **dashboard** (aggregator Deployment + Service) and wires the driver's push at it
 - [ ] Campaign lifecycle: owner refs + finalizer tear the driver/dashboard down on delete; status aggregates run state, finds, and coverage onto the Campaign
-- [ ] Package the **runner** and **dashboard** images the operator launches (alongside the `closurejvm/agents` image below)
+- [ ] Package the **runner** and **dashboard** images the operator launches (alongside the `basquin/agents` image below)
 
 ### Operator (post-P1 platform work — beyond the P2–P4 checklist)
-- [x] Build the versioned `closurejvm/agents:<tag>` image the operator's initContainer copies from — `deploy/agents-image/` (Dockerfile + `build.sh` staging the agent/valve/jacoco jars + native `.so` onto busybox). Built `closurejvm/agents:0.2.0` + `:latest`, loaded into the `closurejvm` kind cluster, verified contents + the initContainer `cp` + ELF arch.
-  - [x] **e2e-instrument the stock JPetStore image** — `deploy/e2e/e2e.sh` builds+loads all images, deploys the operator in-cluster with its namespaced RBAC, deploys a RAW JPetStore, applies a `ClosureJVMTarget`, and asserts injection (initContainer added, `CATALINA_OPTS` appended, agents on the live JVM, app serves 200, **no RBAC forbidden errors**). Passing against the `closurejvm` kind cluster. **This in-cluster test caught two real bugs the local/envtest runs masked:** (a) the operator Role was missing `update;patch` on `closurejvmtargets`, so the finalizer couldn't be added — the operator literally could not run in-cluster; (b) the injected initContainer needed `imagePullPolicy: IfNotPresent` or a `:latest` agents image `ImagePullBackOff`s. Both fixed.
+- [x] Build the versioned `basquin/agents:<tag>` image the operator's initContainer copies from — `deploy/agents-image/` (Dockerfile + `build.sh` staging the agent/valve/jacoco jars + native `.so` onto busybox). Built `basquin/agents:0.2.0` + `:latest`, loaded into the `basquin` kind cluster, verified contents + the initContainer `cp` + ELF arch.
+  - [x] **e2e-instrument the stock JPetStore image** — `deploy/e2e/e2e.sh` builds+loads all images, deploys the operator in-cluster with its namespaced RBAC, deploys a RAW JPetStore, applies a `BasquinTarget`, and asserts injection (initContainer added, `CATALINA_OPTS` appended, agents on the live JVM, app serves 200, **no RBAC forbidden errors**). Passing against the `basquin` kind cluster. **This in-cluster test caught two real bugs the local/envtest runs masked:** (a) the operator Role was missing `update;patch` on `basquintargets`, so the finalizer couldn't be added — the operator literally could not run in-cluster; (b) the injected initContainer needed `imagePullPolicy: IfNotPresent` or a `:latest` agents image `ImagePullBackOff`s. Both fixed.
   - [x] **Multi-arch images (DD-027, done 2026-07-20)** — all four images publish `linux/amd64` + `linux/arm64` manifest lists. The only arch-specific artifact is the native `.so`; rather than cross-compile on the host, the agents Dockerfile gained a `eclipse-temurin:17-jdk` builder stage that runs `native/Makefile`, so `docker buildx --platform` compiles it **per-arch** (native on amd64, QEMU on arm64) from the same portable C source. `release.yml` sets up QEMU+buildx and pushes manifest lists; `STAGE_ONLY=1` on the build.sh scripts stages a context without the local single-arch build. Verified locally: both legs build and produce correct ELFs (`x86-64` / `ARM aarch64`).
     - [ ] **arm64 functional validation on a real arm64 runner** (`ubuntu-24.04-arm`) — today arm64 is **build-validated only**: CI compiles the `.so` under QEMU but never *loads* it in an arm64 JVM. Blast radius if it's subtly wrong: a bad `-agentpath` library is **fatal at JVM startup**, so every injected pod on an arm64 cluster would crash rather than degrade. Do this **before** advertising arm64 support broadly, and carry an "arm64: build-validated only" caveat in the v0.2.0 **release notes** + the chart README (the agents-image README and `docs/OPERATOR-USAGE.md` already carry it). *(#38 review)*
   - [ ] `docker push` / registry publish flow for the agents image (build.sh loads into kind only) — *(surfaced building the image)*
-- [x] **Helm chart to deploy the operator** — `deploy/helm/closurejvm-operator/`: CRDs + namespaced RBAC (Roles, not ClusterRoles) + controller Deployment, with the three images wired from values onto the controller args (no manual patching). `INSTALL=helm deploy/e2e/e2e.sh` exercises it end to end (injection + campaign + dashboard, 0 RBAC forbidden). **Publishing + tag-driven release (done 2026-07-20):** a **release is just a `v*` git tag** — `.github/workflows/release.yml` builds + pushes the four images to **ghcr.io** (`ghcr.io/ianp94/closurejvm-*`, chart defaults point there), cross-builds the **CLI** + attaches it + the packaged chart to the GitHub Release, and its `pages` job repackages the chart into `docs/charts/` + reindexes + commits to main so the **GitHub Pages Helm repo** self-updates (`helm repo add closurejvm https://ianp94.github.io/closureJVM/charts`). **Single-source version:** one chart value `imageTag` (default appVersion) drives all four image tags; `helm package --app-version <tag>` makes the tag the only version input. `deploy/helm/publish.sh` remains for a manual/bootstrap Pages refresh. Remaining follow-ups: cut the first real tag to verify the CI publish end-to-end; a CI check that the chart RBAC hasn't drifted from `make manifests`; multi-arch images (agents `.so` is amd64-only); OCI-registry chart push as an alternative.
-- [~] **CLI to launch tests** — a thin Go `closurejvm` CLI (reuses the operator's api/v1alpha1 types + controller-runtime client → applies real typed CRs). `make -C operator cli`.
-  - [x] `instrument` — apply a `ClosureJVMTarget` from flags (--deployment, --container, --jvm-opts-var, --coverage-includes, --coverage-port, --coverage-service, --invariant-*, --thread-tracker), `--wait` for Injected. Unit-tested + validated against the kind cluster.
-  - [x] `run` — create grammar/corpus ConfigMaps from local files (owner-ref'd to the campaign → GC'd with it) + apply a `ClosureJVMCampaign` (--target, --base-url, --iterations|--duration, --grammar, --corpus, --no-dashboard/--external-push), `--watch` tails to Completed and prints coverage/findings/dashboard. Unit-tested + validated against kind (full run to Completed, ConfigMap GC).
+- [x] **Helm chart to deploy the operator** — `deploy/helm/basquin-operator/`: CRDs + namespaced RBAC (Roles, not ClusterRoles) + controller Deployment, with the three images wired from values onto the controller args (no manual patching). `INSTALL=helm deploy/e2e/e2e.sh` exercises it end to end (injection + campaign + dashboard, 0 RBAC forbidden). **Publishing + tag-driven release (done 2026-07-20):** a **release is just a `v*` git tag** — `.github/workflows/release.yml` builds + pushes the four images to **ghcr.io** (`ghcr.io/ianp94/basquin-*`, chart defaults point there), cross-builds the **CLI** + attaches it + the packaged chart to the GitHub Release, and its `pages` job repackages the chart into `docs/charts/` + reindexes + commits to main so the **GitHub Pages Helm repo** self-updates (`helm repo add basquin https://ianp94.github.io/basquin/charts`). **Single-source version:** one chart value `imageTag` (default appVersion) drives all four image tags; `helm package --app-version <tag>` makes the tag the only version input. `deploy/helm/publish.sh` remains for a manual/bootstrap Pages refresh. Remaining follow-ups: cut the first real tag to verify the CI publish end-to-end; a CI check that the chart RBAC hasn't drifted from `make manifests`; multi-arch images (agents `.so` is amd64-only); OCI-registry chart push as an alternative.
+- [~] **CLI to launch tests** — a thin Go `basquin` CLI (reuses the operator's api/v1alpha1 types + controller-runtime client → applies real typed CRs). `make -C operator cli`.
+  - [x] `instrument` — apply a `BasquinTarget` from flags (--deployment, --container, --jvm-opts-var, --coverage-includes, --coverage-port, --coverage-service, --invariant-*, --thread-tracker), `--wait` for Injected. Unit-tested + validated against the kind cluster.
+  - [x] `run` — create grammar/corpus ConfigMaps from local files (owner-ref'd to the campaign → GC'd with it) + apply a `BasquinCampaign` (--target, --base-url, --iterations|--duration, --grammar, --corpus, --no-dashboard/--external-push), `--watch` tails to Completed and prints coverage/findings/dashboard. Unit-tested + validated against kind (full run to Completed, ConfigMap GC).
   - [x] `status` — renders targets + campaigns (phase, coverage %, findings, dashboardURL) as aligned tables, `--watch` re-renders. Validated against kind.
   - [x] `dashboard` — self-contained client-go port-forward to the campaign's dashboard pod, prints the local URL. Validated against kind (forwarded + served live `/api/campaigns`).
-  - [x] Distribution: `.github/workflows/release.yml` cross-builds the CLI (**linux/darwin/windows × amd64/arm64** — six binaries, `.exe` on Windows) → GitHub Release assets on a version tag, with the tag stamped via `-X main.version` and surfaced by `closurejvm version`. Follow-ups: a `kubectl closurejvm` plugin alias; a `version --short` (bare `0.2.0`, no platform/parens) so install scripts asserting a minimum version don't have to parse the human-readable form *(#39 review)*.
+  - [x] Distribution: `.github/workflows/release.yml` cross-builds the CLI (**linux/darwin/windows × amd64/arm64** — six binaries, `.exe` on Windows) → GitHub Release assets on a version tag, with the tag stamped via `-X main.version` and surfaced by `basquin version`. Follow-ups: a `kubectl basquin` plugin alias; a `version --short` (bare `0.2.0`, no platform/parens) so install scripts asserting a minimum version don't have to parse the human-readable form *(#39 review)*.
 - [ ] **Keep the operator usage docs current** — refresh `docs/` (CRD reference: target + campaign fields, dashboard, grammar/corpus ConfigMaps, spec-edit rerun) as the operator surface grows; a recurring pass, not one-and-done. *(user 2026-07-20)*
 - [ ] Operator CI: `go build` / `go vet` / `gofmt` (and envtest when assets are cached) in the pipeline — today only the Java build is in CI
 - [ ] Field indexer on `spec.deploymentRef.name` so the Deployment mapping-watch does a targeted lookup instead of a namespace-wide list+filter (PR #11 review; fine at current scale, optimization for high target-count/churn namespaces)
@@ -448,7 +448,7 @@ but it's more manual than it should be for a real user. Pain points noticed whil
 - `up.sh` hand-bakes a per-app Dockerfile (`Dockerfile.jpetstore`) with the WAR + all three agent
   jars `COPY`'d in — every new target app means a new bespoke image build, not a reusable pattern.
 - Coverage requires manually extracting `WEB-INF/classes` from the WAR on the host and pointing
-  `-Dclosurejvm.coverage.classes` at it by hand.
+  `-Dbasquin.coverage.classes` at it by hand.
 - Reaching the pod means a `kubectl port-forward` the user has to manage themselves. (The Service
   is deliberately ClusterIP: JaCoCo's remote-control port is unauthenticated and must not be
   published — see DD-022.)

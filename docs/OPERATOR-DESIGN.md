@@ -1,22 +1,22 @@
-# ClosureJVM injection operator — design + status
+# Basquin injection operator — design + status
 
 **Status (2026-07-20):** approved and in build. **P1** (scaffold + CRD + observe-only controller),
 **P2** (injection + idempotency + finalizer revert, **DD-024**), **P3** (headless coverage Service +
 `status.coverageEndpoint`), and **P4** (apply-a-CR is now the documented path — USAGE + ARCHITECTURE
 + the `deploy/k8s` README point at the operator) are done and **validated in-cluster**
 (`deploy/e2e/e2e.sh` instruments a raw JPetStore end-to-end, incl. the coverage Service). Only **P5**
-(`ClosureJVMCampaign` orchestration, §10) remains. Still deferred: valve mounting (needs a Tomcat
+(`BasquinCampaign` orchestration, §10) remains. Still deferred: valve mounting (needs a Tomcat
 `context.xml` entry, not a JVM flag) and a multi-arch agents image.
 
 **Decision being proposed (2026-07-20):** an *explicit patch controller* — a namespaced operator
-that instruments only the Deployments you name in a `ClosureJVMTarget` custom resource. No mutating
+that instruments only the Deployments you name in a `BasquinTarget` custom resource. No mutating
 admission webhook; nothing is intercepted or rewritten unless you asked for it by name.
 
 **Built in Go with kubebuilder / controller-runtime, as its own module** (decided 2026-07-20). The
 operator is a *control plane*, not JVM code: the CR schema, reconcile loop, injection, and revert
 are runtime-agnostic — only the assembled agent flags and the agents image are JVM-specific today.
 Keeping the operator in the idiomatic operator stack (rather than coupling it to the Gradle build in
-Java) is the deliberate bet that ClosureJVM's availability-testing concepts carry to other runtimes
+Java) is the deliberate bet that Basquin's availability-testing concepts carry to other runtimes
 later; when they do, a new "runtime profile" supplies different agents/flags and the entire control
 plane is reused unchanged. Cost accepted: a second language and build enter the repo.
 
@@ -24,12 +24,12 @@ plane is reused unchanged. Cost accepted: a second language and build enter the 
 
 ## 1. Problem
 
-Today, running a target under ClosureJVM in Kubernetes means baking the agents into the image
+Today, running a target under Basquin in Kubernetes means baking the agents into the image
 (`deploy/k8s/Dockerfile.jpetstore`: three `COPY`s plus a hand-written `CATALINA_OPTS` with two
 `-javaagent`s, `-Xbootclasspath/a`, and the invariant flags). That is fine for a demo but wrong for
 real use:
 
-- It forces a **custom image** of every app you want to test — you can't point ClosureJVM at an app
+- It forces a **custom image** of every app you want to test — you can't point Basquin at an app
   someone else owns without a rebuild.
 - The `CATALINA_OPTS` string is fiddly and easy to get subtly wrong (agent order, the JaCoCo
   `includes` filter that DD-022 showed inflates the denominator when left as `*`).
@@ -45,13 +45,13 @@ A mutating admission webhook is the "seamless" option — label a namespace, eve
 gets injected. It is also the heaviest trust boundary we could pick:
 
 - It runs cluster-wide with the power to **mutate any pod at creation**, including workloads that
-  have nothing to do with ClosureJVM. A bug or a bad `failurePolicy` can wedge unrelated
+  have nothing to do with Basquin. A bug or a bad `failurePolicy` can wedge unrelated
   deployments across the cluster.
 - It needs a TLS-served webhook endpoint, cert rotation, and careful `namespaceSelector` /
   `objectSelector` scoping just to *not* touch things.
 - The mutation is invisible at apply time — you can't `kubectl diff` your way to what will run.
 
-The explicit-patch controller inverts all of that. You create a `ClosureJVMTarget` naming one
+The explicit-patch controller inverts all of that. You create a `BasquinTarget` naming one
 Deployment; the controller patches **that Deployment only**. Properties that fall out of the model:
 
 - **Least privilege.** A namespaced `Role`, not a `ClusterRole`. It can read its own CRs and
@@ -65,13 +65,13 @@ The cost is that instrumentation is a deliberate act per app rather than automat
 tool you deliberately point at a target, that is the *right* default — and it is the same reasoning
 as DD-022 (the default should be safe/narrow, breadth should be opt-in).
 
-## 3. The `ClosureJVMTarget` custom resource
+## 3. The `BasquinTarget` custom resource
 
-Namespaced CRD, group `closurejvm.dev/v1alpha1`. The CR is the entire user-facing API.
+Namespaced CRD, group `basquin.dev/v1alpha1`. The CR is the entire user-facing API.
 
 ```yaml
-apiVersion: closurejvm.dev/v1alpha1
-kind: ClosureJVMTarget
+apiVersion: basquin.dev/v1alpha1
+kind: BasquinTarget
 metadata:
   name: jpetstore
   namespace: demo
@@ -93,14 +93,14 @@ spec:
   # JAVA_TOOL_OPTIONS (the JVM appends it to every launch). The operator picks per `jvmOptsVar`.
   jvmOptsVar: CATALINA_OPTS       # or JAVA_TOOL_OPTIONS (default)
 
-  # Invariant config passed straight through as -Dclosurejvm.invariant.* flags.
+  # Invariant config passed straight through as -Dbasquin.invariant.* flags.
   invariants:
     mode: soft
     latencyMaxMs: 25
     heapDeltaMaxKb: 256
 
   # Where server-side findings/status push to (the standalone dashboard, DD-013).
-  dashboardPush: "closurejvm-dashboard.demo.svc:7070"
+  dashboardPush: "basquin-dashboard.demo.svc:7070"
 
   # Create a headless Service selecting this target's pods on the coverage port, so one driver can
   # reach every replica by DNS and DD-023's getAllByName expands it to all pod IPs. Opt-in.
@@ -110,7 +110,7 @@ status:
   phase: Injected                 # Pending | Injecting | Injected | Reverting | Error
   observedGeneration: 3
   instrumentedReplicas: 3
-  coverageEndpoint: "jpetstore-closurejvm-jacoco.demo.svc:6300"   # for the driver flag
+  coverageEndpoint: "jpetstore-basquin-jacoco.demo.svc:6300"   # for the driver flag
   conditions:
     - { type: Ready, status: "True", reason: RolloutComplete }
 ```
@@ -131,13 +131,13 @@ standard "copy via init container + shared volume" pattern (the same shape the O
 Istio operators use):
 
 1. The operator patches the target Deployment's pod template to add:
-   - a small **initContainer** running a `closurejvm/agents:<version>` image whose only job is
-     `cp /agents/* /closurejvm/` into…
-   - a shared **`emptyDir` volume** mounted at `/closurejvm` in both the initContainer and the app
+   - a small **initContainer** running a `basquin/agents:<version>` image whose only job is
+     `cp /agents/* /basquin/` into…
+   - a shared **`emptyDir` volume** mounted at `/basquin` in both the initContainer and the app
      container, and
    - the assembled agent string — `-javaagent`/`-agentpath` pointing at
-     `/closurejvm/closurejvm-agent.jar`, `/closurejvm/jacocoagent.jar` (scoped `includes`), plus the
-     `-Dclosurejvm.*` flags — **appended to** the container's existing `jvmOptsVar`, not replacing
+     `/basquin/basquin-agent.jar`, `/basquin/jacocoagent.jar` (scoped `includes`), plus the
+     `-Dbasquin.*` flags — **appended to** the container's existing `jvmOptsVar`, not replacing
      it. Target containers routinely set their own `JAVA_TOOL_OPTIONS`/`CATALINA_OPTS` (heap sizing,
      GC flags); overwriting would silently change app behavior in ways unrelated to instrumentation.
      If the var is set, the operator appends our flags to the original value (the same original it
@@ -160,13 +160,13 @@ operator/image bump, never a target rebuild.
 
 Level-triggered, idempotent — the controller reconciles desired state, it does not apply diffs:
 
-1. **Observe** a `ClosureJVMTarget`. Load the referenced Deployment.
+1. **Observe** a `BasquinTarget`. Load the referenced Deployment.
 2. **Compute** the desired pod-template patch from the spec (initContainer, volume, env, port). The
    `jvmOptsVar` value is `<stashed original> + " " + <our flags>` — computed against the stashed
    original, never against the already-instrumented value, so re-reconciling never double-appends.
-3. **Compare** against what's already there (identified by a `closurejvm.dev/injected: <hash>`
+3. **Compare** against what's already there (identified by a `basquin.dev/injected: <hash>`
    annotation recording the spec hash we last applied, plus the original `jvmOptsVar` value stashed
-   in `closurejvm.dev/original-<var>` so revert is exact). If the hash matches, do nothing —
+   in `basquin.dev/original-<var>` so revert is exact). If the hash matches, do nothing —
    reconciling a steady target is a no-op, so this is safe to run on every resync.
 4. **Patch** the Deployment if drift is detected; a rollout instruments the pods.
 5. **Report** rollout progress into `status` (`instrumentedReplicas`, `Ready` condition).
@@ -174,16 +174,16 @@ Level-triggered, idempotent — the controller reconciles desired state, it does
 **Revert via finalizer.** The CR carries a finalizer. On deletion, the controller first removes the
 initContainer/volume/env/port from the Deployment (restoring `jvmOptsVar` from the stashed original
 annotation) and deletes the coverage Service, *then* clears the finalizer. Deleting a
-`ClosureJVMTarget` therefore returns the app to exactly its pre-instrumentation state — no orphaned
+`BasquinTarget` therefore returns the app to exactly its pre-instrumentation state — no orphaned
 agents, no leftover env.
 
 ## 6. RBAC — the trust boundary, concretely
 
 Shipped as a namespaced install by default:
 
-- `Role` (namespaced): `get/list/watch` on `closurejvmtargets`; `get/list/watch/update/patch` on
+- `Role` (namespaced): `get/list/watch` on `basquintargets`; `get/list/watch/update/patch` on
   `deployments`; `get/create/update/delete` on `services` (for the coverage Service); `update` on
-  `closurejvmtargets/status` and `/finalizers`.
+  `basquintargets/status` and `/finalizers`.
 - `RoleBinding` to the operator's `ServiceAccount` in that namespace.
 - **No `ClusterRole`, no webhook configuration object, no cluster-scoped verbs.** To instrument
   targets in another namespace you install another instance (or knowingly opt into a broader
@@ -209,8 +209,8 @@ privilege is bounded and inspectable, versus "mutate any pod at admission time."
    module; the existing Gradle build is untouched.
 
 2. **Non-Tomcat JVM opts — RESOLVED (revisit empirically in P2).** Default: the JVMTI native agent
-   (`-agentpath`) and the Java agent (`-javaagent` on `closurejvm-agent.jar`) are injected for every
-   JVM target via `jvmOptsVar`; the `-Xbootclasspath/a:closurejvm-agent.jar` append travels with the
+   (`-agentpath`) and the Java agent (`-javaagent` on `basquin-agent.jar`) are injected for every
+   JVM target via `jvmOptsVar`; the `-Xbootclasspath/a:basquin-agent.jar` append travels with the
    Java agent wherever it goes (it makes the agent's classes visible to bootstrap-loaded code, which
    is not Tomcat-specific). The **valve** is the only genuinely Tomcat-specific piece and is gated on
    `agents.valve` + a `CATALINA_OPTS`/Tomcat target. P2 verifies against a stock (non-Tomcat) JVM
@@ -231,20 +231,20 @@ privilege is bounded and inspectable, versus "mutate any pod at admission time."
 
 - **P0 — this doc.** Agree the model and settle §7. *(Model + Go/kubebuilder settled 2026-07-20.)* ✅
 - **P1 — kubebuilder scaffold + CRD + no-op controller.** Go module under `operator/`, the
-  `ClosureJVMTarget` CRD, an observe-only reconciler, namespaced RBAC (§6). Zero mutation risk. ✅ *(merged)*
+  `BasquinTarget` CRD, an observe-only reconciler, namespaced RBAC (§6). Zero mutation risk. ✅ *(merged)*
 - **P2 — injection.** Deployment patch (initContainer + volume + appended env + port), spec-hash
   idempotency, finalizer-based exact revert (**DD-024**). Verified by envtest (patch shape, append,
   idempotency, revert, Injected phase). ✅ *(this PR)* — e2e against a real pod pending the
-  `closurejvm/agents` image; valve mounting deferred.
+  `basquin/agents` image; valve mounting deferred.
 - **P3 — coverage Service + status.** Headless Service (`clusterIP: None`) selecting the target's
   pods on the coverage port, owner-referenced to the target (GC'd on delete), created/removed as
   `spec.coverageService` toggles; `status.coverageEndpoint` = `<svc>.<ns>.svc.cluster.local:<port>`
   for the DD-023 flag. ✅ *(this PR)* — envtest (create/endpoint/toggle-off) + in-cluster e2e.
 - **P4 — docs + demo.** ✅ *(this PR)* — USAGE gains a "Kubernetes: instrument any app with the
-  operator" section (install, apply-a-`ClosureJVMTarget`, read `status.coverageEndpoint`, revert),
+  operator" section (install, apply-a-`BasquinTarget`, read `status.coverageEndpoint`, revert),
   ARCHITECTURE describes the operator as the deploy-time control plane, and the `deploy/k8s` README
   now points at the operator as the preferred path (the baked image kept as the no-install demo).
-- **P5 — orchestration (`ClosureJVMCampaign`).** The second CRD that fires off a whole test —
+- **P5 — orchestration (`BasquinCampaign`).** The second CRD that fires off a whole test —
   launches the runner + dashboard against an instrumented target and aggregates status. Designed in
   full (likely **DD-025**) then implemented. See §10.
 
@@ -265,7 +265,7 @@ privilege is bounded and inspectable, versus "mutate any pod at admission time."
 
 ---
 
-## 10. Operator-orchestrated test — `ClosureJVMCampaign` (P5)
+## 10. Operator-orchestrated test — `BasquinCampaign` (P5)
 
 **Status (2026-07-20):** direction and CRD shape **confirmed** — two CRDs, campaign built as **P5**
 after the P1–P4 injection work (now complete). The full design is written up in
@@ -277,22 +277,22 @@ test**: bring up the target's instrumentation, launch the **runner** (the covera
 driver) and the **dashboard** (aggregator), wire them together, and fire the run off from a single
 custom resource. "Create a test, everything starts."
 
-**Confirmed shape: two CRDs — a `ClosureJVMCampaign` distinct from `ClosureJVMTarget`.**
+**Confirmed shape: two CRDs — a `BasquinCampaign` distinct from `BasquinTarget`.**
 
-- `ClosureJVMTarget` (P1–P4) stays the *instrument-a-Deployment* primitive: long-lived, "this app
+- `BasquinTarget` (P1–P4) stays the *instrument-a-Deployment* primitive: long-lived, "this app
   carries the agents." A target can exist with no test running.
-- `ClosureJVMCampaign` is the *test* unit — ephemeral, bounded. It references a target (or a target
+- `BasquinCampaign` is the *test* unit — ephemeral, bounded. It references a target (or a target
   selector) and specifies the driver (grammar, corpus, duration, invariants, coverage endpoints) and
   the dashboard. This is the "test CRD that fires everything off."
 
-Why two CRDs rather than folding it into `ClosureJVMTarget`: separation of lifecycle. A target is a
+Why two CRDs rather than folding it into `BasquinTarget`: separation of lifecycle. A target is a
 Deployment-like steady state; a campaign is a Job-like bounded run. One target may be driven by many
 campaigns over time (a nightly run, an ad-hoc repro), and a campaign should be deletable without
 tearing down the instrumentation. Collapsing them would force "instrumented" and "currently being
 tested" to be the same state, which they aren't.
 
 **What the campaign reconciler does** (sketch, to be fleshed out):
-1. Ensure the referenced target is instrumented (reuse the `ClosureJVMTarget` machinery, or require
+1. Ensure the referenced target is instrumented (reuse the `BasquinTarget` machinery, or require
    an already-`Injected` target).
 2. Create/ensure the **dashboard** (aggregator `Deployment` + `Service`) for this campaign.
 3. Create the **driver** as a `Job` — the coverage-guided runner — pointed at the target `Service`,
@@ -304,7 +304,7 @@ tested" to be the same state, which they aren't.
 
 **New build components this pulls in** (tracked in TODO Backlog → *Operator orchestration*): the
 **runner** and **dashboard** need to ship as images the operator can launch, alongside the
-`closurejvm/agents` image the injection path already needs.
+`basquin/agents` image the injection path already needs.
 
 **This absorbs a previously-open question.** TODO's "launch/stop campaigns from the dashboard —
 probably belongs with the operator" is answered here: the *operator* owns scheduling (it already has

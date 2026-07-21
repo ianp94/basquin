@@ -21,7 +21,7 @@ public class InvariantHeapDeltaTest {
         cmd.add(javaBin);
         cmd.add("-cp");
         cmd.add(cp);
-        cmd.add("-Dclosurejvm.invariant.heapDelta.maxKb=64");
+        cmd.add("-Dbasquin.invariant.heapDelta.maxKb=64");
         cmd.add("-Dexamples.heap.bumpKb=1024");
         cmd.add("runner.GenericRunner");
         cmd.add("1");

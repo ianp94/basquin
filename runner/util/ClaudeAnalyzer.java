@@ -29,16 +29,16 @@ public final class ClaudeAnalyzer {
     }
 
     /**
-     * The model {@link #analyze} will actually use: the {@code -Dclosurejvm.claude.model} override
+     * The model {@link #analyze} will actually use: the {@code -Dbasquin.claude.model} override
      * if set, else {@link #DEFAULT_MODEL}. Exposed so callers (e.g. the smoke check) can report the
      * real model without duplicating the default and drifting out of sync with it.
      */
     public static String model() {
-        return System.getProperty("closurejvm.claude.model", DEFAULT_MODEL);
+        return System.getProperty("basquin.claude.model", DEFAULT_MODEL);
     }
 
     private static String apiKey() {
-        String v = System.getProperty("closurejvm.claude.apiKey");
+        String v = System.getProperty("basquin.claude.apiKey");
         if (v != null && !v.isEmpty()) return v;
         v = System.getenv("ANTHROPIC_API_KEY");
         return (v != null && !v.isEmpty()) ? v : null;
@@ -55,7 +55,7 @@ public final class ClaudeAnalyzer {
         // 800-token ceiling could be consumed almost entirely by thinking, returning a truncated
         // analysis or none at all. This is summarisation over pre-clustered data; it does not
         // need extended thinking.
-        int maxTokens = Integer.getInteger("closurejvm.claude.maxTokens", 2000);
+        int maxTokens = Integer.getInteger("basquin.claude.maxTokens", 2000);
         String body = "{\"model\":\"" + esc(model) + "\",\"max_tokens\":" + maxTokens
                 + ",\"thinking\":{\"type\":\"disabled\"}"
                 + ",\"messages\":[{\"role\":\"user\",\"content\":\"" + esc(prompt) + "\"}]}";
@@ -81,7 +81,7 @@ public final class ClaudeAnalyzer {
         // A max_tokens stop is otherwise indistinguishable from a complete answer.
         if ("max_tokens".equals(JsonScan.extract(resp, "stop_reason", 0))) {
             text += "\n\n[truncated: hit max_tokens (" + maxTokens
-                  + "). Raise -Dclosurejvm.claude.maxTokens for a fuller analysis.]";
+                  + "). Raise -Dbasquin.claude.maxTokens for a fuller analysis.]";
         }
         return text;
     }

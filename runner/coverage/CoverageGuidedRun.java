@@ -23,13 +23,13 @@ import java.util.Random;
  * that reach new code — an AFL/Zest feedback loop where the coverage signal comes from the app,
  * over the wire (DD-012). Unlike the round-robin driver, this makes coverage climb.
  *
- * Config: {@code examples.http.baseUrl}, {@code closurejvm.coverage.jacoco=host:port},
- * {@code closurejvm.coverage.classes=<dir>}. Arg[0] = iterations.
+ * Config: {@code examples.http.baseUrl}, {@code basquin.coverage.jacoco=host:port},
+ * {@code basquin.coverage.classes=<dir>}. Arg[0] = iterations.
  */
 public final class CoverageGuidedRun {
 
     // Parameter dictionaries used to MUTATE seed routes. The set of reachable endpoints is NOT
-    // hardcoded here — it comes from the seed corpus (-Dclosurejvm.corpusDir), so the exploration
+    // hardcoded here — it comes from the seed corpus (-Dbasquin.corpusDir), so the exploration
     // surface is data, not compiled code. Baking routes in previously capped this run at 7 of
     // JPetStore's 21 handlers (all of Account and Order were unreachable) — see DD-016.
     private static final String[] CATS = {"FISH", "DOGS", "CATS", "BIRDS", "REPTILES"};
@@ -43,26 +43,26 @@ public final class CoverageGuidedRun {
 
     /** Load the request grammar if one is configured and readable; null to fall back to seeds. */
     private static RequestGrammar loadGrammar(Random rnd) {
-        String path = System.getProperty("closurejvm.grammar");
+        String path = System.getProperty("basquin.grammar");
         if (path == null || path.isEmpty()) return null;
         try {
             RequestGrammar g = RequestGrammar.load(Paths.get(path), rnd);
             if (g.isEmpty()) {
-                System.err.println("[ClosureJVM] grammar " + path + " has no route templates; ignoring it");
+                System.err.println("[Basquin] grammar " + path + " has no route templates; ignoring it");
                 return null;
             }
-            System.out.println("[ClosureJVM] loaded grammar " + path + ": "
+            System.out.println("[Basquin] loaded grammar " + path + ": "
                     + g.routeCount() + " route template(s), " + g.ruleCount() + " rule(s)");
             return g;
         } catch (Exception e) {
-            System.err.println("[ClosureJVM] failed to load grammar " + path + ": " + e);
+            System.err.println("[Basquin] failed to load grammar " + path + ": " + e);
             return null;
         }
     }
 
     /** Seed routes loaded from the corpus dir; falls back to a bare catalog hit if none found. */
     private static List<String> loadSeeds() {
-        String dir = System.getProperty("closurejvm.corpusDir", "examples/corpus/jpetstore");
+        String dir = System.getProperty("basquin.corpusDir", "examples/corpus/jpetstore");
         List<String> seeds = new ArrayList<>();
         java.nio.file.Path root = Paths.get(dir);
         if (java.nio.file.Files.isDirectory(root)) {
@@ -76,15 +76,15 @@ public final class CoverageGuidedRun {
                     }
                 }
             } catch (Exception e) {
-                System.err.println("[ClosureJVM] failed reading seed corpus " + dir + ": " + e);
+                System.err.println("[Basquin] failed reading seed corpus " + dir + ": " + e);
             }
         }
         if (seeds.isEmpty()) {
-            System.err.println("[ClosureJVM] no seeds in " + dir + "; falling back to a single catalog route. "
-                    + "Exploration will be badly limited — point -Dclosurejvm.corpusDir at a seed corpus.");
+            System.err.println("[Basquin] no seeds in " + dir + "; falling back to a single catalog route. "
+                    + "Exploration will be badly limited — point -Dbasquin.corpusDir at a seed corpus.");
             seeds.add("/actions/Catalog.action");
         } else {
-            System.out.println("[ClosureJVM] loaded " + seeds.size() + " seed route(s) from " + dir);
+            System.out.println("[Basquin] loaded " + seeds.size() + " seed route(s) from " + dir);
         }
         return seeds;
     }
@@ -95,8 +95,8 @@ public final class CoverageGuidedRun {
         DashboardClient.ensureStarted();
 
         // Load/soak mode (DD-026): replay a saved corpus at volume instead of coverage-guided
-        // exploration. No grammar, no coverage sampling, no -Dclosurejvm.coverage.classes needed.
-        if ("load".equals(System.getProperty("closurejvm.mode"))) {
+        // exploration. No grammar, no coverage sampling, no -Dbasquin.coverage.classes needed.
+        if ("load".equals(System.getProperty("basquin.mode"))) {
             LoadRun.run();
             return;
         }
@@ -106,7 +106,7 @@ public final class CoverageGuidedRun {
         // Time-boxed exit (operator campaigns, DD-025): stop the loop cleanly at the deadline so the
         // summary still gets written — a Job activeDeadlineSeconds SIGKILL would skip it. When a
         // duration is set without an explicit iteration count, the deadline governs.
-        String durationStr = System.getProperty("closurejvm.run.duration");
+        String durationStr = System.getProperty("basquin.run.duration");
         long deadlineNanos = 0L;
         if (durationStr != null && !durationStr.isEmpty()) {
             deadlineNanos = System.nanoTime() + parseDurationMillis(durationStr) * 1_000_000L;
@@ -114,23 +114,23 @@ public final class CoverageGuidedRun {
         }
         // Machine-readable end-of-run summary for the operator to read (DD-025 §7a). Written via a
         // shutdown hook so it lands on a normal exit and a deadline-triggered one alike.
-        String summaryOut = System.getProperty("closurejvm.summary.out");
+        String summaryOut = System.getProperty("basquin.summary.out");
         if (summaryOut != null && !summaryOut.isEmpty()) {
             // The summary reuses StatusReporter's counters, which are all no-ops unless the status
             // layer is enabled. Without it the summary would be valid JSON full of zeros — a silently
             // wrong "clean run", worse than an error. Warn loudly (the operator campaign always sets
-            // -Dclosurejvm.status=true; this catches a hand-run misconfiguration).
+            // -Dbasquin.status=true; this catches a hand-run misconfiguration).
             if (!StatusReporter.isEnabled()) {
-                System.err.println("[ClosureJVM] WARNING: -Dclosurejvm.summary.out is set but "
-                        + "-Dclosurejvm.status is not — the summary will report ALL ZEROS. "
-                        + "Add -Dclosurejvm.status=true.");
+                System.err.println("[Basquin] WARNING: -Dbasquin.summary.out is set but "
+                        + "-Dbasquin.status is not — the summary will report ALL ZEROS. "
+                        + "Add -Dbasquin.status=true.");
             }
             Runtime.getRuntime().addShutdownHook(new Thread(() -> writeSummary(summaryOut),
-                    "ClosureJVM-Summary"));
+                    "Basquin-Summary"));
         }
-        String jacoco = System.getProperty("closurejvm.coverage.jacoco", "localhost:6300");
-        String classes = System.getProperty("closurejvm.coverage.classes");
-        if (classes == null) { throw new IllegalArgumentException("set -Dclosurejvm.coverage.classes"); }
+        String jacoco = System.getProperty("basquin.coverage.jacoco", "localhost:6300");
+        String classes = System.getProperty("basquin.coverage.classes");
+        if (classes == null) { throw new IllegalArgumentException("set -Dbasquin.coverage.classes"); }
         // Accepts host:port or a comma-separated list; a headless-service host expands to all pods.
         JacocoCoverageProvider cov = new JacocoCoverageProvider(
                 JacocoCoverageProvider.parseEndpoints(jacoco), Paths.get(classes));
@@ -153,15 +153,15 @@ public final class CoverageGuidedRun {
 
         // Alternate session epochs: sign on for a stretch (so account/cart/order handlers run
         // their real logic), then go anonymous (so the unauthenticated paths still get probed).
-        int epochLength = Integer.getInteger("closurejvm.session.epoch", 40);
-        boolean sessionsEnabled = !"false".equals(System.getProperty("closurejvm.session", "true"));
+        int epochLength = Integer.getInteger("basquin.session.epoch", 40);
+        boolean sessionsEnabled = !"false".equals(System.getProperty("basquin.session", "true"));
 
         // Multi-step transactions: some code (order placement) is only reachable after an ordered
         // sequence of requests against one session — a populated cart, not just a login. Run each
         // declared sequence once up front, then mix them in probabilistically.
         List<List<String>> pendingSequences = grammar != null && grammar.hasSequences()
                 ? new ArrayList<>(grammar.expandAllSequences()) : new ArrayList<>();
-        int sequencePercent = Integer.getInteger("closurejvm.sequencePercent", 25);
+        int sequencePercent = Integer.getInteger("basquin.sequencePercent", 25);
 
         for (int i = 0; i < iterations; i++) {
             if (deadlineNanos != 0L && System.nanoTime() >= deadlineNanos) break;  // clean time-box exit
@@ -254,7 +254,7 @@ public final class CoverageGuidedRun {
     /** Absolute upper bound on the replay-corpus bytes (also overridable); the effective budget is the
      *  smaller of this and what's left of the ~4 KiB termination message after the metrics JSON. */
     static final int REPLAY_CORPUS_MAX_BYTES =
-            Integer.getInteger("closurejvm.corpus.out.maxBytes", 3000);
+            Integer.getInteger("basquin.corpus.out.maxBytes", 3000);
 
     /** Keep the whole summary (metrics + corpus) safely under kubelet's 4096-byte termination cap. */
     private static final int TERMINATION_MSG_BUDGET = 3900;
@@ -429,9 +429,9 @@ public final class CoverageGuidedRun {
                 sessionCookie = val.split(";", 2)[0];
             }
         }
-        String inv = c.getHeaderField("X-ClosureJVM-Invariant-Count");
+        String inv = c.getHeaderField("X-Basquin-Invariant-Count");
         if (inv != null) {
-            String detail = c.getHeaderField("X-ClosureJVM-Invariant-Detail");
+            String detail = c.getHeaderField("X-Basquin-Invariant-Detail");
             FuzzIO.saveWithMeta(path.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
                     "route=" + path + "\ncount=" + inv + (detail != null ? "\ndetail=" + detail : ""));
         }

@@ -1,22 +1,22 @@
-# JPetStore demo pod with ClosureJVM agents (valve + ClosureJVM agent + JaCoCo), plus a Service
+# JPetStore demo pod with Basquin agents (valve + Basquin agent + JaCoCo), plus a Service
 # exposing the app (8080) and the JaCoCo coverage tcpserver (6300). Access from the host via:
 #   kubectl port-forward svc/jpetstore 8080:8080 6300:6300
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: jpetstore
-  labels: { app: jpetstore, part-of: closurejvm-demo }
+  labels: { app: jpetstore, part-of: basquin-demo }
 spec:
   replicas: 1
   selector:
     matchLabels: { app: jpetstore }
   template:
     metadata:
-      labels: { app: jpetstore, part-of: closurejvm-demo }
+      labels: { app: jpetstore, part-of: basquin-demo }
     spec:
       containers:
         - name: jpetstore
-          image: closurejvm/jpetstore-demo:latest
+          image: basquin/jpetstore-demo:latest
           imagePullPolicy: IfNotPresent   # image is loaded into kind, not pulled
           ports:
             - { name: http, containerPort: 8080 }
@@ -33,7 +33,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: jpetstore
-  labels: { app: jpetstore, part-of: closurejvm-demo }
+  labels: { app: jpetstore, part-of: basquin-demo }
 spec:
   # ClusterIP, not NodePort. JaCoCo's remote-control protocol is unauthenticated and lets any
   # client dump AND RESET execution data, so port 6300 must not be reachable from outside the

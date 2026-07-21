@@ -10,11 +10,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CHART="$ROOT/deploy/helm/closurejvm-operator"
+CHART="$ROOT/deploy/helm/basquin-operator"
 
 echo "==> Syncing CRDs into the chart"
-cp "$ROOT/operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml"   "$CHART/crds/"
-cp "$ROOT/operator/config/crd/bases/closurejvm.dev_closurejvmcampaigns.yaml" "$CHART/crds/"
+cp "$ROOT/operator/config/crd/bases/basquin.dev_basquintargets.yaml"   "$CHART/crds/"
+cp "$ROOT/operator/config/crd/bases/basquin.dev_basquincampaigns.yaml" "$CHART/crds/"
 
 echo "==> Reminder: the chart's manager Role mirrors operator/config/rbac/role.yaml."
 echo "    If you changed +kubebuilder:rbac markers, reconcile templates/rbac.yaml by hand against:"

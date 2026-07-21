@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Run ClosureJVM against your Tomcat app in Kubernetes — ClosureJVM</title>
-<meta name="description" content="Bake the valve + ClosureJVM agent + JaCoCo agent into your Tomcat image, deploy it, and drive it with coverage-guided exploration and the dashboard.">
+<title>Run Basquin against your Tomcat app in Kubernetes — Basquin</title>
+<meta name="description" content="Bake the valve + Basquin agent + JaCoCo agent into your Tomcat image, deploy it, and drive it with coverage-guided exploration and the dashboard.">
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
@@ -17,7 +17,7 @@
         <path d="M12 9c-3 0-4 2-4 4v2.2c0 1-.4 1.6-1.4 1.8 1 .2 1.4.8 1.4 1.8V23c0 2 1 4 4 4" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
         <path d="M20 9c3 0 4 2 4 4v2.2c0 1 .4 1.6 1.4 1.8-1 .2-1.4.8-1.4 1.8V23c0 2-1 4-4 4" stroke="#c4b3ff" stroke-width="2" stroke-linecap="round" fill="none"/>
       </svg>
-      ClosureJVM
+      Basquin
     </a>
     <nav class="nav-links">
       <a href="index.html">Home</a>
@@ -25,7 +25,7 @@
       <a href="how-it-works.html">How it works</a>
       <a href="kubernetes-tomcat.html" class="active">K8s / Tomcat</a>
       <a href="operator.html">Operator</a>
-      <a class="gh" href="https://github.com/ianp94/closureJVM">GitHub ↗</a>
+      <a class="gh" href="https://github.com/ianp94/basquin">GitHub ↗</a>
     </nav>
   </div>
 </header>
@@ -33,8 +33,8 @@
 <main class="wrap">
   <div class="page-head">
     <div class="breadcrumb">docs / kubernetes-tomcat</div>
-    <h1>Run ClosureJVM against your Tomcat app in Kubernetes</h1>
-    <p class="lead">Bake the valve, the ClosureJVM agent, and the JaCoCo coverage agent into a Tomcat
+    <h1>Run Basquin against your Tomcat app in Kubernetes</h1>
+    <p class="lead">Bake the valve, the Basquin agent, and the JaCoCo coverage agent into a Tomcat
       image, run your WAR as a pod, and drive it from outside with coverage-guided exploration and the
       dashboard — every feature working in-cluster.</p>
     <div class="tag-list">
@@ -56,7 +56,7 @@
   <p>When it finishes, the JPetStore pod is <code>Running</code> with port <strong>8080</strong> (the
     app, every request wrapped by the valve) and <strong>6300</strong> (the JaCoCo coverage
     tcpserver, scoped to <code>org.mybatis.jpetstore.*</code>). Full walkthrough:
-    <a href="https://github.com/ianp94/closureJVM/blob/main/deploy/k8s/README.md">deploy/k8s/README.md</a>.
+    <a href="https://github.com/ianp94/basquin/blob/main/deploy/k8s/README.md">deploy/k8s/README.md</a>.
     The rest of this page shows what to change to point that same machinery at your app.</p>
 
   <hr class="rule">
@@ -88,8 +88,8 @@
       <p>Same command the demo runs — it produces the fat agent jar, the valve jar, and stages the
         JaCoCo agent:</p>
       <pre><code>./gradlew jar :tomcat-valve:jar copyJacocoAgent</code></pre>
-      <p>That yields <code>build/libs/closurejvm-0.2.0.jar</code> (agent),
-        <code>tomcat-valve/build/libs/closurejvm-valve-0.1.0.jar</code> (valve), and
+      <p>That yields <code>build/libs/basquin-0.2.0.jar</code> (agent),
+        <code>tomcat-valve/build/libs/basquin-valve-0.1.0.jar</code> (valve), and
         <code>build/jacoco/jacocoagent.jar</code>.</p>
     </li>
 
@@ -105,15 +105,15 @@
 FROM tomcat:9.0-jdk17-temurin
 
 COPY your-app.war         /usr/local/tomcat/webapps/ROOT.war
-COPY closurejvm-agent.jar /usr/local/tomcat/closurejvm-agent.jar
-COPY closurejvm-valve.jar /usr/local/tomcat/lib/closurejvm-valve.jar
+COPY basquin-agent.jar /usr/local/tomcat/basquin-agent.jar
+COPY basquin-valve.jar /usr/local/tomcat/lib/basquin-valve.jar
 COPY jacocoagent.jar      /jacocoagent.jar
 COPY context.xml          /usr/local/tomcat/conf/context.xml
 
-<span class="c"># JaCoCo tcpserver (scope includes to YOUR packages) + the ClosureJVM agent, both in the app JVM</span>
+<span class="c"># JaCoCo tcpserver (scope includes to YOUR packages) + the Basquin agent, both in the app JVM</span>
 ENV CATALINA_OPTS="-javaagent:/jacocoagent.jar=output=tcpserver,address=0.0.0.0,port=6300,<span class="s">includes=com.yourco.yourapp.*</span> \
--javaagent:/usr/local/tomcat/closurejvm-agent.jar -Xbootclasspath/a:/usr/local/tomcat/closurejvm-agent.jar \
--Dclosurejvm.invariant.mode=soft -Dclosurejvm.invariant.latency.maxMs=25 -Dclosurejvm.invariant.heapDelta.maxKb=256"
+-javaagent:/usr/local/tomcat/basquin-agent.jar -Xbootclasspath/a:/usr/local/tomcat/basquin-agent.jar \
+-Dbasquin.invariant.mode=soft -Dbasquin.invariant.latency.maxMs=25 -Dbasquin.invariant.heapDelta.maxKb=256"
 
 EXPOSE 8080 6300</code></pre>
       <div class="note">
@@ -123,8 +123,8 @@ EXPOSE 8080 6300</code></pre>
           coverage denominator and adds enough overhead to fake latency violations. Narrow-by-default
           is the deliberate choice here.</p>
       </div>
-      <p>Copy the source files ClosureJVM already ships alongside your WAR into the build context:
-        <code>closurejvm-agent.jar</code> and <code>closurejvm-valve.jar</code> from the build outputs
+      <p>Copy the source files Basquin already ships alongside your WAR into the build context:
+        <code>basquin-agent.jar</code> and <code>basquin-valve.jar</code> from the build outputs
         above, <code>jacocoagent.jar</code> from <code>build/jacoco/</code>, and
         <code>context.xml</code> from <code>deploy/valve/context.xml</code>.</p>
     </li>
@@ -157,7 +157,7 @@ spec:
       <h3>Port-forward and extract your classes</h3>
       <p>Forward the app and coverage ports, then unzip your WAR's compiled classes so the coverage
         analyzer can compute covered / total:</p>
-      <pre><code>kubectl --context kind-closurejvm port-forward svc/yourapp 8080:8080 6300:6300 &amp;
+      <pre><code>kubectl --context kind-basquin port-forward svc/yourapp 8080:8080 6300:6300 &amp;
 
 <span class="c"># extract the app's classes for the coverage analyzer</span>
 D=$(mktemp -d); (cd "$D" &amp;&amp; unzip -q /abs/your-app.war 'WEB-INF/classes/*')</code></pre>
@@ -166,25 +166,25 @@ D=$(mktemp -d); (cd "$D" &amp;&amp; unzip -q /abs/your-app.war 'WEB-INF/classes/
     <li>
       <h3>Drive it — coverage-guided, with the dashboard</h3>
       <p>Start the standalone dashboard once, then run the coverage-guided driver against the
-        forwarded pod. Point <code>-Dclosurejvm.coverage.classes</code> at the classes you just
-        extracted and <code>-Dclosurejvm.grammar</code> at a request grammar for your routes:</p>
+        forwarded pod. Point <code>-Dbasquin.coverage.classes</code> at the classes you just
+        extracted and <code>-Dbasquin.grammar</code> at a request grammar for your routes:</p>
       <pre><code><span class="c"># standalone dashboard on 127.0.0.1:7070 (its own process)</span>
 ./gradlew runDashboard &amp;
 
 ./gradlew runCoverageGuided \
   <span class="f">-Dexamples.http.baseUrl</span>=<span class="s">http://localhost:8080</span> \
-  <span class="f">-Dclosurejvm.coverage.jacoco</span>=<span class="s">localhost:6300</span> \
-  <span class="f">-Dclosurejvm.coverage.classes</span>=<span class="s">$D/WEB-INF/classes</span> \
-  <span class="f">-Dclosurejvm.grammar</span>=<span class="s">examples/grammar/yourapp.grammar</span> \
-  <span class="f">-Dclosurejvm.invariant.latency.maxMs</span>=<span class="s">25</span> \
-  <span class="f">-Dclosurejvm.invariant.mode</span>=<span class="s">soft</span> \
-  <span class="f">-Dclosurejvm.dashboard.push</span>=<span class="s">localhost:7070</span></code></pre>
+  <span class="f">-Dbasquin.coverage.jacoco</span>=<span class="s">localhost:6300</span> \
+  <span class="f">-Dbasquin.coverage.classes</span>=<span class="s">$D/WEB-INF/classes</span> \
+  <span class="f">-Dbasquin.grammar</span>=<span class="s">examples/grammar/yourapp.grammar</span> \
+  <span class="f">-Dbasquin.invariant.latency.maxMs</span>=<span class="s">25</span> \
+  <span class="f">-Dbasquin.invariant.mode</span>=<span class="s">soft</span> \
+  <span class="f">-Dbasquin.dashboard.push</span>=<span class="s">localhost:7070</span></code></pre>
       <p>Here <code>examples/grammar/yourapp.grammar</code> is a placeholder for your own routes — the
         repo ships a real, working grammar at
-        <a href="https://github.com/ianp94/closureJVM/blob/main/examples/grammar/jpetstore.grammar"><code>examples/grammar/jpetstore.grammar</code></a>
+        <a href="https://github.com/ianp94/basquin/blob/main/examples/grammar/jpetstore.grammar"><code>examples/grammar/jpetstore.grammar</code></a>
         you can copy and adapt. (Grammar syntax is covered in
         <a href="how-it-works.html">How it works</a> and
-        <a href="https://github.com/ianp94/closureJVM/blob/main/docs/USAGE.md">USAGE.md</a>.)</p>
+        <a href="https://github.com/ianp94/basquin/blob/main/docs/USAGE.md">USAGE.md</a>.)</p>
       <p>The live panel shows execs, latency, invariant finds (harvested server-side from the pod via
         the valve headers), and the coverage % of your app's code (pulled from the pod's JaCoCo agent).
         Prefer coverage without guided mutation? Use <code>runHttpDriveCoverage</code>. No coverage at
@@ -197,9 +197,9 @@ D=$(mktemp -d); (cd "$D" &amp;&amp; unzip -q /abs/your-app.war 'WEB-INF/classes/
     reflects the whole fleet rather than the one pod your reader connected to. Pass an explicit list,
     or a headless Service name that resolves to all pod IPs on its own:</p>
   <pre><code><span class="c"># explicit list of pod endpoints...</span>
--Dclosurejvm.coverage.jacoco=10.0.1.4:6300,10.0.1.5:6300,10.0.1.6:6300
+-Dbasquin.coverage.jacoco=10.0.1.4:6300,10.0.1.5:6300,10.0.1.6:6300
 <span class="c"># ...or a headless Service name, which resolves to all pod IPs</span>
--Dclosurejvm.coverage.jacoco=yourapp-jacoco.default.svc.cluster.local:6300</code></pre>
+-Dbasquin.coverage.jacoco=yourapp-jacoco.default.svc.cluster.local:6300</code></pre>
   <p>Coverage is union-merged across replicas. The status panel shows <code>[N/M pods]</code> whenever
     a replica is unreachable or more than one is expected, so an under-count from a restarting pod is
     visible rather than mistaken for genuinely low coverage.</p>
@@ -211,33 +211,33 @@ D=$(mktemp -d); (cd "$D" &amp;&amp; unzip -q /abs/your-app.war 'WEB-INF/classes/
     <p><strong>Baking agents into every image is the demo path, not the goal.</strong> The page above
       shows the mechanics; in practice the <a href="operator.html">Kubernetes operator</a> does all of
       it for you against an <em>unmodified</em> image. <code>kubectl apply</code> (or
-      <code>closurejvm instrument</code>) a <code>ClosureJVMTarget</code> naming one Deployment; the
+      <code>basquin instrument</code>) a <code>BasquinTarget</code> naming one Deployment; the
       operator copies the agents in via an init container + shared volume and appends the assembled
       flags to the container's existing <code>CATALINA_OPTS</code> / <code>JAVA_TOOL_OPTIONS</code> —
       no custom rebuild, and deleting the CR restores the Deployment byte-for-byte.</p>
     <p>It is an <strong>explicit-patch controller</strong>, not a mutating admission webhook: a
       namespaced <code>Role</code> that only patches Deployments you name, never cluster-wide pod
       mutation.</p>
-    <p>Then a <code>ClosureJVMCampaign</code> runs a whole bounded test against that target — either
+    <p>Then a <code>BasquinCampaign</code> runs a whole bounded test against that target — either
       <code>explore</code> (coverage-guided fuzzing, emitting a corpus) or <code>load</code> (replaying
       that corpus at a fixed concurrency) — launching the driver and a per-campaign dashboard and
       aggregating results into status. Install it with Helm and drive it with the
-      <code>closurejvm</code> CLI: see the <a href="operator.html">operator guide</a>,
-      <a href="https://github.com/ianp94/closureJVM/blob/main/docs/OPERATOR-USAGE.md">OPERATOR-USAGE.md</a>,
+      <code>basquin</code> CLI: see the <a href="operator.html">operator guide</a>,
+      <a href="https://github.com/ianp94/basquin/blob/main/docs/OPERATOR-USAGE.md">OPERATOR-USAGE.md</a>,
       and the design in
-      <a href="https://github.com/ianp94/closureJVM/blob/main/docs/OPERATOR-DESIGN.md">OPERATOR-DESIGN.md</a>.</p>
+      <a href="https://github.com/ianp94/basquin/blob/main/docs/OPERATOR-DESIGN.md">OPERATOR-DESIGN.md</a>.</p>
   </div>
 </main>
 
 <footer class="footer">
   <div class="wrap-wide footer-inner">
-    <div>ClosureJVM — Kubernetes-native fuzz and load testing for JVM web apps.</div>
+    <div>Basquin — Kubernetes-native fuzz and load testing for JVM web apps.</div>
     <div class="links">
       <a href="index.html">Home</a>
       <a href="getting-started.html">Get started</a>
       <a href="how-it-works.html">How it works</a>
       <a href="operator.html">Operator</a>
-      <a href="https://github.com/ianp94/closureJVM">GitHub</a>
+      <a href="https://github.com/ianp94/basquin">GitHub</a>
     </div>
     <div class="ai-note">Built with AI assistance (Anthropic's Claude / Claude Code), directed and reviewed by the author.</div>
   </div>

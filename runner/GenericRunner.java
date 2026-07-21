@@ -16,18 +16,18 @@ import java.util.List;
  *
  * Usage:
  *   java -cp <cp> runner.GenericRunner [iterations] <targetClass>
- * or set -Dclosurejvm.target=<targetClass> and pass only [iterations].
+ * or set -Dbasquin.target=<targetClass> and pass only [iterations].
  *
  * v0.2: Optional classloader reset fallback (disabled by default).
- *   -Dclosurejvm.reset=classloader
- *   -Dclosurejvm.reset.onFailure=true
+ *   -Dbasquin.reset=classloader
+ *   -Dbasquin.reset.onFailure=true
  */
 public class GenericRunner {
 
     private static final int DEFAULT_ITERATIONS = 1000;
 
     public static void main(String[] args) {
-        System.out.println("Starting ClosureJVM GenericRunner");
+        System.out.println("Starting Basquin GenericRunner");
         // Start the triage consumer and status threads before any iteration baseline is
         // captured, so they never appear as a mid-iteration thread delta.
         runner.util.TriageSink.ensureStarted();
@@ -37,13 +37,13 @@ public class GenericRunner {
         int iterations = parseIterations(args);
         String targetClass = parseTargetClass(args);
         if (targetClass == null || targetClass.isEmpty()) {
-            throw new IllegalArgumentException("Target class not specified. Pass as arg or -Dclosurejvm.target");
+            throw new IllegalArgumentException("Target class not specified. Pass as arg or -Dbasquin.target");
         }
 
-        boolean resetViaClassloader = "classloader".equalsIgnoreCase(System.getProperty("closurejvm.reset"));
-        boolean resetOnFailure = Boolean.getBoolean("closurejvm.reset.onFailure");
+        boolean resetViaClassloader = "classloader".equalsIgnoreCase(System.getProperty("basquin.reset"));
+        boolean resetOnFailure = Boolean.getBoolean("basquin.reset.onFailure");
         int resets = 0;
-        int maxResets = Integer.getInteger("closurejvm.reset.maxResets", 3);
+        int maxResets = Integer.getInteger("basquin.reset.maxResets", 3);
 
         System.out.println("Running " + iterations + " iterations with target: " + targetClass +
                 (resetViaClassloader ? " [reset=classloader, onFailure=" + resetOnFailure + "]" : ""));
@@ -83,7 +83,7 @@ public class GenericRunner {
                         if (t instanceof RuntimeException) throw (RuntimeException) t;
                         throw new RuntimeException("Failure during run", t);
                     }
-                    System.err.println("[ClosureJVM] Iteration failed: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+                    System.err.println("[Basquin] Iteration failed: " + t.getClass().getSimpleName() + ": " + t.getMessage());
                 }
 
                 // Reset on failure if configured
@@ -96,7 +96,7 @@ public class GenericRunner {
                     try { handle.target.initialize(); } catch (Exception e) {
                         throw new RuntimeException("Failed to reinitialize target after reset", e);
                     }
-                    System.out.println("[ClosureJVM] Performed classloader reset (#" + resets + ")");
+                    System.out.println("[Basquin] Performed classloader reset (#" + resets + ")");
                 }
             }
             runner.util.StatusReporter.renderFinal();
@@ -125,7 +125,7 @@ public class GenericRunner {
         if (args.length > 1) {
             return args[1];
         }
-        return System.getProperty("closurejvm.target");
+        return System.getProperty("basquin.target");
     }
 
     // --- Reset implementation helpers ---

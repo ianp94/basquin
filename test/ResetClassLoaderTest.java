@@ -24,8 +24,8 @@ public class ResetClassLoaderTest {
         cmd.add(javaBin);
         cmd.add("-cp");
         cmd.add(cp);
-        cmd.add("-Dclosurejvm.reset=classloader");
-        cmd.add("-Dclosurejvm.reset.onFailure=true");
+        cmd.add("-Dbasquin.reset=classloader");
+        cmd.add("-Dbasquin.reset.onFailure=true");
         cmd.add("runner.GenericRunner");
         cmd.add("2");
         cmd.add("examples.targets.ResetSmokeTarget");

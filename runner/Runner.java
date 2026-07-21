@@ -9,7 +9,7 @@ public class Runner {
     private static final int DEFAULT_ITERATIONS = 1000;
 
     public static void main(String[] args) {
-        System.out.println("Starting ClosureJVM Runner (deprecated) -> forwarding to GenericRunner");
+        System.out.println("Starting Basquin Runner (deprecated) -> forwarding to GenericRunner");
         int iterations = parseIterations(args);
         String target = resolveTargetFromProperties();
         if (target == null) {
@@ -29,7 +29,7 @@ public class Runner {
 
     private static String resolveTargetFromProperties() {
         // Only accept explicit target; no hard-coded cases
-        String target = System.getProperty("closurejvm.target");
+        String target = System.getProperty("basquin.target");
         return (target != null && !target.isBlank()) ? target : null;
     }
 }

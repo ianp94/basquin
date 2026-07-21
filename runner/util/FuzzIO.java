@@ -17,9 +17,9 @@ public final class FuzzIO {
     private static final AtomicLong SEQ = new AtomicLong();
 
     public static void saveInteresting(byte[] data, Throwable cause) {
-        boolean enabled = Boolean.parseBoolean(System.getProperty("closurejvm.fuzz.saveOnException", "true"));
+        boolean enabled = Boolean.parseBoolean(System.getProperty("basquin.fuzz.saveOnException", "true"));
         if (!enabled) return;
-        String dirProp = System.getProperty("closurejvm.fuzz.resultsDir", "fuzz-results");
+        String dirProp = System.getProperty("basquin.fuzz.resultsDir", "fuzz-results");
         // Snapshot everything the async write needs NOW: the fuzzer may reuse/mutate
         // the input buffer after we return, and system properties may change.
         final byte[] input = data != null ? data.clone() : new byte[0];
@@ -53,16 +53,16 @@ public final class FuzzIO {
                     m.append("preview=").append(preview).append('\n');
                 } catch (Exception ignored) {}
                 Files.write(meta, m.toString().getBytes(StandardCharsets.UTF_8));
-                System.err.println("[ClosureJVM][Fuzz] Saved interesting input to " + inputPath);
+                System.err.println("[Basquin][Fuzz] Saved interesting input to " + inputPath);
             } catch (IOException ioe) {
-                System.err.println("[ClosureJVM][Fuzz] Failed to save input: " + ioe);
+                System.err.println("[Basquin][Fuzz] Failed to save input: " + ioe);
             }
         });
         StatusReporter.recordSaved("Crash");
     }
 
     public static void saveWithMeta(byte[] data, String classification, String details) {
-        String dirProp = System.getProperty("closurejvm.fuzz.resultsDir", "fuzz-results");
+        String dirProp = System.getProperty("basquin.fuzz.resultsDir", "fuzz-results");
         final byte[] input = data != null ? data.clone() : new byte[0];
         final long ts = Instant.now().toEpochMilli();
         final long seq = SEQ.incrementAndGet();
@@ -81,9 +81,9 @@ public final class FuzzIO {
                     m.append("details=\n").append(details).append('\n');
                 }
                 Files.write(meta, m.toString().getBytes(StandardCharsets.UTF_8));
-                System.err.println("[ClosureJVM][Fuzz] Saved input (" + classification + ") to " + inputPath);
+                System.err.println("[Basquin][Fuzz] Saved input (" + classification + ") to " + inputPath);
             } catch (IOException ioe) {
-                System.err.println("[ClosureJVM][Fuzz] Failed to save input: " + ioe);
+                System.err.println("[Basquin][Fuzz] Failed to save input: " + ioe);
             }
         });
         StatusReporter.recordSaved(classification);

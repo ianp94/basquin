@@ -32,7 +32,7 @@ it configurable was deferred until someone actually needs to tune it.
 Without a GC, that measures *allocation churn*, not *retention* — an
 allocation-heavy but leak-free iteration trips the heap invariant.
 
-**Decision.** `-Dclosurejvm.heap.gcBeforeMeasure=true` runs `System.gc()` before
+**Decision.** `-Dbasquin.heap.gcBeforeMeasure=true` runs `System.gc()` before
 the baseline and end-of-iteration readings (symmetrically, and before the latency
 clock starts). Off by default.
 
@@ -72,7 +72,7 @@ cost scales with thread count, exactly wrong for the real-app direction.
 at all times and feed information in") and considered a separate C program
 observing the JVM from outside.
 
-**Decision.** A JVMTI native agent (`native/closurejvmti.c`) loaded via
+**Decision.** A JVMTI native agent (`native/basquinjvmti.c`) loaded via
 `-agentpath`, subscribing to `ThreadStart`/`ThreadEnd` events, seeded at `VMInit`
 from `GetAllThreads`. It maintains live/non-daemon counts and a weak-global-ref
 set of live non-daemon Thread objects. The Java harness reads via a JNI bridge
@@ -300,7 +300,7 @@ coverage cannot be seen by the client-side harness/JQF JVM. A percentage also ne
 covered/total denominator, which only instrumenting the app provides.
 
 **Decision.** Put a **JaCoCo agent in the app JVM** (`-javaagent:jacocoagent.jar=output=tcpserver`)
-alongside the ClosureJVM agent + valve. A client-side `JacocoCoverageProvider` connects to the
+alongside the Basquin agent + valve. A client-side `JacocoCoverageProvider` connects to the
 agent's TCP server, dumps execution data (accumulating, no reset), and analyzes it against the
 app's class files with JaCoCo's `Analyzer` to compute covered/total instruction probes.
 `CoverageDriver` polls this on a background thread and feeds it to
@@ -420,7 +420,7 @@ actually a bug versus expected proportional behavior, and what would I check fir
 prompt from the *already-clustered* summary plus campaign status, calls the Claude Messages API,
 and returns prose. Triggered only by an explicit button click — never on the 1.5s auto-refresh.
 The API key is read only by the `DashboardServer` process (`ANTHROPIC_API_KEY` or
-`-Dclosurejvm.claude.apiKey`); it is never passed to a driver, never sent to the app under test,
+`-Dbasquin.claude.apiKey`); it is never passed to a driver, never sent to the app under test,
 and never rendered in the UI. Absent a key the endpoint returns a clear "not configured" message
 and the rest of the dashboard is unaffected.
 
@@ -454,7 +454,7 @@ need sessions, but because no code path ever generated their URLs. Every other t
 had `examples/corpus/<name>/`; JPetStore had none.
 
 **Decision.** Endpoints come from a seed corpus (`examples/corpus/jpetstore/`, one route per file,
-`-Dclosurejvm.corpusDir`), covering all 21 handlers. `CoverageGuidedRun` loads seeds, deterministically
+`-Dbasquin.corpusDir`), covering all 21 handlers. `CoverageGuidedRun` loads seeds, deterministically
 exercises each one once before random exploration, and mutates only *parameter values* using
 dictionaries. `randomRoute()` is deleted — the runner no longer invents endpoints. An empty corpus
 warns loudly instead of silently exploring almost nothing.
@@ -554,9 +554,9 @@ the first validation and never gets that far. Keeping values as corpus data also
 product id is editing a text file, not a grammar.
 
 **Decision — sessions.** The driver maintains a `JSESSIONID` cookie and alternates *session
-epochs*: sign on for `-Dclosurejvm.session.epoch` iterations (default 40), then go anonymous, and
+epochs*: sign on for `-Dbasquin.session.epoch` iterations (default 40), then go anonymous, and
 repeat — so both authenticated and unauthenticated paths keep getting probed rather than the run
-committing to one. Disable with `-Dclosurejvm.session=false`.
+committing to one. Disable with `-Dbasquin.session=false`.
 
 **Verified (2026-07-20)** on the JPetStore pod. Coverage **17.7% → 22.1%** (1126 → 1409 of 6368),
 still climbing when the run ended. The session mechanism was confirmed directly rather than
@@ -638,7 +638,7 @@ one item and removes a different one, never reaching the code a real checkout do
 
 **2. Run configuration is part of the result.** "23% coverage, 7 crash sites" is uninterpretable
 without knowing which grammar, endpoints and thresholds produced it. The driver now pushes its
-configuration once per run — the `closurejvm.*`/`examples.*` parameters plus the grammar source —
+configuration once per run — the `basquin.*`/`examples.*` parameters plus the grammar source —
 and the dashboard shows it per campaign. Values whose names look like credentials are redacted:
 system properties aren't a deliberate secret store, but this payload is rendered verbatim in a
 browser that may be shared.
@@ -721,14 +721,14 @@ custom headers isn't preflighted, so any page the operator had open could trigge
 a loop, and anyone on the same network could do so directly.
 
 **Decision.** Three layers, cheapest first:
-1. **Bind `127.0.0.1` by default** (`closurejvm.dashboard.bind` to override). This is a local
+1. **Bind `127.0.0.1` by default** (`basquin.dashboard.bind` to override). This is a local
    operator tool; network exposure should be opt-in, not the default.
 2. **No CORS headers at all.** The UI is same-origin, so the wildcard bought nothing and only
    enabled cross-origin reads.
-3. **Require an `X-ClosureJVM-Dashboard` header** on every state-changing or billed endpoint
+3. **Require an `X-Basquin-Dashboard` header** on every state-changing or billed endpoint
    (`/ingest/*`, `/api/analyze/*`). A cross-origin "simple" request cannot set a custom header
    without a preflight, and with no CORS headers the preflight fails — so this closes the drive-by
-   CSRF path without any token distribution. An optional `closurejvm.dashboard.token` adds a shared
+   CSRF path without any token distribution. An optional `basquin.dashboard.token` adds a shared
    secret; when the bind is non-loopback and no token is set, `/api/analyze` refuses outright and
    the server says so at startup.
 
@@ -738,7 +738,7 @@ of how the browser's preflight rules work; the token is then optional hardening 
 non-loopback case rather than load-bearing for the default one.
 
 **Verified (2026-07-20).** `ss` confirms the listener is `127.0.0.1:7070` only; `/ingest/status`
-and `/api/analyze` both return `missing X-ClosureJVM-Dashboard header` without it and succeed with
+and `/api/analyze` both return `missing X-Basquin-Dashboard header` without it and succeed with
 it; no `Access-Control-*` header appears on any response.
 
 **Also fixed from the same review.** The kind deploy targeted whatever kubectl context happened to
@@ -771,7 +771,7 @@ of them into one `ExecutionDataStore` OR-merges their probe arrays into true uni
 custom merge logic, the store already does it. `JacocoCoverageProvider` now takes a list of
 `host:port` endpoints, and each host is resolved with `InetAddress.getAllByName`, so a **headless
 Service** name transparently expands to every pod IP behind it — the driver never has to enumerate
-pods itself. The `-Dclosurejvm.coverage.jacoco` flag accordingly accepts a comma-separated list.
+pods itself. The `-Dbasquin.coverage.jacoco` flag accordingly accepts a comma-separated list.
 
 **Partial responses are reported, not hidden.** A restarting or unreachable replica is skipped
 (one dead pod must not zero the campaign's accumulated coverage), but the sample carries
@@ -793,23 +793,23 @@ covered — union, not mean, is the fleet's real reach).
 
 ## DD-024: The operator instruments by appending, is idempotent, and reverts via a finalizer (2026-07-20)
 
-**Context.** Operator P2 (docs/OPERATOR-DESIGN.md §4) makes the `ClosureJVMTarget` controller patch
+**Context.** Operator P2 (docs/OPERATOR-DESIGN.md §4) makes the `BasquinTarget` controller patch
 the referenced Deployment to carry the agents in an *unmodified* app image. Several sub-decisions
 shape whether that patch is safe and reversible.
 
 **Decision.**
 1. **Copy agents in via an initContainer + shared `emptyDir`.** The app image doesn't contain our
-   agents, so an initContainer running a versioned `closurejvm/agents` image copies them into an
-   `emptyDir` mounted into the app container at `/closurejvm`. Agent upgrades are an image-tag bump,
+   agents, so an initContainer running a versioned `basquin/agents` image copies them into an
+   `emptyDir` mounted into the app container at `/basquin`. Agent upgrades are an image-tag bump,
    never a target rebuild. The image is operator-configurable (`--agents-image`).
 2. **Append to `jvmOptsVar`, never replace.** The app's own `CATALINA_OPTS`/`JAVA_TOOL_OPTIONS`
    (heap sizing, GC flags) must survive. The original value is stashed in a
-   `closurejvm.dev/original-jvmopts` annotation and the injected value is always recomputed as
+   `basquin.dev/original-jvmopts` annotation and the injected value is always recomputed as
    `<original> + " " + <agent flags>`, so re-reconciling never double-appends.
-3. **Idempotency by spec hash.** A `closurejvm.dev/injected: <hash>` annotation records the spec the
+3. **Idempotency by spec hash.** A `basquin.dev/injected: <hash>` annotation records the spec the
    Deployment was last patched for; a steady target is a no-op on every resync, and a spec change
    re-derives from the stashed original rather than layering onto an already-injected value.
-4. **Revert via a finalizer, not owner references.** The target holds a `closurejvm.dev/revert`
+4. **Revert via a finalizer, not owner references.** The target holds a `basquin.dev/revert`
    finalizer; deleting it removes the initContainer/volume/mount/port and restores the original
    `jvmOptsVar` — the Deployment returns to exactly its pre-injection shape. Owner references were
    **rejected**: the operator patches a Deployment it does not own, and an owner ref would make
@@ -818,7 +818,7 @@ shape whether that patch is safe and reversible.
    targets in the namespace whose `deploymentRef.name` matches the Deployment).
 5. **The valve is deferred.** The Tomcat valve is not a JVM flag — it needs a Catalina
    `context.xml` Valve entry — so `agents.valve` injects nothing in P2; the JVMTI agent, Java agent
-   (+ bootclasspath), JaCoCo coverage agent, and `-Dclosurejvm.*` flags (all pure JVM opts) are the
+   (+ bootclasspath), JaCoCo coverage agent, and `-Dbasquin.*` flags (all pure JVM opts) are the
    P2 surface. Valve mounting is backlog.
 
 **Verified.** envtest (real apiserver) asserts: the patch shape (initContainer/volume/mount/env/port),
@@ -826,12 +826,12 @@ that the original `jvmOptsVar` is preserved at the front, idempotency across rep
 `Injected` phase once replicas roll over, a `ContainerNotResolved` error on an ambiguous container,
 and — the safety property — that deleting the target reverts the Deployment byte-for-byte.
 
-**Not yet.** End-to-end against a real pod needs the `closurejvm/agents` image built and published
+**Not yet.** End-to-end against a real pod needs the `basquin/agents` image built and published
 (backlog); P2 proves the reconcile/patch/revert logic, which is the risky part.
 
 **Revert exactness — refinements (2026-07-20, PR #11 review).** Three correctness gaps in the naïve
 revert were closed: (a) the env-var restore is scoped to the **exact injected container** (stashed in
-`closurejvm.dev/jvmopts-container`), so a sidecar that independently sets the same generic var
+`basquin.dev/jvmopts-container`), so a sidecar that independently sets the same generic var
 (`JAVA_TOOL_OPTIONS`/`CATALINA_OPTS`) is never clobbered; (b) a `valueFrom`-sourced `jvmOptsVar` is
 **refused at inject time** (`InjectionRejected`) rather than silently flattened to a literal and then
 deleted on revert — that would be permanent loss of a Secret/ConfigMap-sourced value; (c) an
@@ -845,7 +845,7 @@ prior injection first, so retargeting `spec.Container` un-instruments the old co
 namespaced ServiceAccount/Role/RoleBinding, built image) and instruments a *raw* JPetStore: agents
 loaded on the live JVM, `CATALINA_OPTS` appended (original kept), app serving. This caught two bugs
 the envtest/local-run path masked (both fixed): the operator Role was missing `update;patch` on
-`closurejvmtargets` — so the P2 finalizer could not be added and the operator could not run
+`basquintargets` — so the P2 finalizer could not be added and the operator could not run
 in-cluster at all; and the injected initContainer needed `imagePullPolicy: IfNotPresent` (a `:latest`
 agents image otherwise `ImagePullBackOff`s on a kind/air-gapped node). Lesson: envtest runs as admin
 and never exercises the operator's own RBAC — the namespaced-trust-boundary design must be verified
@@ -853,13 +853,13 @@ against the real ServiceAccount.
 
 ## DD-027: Multi-arch images — compile the native agent per-arch inside the Dockerfile (2026-07-20)
 
-**Context.** The four published images (`ghcr.io/ianp94/closurejvm-{operator,agents,runner,dashboard}`)
+**Context.** The four published images (`ghcr.io/ianp94/basquin-{operator,agents,runner,dashboard}`)
 were built single-arch (`linux/amd64`) on the release runner. arm64 clusters (AWS Graviton, Apple-Silicon
 `kind`) can't pull them, and the injected agents initContainer would `exec format error` on an arm64 node.
-Of the four, only one artifact is actually arch-specific: the native JVMTI agent `libclosurejvmti.so`
+Of the four, only one artifact is actually arch-specific: the native JVMTI agent `libbasquinjvmti.so`
 (DD-004). Everything else is arch-independent — the operator is a `CGO_ENABLED=0` Go binary on a multi-arch
 distroless base, the runner/dashboard are JVM jars on `eclipse-temurin:17-jre` (multi-arch), and the agents
-image's other payloads (`closurejvm-agent.jar`, `jacocoagent.jar`, `closurejvm-valve.jar`) are jars on a
+image's other payloads (`basquin-agent.jar`, `jacocoagent.jar`, `basquin-valve.jar`) are jars on a
 `busybox` base (multi-arch).
 
 **Decision.**
@@ -867,10 +867,10 @@ image's other payloads (`closurejvm-agent.jar`, `jacocoagent.jar`, `closurejvm-v
    with QEMU (`docker/setup-qemu-action`) for cross-platform emulation. The operator/runner/dashboard
    Dockerfiles need **no change** — their bases are already multi-arch and their artifacts arch-independent;
    buildx just fans the same build across platforms and pushes a manifest list.
-2. **Compile `libclosurejvmti.so` inside the agents Dockerfile, per-arch.** Rather than cross-compile the
+2. **Compile `libbasquinjvmti.so` inside the agents Dockerfile, per-arch.** Rather than cross-compile the
    `.so` on the host (managing an `aarch64-linux-gnu` toolchain + arch-matched JDK headers) or shipping two
    pre-built `.so`s selected by `TARGETARCH`, add a `eclipse-temurin:17-jdk` builder stage that runs the
-   existing `native/Makefile` (`cc -shared closurejvmti.c`). Under buildx, that stage runs once **per target
+   existing `native/Makefile` (`cc -shared basquinjvmti.c`). Under buildx, that stage runs once **per target
    platform** (natively on amd64, under QEMU for arm64), so each leg produces its own correct `.so` from the
    same portable C source (standard JVMTI, no arch-specific asm) with zero cross-toolchain plumbing. The
    busybox final stage `COPY --from` grabs the per-arch `.so`.

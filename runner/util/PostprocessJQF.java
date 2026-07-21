@@ -5,13 +5,13 @@ import java.nio.file.*;
 import java.util.UUID;
 
 /**
- * Post-process JQF output directory to create ClosureJVM triage metadata files
+ * Post-process JQF output directory to create Basquin triage metadata files
  * for coverage-interesting inputs that did not crash.
  */
 public final class PostprocessJQF {
     public static void main(String[] args) throws IOException {
-        Path jqfDir = Paths.get(System.getProperty("closurejvm.jqf.dir", "fuzz-results"));
-        Path outDir = Paths.get(System.getProperty("closurejvm.fuzz.resultsDir", jqfDir.toString()));
+        Path jqfDir = Paths.get(System.getProperty("basquin.jqf.dir", "fuzz-results"));
+        Path outDir = Paths.get(System.getProperty("basquin.fuzz.resultsDir", jqfDir.toString()));
         Files.createDirectories(outDir);
         int processed = 0;
         try (DirectoryStream<Path> ds = Files.newDirectoryStream(jqfDir)) {
@@ -30,7 +30,7 @@ public final class PostprocessJQF {
                 processed++;
             }
         }
-        System.err.println("[ClosureJVM][Fuzz] Post-processed JQF inputs: " + processed + " → " + outDir);
+        System.err.println("[Basquin][Fuzz] Post-processed JQF inputs: " + processed + " → " + outDir);
     }
 }
 

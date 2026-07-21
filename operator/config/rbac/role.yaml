@@ -27,9 +27,9 @@ rules:
   - list
   - watch
 - apiGroups:
-  - closurejvm.dev
+  - basquin.dev
   resources:
-  - closurejvmcampaigns
+  - basquincampaigns
   verbs:
   - get
   - list
@@ -37,23 +37,23 @@ rules:
   - update
   - watch
 - apiGroups:
-  - closurejvm.dev
+  - basquin.dev
   resources:
-  - closurejvmcampaigns/finalizers
+  - basquincampaigns/finalizers
   verbs:
   - update
 - apiGroups:
-  - closurejvm.dev
+  - basquin.dev
   resources:
-  - closurejvmcampaigns/status
+  - basquincampaigns/status
   verbs:
   - get
   - patch
   - update
 - apiGroups:
-  - closurejvm.dev
+  - basquin.dev
   resources:
-  - closurejvmtargets
+  - basquintargets
   verbs:
   - get
   - list
@@ -61,15 +61,15 @@ rules:
   - update
   - watch
 - apiGroups:
-  - closurejvm.dev
+  - basquin.dev
   resources:
-  - closurejvmtargets/finalizers
+  - basquintargets/finalizers
   verbs:
   - update
 - apiGroups:
-  - closurejvm.dev
+  - basquin.dev
   resources:
-  - closurejvmtargets/status
+  - basquintargets/status
   verbs:
   - get
   - patch

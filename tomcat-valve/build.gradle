@@ -2,7 +2,7 @@ plugins {
     id 'java'
 }
 
-group = 'com.closurejvm'
+group = 'com.basquin'
 version = '0.1.0'
 sourceCompatibility = '17'
 targetCompatibility = '17'
@@ -12,12 +12,12 @@ repositories { mavenCentral() }
 dependencies {
     // Catalina API to compile the Valve; provided by the Tomcat runtime, never bundled.
     // Compiled against Tomcat 10.1, but the emitted bytecode references no servlet-namespace
-    // class (see ClosureJVMValve / DD-011), so the one jar also loads on Tomcat 9.
+    // class (see BasquinValve / DD-011), so the one jar also loads on Tomcat 9.
     compileOnly 'org.apache.tomcat:tomcat-catalina:10.1.20'
     // Agent API (Agent.beginIteration/endIteration); the agent jar is on Tomcat's classpath at runtime.
     compileOnly project(':')
 }
 
 jar {
-    archiveBaseName = 'closurejvm-valve'
+    archiveBaseName = 'basquin-valve'
 }

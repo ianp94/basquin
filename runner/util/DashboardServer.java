@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
  * (or an injected sidecar) pushes here under its pod name; one dashboard shows the whole fleet.
  * See docs/DESIGN-DECISIONS.md DD-013.
  *
- * Run standalone: {@code ./gradlew runDashboard [-Dclosurejvm.dashboard.server.port=7070]}
+ * Run standalone: {@code ./gradlew runDashboard [-Dbasquin.dashboard.server.port=7070]}
  */
 public final class DashboardServer {
 
@@ -41,31 +41,31 @@ public final class DashboardServer {
     }
 
     private static final Map<String, Campaign> CAMPAIGNS = new ConcurrentHashMap<>();
-    private static final long STALE_AFTER_MS = Long.getLong("closurejvm.dashboard.staleAfterMs", 10_000L);
+    private static final long STALE_AFTER_MS = Long.getLong("basquin.dashboard.staleAfterMs", 10_000L);
 
     /**
      * Bind loopback by default. This process exposes an endpoint that spends money
      * ({@code /api/analyze} calls the Claude API with the operator's key), so it must not be
      * reachable from the network unless someone deliberately asks for it.
      */
-    private static final String BIND_ADDRESS = System.getProperty("closurejvm.dashboard.bind", "127.0.0.1");
+    private static final String BIND_ADDRESS = System.getProperty("basquin.dashboard.bind", "127.0.0.1");
     /** Optional shared secret, required in addition to the header when set. */
-    private static final String TOKEN = System.getProperty("closurejvm.dashboard.token", "");
+    private static final String TOKEN = System.getProperty("basquin.dashboard.token", "");
     /**
      * Any state-changing or billed endpoint requires this header. A cross-origin "simple" POST
      * cannot set a custom header without a preflight, and we send no CORS headers at all, so the
      * preflight fails — which closes the drive-by CSRF path where a page the operator happens to
      * be visiting triggers billed API calls in a loop.
      */
-    private static final String GUARD_HEADER = "X-ClosureJVM-Dashboard";
+    private static final String GUARD_HEADER = "X-Basquin-Dashboard";
 
     public static void main(String[] args) throws IOException {
-        int port = Integer.getInteger("closurejvm.dashboard.server.port", 7070);
+        int port = Integer.getInteger("basquin.dashboard.server.port", 7070);
         java.net.InetAddress bind = java.net.InetAddress.getByName(BIND_ADDRESS);
         HttpServer server = HttpServer.create(new InetSocketAddress(bind, port), 0);
         if (!bind.isLoopbackAddress() && TOKEN.isEmpty()) {
-            System.err.println("[ClosureJVM] WARNING: dashboard bound to " + BIND_ADDRESS
-                + " with no -Dclosurejvm.dashboard.token; /api/analyze (which spends API credit)"
+            System.err.println("[Basquin] WARNING: dashboard bound to " + BIND_ADDRESS
+                + " with no -Dbasquin.dashboard.token; /api/analyze (which spends API credit)"
                 + " is disabled. Set a token to enable it on a non-loopback bind.");
         }
 
@@ -79,12 +79,12 @@ public final class DashboardServer {
         server.createContext("/", ex -> respond(ex, "text/html; charset=utf-8", page()));
 
         server.setExecutor(Executors.newCachedThreadPool(r -> {
-            Thread t = new Thread(r, "ClosureJVM-DashboardServer");
+            Thread t = new Thread(r, "Basquin-DashboardServer");
             t.setDaemon(true);
             return t;
         }));
         server.start();
-        System.out.println("[ClosureJVM] dashboard server listening on :" + port);
+        System.out.println("[Basquin] dashboard server listening on :" + port);
     }
 
     // --- ingest (called by DashboardClient, one campaign per push) ---
@@ -184,7 +184,7 @@ public final class DashboardServer {
         if (!isLoopbackBind() && TOKEN.isEmpty()) {
             respond(ex, "application/json",
                 "{\"error\":\"analysis disabled: dashboard is bound to a non-loopback address"
-                + " without -Dclosurejvm.dashboard.token\"}");
+                + " without -Dbasquin.dashboard.token\"}");
             return;
         }
         String id = ex.getRequestURI().getPath().substring("/api/analyze/".length());
@@ -210,7 +210,7 @@ public final class DashboardServer {
 
     private static String buildAnalysisPrompt(String id, String statusJson, List<FindingsClusterer.Cluster> clusters) {
         StringBuilder sb = new StringBuilder();
-        sb.append("You are triaging results from ClosureJVM, a fuzzing/availability-testing harness. ")
+        sb.append("You are triaging results from Basquin, a fuzzing/availability-testing harness. ")
           .append("Campaign \"").append(id).append("\" status: ").append(statusJson).append("\n\n")
           .append("Findings have already been deterministically clustered by fingerprint ")
           .append("(same invariant kind + same route shape, or same exception class). ")
@@ -247,8 +247,8 @@ public final class DashboardServer {
             respond(ex, "application/json", "{\"error\":\"missing " + GUARD_HEADER + " header\"}");
             return false;
         }
-        if (!TOKEN.isEmpty() && !TOKEN.equals(ex.getRequestHeaders().getFirst("X-ClosureJVM-Token"))) {
-            respond(ex, "application/json", "{\"error\":\"bad or missing X-ClosureJVM-Token\"}");
+        if (!TOKEN.isEmpty() && !TOKEN.equals(ex.getRequestHeaders().getFirst("X-Basquin-Token"))) {
+            respond(ex, "application/json", "{\"error\":\"bad or missing X-Basquin-Token\"}");
             return false;
         }
         return true;

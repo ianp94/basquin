@@ -24,9 +24,9 @@ public class InvariantLatencyTest {
         cmd.add(javaBin);
         cmd.add("-cp");
         cmd.add(cp);
-        cmd.add("-Dclosurejvm.target=examples.targets.ThreadLeakTarget");
+        cmd.add("-Dbasquin.target=examples.targets.ThreadLeakTarget");
         cmd.add("-Dexamples.mode=proper");
-        cmd.add("-Dclosurejvm.invariant.latency.maxMs=1"); // practically guaranteed to exceed
+        cmd.add("-Dbasquin.invariant.latency.maxMs=1"); // practically guaranteed to exceed
         cmd.add("runner.Runner");
         cmd.add("1");
 

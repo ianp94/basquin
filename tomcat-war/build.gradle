@@ -3,7 +3,7 @@ plugins {
     id 'war'
 }
 
-group = 'com.closurejvm.examples'
+group = 'com.basquin.examples'
 version = '0.1.0'
 sourceCompatibility = '17'
 
@@ -18,7 +18,7 @@ dependencies {
 }
 
 war {
-    archiveBaseName = 'closurejvm-demo'
+    archiveBaseName = 'basquin-demo'
 }
 
 tasks.register('printWarPath') {

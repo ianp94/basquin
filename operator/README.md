@@ -1,6 +1,6 @@
-# ClosureJVM operator
+# Basquin operator
 
-A Kubernetes operator that instruments a named Deployment with the ClosureJVM agents. Design and
+A Kubernetes operator that instruments a named Deployment with the Basquin agents. Design and
 rationale: [`../docs/OPERATOR-DESIGN.md`](../docs/OPERATOR-DESIGN.md). Built with kubebuilder /
 controller-runtime as a self-contained Go module so the control plane stays runtime-agnostic (the
 Gradle/JVM build is untouched).
@@ -13,22 +13,22 @@ The controller now **instruments** the referenced Deployment, reversibly:
   `emptyDir`, mounts it into the app container, **appends** the agent flags to the container's
   `jvmOptsVar` (`CATALINA_OPTS`/`JAVA_TOOL_OPTIONS`) — never replacing the app's own flags — and
   exposes the coverage port.
-- **Idempotent**: a `closurejvm.dev/injected: <spec-hash>` annotation makes a steady target a no-op;
+- **Idempotent**: a `basquin.dev/injected: <spec-hash>` annotation makes a steady target a no-op;
   the original `jvmOptsVar` is stashed so re-reconciles never double-append.
-- **Reverts exactly**: a `closurejvm.dev/revert` finalizer restores the Deployment to its
+- **Reverts exactly**: a `basquin.dev/revert` finalizer restores the Deployment to its
   pre-injection shape when the target is deleted. No owner references (they would make Kubernetes
   garbage-collect the Deployment, not revert it); drift is handled by a Deployment mapping-watch.
 - `status.phase` is `Injecting` → `Injected`, with `instrumentedReplicas` from the rollout.
 
-**Not yet:** end-to-end against a real pod needs the `closurejvm/agents` image built (backlog); the
+**Not yet:** end-to-end against a real pod needs the `basquin/agents` image built (backlog); the
 Tomcat valve is deferred (it needs a `context.xml` Valve entry, not a JVM flag). P1's observe-only
 behavior is superseded by injection. See the phased plan in the design doc §8.
 
-## The `ClosureJVMTarget` API
+## The `BasquinTarget` API
 
-Group `closurejvm.dev`, version `v1alpha1`, **namespaced**. The spec is the whole user-facing API —
+Group `basquin.dev`, version `v1alpha1`, **namespaced**. The spec is the whole user-facing API —
 name a Deployment, choose which agents to inject and how the JVM picks them up. See
-[`config/samples/closurejvm_v1alpha1_closurejvmtarget.yaml`](config/samples/closurejvm_v1alpha1_closurejvmtarget.yaml)
+[`config/samples/basquin_v1alpha1_basquintarget.yaml`](config/samples/basquin_v1alpha1_basquintarget.yaml)
 for a full example mirroring the JPetStore demo.
 
 ## Trust model (RBAC)
@@ -69,9 +69,9 @@ kubectl kustomize config/default   # render the full install to inspect it
 
 ```bash
 make install                       # apply the CRD
-make deploy IMG=<your-registry>/closurejvm-operator:tag   # apply the namespaced install
-kubectl apply -f config/samples/   # create a ClosureJVMTarget
-kubectl get closurejvmtargets      # watch status: phase/instrumented/age
+make deploy IMG=<your-registry>/basquin-operator:tag   # apply the namespaced install
+kubectl apply -f config/samples/   # create a BasquinTarget
+kubectl get basquintargets      # watch status: phase/instrumented/age
 ```
 
 Because P1 never mutates a workload, deploying it against a real app is safe — the worst it can do

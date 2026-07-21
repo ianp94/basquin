@@ -6,24 +6,24 @@ domain: dev
 layout:
 - go.kubebuilder.io/v4
 projectName: operator
-repo: github.com/ianp94/closureJVM/operator
+repo: github.com/ianp94/basquin/operator
 resources:
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
   domain: dev
-  group: closurejvm
-  kind: ClosureJVMTarget
-  path: github.com/ianp94/closureJVM/operator/api/v1alpha1
+  group: basquin
+  kind: BasquinTarget
+  path: github.com/ianp94/basquin/operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
   domain: dev
-  group: closurejvm
-  kind: ClosureJVMCampaign
-  path: github.com/ianp94/closureJVM/operator/api/v1alpha1
+  group: basquin
+  kind: BasquinCampaign
+  path: github.com/ianp94/basquin/operator/api/v1alpha1
   version: v1alpha1
 version: "3"

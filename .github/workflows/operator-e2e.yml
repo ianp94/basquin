@@ -94,12 +94,12 @@ jobs:
       - name: Operator logs on failure
         if: failure()
         run: |
-          K="kubectl --context kind-closurejvm -n closurejvm-system"
+          K="kubectl --context kind-basquin -n basquin-system"
           echo "::group::operator logs"
           $K logs -l control-plane=controller-manager --tail=200 || true
           echo "::endgroup::"
           echo "::group::CRs"
-          $K get closurejvmtargets,closurejvmcampaigns -o wide || true
+          $K get basquintargets,basquincampaigns -o wide || true
           echo "::endgroup::"
           # Events + app-pod logs catch failures the operator's own log won't show — e.g. ImagePullBackOff
           # on the injected initContainer, or the target app pod crashing after injection.

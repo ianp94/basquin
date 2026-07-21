@@ -1,6 +1,6 @@
-# Examples for ClosureJVM
+# Examples for Basquin
 
-This directory contains example targets and test cases for the ClosureJVM project.
+This directory contains example targets and test cases for the Basquin project.
 
 ## ThreadLeakExample.java
 

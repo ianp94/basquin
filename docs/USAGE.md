@@ -1,4 +1,4 @@
-# ClosureJVM Usage Reference
+# Basquin Usage Reference
 
 The command catalog and flag reference. For what the tool is and why, see the
 [README](../README.md); for design rationale see [DESIGN-DECISIONS](DESIGN-DECISIONS.md).
@@ -7,20 +7,20 @@ The command catalog and flag reference. For what the tool is and why, see the
 
 - Java 17+ (tested on 17 and 21), Gradle wrapper included.
 - Build: `./gradlew build`
-- Fat jar (agent + runner + examples): `./gradlew jar` → `build/libs/closurejvm-0.2.0.jar`
+- Fat jar (agent + runner + examples): `./gradlew jar` → `build/libs/basquin-0.2.0.jar`
 
 ## Flags
 
 | Flag | Meaning |
 |------|---------|
-| `-Dclosurejvm.target=<FQCN>` | Target class for the `runner.Runner` forwarder |
-| `-Dclosurejvm.forceExitOnLeak=true` | Exit the process immediately on a leak/hard invariant (demos/CI) |
-| `-Dclosurejvm.status=true` | Live AFL-style status screen (suppresses per-iteration log spam) |
-| `-Dclosurejvm.status.intervalMs=<n>` | Status redraw interval (default 1000) |
-| `-Dclosurejvm.status.forceTty=true` | Render the status box even when output is piped |
-| `-Dclosurejvm.heap.gcBeforeMeasure=true` | GC before heap baseline/measure so heap delta = retention, not allocation noise |
-| `-Dclosurejvm.native.lib=<abs path>` | Load the JVMTI native agent (same path as `-agentpath`) |
-| `-Dclosurejvm.triage.queueCapacity=<n>` | Triage handoff queue capacity (default 256) |
+| `-Dbasquin.target=<FQCN>` | Target class for the `runner.Runner` forwarder |
+| `-Dbasquin.forceExitOnLeak=true` | Exit the process immediately on a leak/hard invariant (demos/CI) |
+| `-Dbasquin.status=true` | Live AFL-style status screen (suppresses per-iteration log spam) |
+| `-Dbasquin.status.intervalMs=<n>` | Status redraw interval (default 1000) |
+| `-Dbasquin.status.forceTty=true` | Render the status box even when output is piped |
+| `-Dbasquin.heap.gcBeforeMeasure=true` | GC before heap baseline/measure so heap delta = retention, not allocation noise |
+| `-Dbasquin.native.lib=<abs path>` | Load the JVMTI native agent (same path as `-agentpath`) |
+| `-Dbasquin.triage.queueCapacity=<n>` | Triage handoff queue capacity (default 256) |
 | `-Dexamples.mode=leak\|proper` | Example behavior selector |
 | `-Dexamples.sleepMs=<n>` / `-Dexamples.threads=<n>` | Example work duration / worker count |
 | `-Dexamples.http.baseUrl=<url>` / `-Dexamples.http.routes=<csv>` | HTTP driver target config |
@@ -29,21 +29,21 @@ The command catalog and flag reference. For what the tool is and why, see the
 
 | Flag | Meaning |
 |------|---------|
-| `-Dclosurejvm.grammar=<file>` | Request grammar: route templates + parameter value space (takes precedence over a plain corpus) |
-| `-Dclosurejvm.corpusDir=<dir>` | Seed corpus of routes, one per line per file (used when no grammar is given) |
-| `-Dclosurejvm.sequencePercent=<n>` | Chance (%) an iteration runs a multi-step `@sequence` instead of a single request (default 25) |
-| `-Dclosurejvm.session=false` | Disable session handling (default on) |
-| `-Dclosurejvm.session.epoch=<n>` | Iterations per session epoch; alternates signed-on and anonymous (default 40) |
+| `-Dbasquin.grammar=<file>` | Request grammar: route templates + parameter value space (takes precedence over a plain corpus) |
+| `-Dbasquin.corpusDir=<dir>` | Seed corpus of routes, one per line per file (used when no grammar is given) |
+| `-Dbasquin.sequencePercent=<n>` | Chance (%) an iteration runs a multi-step `@sequence` instead of a single request (default 25) |
+| `-Dbasquin.session=false` | Disable session handling (default on) |
+| `-Dbasquin.session.epoch=<n>` | Iterations per session epoch; alternates signed-on and anonymous (default 40) |
 
 ### Coverage of the app under test (v0.10)
 
 | Flag | Meaning |
 |------|---------|
-| `-Dclosurejvm.coverage.jacoco=host:port[,host:port...]` | The target's JaCoCo tcpserver(s), default `localhost:6300`. Accepts a comma-separated list; a host that resolves to several addresses (a headless Service name → all pod IPs) is expanded automatically. Coverage is union-merged across every replica that responds (DD-023). |
-| `-Dclosurejvm.coverage.classes=<dir>` | Directory of the app's `.class` files, for computing covered/total |
-| `-Dclosurejvm.coverage.intervalMs=<n>` | Poll interval for the non-guided coverage driver (default 1000) |
-| `-Dclosurejvm.run.duration=<10m\|30s\|500ms\|45>` | Time-box the coverage-guided run: stop the loop and exit cleanly at the deadline (bare number = seconds). When set without an iteration count, the deadline governs. **Best-effort** — the deadline is checked between iterations, so a slow in-flight request (or a multi-step sequence) can overrun it by up to one iteration's wall time; pick an `activeDeadlineSeconds` backstop accordingly. Used by operator campaigns (DD-025) so a run ends cleanly instead of being SIGKILLed. |
-| `-Dclosurejvm.summary.out=<path>` | Write an end-of-run metrics summary (the `StatusReporter` snapshot JSON) to this path on shutdown, for a supervisor (the operator) to read. **Requires `-Dclosurejvm.status=true`** — the metrics are gated behind it, so without it the summary is valid JSON but all zeros (the runner warns loudly). |
+| `-Dbasquin.coverage.jacoco=host:port[,host:port...]` | The target's JaCoCo tcpserver(s), default `localhost:6300`. Accepts a comma-separated list; a host that resolves to several addresses (a headless Service name → all pod IPs) is expanded automatically. Coverage is union-merged across every replica that responds (DD-023). |
+| `-Dbasquin.coverage.classes=<dir>` | Directory of the app's `.class` files, for computing covered/total |
+| `-Dbasquin.coverage.intervalMs=<n>` | Poll interval for the non-guided coverage driver (default 1000) |
+| `-Dbasquin.run.duration=<10m\|30s\|500ms\|45>` | Time-box the coverage-guided run: stop the loop and exit cleanly at the deadline (bare number = seconds). When set without an iteration count, the deadline governs. **Best-effort** — the deadline is checked between iterations, so a slow in-flight request (or a multi-step sequence) can overrun it by up to one iteration's wall time; pick an `activeDeadlineSeconds` backstop accordingly. Used by operator campaigns (DD-025) so a run ends cleanly instead of being SIGKILLed. |
+| `-Dbasquin.summary.out=<path>` | Write an end-of-run metrics summary (the `StatusReporter` snapshot JSON) to this path on shutdown, for a supervisor (the operator) to read. **Requires `-Dbasquin.status=true`** — the metrics are gated behind it, so without it the summary is valid JSON but all zeros (the runner warns loudly). |
 
 ### Dashboard (v0.10)
 
@@ -51,31 +51,31 @@ The dashboard is a **separate process**; drivers push to it and it never drives 
 
 | Flag | Meaning |
 |------|---------|
-| `-Dclosurejvm.dashboard.push=host:port` | Driver side: push status/findings/config to this dashboard |
-| `-Dclosurejvm.dashboard.id=<name>` | Campaign id (defaults to `HOSTNAME`, i.e. the pod name in Kubernetes) |
-| `-Dclosurejvm.dashboard.server.port=<n>` | Dashboard side: listen port (default 7070) |
-| `-Dclosurejvm.dashboard.bind=<addr>` | Dashboard side: bind address. **Defaults to `127.0.0.1`** — this process exposes an endpoint that spends API credit, so network exposure is opt-in |
-| `-Dclosurejvm.dashboard.token=<secret>` | Shared secret required alongside the `X-ClosureJVM-Dashboard` header. Required for `/api/analyze` on a non-loopback bind |
-| `ANTHROPIC_API_KEY` / `-Dclosurejvm.claude.apiKey` | Dashboard side only: enables the "Analyze with Claude" button |
-| `-Dclosurejvm.claude.model` / `-Dclosurejvm.claude.maxTokens` | Model (default `claude-sonnet-5`) and output ceiling (default 2000) |
+| `-Dbasquin.dashboard.push=host:port` | Driver side: push status/findings/config to this dashboard |
+| `-Dbasquin.dashboard.id=<name>` | Campaign id (defaults to `HOSTNAME`, i.e. the pod name in Kubernetes) |
+| `-Dbasquin.dashboard.server.port=<n>` | Dashboard side: listen port (default 7070) |
+| `-Dbasquin.dashboard.bind=<addr>` | Dashboard side: bind address. **Defaults to `127.0.0.1`** — this process exposes an endpoint that spends API credit, so network exposure is opt-in |
+| `-Dbasquin.dashboard.token=<secret>` | Shared secret required alongside the `X-Basquin-Dashboard` header. Required for `/api/analyze` on a non-loopback bind |
+| `ANTHROPIC_API_KEY` / `-Dbasquin.claude.apiKey` | Dashboard side only: enables the "Analyze with Claude" button |
+| `-Dbasquin.claude.model` / `-Dbasquin.claude.maxTokens` | Model (default `claude-sonnet-5`) and output ceiling (default 2000) |
 
 ### Invariants (v0.2)
 
 Disabled unless set. Modes: `hard` (fail fast) or `soft` (record + continue).
 
-- `-Dclosurejvm.invariant.latency.maxMs=100`
-- `-Dclosurejvm.invariant.heapDelta.maxKb=256`
-- `-Dclosurejvm.invariant.threadDelta.max=2`
-- `-Dclosurejvm.invariant.mode=hard|soft` (per-invariant override: `...latency.mode`, etc.)
-- Evidence: `-Dclosurejvm.invariant.stack=current|all|off` (default `current`),
-  `-Dclosurejvm.invariant.stack.maxFrames=15`,
-  `-Dclosurejvm.invariant.latency.sample=true` (sample the execution stack at the latency threshold)
+- `-Dbasquin.invariant.latency.maxMs=100`
+- `-Dbasquin.invariant.heapDelta.maxKb=256`
+- `-Dbasquin.invariant.threadDelta.max=2`
+- `-Dbasquin.invariant.mode=hard|soft` (per-invariant override: `...latency.mode`, etc.)
+- Evidence: `-Dbasquin.invariant.stack=current|all|off` (default `current`),
+  `-Dbasquin.invariant.stack.maxFrames=15`,
+  `-Dbasquin.invariant.latency.sample=true` (sample the execution stack at the latency threshold)
 
 ### Reset (v0.2, preview)
 
-- `-Dclosurejvm.reset=classloader` — child-first classloader swap of the target's package
-- `-Dclosurejvm.reset.onFailure=true` — reset after a hard invariant/leak
-- `-Dclosurejvm.reset.maxResets=3`
+- `-Dbasquin.reset=classloader` — child-first classloader swap of the target's package
+- `-Dbasquin.reset.onFailure=true` — reset after a hard invariant/leak
+- `-Dbasquin.reset.maxResets=3`
 
 ## Running
 
@@ -86,7 +86,7 @@ Disabled unless set. Modes: `hard` (fail fast) or `soft` (record + continue).
 ./gradlew runRunnerJavalinLeak      # Javalin leak demo (downloads Javalin for this run)
 
 # Generic runner against any IterationTarget
-java -cp build/libs/closurejvm-0.2.0.jar runner.GenericRunner 100 your.pkg.YourTarget
+java -cp build/libs/basquin-0.2.0.jar runner.GenericRunner 100 your.pkg.YourTarget
 
 # Soak / stability
 ./gradlew runSoakProper             # 10,000 iterations, prints metrics
@@ -111,7 +111,7 @@ public class YourTarget implements IterationTarget {
 }
 ```
 
-Run: `java -cp build/libs/closurejvm-0.2.0.jar:<your-cp> runner.GenericRunner 100 your.pkg.YourTarget`
+Run: `java -cp build/libs/basquin-0.2.0.jar:<your-cp> runner.GenericRunner 100 your.pkg.YourTarget`
 
 ## Native agent (JVMTI)
 
@@ -119,9 +119,9 @@ Event-driven thread tracking (counts + leak set) with no polling or safepoint st
 the harness falls back to `ThreadMXBean` when it is not loaded.
 
 ```
-./gradlew buildNativeAgent          # -> build/native/libclosurejvmti.so (needs cc + JDK headers)
-LIB=$PWD/build/native/libclosurejvmti.so
-java -agentpath:$LIB -Dclosurejvm.native.lib=$LIB -cp ... runner.GenericRunner ...
+./gradlew buildNativeAgent          # -> build/native/libbasquinjvmti.so (needs cc + JDK headers)
+LIB=$PWD/build/native/libbasquinjvmti.so
+java -agentpath:$LIB -Dbasquin.native.lib=$LIB -cp ... runner.GenericRunner ...
 ./gradlew runGenericNativeProper    # builds + injects + short demo
 ```
 
@@ -141,27 +141,27 @@ Corpus replay & minimization (no JQF required):
 
 ```
 ./gradlew runCalculatorCorpus   # or runHttpCorpus / runJsonCorpus / runLatencyCorpus / runHeapCorpus
-./gradlew minimizeInput -Dclosurejvm.target=<FQCN> \
-  -Dclosurejvm.min.input=fuzz-results/<t>/input-<ts>.bin \
-  -Dclosurejvm.min.output=fuzz-results/<t>/minimized.bin
+./gradlew minimizeInput -Dbasquin.target=<FQCN> \
+  -Dbasquin.min.input=fuzz-results/<t>/input-<ts>.bin \
+  -Dbasquin.min.output=fuzz-results/<t>/minimized.bin
 ```
 
 Saved inputs land under `fuzz-results/<target>/` as a `.bin` plus a `.meta.txt` triage report
-(classification, timestamp, violation, stacks). Configure with `-Dclosurejvm.fuzz.resultsDir=...`.
+(classification, timestamp, violation, stacks). Configure with `-Dbasquin.fuzz.resultsDir=...`.
 
 ## HTTP driver (client-side)
 
 Drive a running app over HTTP — real end-to-end latency + 5xx-as-crash, with the live status
-screen. Harvests server-side `X-ClosureJVM-Invariant-*` headers when the app has the valve/filter.
+screen. Harvests server-side `X-Basquin-Invariant-*` headers when the app has the valve/filter.
 
 ```
 ./gradlew runHttpDrive -Dexamples.http.baseUrl=http://localhost:8080 \
-  -Dclosurejvm.invariant.latency.maxMs=50 -Dclosurejvm.invariant.mode=soft -Ddrive.iterations=200
+  -Dbasquin.invariant.latency.maxMs=50 -Dbasquin.invariant.mode=soft -Ddrive.iterations=200
 ```
 
 ## Coverage-guided exploration (v0.10)
 
-Point it at a running app that has the JaCoCo agent and the ClosureJVM valve injected
+Point it at a running app that has the JaCoCo agent and the Basquin valve injected
 (`docker-compose.coverage.yml`, or the kind demo in [deploy/k8s](../deploy/k8s/README.md)).
 
 ```bash
@@ -171,11 +171,11 @@ Point it at a running app that has the JaCoCo agent and the ClosureJVM valve inj
 
 ./gradlew runCoverageGuided \
   -Dexamples.http.baseUrl=http://localhost:8080 \
-  -Dclosurejvm.coverage.jacoco=localhost:6300 \
-  -Dclosurejvm.coverage.classes=/path/to/WEB-INF/classes \
-  -Dclosurejvm.grammar=examples/grammar/jpetstore.grammar \
-  -Dclosurejvm.invariant.latency.maxMs=25 -Dclosurejvm.invariant.mode=soft \
-  -Dclosurejvm.dashboard.push=localhost:7070
+  -Dbasquin.coverage.jacoco=localhost:6300 \
+  -Dbasquin.coverage.classes=/path/to/WEB-INF/classes \
+  -Dbasquin.grammar=examples/grammar/jpetstore.grammar \
+  -Dbasquin.invariant.latency.maxMs=25 -Dbasquin.invariant.mode=soft \
+  -Dbasquin.dashboard.push=localhost:7070
 ```
 
 Related tasks: `runHttpDriveCoverage` (coverage % without guided mutation), `runHttpDrive`
@@ -188,9 +188,9 @@ coverage reflects the whole fleet, not the one pod your reader connected to (DD-
 
 ```bash
 # explicit list of pod endpoints...
--Dclosurejvm.coverage.jacoco=10.0.1.4:6300,10.0.1.5:6300,10.0.1.6:6300
+-Dbasquin.coverage.jacoco=10.0.1.4:6300,10.0.1.5:6300,10.0.1.6:6300
 # ...or a headless Service name, which resolves to all pod IPs on its own
--Dclosurejvm.coverage.jacoco=jpetstore-jacoco.default.svc.cluster.local:6300
+-Dbasquin.coverage.jacoco=jpetstore-jacoco.default.svc.cluster.local:6300
 ```
 
 Coverage is union-merged across replicas. The status panel shows `[N/M pods]` whenever a replica
@@ -211,30 +211,30 @@ operator, applies a target against a raw app, and asserts the result. To do it b
 
 ```bash
 # 1. Build the agents image the operator injects, and load it into your cluster.
-deploy/agents-image/build.sh 0.2.0 <kind-cluster>            # => closurejvm/agents:0.2.0
+deploy/agents-image/build.sh 0.2.0 <kind-cluster>            # => basquin/agents:0.2.0
 
 # 2. Build + load the operator image (a fixed tag => IfNotPresent, so kind uses the loaded image
 #    instead of trying to pull the manifest's default controller:latest).
-docker build -t closurejvm/operator:0.2.0 operator/
-kind load docker-image closurejvm/operator:0.2.0 --name <kind-cluster>
+docker build -t basquin/operator:0.2.0 operator/
+kind load docker-image basquin/operator:0.2.0 --name <kind-cluster>
 
 # 3. Install the CRD and deploy the operator (namespaced RBAC), pinning that image.
-kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml
+kubectl apply -f operator/config/crd/bases/basquin.dev_basquintargets.yaml
 kubectl kustomize operator/config/default \
-  | sed 's#image: controller:latest#image: closurejvm/operator:0.2.0#' \
+  | sed 's#image: controller:latest#image: basquin/operator:0.2.0#' \
   | kubectl apply -f -                                       # operator + Role/RoleBinding/SA
 
 # 4. Tell the operator which agents image to inject.
-kubectl -n closurejvm-system patch deploy closurejvm-controller-manager --type=json \
-  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--agents-image=closurejvm/agents:0.2.0"}]'
+kubectl -n basquin-system patch deploy basquin-controller-manager --type=json \
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--agents-image=basquin/agents:0.2.0"}]'
 ```
 
-**Instrument an app** — apply a `ClosureJVMTarget` naming its Deployment:
+**Instrument an app** — apply a `BasquinTarget` naming its Deployment:
 
 ```yaml
-apiVersion: closurejvm.dev/v1alpha1
-kind: ClosureJVMTarget
-metadata: { name: myapp, namespace: closurejvm-system }
+apiVersion: basquin.dev/v1alpha1
+kind: BasquinTarget
+metadata: { name: myapp, namespace: basquin-system }
 spec:
   deploymentRef: { name: myapp }
   container: myapp                 # optional if the pod has one container
@@ -250,25 +250,25 @@ The operator patches the Deployment (initContainer copies the agents into a shar
 the agent flags to `jvmOptsVar`, exposes the coverage port), rolls it out, and reports:
 
 ```bash
-kubectl -n closurejvm-system get closurejvmtargets
+kubectl -n basquin-system get basquintargets
 # NAME    DEPLOYMENT   PHASE      INSTRUMENTED   AGE
 # myapp   myapp        Injected   1              30s
 
 # the coverage endpoint to point the DD-023 flag at:
-kubectl -n closurejvm-system get closurejvmtarget myapp -o jsonpath='{.status.coverageEndpoint}'
-# myapp-cjvm-jacoco.closurejvm-system.svc.cluster.local:6300
+kubectl -n basquin-system get basquintarget myapp -o jsonpath='{.status.coverageEndpoint}'
+# myapp-cjvm-jacoco.basquin-system.svc.cluster.local:6300
 ```
 
 **Uninstall / revert** — delete the target; the operator restores the Deployment to exactly its
 pre-injection state (a finalizer guarantees it) and garbage-collects the coverage Service:
 
 ```bash
-kubectl -n closurejvm-system delete closurejvmtarget myapp
+kubectl -n basquin-system delete basquintarget myapp
 ```
 
 > Status: injection (P2) + coverage Service (P3) are implemented and validated in-cluster by
 > `deploy/e2e/e2e.sh`. The Tomcat **valve** is deferred (it needs a `context.xml` entry, not a JVM
-> flag), and launching the *driver + dashboard* from the operator (`ClosureJVMCampaign`) is roadmap.
+> flag), and launching the *driver + dashboard* from the operator (`BasquinCampaign`) is roadmap.
 
 ## Writing a request grammar
 
@@ -330,7 +330,7 @@ WAR + Docker (our demo WAR, jakarta / Tomcat 10):
 ./gradlew :tomcat-war:build jar
 docker compose up tomcat                       # agent injected via CATALINA_OPTS
 # http://localhost:8080/crash?type=NPE  /latency?ms=250  /heap?kb=512
-# status UI: http://localhost:8080/closurejvm/index.html
+# status UI: http://localhost:8080/basquin/index.html
 ```
 
 Third-party apps (unmodified WARs, via the Tomcat valve) — including the JPetStore walkthrough

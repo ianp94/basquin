@@ -1,3 +1,3 @@
-rootProject.name = 'closurejvm'
+rootProject.name = 'basquin'
 include 'tomcat-war'
 include 'tomcat-valve'

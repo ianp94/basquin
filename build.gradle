@@ -1,10 +1,10 @@
-// Build configuration for ClosureJVM
+// Build configuration for Basquin
 plugins {
     id 'java'
     id 'application'
 }
 
-group = 'com.closurejvm'
+group = 'com.basquin'
 version = '0.2.0'
 // Target Java 17 bytecode so artifacts run on JDK 17 and 21+ alike.
 // CI verifies the build and tests on both 17 and 21 (see .github/workflows/ci.yml).
@@ -172,7 +172,7 @@ tasks.register('runRunnerLeak', JavaExec) {
     description = 'Run GenericRunner with ThreadLeakTarget (leak; will exit non-zero).'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.GenericRunner'
-    jvmArgs '-Dexamples.sleepMs=50', '-Dexamples.threads=2', '-Dexamples.mode=leak', '-Dclosurejvm.forceExitOnLeak=true'
+    jvmArgs '-Dexamples.sleepMs=50', '-Dexamples.threads=2', '-Dexamples.mode=leak', '-Dbasquin.forceExitOnLeak=true'
     args '1', 'examples.targets.ThreadLeakTarget'
 }
 
@@ -181,7 +181,7 @@ tasks.register('runRunnerJavalinLeak', JavaExec) {
     description = 'Run runner.Runner with demoTarget=javalinLeak (starts Javalin and calls /leak).'
     classpath = sourceSets.main.runtimeClasspath + configurations.javalinDemo
     mainClass = 'runner.Runner'
-    jvmArgs '-DdemoTarget=javalinLeak', '-Dclosurejvm.forceExitOnLeak=true', '-Dexamples.javalin.port=7071'
+    jvmArgs '-DdemoTarget=javalinLeak', '-Dbasquin.forceExitOnLeak=true', '-Dexamples.javalin.port=7071'
     args '1'
 }
 
@@ -200,7 +200,7 @@ tasks.register('runGenericLeak', JavaExec) {
     description = 'Run GenericRunner with examples.targets.ThreadLeakTarget (leak).'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.GenericRunner'
-    jvmArgs '-Dexamples.sleepMs=50', '-Dexamples.threads=2', '-Dexamples.mode=leak', '-Dclosurejvm.forceExitOnLeak=true'
+    jvmArgs '-Dexamples.sleepMs=50', '-Dexamples.threads=2', '-Dexamples.mode=leak', '-Dbasquin.forceExitOnLeak=true'
     args '1', 'examples.targets.ThreadLeakTarget'
 }
 
@@ -209,7 +209,7 @@ tasks.register('runGenericJavalinLeak', JavaExec) {
     description = 'Run GenericRunner with examples.targets.JavalinLeakTarget (requires Javalin).'
     classpath = sourceSets.main.runtimeClasspath + configurations.javalinDemo
     mainClass = 'runner.GenericRunner'
-    jvmArgs '-Dclosurejvm.forceExitOnLeak=true', '-Dexamples.javalin.port=7071'
+    jvmArgs '-Dbasquin.forceExitOnLeak=true', '-Dexamples.javalin.port=7071'
     args '1', 'examples.targets.JavalinLeakTarget'
 }
 
@@ -224,16 +224,16 @@ tasks.register('runSoakProper', JavaExec) {
 }
 
 // --- JVMTI native agent (optional) ---
-// Compiles native/closurejvmti.c to build/native/libclosurejvmti.{so,dylib}.
+// Compiles native/basquinjvmti.c to build/native/libbasquinjvmti.{so,dylib}.
 // Requires a C compiler (cc/gcc) and JDK headers; skipped gracefully if no compiler is found,
 // so it is never a hard dependency of the normal build.
 def nativeLibName = org.gradle.internal.os.OperatingSystem.current().isMacOsX()
-        ? 'libclosurejvmti.dylib' : 'libclosurejvmti.so'
+        ? 'libbasquinjvmti.dylib' : 'libbasquinjvmti.so'
 def nativeLib = layout.buildDirectory.file("native/${nativeLibName}").get().asFile
 
 tasks.register('buildNativeAgent', Exec) {
     group = 'build'
-    description = 'Compile the JVMTI native agent (native/closurejvmti.c). Requires a C compiler + JDK headers.'
+    description = 'Compile the JVMTI native agent (native/basquinjvmti.c). Requires a C compiler + JDK headers.'
     def cc = System.getenv('CC') ?: 'cc'
     onlyIf {
         try {
@@ -245,7 +245,7 @@ tasks.register('buildNativeAgent', Exec) {
     }
     workingDir 'native'
     commandLine 'make'
-    inputs.file 'native/closurejvmti.c'
+    inputs.file 'native/basquinjvmti.c'
     outputs.file nativeLib
 }
 
@@ -258,20 +258,20 @@ tasks.register('runGenericNativeProper', JavaExec) {
     mainClass = 'runner.GenericRunner'
     doFirst {
         jvmArgs "-agentpath:${nativeLib.absolutePath}",
-                "-Dclosurejvm.native.lib=${nativeLib.absolutePath}",
+                "-Dbasquin.native.lib=${nativeLib.absolutePath}",
                 '-Dexamples.sleepMs=1', '-Dexamples.threads=2', '-Dexamples.mode=proper'
     }
     args '20', 'examples.targets.ThreadLeakTarget'
 }
 
 // Standalone dashboard/aggregator (DD-013): run once, point any number of drivers at it with
-// -Dclosurejvm.dashboard.push=host:port. Deliberately not embedded in any driver process.
+// -Dbasquin.dashboard.push=host:port. Deliberately not embedded in any driver process.
 tasks.register('runDashboard', JavaExec) {
     group = 'application'
     description = 'Standalone dashboard server. Drivers push status/findings to it; never embedded in a driver or the app under test.'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.util.DashboardServer'
-    systemProperties System.getProperties().findAll { k, v -> k.toString().startsWith('closurejvm.dashboard') }
+    systemProperties System.getProperties().findAll { k, v -> k.toString().startsWith('basquin.dashboard') }
 }
 
 // One-shot smoke check of the dashboard's optional Claude-analysis path (DD-015). Exercises the
@@ -283,7 +283,7 @@ tasks.register('verifyClaude', JavaExec) {
     description = 'Send one minimal prompt through the real ClaudeAnalyzer to verify the live API path.'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.util.ClaudeSmokeCheck'
-    systemProperties System.getProperties().findAll { k, v -> k.toString().startsWith('closurejvm.claude') }
+    systemProperties System.getProperties().findAll { k, v -> k.toString().startsWith('basquin.claude') }
     // ANTHROPIC_API_KEY is inherited from the environment automatically (JavaExec passes it
     // through); ClaudeAnalyzer reads it exactly as in production.
 }
@@ -295,8 +295,8 @@ tasks.register('runHttpDrive', JavaExec) {
     description = 'Drive HTTP routes of a running app with the live status screen. Config via -Dexamples.http.baseUrl / -Dexamples.http.routes.'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.GenericRunner'
-    systemProperties System.getProperties().findAll { k, v -> k.toString().startsWith('examples.http.') || k.toString().startsWith('closurejvm.') }
-    jvmArgs '-Dclosurejvm.status=true'
+    systemProperties System.getProperties().findAll { k, v -> k.toString().startsWith('examples.http.') || k.toString().startsWith('basquin.') }
+    jvmArgs '-Dbasquin.status=true'
     args System.getProperty('drive.iterations', '200'), 'examples.targets.HttpRouteDriveTarget'
 }
 
@@ -317,8 +317,8 @@ tasks.register('stageAgents', Copy) {
     description = 'Copy agent/valve jars to build/stage/ under stable names, plus the JaCoCo agent.'
     dependsOn 'jar', ':tomcat-valve:jar', 'copyJacocoAgent'
     into layout.buildDirectory.dir('stage')
-    from(tasks.named('jar')) { rename '.*', 'closurejvm-agent.jar' }
-    from(project(':tomcat-valve').tasks.named('jar')) { rename '.*', 'closurejvm-valve.jar' }
+    from(tasks.named('jar')) { rename '.*', 'basquin-agent.jar' }
+    from(project(':tomcat-valve').tasks.named('jar')) { rename '.*', 'basquin-valve.jar' }
 }
 
 // Coverage-guided-over-HTTP driver: polls the target's JaCoCo coverage into the live panel,
@@ -328,9 +328,9 @@ tasks.register('runHttpDriveCoverage', JavaExec) {
     description = 'Drive HTTP routes while showing the app-under-test coverage % from its JaCoCo agent.'
     classpath = sourceSets.coverage.runtimeClasspath
     mainClass = 'runner.coverage.CoverageDriver'
-    jvmArgs '-Dclosurejvm.status=true'
+    jvmArgs '-Dbasquin.status=true'
     systemProperties System.getProperties().findAll { k, v ->
-        k.toString().startsWith('examples.http.') || k.toString().startsWith('closurejvm.') }
+        k.toString().startsWith('examples.http.') || k.toString().startsWith('basquin.') }
     args System.getProperty('drive.iterations', '300'), 'examples.targets.HttpRouteDriveTarget'
 }
 
@@ -341,16 +341,16 @@ tasks.register('runCoverageGuided', JavaExec) {
     description = 'Coverage-guided HTTP exploration: mutate inputs toward new coverage of the app under test.'
     classpath = sourceSets.coverage.runtimeClasspath
     mainClass = 'runner.coverage.CoverageGuidedRun'
-    jvmArgs '-Dclosurejvm.status=true'
+    jvmArgs '-Dbasquin.status=true'
     systemProperties System.getProperties().findAll { k, v ->
-        k.toString().startsWith('examples.http.') || k.toString().startsWith('closurejvm.') }
+        k.toString().startsWith('examples.http.') || k.toString().startsWith('basquin.') }
     args System.getProperty('drive.iterations', '600')
 }
 
 // JQF fuzzing (v0.3 preview) — only resolves when explicitly run
 tasks.register('runFuzzJQF', JavaExec) {
     group = 'verification'
-    description = 'Run JQF with the Iteration harness. Usage: -Dclosurejvm.target=<FQCN>'
+    description = 'Run JQF with the Iteration harness. Usage: -Dbasquin.target=<FQCN>'
     onlyIf { Boolean.getBoolean('enableJQF') }
     dependsOn 'classes', 'compileFuzzJava'
     classpath = sourceSets.fuzz.runtimeClasspath + sourceSets.main.runtimeClasspath + configurations.jqf
@@ -363,20 +363,20 @@ tasks.register('runFuzzJQF', JavaExec) {
         } else {
             logger.lifecycle('Warning: jqf-instrument agent jar not found; coverage guidance may not work')
         }
-        if (!System.getProperty('closurejvm.target')) {
-            throw new GradleException('Set -Dclosurejvm.target=<FQCN of IterationTarget>')
+        if (!System.getProperty('basquin.target')) {
+            throw new GradleException('Set -Dbasquin.target=<FQCN of IterationTarget>')
         }
         // Optional seeds & results directories
-        def seeds = System.getProperty('closurejvm.fuzz.seedsDir')
-        def tgt = System.getProperty('closurejvm.target')
+        def seeds = System.getProperty('basquin.fuzz.seedsDir')
+        def tgt = System.getProperty('basquin.target')
         def simple = tgt?.tokenize('.')?.last() ?: 'generic'
-        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: "fuzz-results/${simple.toLowerCase()}"
+        def results = System.getProperty('basquin.fuzz.resultsDir') ?: "fuzz-results/${simple.toLowerCase()}"
         if (seeds) {
-            jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
+            jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dbasquin.fuzz.preseedDir=${seeds}"
         }
         jvmArgs "-Djqf.ei.DIRECTORY=${results}"
-        if (!System.getProperty('closurejvm.fuzz.resultsDir')) {
-            jvmArgs "-Dclosurejvm.fuzz.resultsDir=${results}"
+        if (!System.getProperty('basquin.fuzz.resultsDir')) {
+            jvmArgs "-Dbasquin.fuzz.resultsDir=${results}"
         }
     }
 }
@@ -394,19 +394,19 @@ tasks.register('runFuzzCalculatorJQF', JavaExec) {
         if (agentJar != null) {
             jvmArgs "-javaagent:${agentJar.absolutePath}"
         }
-        jvmArgs '-Dclosurejvm.target=examples.targets.CalculatorFuzzTarget'
+        jvmArgs '-Dbasquin.target=examples.targets.CalculatorFuzzTarget'
         // Forward the live-status flags into the fuzz JVM so the exploration panel shows.
-        ['closurejvm.status', 'closurejvm.status.intervalMs', 'closurejvm.status.forceTty',
-         'closurejvm.status.explore'].each { k ->
+        ['basquin.status', 'basquin.status.intervalMs', 'basquin.status.forceTty',
+         'basquin.status.explore'].each { k ->
             def v = System.getProperty(k); if (v != null) jvmArgs "-D${k}=${v}"
         }
         // Allow user override of resultsDir; default to fuzz-results
-        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/calculator'
+        def results = System.getProperty('basquin.fuzz.resultsDir') ?: 'fuzz-results/calculator'
         jvmArgs "-Djqf.ei.DIRECTORY=${results}"
-        jvmArgs "-Dclosurejvm.fuzz.resultsDir=${results}"
+        jvmArgs "-Dbasquin.fuzz.resultsDir=${results}"
         // Seeds
-        def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/calculator'
-        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
+        def seeds = System.getProperty('basquin.fuzz.seedsDir') ?: 'examples/corpus/calculator'
+        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dbasquin.fuzz.preseedDir=${seeds}"
     }
 }
 
@@ -417,10 +417,10 @@ tasks.register('runCorpusReplay', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.CorpusRunner'
     doFirst {
-        def target = System.getProperty('closurejvm.target')
-        def corpus = System.getProperty('closurejvm.corpusDir') ?: 'corpus'
-        if (!target) throw new GradleException('Set -Dclosurejvm.target=<FQCN>')
-        jvmArgs "-Dclosurejvm.corpusDir=${corpus}" // allow override
+        def target = System.getProperty('basquin.target')
+        def corpus = System.getProperty('basquin.corpusDir') ?: 'corpus'
+        if (!target) throw new GradleException('Set -Dbasquin.target=<FQCN>')
+        jvmArgs "-Dbasquin.corpusDir=${corpus}" // allow override
         args target, corpus
     }
 }
@@ -431,7 +431,7 @@ tasks.register('runCalculatorCorpus', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.CorpusRunner'
     args 'examples.targets.CalculatorFuzzTarget', 'examples/corpus/calculator'
-    jvmArgs '-Dclosurejvm.fuzz.resultsDir=fuzz-results/calculator'
+    jvmArgs '-Dbasquin.fuzz.resultsDir=fuzz-results/calculator'
 }
 
 tasks.register('runHttpCorpus', JavaExec) {
@@ -440,7 +440,7 @@ tasks.register('runHttpCorpus', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.CorpusRunner'
     args 'examples.targets.HttpRequestLineTarget', 'examples/corpus/http'
-    jvmArgs '-Dclosurejvm.fuzz.resultsDir=fuzz-results/http'
+    jvmArgs '-Dbasquin.fuzz.resultsDir=fuzz-results/http'
 }
 
 tasks.register('runJsonCorpus', JavaExec) {
@@ -449,7 +449,7 @@ tasks.register('runJsonCorpus', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.CorpusRunner'
     args 'examples.targets.JsonTokenizerTarget', 'examples/corpus/json'
-    jvmArgs '-Dclosurejvm.fuzz.resultsDir=fuzz-results/json'
+    jvmArgs '-Dbasquin.fuzz.resultsDir=fuzz-results/json'
 }
 
 tasks.register('runFuzzHttpJQF', JavaExec) {
@@ -465,11 +465,11 @@ tasks.register('runFuzzHttpJQF', JavaExec) {
         if (agentJar != null) {
             jvmArgs "-javaagent:${agentJar.absolutePath}"
         }
-        jvmArgs '-Dclosurejvm.target=examples.targets.HttpRequestLineTarget'
-        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/http'
-        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dclosurejvm.fuzz.resultsDir=${results}"
-        def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/http'
-        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
+        jvmArgs '-Dbasquin.target=examples.targets.HttpRequestLineTarget'
+        def results = System.getProperty('basquin.fuzz.resultsDir') ?: 'fuzz-results/http'
+        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dbasquin.fuzz.resultsDir=${results}"
+        def seeds = System.getProperty('basquin.fuzz.seedsDir') ?: 'examples/corpus/http'
+        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dbasquin.fuzz.preseedDir=${seeds}"
     }
 }
 
@@ -486,11 +486,11 @@ tasks.register('runFuzzJsonJQF', JavaExec) {
         if (agentJar != null) {
             jvmArgs "-javaagent:${agentJar.absolutePath}"
         }
-        jvmArgs '-Dclosurejvm.target=examples.targets.JsonTokenizerTarget'
-        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/json'
-        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dclosurejvm.fuzz.resultsDir=${results}"
-        def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/json'
-        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
+        jvmArgs '-Dbasquin.target=examples.targets.JsonTokenizerTarget'
+        def results = System.getProperty('basquin.fuzz.resultsDir') ?: 'fuzz-results/json'
+        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dbasquin.fuzz.resultsDir=${results}"
+        def seeds = System.getProperty('basquin.fuzz.seedsDir') ?: 'examples/corpus/json'
+        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dbasquin.fuzz.preseedDir=${seeds}"
     }
 }
 tasks.register('runFuzzTomcatJQF', JavaExec) {
@@ -504,12 +504,12 @@ tasks.register('runFuzzTomcatJQF', JavaExec) {
     doFirst {
         def agentJar = configurations.jqf.resolve().find { it.name.contains('jqf-instrument') }
         if (agentJar != null) { jvmArgs "-javaagent:${agentJar.absolutePath}" }
-        jvmArgs '-Dclosurejvm.target=examples.server.TomcatFuzzTarget'
-        jvmArgs '-Dclosurejvm.invariant.latency.maxMs=50', '-Dclosurejvm.invariant.mode=soft', '-Dclosurejvm.invariant.latency.sample=true'
-        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/tomcat'
-        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dclosurejvm.fuzz.resultsDir=${results}"
-        def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/tomcat'
-        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
+        jvmArgs '-Dbasquin.target=examples.server.TomcatFuzzTarget'
+        jvmArgs '-Dbasquin.invariant.latency.maxMs=50', '-Dbasquin.invariant.mode=soft', '-Dbasquin.invariant.latency.sample=true'
+        def results = System.getProperty('basquin.fuzz.resultsDir') ?: 'fuzz-results/tomcat'
+        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dbasquin.fuzz.resultsDir=${results}"
+        def seeds = System.getProperty('basquin.fuzz.seedsDir') ?: 'examples/corpus/tomcat'
+        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dbasquin.fuzz.preseedDir=${seeds}"
     }
 }
 
@@ -524,11 +524,11 @@ tasks.register('runFuzzTomcatDockerJQF', JavaExec) {
     doFirst {
         def agentJar = configurations.jqf.resolve().find { it.name.contains('jqf-instrument') }
         if (agentJar != null) { jvmArgs "-javaagent:${agentJar.absolutePath}" }
-        jvmArgs '-Dclosurejvm.target=examples.targets.HttpDockerFuzzTarget'
-        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/tomcat-docker'
-        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dclosurejvm.fuzz.resultsDir=${results}"
-        def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/tomcat'
-        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
+        jvmArgs '-Dbasquin.target=examples.targets.HttpDockerFuzzTarget'
+        def results = System.getProperty('basquin.fuzz.resultsDir') ?: 'fuzz-results/tomcat-docker'
+        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dbasquin.fuzz.resultsDir=${results}"
+        def seeds = System.getProperty('basquin.fuzz.seedsDir') ?: 'examples/corpus/tomcat'
+        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dbasquin.fuzz.preseedDir=${seeds}"
         def base = System.getProperty('examples.tomcat.baseUrl') ?: 'http://localhost:8080'
         jvmArgs "-Dexamples.tomcat.baseUrl=${base}"
     }
@@ -541,7 +541,7 @@ tasks.register('runTomcatCorpus', JavaExec) {
     classpath = sourceSets.server.runtimeClasspath + sourceSets.main.runtimeClasspath
     mainClass = 'runner.CorpusRunner'
     args 'examples.server.TomcatFuzzTarget', 'examples/corpus/tomcat'
-    jvmArgs '-Dclosurejvm.invariant.latency.maxMs=50', '-Dclosurejvm.invariant.mode=soft', '-Dclosurejvm.invariant.latency.sample=true', '-Dclosurejvm.fuzz.resultsDir=fuzz-results/tomcat'
+    jvmArgs '-Dbasquin.invariant.latency.maxMs=50', '-Dbasquin.invariant.mode=soft', '-Dbasquin.invariant.latency.sample=true', '-Dbasquin.fuzz.resultsDir=fuzz-results/tomcat'
 }
 
 tasks.register('runFuzzLatencyJQF', JavaExec) {
@@ -555,13 +555,13 @@ tasks.register('runFuzzLatencyJQF', JavaExec) {
     doFirst {
         def agentJar = configurations.jqf.resolve().find { it.name.contains('jqf-instrument') }
         if (agentJar != null) { jvmArgs "-javaagent:${agentJar.absolutePath}" }
-        jvmArgs '-Dclosurejvm.target=examples.targets.LatencyFuzzTarget'
+        jvmArgs '-Dbasquin.target=examples.targets.LatencyFuzzTarget'
         // Invariant: low latency threshold, soft mode to collect
-        jvmArgs '-Dclosurejvm.invariant.latency.maxMs=50', '-Dclosurejvm.invariant.mode=soft'
-        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/latency'
-        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dclosurejvm.fuzz.resultsDir=${results}"
-        def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/latency'
-        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
+        jvmArgs '-Dbasquin.invariant.latency.maxMs=50', '-Dbasquin.invariant.mode=soft'
+        def results = System.getProperty('basquin.fuzz.resultsDir') ?: 'fuzz-results/latency'
+        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dbasquin.fuzz.resultsDir=${results}"
+        def seeds = System.getProperty('basquin.fuzz.seedsDir') ?: 'examples/corpus/latency'
+        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dbasquin.fuzz.preseedDir=${seeds}"
     }
 }
 
@@ -576,13 +576,13 @@ tasks.register('runFuzzHeapJQF', JavaExec) {
     doFirst {
         def agentJar = configurations.jqf.resolve().find { it.name.contains('jqf-instrument') }
         if (agentJar != null) { jvmArgs "-javaagent:${agentJar.absolutePath}" }
-        jvmArgs '-Dclosurejvm.target=examples.targets.HeapFuzzTarget'
+        jvmArgs '-Dbasquin.target=examples.targets.HeapFuzzTarget'
         // Invariant: low heap delta threshold, soft mode to collect
-        jvmArgs '-Dclosurejvm.invariant.heapDelta.maxKb=128', '-Dclosurejvm.invariant.mode=soft'
-        def results = System.getProperty('closurejvm.fuzz.resultsDir') ?: 'fuzz-results/heap'
-        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dclosurejvm.fuzz.resultsDir=${results}"
-        def seeds = System.getProperty('closurejvm.fuzz.seedsDir') ?: 'examples/corpus/heap'
-        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dclosurejvm.fuzz.preseedDir=${seeds}"
+        jvmArgs '-Dbasquin.invariant.heapDelta.maxKb=128', '-Dbasquin.invariant.mode=soft'
+        def results = System.getProperty('basquin.fuzz.resultsDir') ?: 'fuzz-results/heap'
+        jvmArgs "-Djqf.ei.DIRECTORY=${results}", "-Dbasquin.fuzz.resultsDir=${results}"
+        def seeds = System.getProperty('basquin.fuzz.seedsDir') ?: 'examples/corpus/heap'
+        jvmArgs "-Djqf.zest.seeds=${seeds}", "-Dbasquin.fuzz.preseedDir=${seeds}"
     }
 }
 
@@ -593,7 +593,7 @@ tasks.register('runLatencyCorpus', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.CorpusRunner'
     args 'examples.targets.LatencyFuzzTarget', 'examples/corpus/latency'
-    jvmArgs '-Dclosurejvm.invariant.latency.maxMs=50', '-Dclosurejvm.invariant.mode=soft', '-Dclosurejvm.fuzz.resultsDir=fuzz-results/latency'
+    jvmArgs '-Dbasquin.invariant.latency.maxMs=50', '-Dbasquin.invariant.mode=soft', '-Dbasquin.fuzz.resultsDir=fuzz-results/latency'
 }
 
 tasks.register('runHeapCorpus', JavaExec) {
@@ -602,7 +602,7 @@ tasks.register('runHeapCorpus', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.CorpusRunner'
     args 'examples.targets.HeapFuzzTarget', 'examples/corpus/heap'
-    jvmArgs '-Dclosurejvm.invariant.heapDelta.maxKb=128', '-Dclosurejvm.invariant.mode=soft', '-Dclosurejvm.fuzz.resultsDir=fuzz-results/heap'
+    jvmArgs '-Dbasquin.invariant.heapDelta.maxKb=128', '-Dbasquin.invariant.mode=soft', '-Dbasquin.fuzz.resultsDir=fuzz-results/heap'
 }
 
 // Minimization runner: ddmin-like reduction for an input
@@ -612,26 +612,26 @@ tasks.register('minimizeInput', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.MinimizeRunner'
     doFirst {
-        def target = System.getProperty('closurejvm.target')
-        def inFile = System.getProperty('closurejvm.min.input')
-        def outFile = System.getProperty('closurejvm.min.output') ?: 'fuzz-results/minimized.bin'
+        def target = System.getProperty('basquin.target')
+        def inFile = System.getProperty('basquin.min.input')
+        def outFile = System.getProperty('basquin.min.output') ?: 'fuzz-results/minimized.bin'
         if (!target || !inFile) {
-            throw new GradleException('Usage: -Dclosurejvm.target=<FQCN> -Dclosurejvm.min.input=<path> [-Dclosurejvm.min.output=<path>]')
+            throw new GradleException('Usage: -Dbasquin.target=<FQCN> -Dbasquin.min.input=<path> [-Dbasquin.min.output=<path>]')
         }
         args target, inFile, outFile
     }
 }
 
-// Post-process JQF outputs into ClosureJVM triage meta files
+// Post-process JQF outputs into Basquin triage meta files
 tasks.register('postprocessJQF', JavaExec) {
     group = 'verification'
     description = 'Create triage .meta.txt files for JQF coverage-interesting inputs.'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.util.PostprocessJQF'
     doFirst {
-        def jqfDir = System.getProperty('closurejvm.jqf.dir')
-        if (!jqfDir) throw new GradleException('Set -Dclosurejvm.jqf.dir=<JQF output dir>')
-        // closurejvm.fuzz.resultsDir is optional; defaults to jqfDir
+        def jqfDir = System.getProperty('basquin.jqf.dir')
+        if (!jqfDir) throw new GradleException('Set -Dbasquin.jqf.dir=<JQF output dir>')
+        // basquin.fuzz.resultsDir is optional; defaults to jqfDir
     }
 }
 
@@ -641,7 +641,7 @@ tasks.register('verifyLatencyInvariant', JavaExec) {
     description = 'Assert a very low latency threshold triggers an invariant failure.'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.Runner'
-    jvmArgs '-Dclosurejvm.target=examples.targets.ThreadLeakTarget', '-Dexamples.mode=proper', '-Dclosurejvm.invariant.latency.maxMs=1'
+    jvmArgs '-Dbasquin.target=examples.targets.ThreadLeakTarget', '-Dexamples.mode=proper', '-Dbasquin.invariant.latency.maxMs=1'
     args '1'
     ignoreExitValue = true
     def outBuf = new ByteArrayOutputStream()
@@ -664,7 +664,7 @@ tasks.register('verifyResetClassloader', JavaExec) {
     description = 'Assert classloader reset recovers from a deliberate failure in ResetSmokeTarget.'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.GenericRunner'
-    jvmArgs '-Dclosurejvm.reset=classloader', '-Dclosurejvm.reset.onFailure=true'
+    jvmArgs '-Dbasquin.reset=classloader', '-Dbasquin.reset.onFailure=true'
     args '2', 'examples.targets.ResetSmokeTarget'
     def outBuf = new ByteArrayOutputStream()
     standardOutput = outBuf
@@ -690,7 +690,7 @@ tasks.register('verifyHeapInvariant', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.GenericRunner'
     args '1', 'examples.targets.HeapBumpTarget'
-    jvmArgs '-Dclosurejvm.invariant.heapDelta.maxKb=64', '-Dexamples.heap.bumpKb=1024'
+    jvmArgs '-Dbasquin.invariant.heapDelta.maxKb=64', '-Dexamples.heap.bumpKb=1024'
     ignoreExitValue = true
     def outBuf = new ByteArrayOutputStream()
     standardOutput = outBuf
@@ -713,7 +713,7 @@ tasks.register('verifyThreadDeltaInvariant', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.GenericRunner'
     args '1', 'examples.targets.ThreadDeltaTarget'
-    jvmArgs '-Dclosurejvm.invariant.threadDelta.max=0'
+    jvmArgs '-Dbasquin.invariant.threadDelta.max=0'
     ignoreExitValue = true
     def outBuf = new ByteArrayOutputStream()
     standardOutput = outBuf
@@ -741,7 +741,7 @@ tasks.register('runLatencyInvariantDemo', JavaExec) {
     description = 'Run a demo where a very low latency threshold triggers an invariant failure (non-zero exit).'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.Runner'
-    jvmArgs '-Dclosurejvm.target=examples.targets.ThreadLeakTarget', '-Dexamples.mode=proper', '-Dclosurejvm.invariant.latency.maxMs=1'
+    jvmArgs '-Dbasquin.target=examples.targets.ThreadLeakTarget', '-Dexamples.mode=proper', '-Dbasquin.invariant.latency.maxMs=1'
     args '1'
     // Do not fail the Gradle task when the app exits non-zero; this demo is expected to fail
     ignoreExitValue = true
@@ -752,7 +752,7 @@ tasks.register('runResetClassloaderDemo', JavaExec) {
     description = 'Run a demo that fails once then resets via classloader and succeeds.'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'runner.GenericRunner'
-    jvmArgs '-Dclosurejvm.reset=classloader', '-Dclosurejvm.reset.onFailure=true'
+    jvmArgs '-Dbasquin.reset=classloader', '-Dbasquin.reset.onFailure=true'
     args '2', 'examples.targets.ResetSmokeTarget'
 }
 

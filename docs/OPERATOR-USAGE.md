@@ -1,4 +1,4 @@
-# ClosureJVM operator — usage guide
+# Basquin operator — usage guide
 
 How to actually drive the operator: instrument a running app, run a bounded coverage-guided test
 against it, and read the result. For *why* the operator is shaped this way (explicit-patch vs.
@@ -11,13 +11,13 @@ result in a kind cluster. Every YAML block below is adapted from it.
 
 ## 1. Overview
 
-The operator is two custom resources in group `closurejvm.dev/v1alpha1`:
+The operator is two custom resources in group `basquin.dev/v1alpha1`:
 
-- **`ClosureJVMTarget`** — *instrument a Deployment*. Long-lived: it patches an unmodified app
-  Deployment to load the ClosureJVM agents (thread tracker, JaCoCo coverage) and, optionally, stands
+- **`BasquinTarget`** — *instrument a Deployment*. Long-lived: it patches an unmodified app
+  Deployment to load the Basquin agents (thread tracker, JaCoCo coverage) and, optionally, stands
   up a headless coverage Service. Reversible — deleting it restores the app exactly. "This app
   carries the agents."
-- **`ClosureJVMCampaign`** — *run a bounded test*. Ephemeral: it references an already-instrumented
+- **`BasquinCampaign`** — *run a bounded test*. Ephemeral: it references an already-instrumented
   target, launches the coverage-guided driver as a `Job`, and (by default) a per-campaign dashboard,
   then aggregates the result into status. One target can be driven by many campaigns over time.
 
@@ -37,9 +37,9 @@ injects — you supply each via a flag:
 
 | Image | Flag | Used for |
 |-------|------|----------|
-| `closurejvm/agents` | `--agents-image` | the initContainer the target injection copies agents from |
-| `closurejvm/runner` | `--runner-image` | the campaign driver `Job` (coverage-guided runner) |
-| `closurejvm/dashboard` | `--dashboard-image` | the per-campaign dashboard Deployment |
+| `basquin/agents` | `--agents-image` | the initContainer the target injection copies agents from |
+| `basquin/runner` | `--runner-image` | the campaign driver `Job` (coverage-guided runner) |
+| `basquin/dashboard` | `--dashboard-image` | the per-campaign dashboard Deployment |
 
 Each flag empty falls back to a built-in default; in practice you pin them to a fixed tag, and the
 Helm chart wires all three onto the controller for you.
@@ -47,14 +47,14 @@ Helm chart wires all three onto the controller for you.
 ### Install from the published repo (no clone, no build)
 
 The chart is published to a GitHub Pages Helm repo and its default images to GitHub Container Registry
-(`ghcr.io/ianp94/closurejvm-*`), so this pulls real images with nothing to build:
+(`ghcr.io/ianp94/basquin-*`), so this pulls real images with nothing to build:
 
 ```bash
-helm repo add closurejvm https://ianp94.github.io/closureJVM/charts
+helm repo add basquin https://ianp94.github.io/basquin/charts
 helm repo update
-helm install closurejvm closurejvm/closurejvm-operator \
-  --namespace closurejvm-system --create-namespace \
-  --set fullnameOverride=closurejvm
+helm install basquin basquin/basquin-operator \
+  --namespace basquin-system --create-namespace \
+  --set fullnameOverride=basquin
 ```
 
 Then jump to §3. The rest of this section covers building the images yourself (for a local kind
@@ -71,36 +71,36 @@ cluster or a private registry).
 `kind load`s the image):
 
 ```bash
-deploy/agents-image/build.sh    0.2.0 <kind-cluster>    # => closurejvm/agents:0.2.0
-deploy/runner-image/build.sh    0.2.0 <kind-cluster>    # => closurejvm/runner:0.2.0
-deploy/dashboard-image/build.sh 0.2.0 <kind-cluster>    # => closurejvm/dashboard:0.2.0
+deploy/agents-image/build.sh    0.2.0 <kind-cluster>    # => basquin/agents:0.2.0
+deploy/runner-image/build.sh    0.2.0 <kind-cluster>    # => basquin/runner:0.2.0
+deploy/dashboard-image/build.sh 0.2.0 <kind-cluster>    # => basquin/dashboard:0.2.0
 
 # operator image (a fixed tag => IfNotPresent, so kind uses the loaded image, not controller:latest)
-docker build -t closurejvm/operator:0.2.0 operator/
-kind load docker-image closurejvm/operator:0.2.0 --name <kind-cluster>
+docker build -t basquin/operator:0.2.0 operator/
+kind load docker-image basquin/operator:0.2.0 --name <kind-cluster>
 ```
 
 ### Build + install from a checkout (local / kind)
 
 For a local kind cluster or a private registry, build the images (above) and install the chart from
 the checkout, `--set`ting the locally-built images (chart docs:
-[the chart README](../deploy/helm/closurejvm-operator/README.md)):
+[the chart README](../deploy/helm/basquin-operator/README.md)):
 
 ```bash
-helm install closurejvm ./deploy/helm/closurejvm-operator \
-  --namespace closurejvm-system --create-namespace \
-  --set fullnameOverride=closurejvm \
+helm install basquin ./deploy/helm/basquin-operator \
+  --namespace basquin-system --create-namespace \
+  --set fullnameOverride=basquin \
   --set imageTag=0.2.0 \
-  --set image.repository=closurejvm/operator \
-  --set images.agents=closurejvm/agents \
-  --set images.runner=closurejvm/runner \
-  --set images.dashboard=closurejvm/dashboard
+  --set image.repository=basquin/operator \
+  --set images.agents=basquin/agents \
+  --set images.runner=basquin/runner \
+  --set images.dashboard=basquin/dashboard
 ```
 
 (One `imageTag` sets all four image tags — for a published release it defaults to the chart's
 appVersion, so a plain `helm install` from the repo needs no version flags.)
 
-`--set fullnameOverride=closurejvm` makes the resources read as `closurejvm-controller-manager`, … to
+`--set fullnameOverride=basquin` makes the resources read as `basquin-controller-manager`, … to
 match this guide; omit it for the default `<release>-<chart>` prefix. RBAC is namespaced `Role`s (the
 operator needs no cluster-scoped grants). Note: Helm does **not** upgrade or delete CRDs — re-apply
 changed CRDs by hand on `helm upgrade`, and they (plus any remaining CRs) are left in place on
@@ -109,23 +109,23 @@ changed CRDs by hand on `helm upgrade`, and they (plus any remaining CRs) are le
 ### Or install with kustomize
 
 ```bash
-kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmtargets.yaml
-kubectl apply -f operator/config/crd/bases/closurejvm.dev_closurejvmcampaigns.yaml
-kubectl create namespace closurejvm-system
+kubectl apply -f operator/config/crd/bases/basquin.dev_basquintargets.yaml
+kubectl apply -f operator/config/crd/bases/basquin.dev_basquincampaigns.yaml
+kubectl create namespace basquin-system
 
 kubectl kustomize operator/config/default \
-  | sed 's#image: controller:latest#image: closurejvm/operator:0.2.0#' \
+  | sed 's#image: controller:latest#image: basquin/operator:0.2.0#' \
   | kubectl apply -f -                      # controller Deployment + ServiceAccount/Role/RoleBinding
 
 # then wire the three image flags onto the controller (Helm does this for you):
 for arg in \
-  --agents-image=closurejvm/agents:0.2.0 \
-  --runner-image=closurejvm/runner:0.2.0 \
-  --dashboard-image=closurejvm/dashboard:0.2.0 ; do
-  kubectl -n closurejvm-system patch deploy closurejvm-controller-manager --type=json \
+  --agents-image=basquin/agents:0.2.0 \
+  --runner-image=basquin/runner:0.2.0 \
+  --dashboard-image=basquin/dashboard:0.2.0 ; do
+  kubectl -n basquin-system patch deploy basquin-controller-manager --type=json \
     -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"$arg\"}]"
 done
-kubectl -n closurejvm-system rollout status deploy/closurejvm-controller-manager --timeout=120s
+kubectl -n basquin-system rollout status deploy/basquin-controller-manager --timeout=120s
 ```
 
 The `kubectl patch` loop appends unconditionally — re-running it by hand duplicates the args. Guard
@@ -133,19 +133,19 @@ each with a `grep -q -- '--agents-image'`-style check as `deploy/e2e/e2e.sh` doe
 which wires the flags declaratively. (The in-cluster e2e installs either way — `INSTALL=helm
 deploy/e2e/e2e.sh` exercises the chart end to end; the default uses kustomize.)
 
-## 3. Instrument an app (`ClosureJVMTarget`)
+## 3. Instrument an app (`BasquinTarget`)
 
-Point a `ClosureJVMTarget` at a Deployment in the same namespace. The operator patches that
+Point a `BasquinTarget` at a Deployment in the same namespace. The operator patches that
 Deployment's pod template — an initContainer copies the agents into a shared `emptyDir`, the agent
 flags are **appended** to the container's JVM opts env var (never replacing your heap/GC flags), the
 coverage port is exposed — then rolls it out.
 
 ```yaml
-apiVersion: closurejvm.dev/v1alpha1
-kind: ClosureJVMTarget
+apiVersion: basquin.dev/v1alpha1
+kind: BasquinTarget
 metadata:
   name: jpetstore
-  namespace: closurejvm-system
+  namespace: basquin-system
 spec:
   # WHAT to instrument — a Deployment in this namespace.
   deploymentRef:
@@ -166,7 +166,7 @@ spec:
       port: 6300                 # coverage port inside the pod (default 6300)
       includes: "org.mybatis.jpetstore.*"   # REQUIRED when enabled — no wildcard default (DD-022)
 
-  # Invariant thresholds, passed through as -Dclosurejvm.invariant.* flags.
+  # Invariant thresholds, passed through as -Dbasquin.invariant.* flags.
   invariants:
     mode: soft                   # soft (record + continue) | hard (fail the iteration). default soft
     latencyMaxMs: 25
@@ -193,58 +193,58 @@ Field notes:
 campaign will consume:
 
 ```bash
-kubectl -n closurejvm-system get closurejvmtargets
+kubectl -n basquin-system get basquintargets
 # NAME        DEPLOYMENT   PHASE      INSTRUMENTED   AGE
 # jpetstore   jpetstore    Injected   1              30s
 
-kubectl -n closurejvm-system get closurejvmtarget jpetstore -o jsonpath='{.status.coverageEndpoint}'
-# jpetstore-cjvm-jacoco.closurejvm-system.svc.cluster.local:6300
+kubectl -n basquin-system get basquintarget jpetstore -o jsonpath='{.status.coverageEndpoint}'
+# jpetstore-cjvm-jacoco.basquin-system.svc.cluster.local:6300
 ```
 
 Phases: `Pending → Injecting → Injected` (or `Reverting`/`Error`). With `coverageService: true` the
 operator creates a headless Service named after the **Deployment it targets** —
-`<deploymentRef.name>-cjvm-jacoco` (not the `ClosureJVMTarget` CR's own name; they match in this
+`<deploymentRef.name>-cjvm-jacoco` (not the `BasquinTarget` CR's own name; they match in this
 example) — and writes its DNS name to `status.coverageEndpoint`.
 
-**Or with the CLI.** The `closurejvm` CLI (download a binary for your platform from the
-[GitHub Releases](https://github.com/ianp94/closureJVM/releases), or build it with
-`make -C operator cli` → `operator/bin/closurejvm`) applies
-the same typed `ClosureJVMTarget` from flags, so you don't hand-write the YAML above — and `--wait`
+**Or with the CLI.** The `basquin` CLI (download a binary for your platform from the
+[GitHub Releases](https://github.com/ianp94/basquin/releases), or build it with
+`make -C operator cli` → `operator/bin/basquin`) applies
+the same typed `BasquinTarget` from flags, so you don't hand-write the YAML above — and `--wait`
 blocks until `Injected`:
 
 ```bash
-closurejvm instrument -n closurejvm-system --deployment jpetstore \
+basquin instrument -n basquin-system --deployment jpetstore \
   --jvm-opts-var CATALINA_OPTS \
   --coverage-includes 'org.mybatis.jpetstore.*' --coverage-service \
   --invariant-mode soft --latency-max-ms 25 --heap-delta-max-kb 256 --wait
-# Applied ClosureJVMTarget closurejvm-system/jpetstore (deployment "jpetstore")
+# Applied BasquinTarget basquin-system/jpetstore (deployment "jpetstore")
 #   phase: Injected
-# Injected ✓  coverageEndpoint=jpetstore-cjvm-jacoco.closurejvm-system.svc.cluster.local:6300
+# Injected ✓  coverageEndpoint=jpetstore-cjvm-jacoco.basquin-system.svc.cluster.local:6300
 ```
 
-`closurejvm instrument -h` lists every flag. Running a campaign / reading status via the CLI is
+`basquin instrument -h` lists every flag. Running a campaign / reading status via the CLI is
 planned; for now the campaign is applied as YAML (next section).
 
-## 4. Run a test (`ClosureJVMCampaign`)
+## 4. Run a test (`BasquinCampaign`)
 
-Once the target is `Injected`, a `ClosureJVMCampaign` drives it. The operator gates on the target
+Once the target is `Injected`, a `BasquinCampaign` drives it. The operator gates on the target
 being `Injected`, reads its `status.coverageEndpoint` for coverage, launches the driver `Job`, and
 aggregates status.
 
 ```yaml
-apiVersion: closurejvm.dev/v1alpha1
-kind: ClosureJVMCampaign
+apiVersion: basquin.dev/v1alpha1
+kind: BasquinCampaign
 metadata:
   name: jpetstore-campaign
-  namespace: closurejvm-system
+  namespace: basquin-system
 spec:
-  # WHAT to drive — an existing ClosureJVMTarget in this namespace (must be Injected before the run).
+  # WHAT to drive — an existing BasquinTarget in this namespace (must be Injected before the run).
   targetRef:
     name: jpetstore
 
   # REQUIRED — the app's HTTP entrypoint. The operator does NOT front the app with a Service of its
   # own, so name an in-cluster Service URL here (you create the app Service yourself).
-  baseURL: http://jpetstore-app.closurejvm-system.svc.cluster.local:8080
+  baseURL: http://jpetstore-app.basquin-system.svc.cluster.local:8080
 
   driver:
     # Bound the run — set EXACTLY ONE of iterations / duration (CEL-enforced).
@@ -276,18 +276,18 @@ Field notes:
 - **`driver.classesPath`** must point at real `.class` *files in the target image*. A war-only image
   (no exploded `WEB-INF/classes`) has nothing to copy and coverage reports zero — see Troubleshooting.
 
-**Or with the CLI.** `closurejvm run` creates the grammar/corpus ConfigMaps from local files (§5), applies
+**Or with the CLI.** `basquin run` creates the grammar/corpus ConfigMaps from local files (§5), applies
 the campaign, and — with `--watch` — tails it to completion, printing coverage/findings/dashboard. The
-ConfigMaps are owner-referenced to the campaign, so `kubectl delete closurejvmcampaign` GCs them:
+ConfigMaps are owner-referenced to the campaign, so `kubectl delete basquincampaign` GCs them:
 
 ```bash
-closurejvm run -n closurejvm-system --target jpetstore \
-  --base-url http://jpetstore-app.closurejvm-system.svc.cluster.local:8080 \
+basquin run -n basquin-system --target jpetstore \
+  --base-url http://jpetstore-app.basquin-system.svc.cluster.local:8080 \
   --iterations 200 \
   --grammar examples/grammar/jpetstore.grammar \
   --corpus  examples/corpus/jpetstore \
   --watch
-# Created ClosureJVMCampaign closurejvm-system/jpetstore-campaign (target "jpetstore")
+# Created BasquinCampaign basquin-system/jpetstore-campaign (target "jpetstore")
 #   grammar ConfigMap jpetstore-campaign-grammar (key jpetstore.grammar)
 #   corpus ConfigMap jpetstore-campaign-corpus (27 file(s))
 #   phase: Running
@@ -298,7 +298,7 @@ closurejvm run -n closurejvm-system --target jpetstore \
 `--corpus` reads the dir's top-level files **and** its `values/` subdir (the corpus layout), keyed by
 basename — the same flat convention the `kubectl create configmap --from-file` commands below produce.
 `--duration 10m` bounds by time instead of `--iterations`; `--no-dashboard` / `--external-push host:port`
-control the dashboard. `closurejvm run -h` lists every flag.
+control the dashboard. `basquin run -h` lists every flag.
 
 ### Load / soak mode — hammer the interesting states (`spec.mode: load`)
 
@@ -314,13 +314,13 @@ A campaign runs in one of two modes (`spec.mode`, default `explore`):
 So the workflow is: run an `explore` campaign, then point a `load` campaign at the corpus it emitted:
 
 ```yaml
-apiVersion: closurejvm.dev/v1alpha1
-kind: ClosureJVMCampaign
-metadata: { name: jpetstore-load, namespace: closurejvm-system }
+apiVersion: basquin.dev/v1alpha1
+kind: BasquinCampaign
+metadata: { name: jpetstore-load, namespace: basquin-system }
 spec:
   mode: load
   targetRef: { name: jpetstore }
-  baseURL: http://jpetstore-app.closurejvm-system.svc.cluster.local:8080
+  baseURL: http://jpetstore-app.basquin-system.svc.cluster.local:8080
   driver:
     duration: 30m                            # load is time-bounded (CEL requires duration, not iterations)
     concurrency: 50                          # parallel in-flight requests
@@ -338,7 +338,7 @@ Notes:
 Read the results from `status.load`:
 
 ```bash
-kubectl -n closurejvm-system get closurejvmcampaign jpetstore-load -o jsonpath='{.status.load}'
+kubectl -n basquin-system get basquincampaign jpetstore-load -o jsonpath='{.status.load}'
 # {"requests":1284003,"throughputRps":"713.4","latencyMs":{"p50":8,"p90":22,"p99":61,"max":240},
 #  "heapDriftKb":1840,"threadDrift":0,"violations":{"latency":12,"heap":0,"thread":0}}
 ```
@@ -349,7 +349,7 @@ are reported as end-to-end **drift** (`heapDriftKb`/`threadDrift`), measured on 
 **Or with the CLI:**
 
 ```bash
-closurejvm run -n closurejvm-system --name jpetstore-load --mode load --target jpetstore \
+basquin run -n basquin-system --name jpetstore-load --mode load --target jpetstore \
   --base-url http://jpetstore-app...:8080 \
   --duration 30m --concurrency 50 --corpus ./saved-corpus --watch
 # Completed ✓  ... load: 1284003 requests, 713.4 rps, p99 61ms, 12 latency violations
@@ -365,7 +365,7 @@ look real — is DD-018; for writing a grammar see [USAGE.md → "Writing a requ
 omit it if the ConfigMap has exactly one entry:
 
 ```bash
-kubectl -n closurejvm-system create configmap jpetstore-grammar \
+kubectl -n basquin-system create configmap jpetstore-grammar \
   --from-file=jpetstore.grammar=examples/grammar/jpetstore.grammar \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
@@ -376,14 +376,14 @@ route-seed files at the top (`cart_add.txt`, `catalog_item.txt`, …) and value 
 **non-recursive**, so pass *both* levels; each file lands as a key named by its basename:
 
 ```bash
-kubectl -n closurejvm-system create configmap jpetstore-corpus \
+kubectl -n basquin-system create configmap jpetstore-corpus \
   --from-file=examples/corpus/jpetstore/ \
   --from-file=examples/corpus/jpetstore/values/ \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 How this resolves at run time: the driver mounts the ConfigMap and runs with
-`-Dclosurejvm.corpusDir=<mount>`. The route-seed files are walked for `/`-prefixed routes, and the
+`-Dbasquin.corpusDir=<mount>`. The route-seed files are walked for `/`-prefixed routes, and the
 grammar's `@`-value-file references — e.g. `@../corpus/jpetstore/values/itemId.txt` — fall back to
 `<corpusDir>/<basename>` (i.e. the key `itemId.txt`). That's why the flat basename convention matters:
 `@../a/b/c/itemId.txt` and a ConfigMap key `itemId.txt` must line up.
@@ -396,14 +396,14 @@ garbage-collected when the campaign is deleted. The URL is published to `status.
 ClusterIP with **no auth**, so reach it with a port-forward:
 
 ```bash
-kubectl -n closurejvm-system get closurejvmcampaign jpetstore-campaign -o jsonpath='{.status.dashboardURL}'
-# http://jpetstore-campaign-dashboard.closurejvm-system.svc.cluster.local:7070
+kubectl -n basquin-system get basquincampaign jpetstore-campaign -o jsonpath='{.status.dashboardURL}'
+# http://jpetstore-campaign-dashboard.basquin-system.svc.cluster.local:7070
 
-kubectl -n closurejvm-system port-forward svc/jpetstore-campaign-dashboard 7070:7070
+kubectl -n basquin-system port-forward svc/jpetstore-campaign-dashboard 7070:7070
 # then open http://localhost:7070
 
 # ...or let the CLI find the dashboard pod and forward it:
-closurejvm dashboard -n closurejvm-system --campaign jpetstore-campaign
+basquin dashboard -n basquin-system --campaign jpetstore-campaign
 # Dashboard for "jpetstore-campaign" at http://localhost:7070  (Ctrl-C to stop)
 ```
 
@@ -418,7 +418,7 @@ dashboard:
 ```
 ```yaml
 dashboard:
-  externalPush: "closurejvm-dashboard.closurejvm-system.svc:7070"   # push to a shared, long-lived one
+  externalPush: "basquin-dashboard.basquin-system.svc:7070"   # push to a shared, long-lived one
 ```
 
 `externalPush` fans many campaigns into one dashboard for cross-campaign comparison. `enabled` is a
@@ -433,15 +433,15 @@ The driver writes a machine-readable summary the operator surfaces in campaign s
 scraping needed:
 
 ```bash
-kubectl -n closurejvm-system get closurejvmcampaign
+kubectl -n basquin-system get basquincampaign
 # NAME                 TARGET      PHASE       COVERAGE   FINDINGS   AGE
 # jpetstore-campaign   jpetstore   Completed   23.1       19         5m
 
-kubectl -n closurejvm-system get closurejvmcampaign jpetstore-campaign -o yaml | less
+kubectl -n basquin-system get basquincampaign jpetstore-campaign -o yaml | less
 # status.phase / coveragePct / findings / dashboardURL / driverJob / startTime / completionTime
 
 # ...or the CLI, which renders targets + campaigns together (add --watch to follow):
-closurejvm status -n closurejvm-system
+basquin status -n basquin-system
 # TARGET      DEPLOYMENT   PHASE      COVERAGE-ENDPOINT
 # jpetstore   jpetstore    Injected   jpetstore-cjvm-jacoco...:6300
 #
@@ -455,7 +455,7 @@ driver Job) → **`Running`** (driver Job active) → **`Completed`** (Job succe
 tail its logs to triage a run:
 
 ```bash
-kubectl -n closurejvm-system logs job/$(kubectl -n closurejvm-system get closurejvmcampaign \
+kubectl -n basquin-system logs job/$(kubectl -n basquin-system get basquincampaign \
   jpetstore-campaign -o jsonpath='{.status.driverJob}')
 ```
 
@@ -472,11 +472,11 @@ Delete the CRs; owner references and finalizers do the rest.
 
 ```bash
 # Delete the campaign FIRST — owner refs GC its driver Job + dashboard.
-kubectl -n closurejvm-system delete closurejvmcampaign jpetstore-campaign
+kubectl -n basquin-system delete basquincampaign jpetstore-campaign
 
 # Then the target — a finalizer reverts the Deployment to its exact pre-injection state
 # (initContainer/volume/env/port removed, jvmOptsVar restored) and GCs the coverage Service.
-kubectl -n closurejvm-system delete closurejvmtarget jpetstore
+kubectl -n basquin-system delete basquintarget jpetstore
 ```
 
 Delete the campaign before the target: the campaign's driver Job depends on the target's coverage
@@ -487,7 +487,7 @@ outlive campaigns.
 
 - **Target stuck `Pending`, never `Injected`.** The operator observed the CR but hasn't injected.
   Check `--agents-image` is wired onto the controller and pullable; check the operator logs for RBAC
-  `forbidden` errors (`kubectl -n <ns> logs deploy/closurejvm-controller-manager`); confirm
+  `forbidden` errors (`kubectl -n <ns> logs deploy/basquin-controller-manager`); confirm
   `deploymentRef.name` matches a real Deployment in the *same* namespace, and that `container` names a
   real container when the pod has more than one.
 - **No `status.coverageEndpoint`.** You didn't set `coverageService: true`, or coverage isn't enabled.
@@ -500,7 +500,7 @@ outlive campaigns.
   to copy (Tomcat only unpacks the WAR at runtime, so the files aren't in the image layers). The image
   must ship the classes as files — the e2e explodes `ROOT.war` into `webapps/ROOT/` for exactly this
   reason. Point `classesPath` at the real in-image location, or bake an exploded webapp. The reason and
-  message are in `status.conditions` (`kubectl get closurejvmcampaign -o yaml`), not only in pod logs.
+  message are in `status.conditions` (`kubectl get basquincampaign -o yaml`), not only in pod logs.
 - **Campaign `Failed` for other reasons.** Check `status.conditions[].reason`/`message`, then tail
   `job/<status.driverJob>` logs. Common causes: `baseURL` unreachable from the driver pod (wrong
   Service name/namespace/port → `DriverFailed`), or the target reverted/was deleted mid-run

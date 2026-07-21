@@ -21,11 +21,11 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the Project itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- closurejvmcampaign_editor_role.yaml
-- closurejvmcampaign_viewer_role.yaml
+- basquincampaign_editor_role.yaml
+- basquincampaign_viewer_role.yaml
 # The scaffolded per-CRD "editor"/"viewer" ClusterRoles are omitted: they are unbound admin helpers
 # the operator itself never uses, and leaving them out keeps the install's only ClusterRole the
 # RoleBinding-scoped manager-role, matching the namespaced trust model (docs/OPERATOR-DESIGN.md §6).
 # The files remain on disk (config/rbac/*_role.yaml) for anyone who wants to apply them deliberately.
-#- closurejvmtarget_editor_role.yaml
-#- closurejvmtarget_viewer_role.yaml
+#- basquintarget_editor_role.yaml
+#- basquintarget_viewer_role.yaml

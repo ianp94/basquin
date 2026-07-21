@@ -8,7 +8,7 @@ import java.util.List;
 import static org.junit.Assert.*;
 
 /**
- * Endpoint parsing is the seam where a mistyped {@code -Dclosurejvm.coverage.jacoco} flag becomes
+ * Endpoint parsing is the seam where a mistyped {@code -Dbasquin.coverage.jacoco} flag becomes
  * either a clear error or a silently-wrong campaign (DD-023). Lives in {@code runner.coverage} to
  * read {@link Endpoint}'s package-private {@code host}/{@code port}. The actual union merge needs a
  * live JaCoCo tcpserver, so it is exercised in a real multi-replica run, not here.

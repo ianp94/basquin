@@ -97,7 +97,7 @@ public final class RequestBoundary {
             else pending = endError;
         } finally {
             try {
-                headers = invariantHeaders();
+                headers = exitHeaders();
             } finally {
                 ITERATION_LOCK.unlock();
             }
@@ -105,23 +105,28 @@ public final class RequestBoundary {
         return new ExitResult(headers, pending);
     }
 
-    /** The invariant headers to set on the response (empty if none). Caller gates on !isCommitted(). */
-    private static Map<String, String> invariantHeaders() {
+    /** Headers to set on the EXPLORE exit: invariant evidence (if any) + the always-present cost header.
+     *  Read here — before onExit releases ITERATION_LOCK — so the numbers belong to THIS request. */
+    private static Map<String, String> exitHeaders() {
+        Map<String, String> h = new LinkedHashMap<>();
         try {
             List<String> violations = Agent.getLastInvariantViolations();
             if (violations != null && !violations.isEmpty()) {
-                Map<String, String> h = new LinkedHashMap<>();
                 h.put("X-Basquin-Invariant-Count", String.valueOf(violations.size()));
                 String first = violations.get(0);
                 if (first != null) {
                     if (first.length() > 200) first = first.substring(0, 200);
                     h.put("X-Basquin-Invariant-Detail", first);
                 }
-                return h;
             }
         } catch (Throwable ignored) {
-            // header reporting is best-effort
+            // invariant reporting is best-effort
         }
-        return NO_HEADERS;
+        try {
+            h.put("X-Basquin-Cost", Agent.lastCostCsv());
+        } catch (Throwable ignored) {
+            // cost reporting is best-effort
+        }
+        return h.isEmpty() ? NO_HEADERS : h;
     }
 }

@@ -71,4 +71,22 @@ public class RequestBoundaryTest {
         RuntimeException boom = new RuntimeException("app blew up");
         Assert.assertSame(boom, RequestBoundary.onExit(boom).toThrow);
     }
+
+    @Test public void exploreExitEmitsCostHeader() {
+        LoadMode.setExplore();
+        RequestBoundary.onEnter("/app/page", null);           // EXPLORE_BEGAN
+        RequestBoundary.ExitResult r = RequestBoundary.onExit(null);
+        String cost = r.headers.get("X-Basquin-Cost");
+        Assert.assertNotNull("explore exit must emit X-Basquin-Cost", cost);
+        Assert.assertTrue("cost is latencyMs,heapDeltaKb,threadDelta", cost.matches("^-?\\d+,-?\\d+,-?\\d+$"));
+    }
+
+    @Test public void loadAndControlEmitNoCostHeader() {
+        LoadMode.setLoad(60_000L);
+        RequestBoundary.onEnter("/app", null);                 // LOAD_PASSTHROUGH
+        Assert.assertNull(RequestBoundary.onExit(null).headers.get("X-Basquin-Cost"));
+        LoadMode.setExplore();
+        RequestBoundary.onEnter("/__basquin/drift", null);     // CONTROL_HANDLED
+        Assert.assertNull(RequestBoundary.onExit(null).headers.get("X-Basquin-Cost"));
+    }
 }

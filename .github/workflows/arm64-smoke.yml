@@ -1,0 +1,62 @@
+name: arm64 smoke (native agent)
+
+# Closes the "arm64: build-validated only" caveat (DD-027, #38 review): release CI cross-compiles
+# the JVMTI .so for arm64 under QEMU but nothing ever LOADED it in a real arm64 JVM — and a bad
+# -agentpath library is fatal at JVM startup, so every injected pod on an arm64 cluster would
+# crash rather than degrade. This job compiles the .so natively on a real arm64 runner, loads it
+# via -agentpath in a real arm64 JVM, asserts the JVMTI hooks actually engaged (not the
+# ThreadMXBean fallback), and runs a full iteration loop with the leak oracle on it.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'native/**'
+      - 'agent/**'
+      - '.github/workflows/arm64-smoke.yml'
+  pull_request:
+    paths:
+      - 'native/**'
+      - 'agent/**'
+      - '.github/workflows/arm64-smoke.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: arm64-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jvmti-arm64:
+    name: Build + load the JVMTI agent on real arm64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: chmod +x gradlew
+      - name: Set up Java 17 (arm64 temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/gradle-build-action@v3
+      - name: Build classes + the native agent (natively, no QEMU)
+        run: |
+          ./gradlew classes buildNativeAgent -q
+          file build/native/libbasquinjvmti.so | tee /dev/stderr | grep -q "ARM aarch64"
+      - name: Load the .so in a real arm64 JVM and assert the JVMTI hooks engaged
+        run: |
+          cat > /tmp/Arm64Smoke.java <<'EOF'
+          public class Arm64Smoke {
+            public static void main(String[] args) {
+              boolean active = agent.NativeThreadTracker.isActive();
+              System.out.println("[arm64-smoke] native-active=" + active);
+              if (!active) System.exit(2); // loaded but hooks not tracking = fallback, not a pass
+            }
+          }
+          EOF
+          javac -cp build/classes/java/main -d /tmp /tmp/Arm64Smoke.java
+          # -agentpath failing IS the advertised risk: it kills the JVM at startup, failing this step.
+          java "-agentpath:$PWD/build/native/libbasquinjvmti.so" \
+               "-Dbasquin.native.lib=$PWD/build/native/libbasquinjvmti.so" \
+               -cp "build/classes/java/main:/tmp" Arm64Smoke
+      - name: Full iteration loop with the native agent (leak oracle path)
+        run: ./gradlew runGenericNativeProper -q

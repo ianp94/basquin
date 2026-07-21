@@ -40,8 +40,14 @@ reading — which needs no lock at all.
    - **load:** passthrough — no lock, no deltas. Requests run concurrently at app speed.
 2. **App-side drift via a pollable agent endpoint.** A cheap agent thread samples absolute
    `Runtime.totalMemory()-freeMemory()` and the thread count every few seconds and serves the series
-   on a small endpoint; the driver polls it — the same shape as the coverage endpoint. **An endpoint,
-   not response headers, on purpose:** the benchmark showed JSPWiki flushes its response early, so
+   on a small endpoint; the driver polls it. **This endpoint is net-new agent-side server code**
+   (#68 review): there is no HTTP/control surface in the agent or valve today — the valve only handles
+   app traffic, and the one in-repo HTTP server (`DashboardServer`) is a separate isolated process.
+   It mirrors the *coverage wiring shape* (a `host:port` string handed to the driver Job), but not any
+   existing in-agent server — note JaCoCo coverage isn't even HTTP, it's JaCoCo's own raw-TCP
+   remote-control protocol in a third-party jar (`JacocoCoverageProvider` uses `java.net.Socket`). So
+   the drift server is built fresh; only the operator plumbing pattern is reused. **An endpoint, not
+   response headers, on purpose:** the benchmark showed JSPWiki flushes its response early, so
    header-stamping fails on real apps; polling is robust to that. NB: this is a *fresh absolute read*,
    NOT the #59 CSV sampler's heap columns (those are the lock-dependent `ctx.heapDeltaBytes` delta —
    #63 review). The #59 sampler contributes the timer/CSV *cadence* idea, not the value.
@@ -49,15 +55,17 @@ reading — which needs no lock at all.
    workers; **add 5xx/status detection** — new work (`LoadRun.fire()` currently swallows exceptions
    and ignores status, per DD-026 follow-ups and the #63 review). End-to-end latency is the correct
    load metric (what users feel; makes the k6 comparison apples-to-apples).
-4. **The target enters load mode via a driver-owned runtime toggle over the existing HTTP channel.**
+4. **The target enters load mode via a driver-owned runtime toggle on the app's own HTTP port.**
    The lock is all-or-nothing (a request skipping the lock corrupts a concurrent locked request's
    delta), so mode is **target-wide for the campaign's duration**, not per-request. The driver sends
-   a control request that flips the valve to load mode at campaign start and reverts at end; the agent
-   **auto-reverts to explore after inactivity** as a crash-safety. **Rejected alternative:** the
+   a **distinguished control request on the app's HTTP port, which the valve already intercepts**
+   (there is no separate control endpoint today — #68 review) that flips the valve to load mode at
+   campaign start and reverts at end; the agent **auto-reverts to explore after inactivity** as a
+   crash-safety. **Rejected alternative:** the
    operator appends `-Dbasquin.mode=load` to the target's JVM opts and rolls the pod — because (a) it
    makes a *campaign* mutate the *target's* Deployment, violating the two-CRD boundary; (b) it needs a
-   pod restart per load campaign; whereas the driver toggle needs no restart and rides the control
-   surface the drift endpoint already adds.
+   pod restart per load campaign; whereas the driver toggle needs no restart and reaches the target
+   over its already-intercepted app port (no new listener needed just for the toggle).
 5. **Operator change is small.** It already gates on Injected and launches the load driver for
    `spec.mode: load`; it additionally passes the **drift endpoint** to the driver (mirrors the
    coverage-endpoint wiring). No new CRD surface.

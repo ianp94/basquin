@@ -9,8 +9,11 @@ retention, and thread/executor leaks are first-class findings — not just excep
 
 [![CI](https://github.com/ianp94/basquin/actions/workflows/ci.yml/badge.svg)](https://github.com/ianp94/basquin/actions/workflows/ci.yml)
 [![Operator e2e](https://github.com/ianp94/basquin/actions/workflows/operator-e2e.yml/badge.svg)](https://github.com/ianp94/basquin/actions/workflows/operator-e2e.yml)
+[![Latest release](https://img.shields.io/github/v/release/ianp94/basquin?label=release&color=5b3df5)](https://github.com/ianp94/basquin/releases/latest)
 
 📖 **[Documentation, guides & demos → ianp94.github.io/basquin](https://ianp94.github.io/basquin/)**
+· 🚀 **[Releases & live status](https://ianp94.github.io/basquin/releases.html)**
+· 📝 **[Changelog](CHANGELOG.md)** (release-level, linking each component's own)
 
 ![Basquin full stack in a kind cluster](docs/demo-k8s.svg)
 

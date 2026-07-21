@@ -427,6 +427,20 @@ the P1–P4 injection work (a campaign needs a working instrumented target). Des
 - [ ] Field indexer on `spec.deploymentRef.name` so the Deployment mapping-watch does a targeted lookup instead of a namespace-wide list+filter (PR #11 review; fine at current scale, optimization for high target-count/churn namespaces)
 - [x] **Deeper content-drift detection** — `injectionApplied` now verifies the agent flags in the target container's `jvmOptsVar` AND the shared volume mount, not just the annotation + initContainer, so a stripped/edited env (agents silently stop loading) is re-healed rather than read as steady-state Injected. envtest covers the env-strip drift case. *(surfaced by the in-cluster e2e)*
 - [x] Operator e2e in CI — `.github/workflows/operator-e2e.yml` builds the JPetStore WAR (mvn) + every image, Helm-installs the operator into an ephemeral kind cluster, and runs the full `deploy/e2e/e2e.sh` (injection + campaign + load + dashboard) on operator/deploy/runner/agent changes. Guards the in-cluster path (RBAC, real images, agent loading) beyond envtest.
+- [ ] **E2e pipeline speed** — the kind e2e is ~8 min/run and PR-blocking; keep it (it's the test
+      that catches what envtest can't), but reclaim the ~3 min that is build plumbing, not testing
+      (analysis from step timings of run 29791523687, 2026-07-21: ~1 min setup incl. 45s WAR build +
+      409s e2e.sh). No test-semantics changes:
+  - [ ] Parallelize the four image builds + kind cluster creation in `e2e.sh` (`&`/`wait` — all
+        five are independent; builds are sequential today) *(~1–1.5 min)*
+  - [ ] Docker layer caching for the operator image in CI (`docker buildx --cache-from/--cache-to
+        type=gha`) — the golang:1.21 multi-stage build re-downloads all Go modules every run *(~1 min warm)*
+  - [ ] Cache the built JPetStore WAR keyed on `JPETSTORE_SHA` (not just `~/.m2`) — the upstream
+        commit is pinned, so skip the mvn build entirely on cache hit *(~45s)*
+  - [ ] `concurrency: cancel-in-progress` on `operator-e2e.yml` so push-after-push doesn't queue
+        stale 8-min runs
+  - Optional, mild signal trade-off (only if the above isn't enough): explore `iterations: 200`→100
+    (assertion is only non-zero coverage) *(~30–60s)*; load `duration: 45s`→30s *(~15s)*
 - [ ] Validating enforcement for `container` required-when-ambiguous (a CRD schema can't express "required only when the pod has >1 container") — pairs with P2
 - [ ] Namespaced metrics security: re-enable a metrics-protection approach that needs no cluster-scoped binding (the kube-rbac-proxy sidecar was dropped in P1 because it requires a `system:auth-delegator` ClusterRoleBinding)
 - [ ] **Multi-runtime profiles** (`runtimeProfile: jvm | node | …`) — the forward reason for Go: the CR/reconcile/inject/revert control plane is runtime-agnostic; a new profile supplies different agents/flags without touching the machinery

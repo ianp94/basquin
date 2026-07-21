@@ -94,8 +94,13 @@ fields are final; `pheromone` is monitor-guarded state owned by `CostCorpus`.
 - `CorpusEntry selectParent(Random rnd)` — ε-greedy: ε-uniform else roulette by pheromone; returns the
   **entry** (so the loop can reinforce it). Off / cold-start / zero-total → uniform. Synchronized.
 - `void reinforce(CorpusEntry parent, double childCost)` — `parent.pheromone += min(childCost,
-  depositCap × emaCost)`. If `parent` was already evicted, the deposit harmlessly vanishes with the
-  object — **no `contains` check needed** (documented so nobody adds one). Synchronized.
+  depositCap × emaCost)`, and the deposit is also added to the running `totalPheromone`. **Correctness
+  depends on call ordering, not a `contains` check:** `reinforce` MUST run before the child's `consider`
+  (the only evictor), so the parent is still a live entry and `totalPheromone` stays equal to the sum of
+  live pheromone. Reinforcing an *already-evicted* parent is **not** harmless — it would drift
+  `totalPheromone` above the live sum and silently corrupt subsequent roulette draws; the ordering is
+  what prevents that (do **not** add a `contains` check as a substitute, and do **not** reorder
+  `reinforce` after `consider`). Synchronized.
 - `void evaporate()` — `pheromone *= decay` for all entries; also scales the running total. Synchronized.
 - Retention sets a new entry's `pheromone = emaCost + cost`.
 - `evictIfOverCap` evicts min-`pheromone` (pheromone on) or min-`cost` (off) non-coverage entry.
@@ -150,7 +155,8 @@ untouched here; DD-031's `X-Basquin-Cost` path stays a single string-concat + ma
   uniform (roughly flat distribution); pheromone off → uniform; zero-total/cold-start → uniform, no
   crash.
 - **`reinforce`:** parent pheromone rises by the (capped) child cost; a deposit above `depositCap×EMA`
-  is clamped; reinforce on an evicted entry is a harmless no-op.
+  is clamped; a negative test pins that reinforcing an *evicted* parent drifts the running total
+  (corrupting selection) — proving why reinforce-before-consider ordering is load-bearing, not optional.
 - **`evaporate`:** pheromone × decay; running total stays consistent with the sum after evaporation;
   the sticky-spike scenario (one capped spike) returns near baseline within the computed ~cycle count.
 - **eviction:** with pheromone on, the min-*pheromone* (not min-cost) non-coverage entry is evicted; a

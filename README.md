@@ -1,6 +1,6 @@
-<h1 align="center">Basquin</h1>
-
 <p align="center"><img src="docs/logo.svg" width="96" alt="Basquin logo"></p>
+
+<h1 align="center">Basquin</h1>
 
 **Kubernetes-native fuzz and load testing for JVM web apps — where the bug oracle is availability,
 not just crashes.**

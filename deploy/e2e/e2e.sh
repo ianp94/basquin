@@ -66,9 +66,19 @@ say "Ensure kind cluster '$CLUSTER' (parallel with image builds)"
 ( kind get clusters | grep -qx "$CLUSTER" || kind create cluster --name "$CLUSTER" ) \
   > /tmp/e2e-cluster.log 2>&1 & cluster_pid=$!
 
+# PREBUILT_OPERATOR=1: CI pre-builds the operator image with a persistent buildx layer cache
+# (operator-e2e.yml) — skip the local, uncached rebuild if that image is already in the daemon.
+build_operator() {
+  if [ "${PREBUILT_OPERATOR:-}" = "1" ] && docker image inspect "$OPERATOR_IMAGE" >/dev/null 2>&1; then
+    echo "operator image prebuilt ($OPERATOR_IMAGE) — skipping docker build"
+    return 0
+  fi
+  docker build -t "$OPERATOR_IMAGE" "$ROOT/operator"
+}
+
 say "Build images in parallel (agents, operator, runner, dashboard)"
 bash "$ROOT/deploy/agents-image/build.sh"    "$TAG" > /tmp/e2e-build-agents.log    2>&1 & agents_pid=$!
-docker build -t "$OPERATOR_IMAGE" "$ROOT/operator"  > /tmp/e2e-build-operator.log  2>&1 & operator_pid=$!
+build_operator                                      > /tmp/e2e-build-operator.log  2>&1 & operator_pid=$!
 bash "$ROOT/deploy/runner-image/build.sh"    "$TAG" > /tmp/e2e-build-runner.log    2>&1 & runner_pid=$!
 bash "$ROOT/deploy/dashboard-image/build.sh" "$TAG" > /tmp/e2e-build-dashboard.log 2>&1 & dashboard_pid=$!
 build_pids=("$agents_pid" "$operator_pid" "$runner_pid" "$dashboard_pid")

@@ -25,7 +25,8 @@ cd "$REPO_ROOT"
 # run a stripped copy to be safe.
 GRADLEW="./gradlew"
 if head -1 ./gradlew | grep -q $'\r'; then
-  tr -d '\r' < ./gradlew > .gradlew.lf && chmod +x .gradlew.lf && GRADLEW="./.gradlew.lf"
+  GRADLEW_TMP=".gradlew.$$.lf"
+  tr -d '\r' < ./gradlew > "$GRADLEW_TMP" && chmod +x "$GRADLEW_TMP" && GRADLEW="./$GRADLEW_TMP"
 fi
 
 echo "==> Building agent jars"
@@ -37,7 +38,7 @@ echo "==> Building agent jars"
 # checkout (the case this handling exists for) the query would run the broken original gradlew, fail
 # silently, and TAG would wrongly fall back to "dev".
 VERSION="$("$GRADLEW" -q properties 2>/dev/null | awk -F': ' '/^version:/{print $2}' || true)"
-[ -f .gradlew.lf ] && rm -f .gradlew.lf || true
+rm -f ".gradlew.$$.lf" 2>/dev/null || true
 TAG="${1:-${VERSION:-dev}}"
 KIND_CLUSTER="${2:-}"
 

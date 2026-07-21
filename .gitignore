@@ -1,5 +1,7 @@
 agents.md
 .gradle/*
+# CRLF-stripped gradlew copies the build scripts create (self-deleting, but not on failure)
+.gradlew.*
 build/*
 fuzz-results
 tomcat-war/build

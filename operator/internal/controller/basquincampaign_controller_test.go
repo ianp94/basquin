@@ -556,8 +556,8 @@ var _ = Describe("BasquinCampaign Controller (P5a)", func() {
 		Expect(err).NotTo(HaveOccurred())
 		got := &basquinv1alpha1.BasquinCampaign{}
 		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
-		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.CampaignRunning)) // not Provisioning
-		Expect(getJob(jobKey).Annotations[specHashAnnotation]).To(Equal(h1))   // same Job, same hash
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.CampaignRunning))  // not Provisioning
+		Expect(getJob(jobKey).Annotations[specHashAnnotation]).To(Equal(h1)) // same Job, same hash
 	})
 
 	// --- P5b: per-campaign dashboard ------------------------------------------------------------

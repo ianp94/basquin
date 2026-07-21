@@ -21,6 +21,11 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "list", "watch", "create", "update"]
+  # Per-campaign dashboard token Secret. No delete (owner-referenced to the campaign, so Kubernetes
+  # GCs it) and no update (the token is minted once, never rotated mid-campaign).
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create"]
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch"]

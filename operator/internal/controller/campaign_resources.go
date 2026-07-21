@@ -53,7 +53,7 @@ func driverJobName(c *basquinv1alpha1.BasquinCampaign) string { return c.Name + 
 // buildDriverJob builds the coverage-guided driver Job. appImage is the target's app-container image
 // (source of the .class files); coverageEndpoint is the target's status.coverageEndpoint;
 // dashboardPush is the resolved dashboard host:port to push status/findings to ("" = don't push).
-func buildDriverJob(c *basquinv1alpha1.BasquinCampaign, appImage, coverageEndpoint, runnerImage, dashboardPush string) *batchv1.Job {
+func buildDriverJob(c *basquinv1alpha1.BasquinCampaign, appImage, coverageEndpoint, runnerImage, dashboardPush, tokenSecret string) *batchv1.Job {
 	d := &c.Spec.Driver
 	load := c.Spec.Mode == "load"
 
@@ -95,6 +95,11 @@ func buildDriverJob(c *basquinv1alpha1.BasquinCampaign, appImage, coverageEndpoi
 		props = append(props,
 			"-Dbasquin.dashboard.push="+dashboardPush,
 			"-Dbasquin.dashboard.id="+c.Name)
+		// Authenticate our pushes to an operator-owned dashboard. Empty for externalPush: that
+		// dashboard isn't ours, so we have no token for it and must not send a bogus one.
+		if tokenSecret != "" {
+			props = append(props, "-Dbasquin.dashboard.token=$("+dashboardTokenEnvVar+")")
+		}
 	}
 
 	// The shared classes volume + extract/verify initContainers are for JaCoCo coverage — explore only.
@@ -177,7 +182,7 @@ func buildDriverJob(c *basquinv1alpha1.BasquinCampaign, appImage, coverageEndpoi
 			Namespace: c.Namespace,
 			Labels: map[string]string{
 				"app.kubernetes.io/managed-by": "basquin-operator",
-				"basquin.dev/campaign":      c.Name,
+				"basquin.dev/campaign":         c.Name,
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -186,7 +191,7 @@ func buildDriverJob(c *basquinv1alpha1.BasquinCampaign, appImage, coverageEndpoi
 				// component=driver distinguishes these from the per-campaign dashboard pod, which shares
 				// the basquin.dev/campaign label — so the rerun pod-cleanup can target driver pods only.
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
-					"basquin.dev/campaign":     c.Name,
+					"basquin.dev/campaign":        c.Name,
 					"app.kubernetes.io/component": "driver",
 				}},
 				Spec: corev1.PodSpec{
@@ -197,7 +202,7 @@ func buildDriverJob(c *basquinv1alpha1.BasquinCampaign, appImage, coverageEndpoi
 						Name:                     "driver",
 						Image:                    runnerImage,
 						ImagePullPolicy:          corev1.PullIfNotPresent,
-						Env:                      []corev1.EnvVar{{Name: "JAVA_TOOL_OPTIONS", Value: strings.Join(props, " ")}},
+						Env:                      driverEnv(tokenSecret, props),
 						Args:                     args,
 						VolumeMounts:             mounts,
 						TerminationMessagePath:   "/dev/termination-log",
@@ -207,4 +212,15 @@ func buildDriverJob(c *basquinv1alpha1.BasquinCampaign, appImage, coverageEndpoi
 			},
 		},
 	}
+}
+
+// driverEnv builds the driver container env. The dashboard-token SecretKeyRef must come BEFORE
+// JAVA_TOOL_OPTIONS so Kubernetes' $(VAR) expansion resolves it inside the -D flag; without a token
+// (dashboard disabled, or an externalPush dashboard we don't own) only JAVA_TOOL_OPTIONS is set.
+func driverEnv(tokenSecret string, props []string) []corev1.EnvVar {
+	var env []corev1.EnvVar
+	if tokenSecret != "" {
+		env = append(env, dashboardTokenEnv(tokenSecret))
+	}
+	return append(env, corev1.EnvVar{Name: "JAVA_TOOL_OPTIONS", Value: strings.Join(props, " ")})
 }

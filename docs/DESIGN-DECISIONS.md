@@ -1145,3 +1145,90 @@ across apps whose typical costs differ by orders of magnitude); a Fenwick/lazy-s
 
 See [`docs/superpowers/specs/2026-07-21-pheromone-selection-design.md`](docs/superpowers/specs/2026-07-21-pheromone-selection-design.md)
 and the bench protocol, [`docs/BENCH-AB.md`](BENCH-AB.md).
+
+---
+
+## DD-033: Load as a first-class citizen — mode-aware dashboard + CLI, OTel-typed metrics (2026-07-21)
+
+**Context.** Load campaigns produce throughput / latency-percentiles / heap+thread-drift / 5xx
+(`LoadRun`, DD-026/DD-029), but both surfaces that display a campaign are hard-coded to explore:
+`LoadRun` never called `StatusReporter`/`DashboardClient`, so a load campaign's dashboard showed
+`iterations=0`/`crashes=0`/empty explore scaffolding, and the CLI (`operator/cmd/basquin/status.go`)
+printed `<none>` coverage / `0` findings for load. The real numbers only reached the pod termination
+message and `status.load` (via `kubectl`) — `docs/LOAD-MODE-DESIGN.md:127`'s promised dashboard push
+was never built.
+
+**Decision.** Make the one existing push path mode-aware instead of building a second one.
+`StatusReporter.snapshotJson()` emits `"mode":"explore"|"load"` and, in load, a `"load":{...}` block
+(`throughputRps`, `latencyMs.{p50,p90,p99,max}`, `heapDriftKb`, `threadDrift`, `serverErrors`,
+`requests}`) via new `setMode(String)`/`recordLoad(...)` API (mode defaults to `explore`, so explore
+is byte-for-byte unchanged). `LoadRun` calls `setMode("load")` at start and runs a lightweight
+snapshotter thread (every `basquin.dashboard.pushIntervalMs`, default 2000ms) that computes
+throughput-so-far, live percentiles, current drift, and 5xx, feeding `recordLoad(...)` — carried by
+the **existing** `DashboardClient` loop `CoverageGuidedRun.main` already starts. No second pusher, no
+new endpoint. `resources/dashboard.html` reads `st.mode` and renders a load card (throughput, p50/
+p90/p99, heap/thread drift, 5xx) in place of the explore cards when `mode=load`; the `/api/campaigns`
+list scrape additionally greps `mode` so the fleet view distinguishes explore vs load at a glance
+(server stays schema-agnostic — a light regex, not a schema parse). The CLI (`status.go`) gains a
+**MODE** column and a mode-aware metrics column: explore shows `cov% · N finds`, load shows
+`rps · p99ms` from `cp.Status.Load`.
+
+**Live-snapshotter semantics (three requirements, load-bearing).**
+- **Torn reads are acceptable; the terminal numbers are authoritative.** Each `AtomicLongArray`
+  bucket read is atomic, but scanning it while workers concurrently increment is not a consistent
+  snapshot — live percentiles are approximate *by design* for a 2s display. `status.load` and the
+  end-of-run metrics remain the authoritative record. No lock is added to the hot path to reconcile a
+  transient live/terminal discrepancy — that would defeat DD-029's lock-free load. (The dashboard's
+  last shown value is the last *live* snapshot, which has converged to terminal; the JVM may exit
+  before the daemon push loop ships an explicit final push, so `status.load` — not the dashboard — is
+  the authoritative terminal record.)
+- **Live throughput uses the same post-warmup window as the terminal number**, anchored at the same
+  post-warmup mark the baseline drift snapshot already uses — so the live value *converges to* the
+  terminal one instead of diverging (a live/terminal disagreement would otherwise read as a bug).
+- **One drift poller, one source of truth.** The snapshotter owns drift polling; the terminal drift
+  reuses its last poll rather than keeping the previous independent post-warmup-baseline + terminal-
+  poll pair as two separate paths. `/__basquin/drift` is control-handled in the boundary (no lock,
+  never reaches the app), so the added 2s poll is negligible load on the soak.
+
+**OTel-typed metrics (typed now; export deferred).** Every signal gets an OTel-native type + stable
+name + attributes, so a future optional OTLP exporter is a thin adapter over the same registry — no
+OpenTelemetry dependency is added by this DD:
+
+| Signal | OTel type | Name (intended) | Unit (UCUM) | Notes |
+|---|---|---|---|---|
+| Request latency | **histogram** | `basquin.load.request.duration` | `ms` | `*.duration` per OTel convention (cf. `http.server.request.duration`), not "latency"; boundaries below |
+| Throughput | counter (+rate) | `basquin.load.requests` | `{request}` | rate = counter / window |
+| Heap drift | **gauge** | `basquin.load.heap_drift` | `KiB` | absolute over-time reading (DD-029) |
+| Thread drift | **gauge** | `basquin.load.thread_drift` | `{thread}` | |
+| 5xx | counter | `basquin.load.server_errors` | `{error}` | |
+| Iterations | counter | `basquin.explore.iterations` | `{iteration}` | |
+| Coverage | gauge (ratio) | `basquin.explore.coverage` | `1` | ratio 0..1 |
+| Findings / crashes | counter | `basquin.explore.findings` / `.crashes` | `{finding}` / `{crash}` | |
+
+Three contract commitments a future exporter inherits: **unit is the UCUM `unit` field**, never baked
+into the name (`ms`, not `..._ms`); **the histogram's bucket boundaries are part of the contract** —
+the `AtomicLongArray`'s layout (1 ms buckets from 0..30000 ms (`MAX_MS`), plus one overflow bucket for
+anything slower) becomes the explicit-bucket-histogram boundaries the exporter must emit verbatim
+(re-bucketing later is a breaking change to downstream dashboards);
+and **`campaign.id` is a resource attribute, `mode` is a metric attribute** (identity vs. dimension —
+what makes the future exporter thin, not a re-model).
+
+**Verified.** Unit: `StatusReporter.snapshotJson()` defaults to `mode=explore`, emits a well-formed
+`load` block only after `setMode("load")`+`recordLoad(...)`, explore fields unaffected; `LoadRun`'s
+live-histogram percentile snapshot matches the end-of-run computation for the same histogram state;
+Go CLI table renders `MODE` + mode-aware metrics column, alignment holds for both explore and load
+rows. In-cluster: `deploy/e2e/e2e.sh` **asserts** the load campaign's own per-campaign dashboard,
+queried at `/api/campaign/{id}/status` right after the campaign reaches `Completed` (before its GC'd
+delete), received `"mode":"load"` and a non-empty `"load":{"throughputRps"...}` block — closing the
+loop in-cluster, not just at the unit level; **CI executes this e2e in a kind cluster on every
+change.**
+
+**Rejected.** A second push mechanism for load (violates "one push path"; the existing
+`DashboardClient` loop already carries whatever `StatusReporter` emits); a hot-path lock to make live
+percentiles exactly consistent with the terminal read (defeats DD-029's lock-free load for a 2s
+display concern); a full unified explore+load metrics model / `StatusReporter` rewrite (this DD is
+additive/mode-tagged); building the OTLP exporter now (typed here so it's a thin adapter later, but
+export is its own DD — off by default, alongside not replacing the bespoke dashboard, and tied to
+clustered runners' honest cross-runner percentile merge).
+
+See [`docs/superpowers/specs/2026-07-21-load-first-class-design.md`](docs/superpowers/specs/2026-07-21-load-first-class-design.md).

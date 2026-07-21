@@ -142,7 +142,8 @@ public final class DashboardServer {
                     + ",\"alive\":" + alive
                     + ",\"iterations\":" + numField(c.statusJson, "iterations")
                     + ",\"crashes\":" + numField(c.statusJson, "crashes")
-                    + ",\"coveragePct\":" + numField(c.statusJson, "pct") + "}";
+                    + ",\"coveragePct\":" + numField(c.statusJson, "pct")
+                    + ",\"mode\":\"" + strField(c.statusJson, "mode") + "\"}";
         }).collect(Collectors.joining(",", "[", "]"));
         respond(ex, "application/json", json);
     }
@@ -395,6 +396,14 @@ public final class DashboardServer {
     private static String numField(String json, String field) {
         Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\"\\s*:\\s*(-?[0-9.]+)").matcher(json);
         return m.find() ? m.group(1) : "-1";
+    }
+
+    // Same best-effort scrape as numField, but for a top-level string field (DD-033: "mode").
+    // Defaults to "explore" when absent so pre-DD-033 payloads and older campaigns still render.
+    private static String strField(String json, String field) {
+        if (json == null) return "explore";
+        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\"\\s*:\\s*\"([^\"]*)\"").matcher(json);
+        return m.find() ? m.group(1) : "explore";
     }
 
     private static String jsonEsc(String s) {

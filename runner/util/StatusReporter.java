@@ -67,6 +67,13 @@ public final class StatusReporter {
     private static int coverageSourcesResponded;
     private static int coverageSourcesExpected;
 
+    // DD-033: mode + load-block state (load campaigns feed these via recordLoad).
+    private static volatile String mode = "explore";
+    private static double loadThroughputRps;
+    private static int loadP50, loadP90, loadP99, loadMax, loadThreadDrift;
+    private static long loadHeapDriftKb, loadServerErrors, loadRequests;
+    private static boolean loadRecorded;
+
     private StatusReporter() {}
 
     /**
@@ -116,6 +123,29 @@ public final class StatusReporter {
                 else if (v.startsWith("thread")) violThread++;
             }
         }
+    }
+
+    /** DD-033: campaign mode ("explore"|"load"); tags snapshotJson so the dashboard/CLI pick a view. */
+    public static synchronized void setMode(String m) { mode = (m == null ? "explore" : m); }
+
+    /** DD-033: publish the current load snapshot for the dashboard (fed live by LoadRun's snapshotter). */
+    public static synchronized void recordLoad(double throughputRps, int p50, int p90, int p99, int max,
+            long heapDriftKb, int threadDrift, long serverErrors, long requests) {
+        loadThroughputRps = throughputRps; loadP50 = p50; loadP90 = p90; loadP99 = p99; loadMax = max;
+        loadHeapDriftKb = heapDriftKb; loadThreadDrift = threadDrift; loadServerErrors = serverErrors;
+        loadRequests = requests; loadRecorded = true;
+    }
+
+    /** The load block, or "" unless we're in load mode AND a load snapshot has been recorded. Gating on
+     *  the mode (not just loadRecorded) keeps the invariant explicit — a load block appears iff mode==load
+     *  — so an explore snapshot never carries a stale block (also removes a test-ordering dependency). */
+    private static String loadBlockJson() {
+        if (!loadRecorded || !"load".equals(mode)) return "";
+        return String.format(java.util.Locale.ROOT,
+            ",\"load\":{\"throughputRps\":\"%.1f\",\"latencyMs\":{\"p50\":%d,\"p90\":%d,\"p99\":%d,\"max\":%d},"
+          + "\"heapDriftKb\":%d,\"threadDrift\":%d,\"serverErrors\":%d,\"requests\":%d}",
+            loadThroughputRps, loadP50, loadP90, loadP99, loadMax,
+            loadHeapDriftKb, loadThreadDrift, loadServerErrors, loadRequests);
     }
 
     public static synchronized void recordCrash() { if (TRACKING) crashes++; }
@@ -303,7 +333,7 @@ public final class StatusReporter {
         double rate = elapsedSec > 0.05 ? iterations / elapsedSec : 0.0;
         double meanLatency = iterations > 0 ? (double) sumLatencyMs / iterations : 0.0;
         double coveragePct = totalEdges > 0 ? 100.0 * coveredEdges / totalEdges : 0.0;
-        return String.format(java.util.Locale.ROOT,
+        String explore = String.format(java.util.Locale.ROOT,
             "{\"elapsedSec\":%d,\"iterations\":%d,\"rate\":%.2f,\"crashes\":%d,\"leaks\":%d,\"resets\":%d,"
             + "\"invariants\":{\"latency\":%d,\"heap\":%d,\"thread\":%d},"
             + "\"latencyMs\":{\"last\":%d,\"mean\":%.0f,\"max\":%d},"
@@ -318,6 +348,8 @@ public final class StatusReporter {
             corpusSaved, findCrash, findInvariant, rejected,
             coveredEdges, totalEdges, coveragePct,
             coverageSourcesResponded, coverageSourcesExpected);
+        String extra = ",\"mode\":\"" + mode + "\"" + loadBlockJson();
+        return explore.substring(0, explore.length() - 1) + extra + "}";
     }
 
     private static String sinceLastFind() {

@@ -314,7 +314,7 @@ Design-note first (likely its own DD); phased.
   coordinator); Job `parallelism` vs a Deployment of runners; how the dashboard distinguishes
   per-runner vs aggregate views; back-pressure so N runners don't overwhelm a small target unintentionally.
 
-### Mode-aware dashboard (load campaigns are blank today) *(roadmap, user 2026-07-21)*
+### Mode-aware dashboard (load campaigns are blank today) — ✅ delivered by DD-033 *(roadmap, user 2026-07-21)*
 The per-campaign dashboard is hard-coded to **explore** metrics — it is not mode-aware. `LoadRun`
 (load mode) never calls `StatusReporter`/`DashboardClient`, and `CoverageGuidedRun.main` starts the 2s
 push loop *before* branching into the load path — so a load campaign's dashboard shows `iterations=0`,
@@ -326,17 +326,44 @@ that half was never implemented — design/implementation drift, not merely an o
 more now: DD-026 load + DD-029 lock-free + DD-031 cost-ranked + DD-032 pheromone all make **load** the
 mode where the interesting availability signals land, and it's the one the dashboard can't show.
 
-- [ ] **`LoadRun` pushes to the dashboard.** Start `DashboardClient` in the load path and push the load
+**Done: DD-033** (`docs/DESIGN-DECISIONS.md`) — `StatusReporter`/`LoadRun` push mode-aware load
+status through the existing one push path, the dashboard renders a load card, the campaign list
+scrapes `mode`, and the CLI status table is mode-aware. e2e-asserted in-cluster
+(`deploy/e2e/e2e.sh`).
+
+- [x] **`LoadRun` pushes to the dashboard.** Start `DashboardClient` in the load path and push the load
   JSON (throughput/percentiles/drift/5xx) to `/ingest/status`. The server is schema-agnostic (opaque
   blob + a light scrape, DD-013), so this is a driver-side change — no server change.
-- [ ] **A load view in the UI.** `resources/dashboard.html` renders explore fields only (iterations,
+- [x] **A load view in the UI.** `resources/dashboard.html` renders explore fields only (iterations,
   crashes, coverage%, corpus, invariant finds). Add a load card (throughput, p50/p90/p99, heap/thread
   drift, 5xx), selected off a `mode` field the driver includes in its status payload.
-- [ ] **`mode` in the data model.** Thread the campaign `mode` through the status payload so the
+- [x] **`mode` in the data model.** Thread the campaign `mode` through the status payload so the
   dashboard — and the `/api/campaigns` list scrape (which today greps `iterations`/`crashes`/`pct`) —
   distinguishes explore vs load at a glance.
 - Ties in: **clustered runners** (aggregating load across N runners — merge histograms/t-digests, don't
   average percentiles) and the **pheromone/cost** work (load is where cost-concentration shows up).
+
+### Optional OTLP metrics export — off by default, alongside the dashboard *(roadmap, user 2026-07-21)*
+DD-033 types every load/explore signal in OTel-native terms (histogram/counter/gauge, stable names,
+units, attributes — `docs/DESIGN-DECISIONS.md`) but ships no exporter. The next step: an **optional**
+OTLP metrics exporter, off by default, emitting exactly that set — `basquin.load.request.duration`
+(histogram, unit `ms`, the 1ms × 30000-bucket layout as a hard contract), `basquin.load.requests` /
+`.server_errors` (counters), `basquin.load.heap_drift` / `.thread_drift` (gauges),
+`basquin.explore.iterations` / `.findings` / `.crashes` (counters), `basquin.explore.coverage`
+(gauge) — `campaign.id` as a resource attribute, `mode` as a metric attribute — so adopters' existing
+Prometheus/Grafana/Datadog stacks consume Basquin's numbers directly, with zero re-modelling (the
+exporter is a thin adapter over the registry DD-033 already typed).
+
+- [ ] **Alongside, never replacing, the bespoke dashboard.** Grafana can't express the fuzzing-domain
+  UX (input viewer, finding clusters, triage) — the dashboard stays the primary surface; OTLP is an
+  additional, opt-in output for teams that already run observability stacks.
+- [ ] **Ties directly into clustered runners** (above): once N runners drive one campaign, summing
+  throughput is trivial, but **percentiles don't average** — OTel histogram aggregation (explicit-
+  bucket merge across runners) is what makes a cross-runner p99 honest instead of an
+  average-of-averages lie.
+- [ ] Its own DD before building (per DD-033's deferral): exporter config (endpoint, protocol), which
+  attributes travel as OTel resource vs. metric attributes in practice, and whether it runs
+  in-process or as a sidecar/agent.
 
 ### Dashboard as a control plane (needs a decision before building)
 Currently the dashboard is strictly read-only: drivers push, it displays (DD-013). Making it

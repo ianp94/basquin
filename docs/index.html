@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ClosureJVM — find the availability bugs crash-only testing misses</title>
-<meta name="description" content="A persistent-JVM execution harness that treats latency, heap growth, and thread/executor leaks as first-class bug oracles — in unmodified JVM web apps.">
+<title>ClosureJVM — Kubernetes-native fuzz and load testing for JVM web apps</title>
+<meta name="description" content="Fuzz and load test JVM web apps in Kubernetes, unmodified. Coverage-guided fuzzing finds the inputs that stress your app; load mode replays them at volume — with latency, heap growth, and thread/executor leaks as first-class findings.">
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
@@ -33,15 +33,16 @@
 <main>
   <section class="hero">
     <div class="wrap">
-      <span class="kicker">persistent-JVM availability testing</span>
-      <h1>Find the availability bugs that crash-only testing misses.</h1>
-      <p class="lede">Most JVM web apps don't fall over with a <code>NullPointerException</code> — they
-        <strong>degrade</strong>: a pathological input takes 500ms instead of 5ms, a request leaks a
-        thread or holds an executor, memory creeps until a GC storm. ClosureJVM runs an app across
-        thousands of clean iterations and treats <strong>availability invariants</strong> — latency,
-        heap retention, thread/executor leaks — as first-class bug oracles, not just crashes.</p>
+      <span class="kicker">kubernetes-native fuzz + load testing</span>
+      <h1>Fuzz and load test your JVM web apps — unmodified, in Kubernetes.</h1>
+      <p class="lede">Instrument a running app with a <code>ClosureJVMTarget</code> — no rebuild, no
+        image changes. Run a <strong>coverage-guided fuzz</strong> campaign to discover the inputs
+        that stress it, then <strong>replay those exact inputs under load</strong>. And because the
+        bug oracle is <strong>availability</strong> — latency budgets, heap retention,
+        thread/executor leaks — you catch the apps that don't crash but <em>degrade</em>.</p>
       <div class="btn-row">
-        <a class="btn btn-primary" href="getting-started.html">Get started →</a>
+        <a class="btn btn-primary" href="operator.html">Run it in Kubernetes →</a>
+        <a class="btn btn-secondary" href="getting-started.html">Get started</a>
         <a class="btn btn-secondary" href="https://github.com/ianp94/closureJVM">GitHub repo</a>
       </div>
     </div>
@@ -49,18 +50,64 @@
 
   <section class="wrap">
     <figure class="demo-figure">
-      <img src="demo.svg" alt="ClosureJVM live status screen driving JPetStore over HTTP">
-      <figcaption>The live status screen during a 200-iteration HTTP drive against an unmodified
-        <a href="https://github.com/mybatis/jpetstore-6">JPetStore</a>, flagging the app's real
-        per-request latency.</figcaption>
+      <img src="demo-k8s.svg" alt="ClosureJVM driving an unmodified JPetStore pod in a kind cluster">
+      <figcaption>250 requests against an unmodified
+        <a href="https://github.com/mybatis/jpetstore-6">JPetStore</a> <strong>pod</strong> — live
+        coverage % (281/6368 edges of the pod's own code, pulled from its JaCoCo agent), 96 invariant
+        finds harvested server-side through the valve, 0 crashes.</figcaption>
     </figure>
+  </section>
+
+  <section class="section wrap">
+    <h2>Instrument once, then run campaigns</h2>
+    <p class="lead">Two custom resources in group <code>closurejvm.dev/v1alpha1</code>. You
+      instrument an app once, then run any number of bounded tests against it.</p>
+    <div class="cards">
+      <div class="card">
+        <span class="ico">// long-lived</span>
+        <h3>ClosureJVMTarget — instrument</h3>
+        <p>Patches an unmodified app Deployment to load the agents via an initContainer + shared
+          volume. Fully reversible — deleting it restores the Deployment byte-for-byte.</p>
+      </div>
+      <div class="card">
+        <span class="ico">// ephemeral</span>
+        <h3>ClosureJVMCampaign — test</h3>
+        <p>Drives the instrumented target and aggregates results into status. Runs in one of two
+          modes: <code>explore</code> (coverage-guided fuzzing) or <code>load</code> (corpus replay
+          at volume).</p>
+      </div>
+    </div>
+    <div class="table-scroll" style="margin-top:20px;">
+      <table>
+        <thead><tr><th>Mode</th><th>What it does</th><th>Bounded by</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>explore</code></td>
+            <td>Coverage-guided fuzzing — keeps inputs that reach new code, emits the interesting
+              ones as a corpus</td>
+            <td><code>iterations</code> or <code>duration</code></td>
+          </tr>
+          <tr>
+            <td><code>load</code></td>
+            <td>Replays that saved corpus at a fixed concurrency, reporting throughput and latency
+              percentiles</td>
+            <td><code>duration</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:18px;"><em>Fuzz to discover the interesting states, then hammer those
+      states under load.</em> Install with Helm, drive it with the <code>closurejvm</code> CLI —
+      see the <a href="operator.html">operator guide</a>.</p>
   </section>
 
   <section class="section section-alt">
     <div class="wrap">
       <h2>Why it's different</h2>
       <p class="lead">Fuzzers like Jazzer and JQF are excellent, but their oracle is
-        <em>"did it throw / crash."</em> ClosureJVM's oracle is availability.</p>
+        <em>"did it throw / crash."</em> Load tools like k6 and Gatling measure throughput but know
+        nothing about what's happening <em>inside</em> the JVM. ClosureJVM sits in the gap — and the
+        corpus carries from fuzzing straight into the load test.</p>
       <div class="cards">
         <div class="card">
           <span class="ico">// oracle</span>
@@ -152,9 +199,16 @@
         </div>
         <div class="card">
           <span class="ico">// kubernetes</span>
-          <h3>Kubernetes demo</h3>
-          <p>One command runs the whole stack in a local kind cluster: the app as a pod with valve +
-            agents baked in, driven from outside. A namespaced injection operator is in progress.</p>
+          <h3>Kubernetes operator</h3>
+          <p>Two CRDs, namespaced RBAC (never a <code>ClusterRole</code>), reversible in-place
+            instrumentation of unmodified images, and a per-campaign dashboard. Installed with Helm,
+            driven by the <code>closurejvm</code> CLI.</p>
+        </div>
+        <div class="card">
+          <span class="ico">// load</span>
+          <h3>Load / soak mode</h3>
+          <p>Replays the corpus a fuzz run emitted at a fixed concurrency for a duration, reporting
+            throughput and p50/p90/p99/max latency, plus heap and thread drift across the run.</p>
         </div>
       </div>
     </div>
@@ -162,19 +216,19 @@
 
   <section class="section wrap" style="text-align:center; padding-top:48px;">
     <h2 style="margin-top:0;">Point it at your app</h2>
-    <p class="lead" style="max-width:640px; margin:0 auto 28px;">Run the leak demo, drive embedded
-      Tomcat, or instrument your own WAR in Kubernetes. The getting-started guide has copy-pasteable
-      commands.</p>
+    <p class="lead" style="max-width:640px; margin:0 auto 28px;">Install the operator with Helm and
+      instrument a running Deployment — no rebuild — then fuzz it and replay the findings under load.
+      The harness also runs standalone if you're not on Kubernetes.</p>
     <div class="btn-row">
-      <a class="btn btn-primary" href="getting-started.html">Get started →</a>
-      <a class="btn btn-secondary" href="kubernetes-tomcat.html">Run against your Tomcat in K8s</a>
+      <a class="btn btn-primary" href="operator.html">Run it in Kubernetes →</a>
+      <a class="btn btn-secondary" href="getting-started.html">Run it standalone</a>
     </div>
   </section>
 </main>
 
 <footer class="footer">
   <div class="wrap-wide footer-inner">
-    <div>ClosureJVM — availability-first testing for JVM web apps.</div>
+    <div>ClosureJVM — Kubernetes-native fuzz and load testing for JVM web apps.</div>
     <div class="links">
       <a href="getting-started.html">Get started</a>
       <a href="how-it-works.html">How it works</a>

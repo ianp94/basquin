@@ -1,0 +1,14 @@
+# jspwiki — server-side invariant findings summary (from 14354 findings)
+## heap-delta violations (KB):
+  count=12007 min=595 p50=945 p90=1054 p99=1540 max=10713 mean=989
+## latency violations (ms):
+  count=2347 min=26 p50=72 p90=145 p99=504 max=8408
+## sample findings:
+jspwiki-1  | [Basquin][Invariant] Iteration 1 violated 'latency': 8408ms > 25ms
+jspwiki-1  | [Basquin][Invariant] Iteration 1 violated 'heapDelta': 10713KB > 256KB
+jspwiki-1  | [Basquin][Invariant] Iteration 2 violated 'latency': 105ms > 25ms
+jspwiki-1  | [Basquin][Invariant] Iteration 2 violated 'heapDelta': 1945KB > 256KB
+jspwiki-1  | [Basquin][Invariant] Iteration 3 violated 'heapDelta': 1153KB > 256KB
+jspwiki-1  | [Basquin][Invariant] Iteration 4 violated 'heapDelta': 1165KB > 256KB
+jspwiki-1  | [Basquin][Invariant] Iteration 5 violated 'latency': 2727ms > 25ms
+jspwiki-1  | [Basquin][Invariant] Iteration 6 violated 'latency': 442ms > 25ms

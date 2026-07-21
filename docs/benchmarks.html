@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Benchmarks — Basquin against unmodified CMS apps</title>
+<meta name="description" content="Basquin run against two real, unmodified JVM web apps (Apache JSPWiki, MyBatis JPetStore): 16,701 availability findings, zero crashes — the pathologies a crash-only tool never reports.">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<style>
+  :root{
+    --bg:#ffffff; --surface:#fcfcfb; --border:#e3e6ea; --ink:#0b0b0b; --ink2:#52514e; --muted:#7a7a75;
+    --accent:#5b3df5; --s1:#2a78d6; --s2:#eb6834; --ok:#0ca30c; --grid:#ececea;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0d1117; --surface:#1a1a19; --border:#262c36; --ink:#ffffff; --ink2:#c3c2b7; --muted:#8b8b82;
+    --accent:#a48bff; --s1:#3987e5; --s2:#d95926; --ok:#4ac26b; --grid:#22262d;
+  }}
+  :root[data-theme="dark"]{--bg:#0d1117;--surface:#1a1a19;--border:#262c36;--ink:#fff;--ink2:#c3c2b7;--muted:#8b8b82;--accent:#a48bff;--s1:#3987e5;--s2:#d95926;--ok:#4ac26b;--grid:#22262d;}
+  :root[data-theme="light"]{--bg:#fff;--surface:#fcfcfb;--border:#e3e6ea;--ink:#0b0b0b;--ink2:#52514e;--muted:#7a7a75;--accent:#5b3df5;--s1:#2a78d6;--s2:#eb6834;--ok:#0ca30c;--grid:#ececea;}
+  *{box-sizing:border-box} html{-webkit-text-size-adjust:100%}
+  body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--bg);line-height:1.55}
+  .wrap{max-width:960px;margin:0 auto;padding:0 20px}
+  h1{font-size:2rem;letter-spacing:-.02em;margin:.2em 0 .1em} h2{font-size:1.35rem;letter-spacing:-.01em;margin:2.2rem 0 .6rem}
+  h3{font-size:1rem;margin:1.4rem 0 .4rem} p{color:var(--ink2);margin:.7rem 0}
+  .kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+  header.hero{border-bottom:1px solid var(--border);padding:40px 0 30px}
+  code{font-family:var(--mono);font-size:.85em;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:.1em .35em}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:22px 0}
+  .tile{border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:16px 18px}
+  .tile .n{font-size:2rem;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+  .tile .l{font-size:.82rem;color:var(--muted);margin-top:3px}
+  .tile .n.ok{color:var(--ok)} .tile .n.warn{color:var(--s2)}
+  table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.6rem 0}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)} th{color:var(--muted);font-weight:600}
+  td.num,th.num{text-align:right;font-family:var(--mono)}
+  .swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  .legend{display:flex;gap:18px;font-size:.85rem;color:var(--ink2);margin:.2rem 0 .8rem}
+  figure{margin:1rem 0 0} figcaption{font-size:.82rem;color:var(--muted);margin-top:6px}
+  .chart-card{border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:18px}
+  .callout{border-left:3px solid var(--s2);background:var(--surface);border-radius:0 10px 10px 0;padding:12px 16px;margin:1rem 0}
+  .callout .big{font-size:1.5rem;font-weight:700;letter-spacing:-.02em}
+  .note{font-size:.86rem;color:var(--muted)}
+  svg text{font-family:var(--sans)} .bar-val{font-family:var(--mono);font-size:11px;fill:var(--ink2)}
+  .axis{fill:var(--muted);font-size:11px} .gridline{stroke:var(--grid);stroke-width:1}
+  footer{border-top:1px solid var(--border);margin-top:40px;padding:24px 0;color:var(--muted);font-size:.85rem}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">basquin benchmarks · 2026-07-21</div>
+    <h1>16,701 availability findings. Zero crashes.</h1>
+    <p style="max-width:680px;font-size:1.05rem">Basquin was pointed at two real, <strong>unmodified</strong>
+      JVM web apps — Apache JSPWiki and MyBatis JPetStore — for ~10 minutes each. It found <strong>16,701
+      moments where an app degraded</strong>: allocating megabytes on a single page render, stalling for
+      seconds. Every request returned a normal 2xx/3xx. <strong>A crash-only tool — a fuzzer, a load
+      test's error count — reports none of these.</strong></p>
+    <div class="tiles">
+      <div class="tile"><div class="n warn">16,701</div><div class="l">invariant findings (both apps)</div></div>
+      <div class="tile"><div class="n ok">0</div><div class="l">crashes — a crash oracle finds nothing</div></div>
+      <div class="tile"><div class="n">15.6 MB</div><div class="l">peak heap on one JPetStore request</div></div>
+      <div class="tile"><div class="n">8.4 s</div><div class="l">peak latency on one JSPWiki render</div></div>
+    </div>
+    <p class="note">No app code was changed. Findings come from the in-JVM Basquin valve on Tomcat 9.
+      Every number on this page is from a real run — see <a href="#method">Methodology</a>.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section>
+    <h2>The two apps, side by side</h2>
+    <p>Same harness, same ~20 req/s single-flight driver, 12,000 requests each, soft budgets
+      (<code>latency &gt; 25ms</code>, <code>heapDelta &gt; 256KB</code>). The apps behave very differently —
+      and Basquin surfaces exactly how.</p>
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th></th>
+        <th class="num"><span class="swatch" style="background:var(--s1)"></span>JSPWiki 2.12.4<br><span class="note">wiki CMS · filesystem</span></th>
+        <th class="num"><span class="swatch" style="background:var(--s2)"></span>JPetStore-6<br><span class="note">e-commerce · MyBatis+HSQLDB</span></th>
+      </tr></thead>
+      <tbody>
+        <tr><td>Invariant findings</td><td class="num">14,354</td><td class="num">2,347</td></tr>
+        <tr><td>&nbsp;&nbsp;— heap-delta / latency</td><td class="num">12,007 / 2,347</td><td class="num">2,343 / 4</td></tr>
+        <tr><td>Crashes (real faults)</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Requests over heap budget</td><td class="num">~100%</td><td class="num">~19.5%</td></tr>
+        <tr><td>Heap / request — median</td><td class="num">945 KB</td><td class="num">298 KB</td></tr>
+        <tr><td>Heap / request — p99</td><td class="num">1,540 KB</td><td class="num">513 KB</td></tr>
+        <tr><td>Heap / request — <strong>max</strong></td><td class="num">10.7 MB</td><td class="num">15.6 MB</td></tr>
+        <tr><td>Client latency (1 VU) — median</td><td class="num">33 ms</td><td class="num">26 ms</td></tr>
+        <tr><td>Client latency (1 VU) — p99</td><td class="num">195 ms</td><td class="num">27 ms</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note">JSPWiki allocates ~1&nbsp;MB on <em>every</em> markup render and is latency-variable;
+      JPetStore is lean and rock-steady (~26&nbsp;ms) — until a cold catalog load spikes to 15.6&nbsp;MB.
+      Two opposite failure shapes, both found automatically in code nobody changed.</p>
+  </section>
+
+  <section>
+    <h2>Heap allocated per request</h2>
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--s1)"></span>JSPWiki</span>
+      <span><span class="swatch" style="background:var(--s2)"></span>JPetStore</span>
+      <span class="note">budget: 256 KB</span>
+    </div>
+    <div class="chart-card">
+      <figure>
+        <!-- grouped bars: p50/p90/p99 heap KB. max shown separately (outlier). scale 0..1600KB -->
+        <svg viewBox="0 0 620 260" width="100%" role="img" aria-label="Heap per request percentiles, JSPWiki vs JPetStore">
+          <!-- gridlines at 0,400,800,1200,1600 -->
+          <g>
+            <line class="gridline" x1="70" y1="200" x2="600" y2="200"/>
+            <line class="gridline" x1="70" y1="155" x2="600" y2="155"/>
+            <line class="gridline" x1="70" y1="110" x2="600" y2="110"/>
+            <line class="gridline" x1="70" y1="65" x2="600" y2="65"/>
+            <line class="gridline" x1="70" y1="20" x2="600" y2="20"/>
+            <text class="axis" x="62" y="204" text-anchor="end">0</text>
+            <text class="axis" x="62" y="159" text-anchor="end">400</text>
+            <text class="axis" x="62" y="114" text-anchor="end">800</text>
+            <text class="axis" x="62" y="69" text-anchor="end">1200</text>
+            <text class="axis" x="62" y="24" text-anchor="end">1600 KB</text>
+            <!-- budget line 256KB -> y=200-256/1600*180 = 200-28.8=171.2 -->
+            <line x1="70" y1="171" x2="600" y2="171" stroke="var(--muted)" stroke-dasharray="4 3" stroke-width="1"/>
+            <text class="axis" x="600" y="167" text-anchor="end">256 KB budget</text>
+          </g>
+          <!-- groups: p50, p90, p99. group centers at 160, 340, 520; bar width 34, gap 4 -->
+          <!-- p50: JSPWiki 945 -> h=945/1600*180=106.3 y=93.7 ; JPetStore 298 -> h=33.5 y=166.5 -->
+          <g>
+            <rect x="140" y="94" width="34" height="106" rx="4" fill="var(--s1)"/>
+            <rect x="178" y="167" width="34" height="33" rx="4" fill="var(--s2)"/>
+            <text class="bar-val" x="157" y="88" text-anchor="middle">945</text>
+            <text class="bar-val" x="195" y="161" text-anchor="middle">298</text>
+            <text class="axis" x="176" y="218" text-anchor="middle">p50</text>
+          </g>
+          <!-- p90: JSPWiki 1054 -> h=118.6 y=81.4 ; JPetStore 392 -> h=44.1 y=155.9 -->
+          <g>
+            <rect x="320" y="81" width="34" height="119" rx="4" fill="var(--s1)"/>
+            <rect x="358" y="156" width="34" height="44" rx="4" fill="var(--s2)"/>
+            <text class="bar-val" x="337" y="75" text-anchor="middle">1054</text>
+            <text class="bar-val" x="375" y="150" text-anchor="middle">392</text>
+            <text class="axis" x="356" y="218" text-anchor="middle">p90</text>
+          </g>
+          <!-- p99: JSPWiki 1540 -> h=173.3 y=26.7 ; JPetStore 513 -> h=57.7 y=142.3 -->
+          <g>
+            <rect x="500" y="27" width="34" height="173" rx="4" fill="var(--s1)"/>
+            <rect x="538" y="142" width="34" height="58" rx="4" fill="var(--s2)"/>
+            <text class="bar-val" x="517" y="21" text-anchor="middle">1540</text>
+            <text class="bar-val" x="555" y="136" text-anchor="middle">513</text>
+            <text class="axis" x="536" y="218" text-anchor="middle">p99</text>
+          </g>
+        </svg>
+        <figcaption>Per-request heap growth (KB), by percentile, measured inside each app's JVM by the valve.
+          Every JSPWiki render clears the 256&nbsp;KB budget; JPetStore mostly stays under it. Not shown
+          (off-scale outliers): the worst single request allocated <strong>10.7&nbsp;MB</strong> (JSPWiki)
+          and <strong>15.6&nbsp;MB</strong> (JPetStore, cold catalog).</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Client latency distribution (k6, 1 VU)</h2>
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--s1)"></span>JSPWiki</span>
+      <span><span class="swatch" style="background:var(--s2)"></span>JPetStore</span>
+    </div>
+    <div class="chart-card">
+      <figure>
+        <!-- grouped bars med/p90/p99 ms; scale 0..200 -->
+        <svg viewBox="0 0 620 260" width="100%" role="img" aria-label="Client latency percentiles, JSPWiki vs JPetStore">
+          <g>
+            <line class="gridline" x1="70" y1="200" x2="600" y2="200"/>
+            <line class="gridline" x1="70" y1="155" x2="600" y2="155"/>
+            <line class="gridline" x1="70" y1="110" x2="600" y2="110"/>
+            <line class="gridline" x1="70" y1="65" x2="600" y2="65"/>
+            <line class="gridline" x1="70" y1="20" x2="600" y2="20"/>
+            <text class="axis" x="62" y="204" text-anchor="end">0</text>
+            <text class="axis" x="62" y="159" text-anchor="end">50</text>
+            <text class="axis" x="62" y="114" text-anchor="end">100</text>
+            <text class="axis" x="62" y="69" text-anchor="end">150</text>
+            <text class="axis" x="62" y="24" text-anchor="end">200 ms</text>
+          </g>
+          <!-- med: JSPWiki 33 -> h=33/200*180=29.7 y=170.3 ; JPetStore 26 -> h=23.4 y=176.6 -->
+          <g>
+            <rect x="140" y="170" width="34" height="30" rx="4" fill="var(--s1)"/>
+            <rect x="178" y="177" width="34" height="23" rx="4" fill="var(--s2)"/>
+            <text class="bar-val" x="157" y="164" text-anchor="middle">33</text>
+            <text class="bar-val" x="195" y="171" text-anchor="middle">26</text>
+            <text class="axis" x="176" y="218" text-anchor="middle">median</text>
+          </g>
+          <!-- p90: JSPWiki 74 -> h=66.6 y=133.4 ; JPetStore 26 -> h=23.4 y=176.6 -->
+          <g>
+            <rect x="320" y="133" width="34" height="67" rx="4" fill="var(--s1)"/>
+            <rect x="358" y="177" width="34" height="23" rx="4" fill="var(--s2)"/>
+            <text class="bar-val" x="337" y="127" text-anchor="middle">74</text>
+            <text class="bar-val" x="375" y="171" text-anchor="middle">26</text>
+            <text class="axis" x="356" y="218" text-anchor="middle">p90</text>
+          </g>
+          <!-- p99: JSPWiki 195 -> h=175.5 y=24.5 ; JPetStore 27 -> h=24.3 y=175.7 -->
+          <g>
+            <rect x="500" y="25" width="34" height="175" rx="4" fill="var(--s1)"/>
+            <rect x="538" y="176" width="34" height="24" rx="4" fill="var(--s2)"/>
+            <text class="bar-val" x="517" y="19" text-anchor="middle">195</text>
+            <text class="bar-val" x="555" y="170" text-anchor="middle">27</text>
+            <text class="axis" x="536" y="218" text-anchor="middle">p99</text>
+          </g>
+        </svg>
+        <figcaption>End-to-end request latency (ms) from k6 at 1 virtual user (matching the single-flight
+          driver). JPetStore is flat at ~26&nbsp;ms across percentiles; JSPWiki's tail blows out — median
+          33&nbsp;ms but p99 <strong>195&nbsp;ms</strong>, a 6× spread that a median-only dashboard hides.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>The cold cliff</h2>
+    <div class="callout">
+      <div class="big">8260 ms → 847 ms → 34 ms</div>
+      <p style="margin:.3rem 0 0">JSPWiki's front page on the first three hits after deploy. The
+        first-request-after-deploy cliff — JSP compilation plus cold-cache markup rendering — is an
+        availability pathology a warmed-up load test never sees and a crash test never flags. Basquin
+        catches it on request #1.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>What a load tool sees vs what Basquin adds</h2>
+    <p>k6 and Basquin measure different things, and that's the point. On the same JPetStore workload:</p>
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>Tool</th><th>Reports</th><th class="num">Defects surfaced</th></tr></thead>
+      <tbody>
+        <tr><td>k6 (10 VUs)</td><td>throughput + latency percentiles (~256&nbsp;ms under load*)</td><td class="num">0</td></tr>
+        <tr><td><strong>Basquin</strong></td><td>same requests, <strong>plus</strong> per-request heap, which inputs cost most, cold-start cliff</td><td class="num">2,347</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note">*Indicative only, not a controlled head-to-head. The ~256&nbsp;ms figure reflects the
+      valve <em>serializing</em> requests (a deliberate measurement tradeoff — DD-005 — so per-request
+      heap/thread deltas stay accurate under concurrency); single-flight latency is ~26&nbsp;ms. The point
+      isn't speed — it's that a load tool reports zero defects on requests Basquin flags 2,347 times.</p>
+  </section>
+
+  <section id="method">
+    <h2>Methodology &amp; honesty</h2>
+    <ul style="color:var(--ink2)">
+      <li><strong>Real runs only.</strong> Every figure traces to a file under <code>bench-results/</code>
+        (sampler CSVs, server-finding logs, k6 JSON) — nothing projected or hand-tuned.</li>
+      <li><strong>Apps unmodified.</strong> Apache JSPWiki 2.12.4 (prebuilt WAR) and MyBatis JPetStore-6
+        (built at pinned commit <code>c8f62cc7</code>), each on Tomcat 9 with the namespace-free Basquin
+        valve + agent. No code, config, or bytecode changes to the apps.</li>
+      <li><strong>Budgets:</strong> soft mode, <code>latency&gt;25ms</code>, <code>heapDelta&gt;256KB</code>
+        — findings are recorded, the run continues.</li>
+      <li><strong>Driver:</strong> <code>HttpRouteDriveTarget</code>, single-flight, ~20 req/s, 12,000
+        requests/app across a fixed route mix. Client latency from k6 at 1 VU.</li>
+      <li><strong>Known gap:</strong> this pass ran the round-robin/load driver. Coverage-<em>guided</em>
+        exploration (guided-vs-naive coverage climb) needs a JaCoCo agent in each app JVM and is a
+        documented next addition — it would raise the finding counts, not lower them.</li>
+      <li><strong>k6 comparison</strong> is explicitly indicative, not a controlled benchmark; the tools
+        measure different things and the valve's serialization is noted above.</li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    Basquin — Kubernetes-native fuzz + load testing for JVM web apps, where the bug oracle is
+    availability. · <a href="https://github.com/ianp94/basquin">GitHub</a> ·
+    Data: <code>bench-results/report-data.json</code>. Built with AI assistance, directed and reviewed by the author.
+  </div>
+</footer>
+
+</body>
+</html>

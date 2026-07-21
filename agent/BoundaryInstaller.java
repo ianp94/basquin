@@ -2,8 +2,10 @@ package agent;
 
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.asm.Advice;
+import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.ClassFileLocator;
 import net.bytebuddy.matcher.ElementMatchers;
+import net.bytebuddy.pool.TypePool;
 
 import java.lang.instrument.Instrumentation;
 
@@ -30,24 +32,35 @@ public final class BoundaryInstaller {
      * method name/signature must stay {@code public static void install(Instrumentation)}). Best-effort:
      * a transform failure is surfaced via the listener but never propagated — the app runs uninstrumented.
      */
+    /** Advice class resolved by name (not by .class) — see {@link #install} for why. */
+    private static final String ADVICE = "agent.TomcatBoundaryAdvice";
+
     public static void install(Instrumentation instrumentation) {
-        // Locate the advice class bytes explicitly. The agent jar is injected on BOTH the boot classpath
-        // (-Xbootclasspath/a, so the advice class is visible to StandardHostValve's loader) AND the system
-        // classpath (-javaagent). ByteBuddy's default locator derives from the advice class's loader, which
-        // is the boot loader (null) for a -Xbootclasspath/a class — and that cannot enumerate boot-appended
-        // resources, so the transform silently no-ops. Reading the bytes via the system loader (where the
-        // -javaagent jar lives) is reliable; fall back to the advice class's own loader just in case.
-        ClassFileLocator locator = new ClassFileLocator.Compound(
-                ClassFileLocator.ForClassLoader.ofSystemLoader(),
-                ClassFileLocator.ForClassLoader.of(TomcatBoundaryAdvice.class.getClassLoader()));
+        // Tolerate class-file versions newer than this ByteBuddy officially supports: some Tomcat images
+        // ship a very recent JDK (24/25), and without this the transform of StandardHostValve throws
+        // "Java NN is not supported" and no-ops. Our advice is a trivial method enter/exit, well within
+        // what experimental mode handles; the errors-only listener below still surfaces any real failure.
+        System.setProperty("net.bytebuddy.experimental", "true");
 
         new AgentBuilder.Default()
                 .disableClassFormatChanges() // advice-only; no class-schema changes
                 // Surface transform errors instead of swallowing them (this is how a silent no-op hid before).
                 .with(AgentBuilder.Listener.StreamWriting.toSystemError().withErrorsOnly())
                 .type(ElementMatchers.named("org.apache.catalina.core.StandardHostValve"))
-                .transform((builder, type, cl, module, pd) -> builder.visit(
-                        Advice.to(TomcatBoundaryAdvice.class, locator).on(ElementMatchers.named("invoke"))))
+                .transform((builder, type, classLoader, module, pd) -> {
+                    // Resolve the advice — and, crucially, the org.apache.catalina.connector.Request/Response
+                    // types its signatures name — through the TARGET class's loader (Catalina's), NOT the
+                    // loaded advice Class. The advice is defined by the boot loader (agent jar is on
+                    // -Xbootclasspath/a), so Advice.to(Class) would reflect on it and resolve those Catalina
+                    // types via the boot loader, which can't see them → NoClassDefFoundError, swallowed as a
+                    // silent no-op. The target loader sees Catalina (its own) AND the advice (via its boot
+                    // parent), so a non-loaded TypePool over it resolves everything.
+                    ClassFileLocator locator = classLoader == null
+                            ? ClassFileLocator.ForClassLoader.ofSystemLoader()
+                            : ClassFileLocator.ForClassLoader.of(classLoader);
+                    TypeDescription advice = TypePool.Default.of(locator).describe(ADVICE).resolve();
+                    return builder.visit(Advice.to(advice, locator).on(ElementMatchers.named("invoke")));
+                })
                 .installOn(instrumentation);
         System.out.println("[Basquin] agent boundary installed on StandardHostValve");
     }

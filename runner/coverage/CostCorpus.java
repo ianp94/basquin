@@ -25,21 +25,75 @@ public final class CostCorpus {
     private double emaCost = 0.0;   // EMA baseline of observed cost (heavy-tail-robust vs a mean)
     private int samples = 0;
 
-    public CostCorpus(List<String> seeds, boolean enabled) {
+    private final boolean pheromone;
+    private final double epsilon;
+    private final double decay;
+    private final double depositCap;
+    private double totalPheromone = 0.0;   // running sum of in-corpus pheromone (O(1)-maintained)
+
+    public CostCorpus(List<String> seeds, boolean enabled) { this(seeds, enabled, false); }
+
+    public CostCorpus(List<String> seeds, boolean enabled, boolean pheromone) {
         this.enabled = enabled;
+        this.pheromone = pheromone;
         this.maxSize = Integer.getInteger("basquin.corpus.max", 1000);
         this.retainFactor = dbl("basquin.cost.retainFactor", 3.0);
         this.minSamples = Integer.getInteger("basquin.cost.minSamples", 20);
         this.emaAlpha = dbl("basquin.cost.emaAlpha", 0.1);
+        this.epsilon = dbl("basquin.pheromone.epsilon", 0.3);
+        this.decay = dbl("basquin.pheromone.decay", 0.7);
+        this.depositCap = dbl("basquin.pheromone.depositCap", 10.0);
         if (seeds != null) {
-            for (String s : seeds) entries.add(new CorpusEntry(s, 0.0, 0, 0, 0, 0, true));
+            for (String s : seeds) entries.add(new CorpusEntry(s, 0.0, 0, 0, 0, 0, true)); // pheromone 0 (ema=0 here)
         }
     }
 
-    /** Uniform parent draw (selection is NOT cost-biased in this phase). Synchronized with mutation. */
+    /**
+     * ε-greedy parent selection (DD-032): with probability ε (or when pheromone is off / the total is
+     * zero / cold start) draw UNIFORMLY — the coverage guardrail; otherwise roulette by pheromone.
+     * Returns the ENTRY so the caller can reinforce it. Null only if the corpus is empty. Synchronized.
+     * Single O(n) locate scan against the running total — no re-summing.
+     */
+    public synchronized CorpusEntry selectParent(Random rnd) {
+        int n = entries.size();
+        if (n == 0) return null;
+        if (!pheromone || totalPheromone <= 0.0 || rnd.nextDouble() < epsilon) {
+            return entries.get(rnd.nextInt(n));   // uniform (off / cold-start / ε-explore)
+        }
+        double r = rnd.nextDouble() * totalPheromone;
+        double cum = 0.0;
+        for (int i = 0; i < n; i++) {
+            cum += entries.get(i).pheromone;
+            if (cum >= r) return entries.get(i);
+        }
+        return entries.get(n - 1);   // float-rounding safety
+    }
+
+    /**
+     * Deposit a fired child's cost onto the parent it was mutated from (DD-032 credit assignment),
+     * capped at depositCap × EMA so one invariant-hit spike can't own the roulette. MUST be called
+     * before the child's consider() (the only evictor), so parent is a live entry and the running total
+     * stays exact — do not reorder. No contains-check needed for that reason. Synchronized.
+     */
+    public synchronized void reinforce(CorpusEntry parent, double childCost) {
+        if (!pheromone || parent == null) return;
+        double cap = depositCap * (emaCost > 0 ? emaCost : childCost);
+        double deposit = Math.min(childCost, cap);
+        parent.pheromone += deposit;
+        totalPheromone += deposit;
+    }
+
+    /** Evaporate all pheromone by `decay` (DD-032). O(n), called every N iterations by the loop. */
+    public synchronized void evaporate() {
+        if (!pheromone) return;
+        for (CorpusEntry e : entries) e.pheromone *= decay;
+        totalPheromone *= decay;
+    }
+
+    /** Back-compat string accessor (DD-031). Uniform when pheromone is off. */
     public synchronized String randomParentInput(Random rnd) {
-        if (entries.isEmpty()) return "/";
-        return entries.get(rnd.nextInt(entries.size())).input;
+        CorpusEntry e = selectParent(rnd);
+        return e == null ? "/" : e.input;
     }
 
     /**
@@ -58,20 +112,25 @@ public final class CostCorpus {
             emaCost = emaCost == 0.0 ? cost : emaAlpha * cost + (1 - emaAlpha) * emaCost;
         }
         if (!retain) return;
-        entries.add(new CorpusEntry(input, cost, latencyMs, heapDeltaKb, threadDelta, invariantCount, coverageFind));
+        CorpusEntry e = new CorpusEntry(input, cost, latencyMs, heapDeltaKb, threadDelta, invariantCount, coverageFind);
+        if (pheromone) { e.pheromone = emaCost + cost; totalPheromone += e.pheromone; }
+        entries.add(e);
         if (enabled) evictIfOverCap();
     }
 
-    /** Remove the cheapest NON-coverage entry when over the cap. Coverage finds are never evicted. */
+    /** Remove the worst NON-coverage entry when over the cap (pheromone-aware when on). Coverage finds are never evicted. */
     private void evictIfOverCap() {
         while (entries.size() > maxSize) {
             int victim = -1;
-            double cheapest = Double.MAX_VALUE;
+            double worst = Double.MAX_VALUE;
             for (int i = 0; i < entries.size(); i++) {
                 CorpusEntry e = entries.get(i);
-                if (!e.coverageFind && e.cost < cheapest) { cheapest = e.cost; victim = i; }
+                if (e.coverageFind) continue;                 // coverage backbone never evicted
+                double key = pheromone ? e.pheromone : e.cost; // pheromone-aware when on (DD-032)
+                if (key < worst) { worst = key; victim = i; }
             }
             if (victim < 0) break;   // only coverage-finds remain — stop (the cap yields to coverage)
+            totalPheromone -= entries.get(victim).pheromone;
             entries.remove(victim);
         }
     }

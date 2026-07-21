@@ -101,6 +101,11 @@ therefore gated on the deferred "mount the valve via the operator" item** — th
 step to make lock-free load truly operator-integrated. The feature itself is complete and correct
 for the valve path today.
 
+**Update (DD-030):** the operator now activates DD-029 in-cluster via the *agent-installed* boundary
+(the injected `-javaagent` instruments `StandardHostValve` when `-Dbasquin.boundary=agent`) — no valve
+mount required. `LoadRun`'s mode toggle + drift polling reach a live `/__basquin` surface on the
+operator target; the e2e asserts it.
+
 ## Non-goals / deferred
 
 - **Clustered-runner mode coordination** — who owns the target's mode when N drivers share it. MVP is

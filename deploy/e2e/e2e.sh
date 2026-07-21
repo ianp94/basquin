@@ -56,10 +56,10 @@ say "Pre-build all jars (single gradle invocation)"
   cd "$ROOT"
   GRADLEW=./gradlew
   if head -1 ./gradlew | grep -q $'\r'; then
-    tr -d '\r' < ./gradlew > .gradlew.e2e.lf && chmod +x .gradlew.e2e.lf && GRADLEW=./.gradlew.e2e.lf
+    tr -d '\r' < ./gradlew > ".gradlew.e2e.$$.lf" && chmod +x ".gradlew.e2e.$$.lf" && GRADLEW="./.gradlew.e2e.$$.lf"
   fi
   "$GRADLEW" stageAgents copyJacocoAgent runnerJar jar -q
-  rm -f .gradlew.e2e.lf
+  rm -f ".gradlew.e2e.$$.lf"
 )
 
 say "Ensure kind cluster '$CLUSTER' (parallel with image builds)"
@@ -71,19 +71,38 @@ bash "$ROOT/deploy/agents-image/build.sh"    "$TAG" > /tmp/e2e-build-agents.log 
 docker build -t "$OPERATOR_IMAGE" "$ROOT/operator"  > /tmp/e2e-build-operator.log  2>&1 & operator_pid=$!
 bash "$ROOT/deploy/runner-image/build.sh"    "$TAG" > /tmp/e2e-build-runner.log    2>&1 & runner_pid=$!
 bash "$ROOT/deploy/dashboard-image/build.sh" "$TAG" > /tmp/e2e-build-dashboard.log 2>&1 & dashboard_pid=$!
-for pair in "agents:$agents_pid" "operator:$operator_pid" "runner:$runner_pid" "dashboard:$dashboard_pid"; do
-  name="${pair%%:*}"; pid="${pair#*:}"
-  wait "$pid" || { echo "--- $name image build failed; full log: ---"; cat "/tmp/e2e-build-$name.log"; die "$name image build failed"; }
-done
+build_pids=("$agents_pid" "$operator_pid" "$runner_pid" "$dashboard_pid")
+build_names=(agents operator runner dashboard)
+build_name_of() { local i; for i in "${!build_pids[@]}"; do [ "${build_pids[$i]}" = "$1" ] && { echo "${build_names[$i]}"; return; }; done; echo "unknown"; }
+build_failed() {
+  local name; name="$(build_name_of "$1")"
+  echo "--- $name image build failed; full log: ---"; cat "/tmp/e2e-build-$name.log" 2>/dev/null || true
+  kill "${build_pids[@]}" 2>/dev/null || true
+  die "$name image build failed"
+}
+# Fail fast on the FIRST failing build, not the first in list order (#49 review). `wait -n -p`
+# needs bash >= 5.1 (CI has it); older shells fall back to ordered waits — same result, just
+# reported later when a fast failure sits behind a slower build.
+if [ "${BASH_VERSINFO[0]}" -gt 5 ] || { [ "${BASH_VERSINFO[0]}" -eq 5 ] && [ "${BASH_VERSINFO[1]}" -ge 1 ]; }; then
+  left=${#build_pids[@]}
+  while [ "$left" -gt 0 ]; do
+    done_pid=""
+    wait -n -p done_pid "${build_pids[@]}" || build_failed "$done_pid"
+    left=$((left-1))
+  done
+else
+  for pid in "${build_pids[@]}"; do wait "$pid" || build_failed "$pid"; done
+fi
 wait "$cluster_pid" || { cat /tmp/e2e-cluster.log; die "kind cluster create failed"; }
 
 say "Load images into kind (parallel)"
-load_pids=()
+load_pids=(); load_names=()
 for img in "$AGENTS_IMAGE" "$OPERATOR_IMAGE" "$RUNNER_IMAGE" "$DASHBOARD_IMAGE"; do
-  kind load docker-image "$img" --name "$CLUSTER" & load_pids+=($!)
+  lname="${img##*/}"; lname="${lname%%:*}"
+  kind load docker-image "$img" --name "$CLUSTER" > "/tmp/e2e-load-$lname.log" 2>&1 & load_pids+=($!); load_names+=("$lname")
 done
-for pid in "${load_pids[@]}"; do
-  wait "$pid" || die "kind load failed"
+for i in "${!load_pids[@]}"; do
+  wait "${load_pids[$i]}" || { cat "/tmp/e2e-load-${load_names[$i]}.log" 2>/dev/null || true; die "kind load failed for ${load_names[$i]}"; }
 done
 
 say "Ensure raw app image ($RAW_APP_IMAGE)"

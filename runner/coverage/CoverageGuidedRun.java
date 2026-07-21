@@ -144,10 +144,13 @@ public final class CoverageGuidedRun {
         RequestGrammar grammar = loadGrammar(rnd);
         List<String> seeds = grammar != null ? grammar.expandAll() : loadSeeds();
         // Start the corpus as the full seed set so every seeded endpoint is exercised, rather than
-        // relying on random discovery to stumble onto them.
-        List<String> corpus = new ArrayList<>(seeds);
+        // relying on random discovery to stumble onto them. Cost-driven retention/eviction/ranking
+        // (DD-031) is gated behind basquin.cost.enabled; disabled restores today's grow-only,
+        // coverage-only, insertion-ordered behavior exactly.
+        boolean costEnabled = !"false".equals(System.getProperty("basquin.cost.enabled", "true"));
+        CostCorpus corpus = new CostCorpus(seeds, costEnabled);
         // Publish the live corpus so the end-of-run summary can emit a capped "replay corpus" the
-        // operator persists (DD-026 PR 1). Same list object, populated as the run finds new coverage.
+        // operator persists (DD-026 PR 1). Same object, populated as the run finds new coverage.
         lastCorpus = corpus;
         long best = 0, total = 0;
 
@@ -184,9 +187,9 @@ public final class CoverageGuidedRun {
                 total = lastCoverageTotal;   // else a sequence-only run reports coverage=N/0
                 if (coveredAfterSeq > best) {
                     best = coveredAfterSeq;
-                    // Synchronized: the summary shutdown hook may snapshot this list concurrently on an
-                    // external SIGTERM (kubectl delete pod / eviction) before the deadline is hit.
-                    synchronized (corpus) { corpus.add(sequence.get(sequence.size() - 1)); }
+                    // A sequence coverage-find: cost of a whole sequence isn't a single request, so
+                    // record it as a coverage-find with zero cost — retained, never evicted.
+                    corpus.consider(sequence.get(sequence.size() - 1), 0.0, 0, 0, 0, 0, true);
                     StatusReporter.recordSaved("Coverage");
                 }
                 continue;
@@ -201,16 +204,24 @@ public final class CoverageGuidedRun {
                 // the template behind a corpus entry that previously found new coverage.
                 input = rnd.nextInt(100) < 30
                         ? grammar.randomRequest()
-                        : grammar.mutate(corpus.get(rnd.nextInt(corpus.size())));
+                        : grammar.mutate(corpus.randomParentInput(rnd));
             } else {
                 boolean fresh = rnd.nextInt(100) < 30;
                 input = fresh ? seeds.get(rnd.nextInt(seeds.size()))
-                              : mutate(corpus.get(rnd.nextInt(corpus.size())), rnd);
+                              : mutate(corpus.randomParentInput(rnd), rnd);
             }
 
             Agent.beginIteration();
+            double cost = 0.0; boolean measured = false; long latMs = 0;
+            CostSample sample = CostSample.EMPTY;
+            long t0 = System.nanoTime();
             try {
-                request(baseUrl, input);
+                sample = request(baseUrl, input);
+                latMs = (System.nanoTime() - t0) / 1_000_000L;
+                if (costEnabled) {
+                    cost = CostModel.score(latMs, sample.heapDeltaKb, sample.threadDelta, sample.invariantCount);
+                    measured = true;
+                }
             } catch (Throwable t) {
                 StatusReporter.recordCrash();
                 FuzzIO.saveInteresting(input.getBytes(StandardCharsets.UTF_8), t);
@@ -222,14 +233,27 @@ public final class CoverageGuidedRun {
             // rising covered count means this input hit an edge nothing before it had).
             long covered = sampleCoverage(cov);
             total = lastCoverageTotal;
-            if (covered > best) {
-                best = covered;
-                synchronized (corpus) { corpus.add(input); } // see the sequence branch above
-                StatusReporter.recordSaved("Coverage");
+            boolean coverageFind = covered > best;
+            if (coverageFind) best = covered;
+            if (coverageFind) StatusReporter.recordSaved("Coverage");
+            // Offer the input to the pool: coverage finds always retained; when cost was measured,
+            // the pool also retains notably-expensive inputs (cold-start + EMA gated) and evicts.
+            if (coverageFind || measured) {
+                corpus.consider(input, cost, latMs, sample.heapDeltaKb, sample.threadDelta,
+                        sample.invariantCount, coverageFind);
             }
         }
         StatusReporter.renderFinal();
         System.out.printf("CoverageGuidedRun done: corpus=%d coverage=%d/%d%n", corpus.size(), best, total);
+        if (costEnabled) {
+            StringBuilder top = new StringBuilder();
+            int n = 0;
+            for (CorpusEntry e : corpus.snapshotByCost()) {
+                if (n++ >= 5) break;
+                top.append(n == 1 ? "" : ", ").append(e.input).append('=').append(String.format("%.0f", e.cost));
+            }
+            System.out.println("[Basquin] replay cost-ranked (top " + Math.min(5, corpus.size()) + "): " + top);
+        }
     }
 
     /**
@@ -249,7 +273,7 @@ public final class CoverageGuidedRun {
     }
 
     /** The run's live corpus, published for the end-of-run summary's replay-corpus emission (DD-026). */
-    static volatile List<String> lastCorpus; // package-private for the combined-size test
+    static volatile CostCorpus lastCorpus; // package-private for the combined-size test
 
     /** Absolute upper bound on the replay-corpus bytes (also overridable); the effective budget is the
      *  smaller of this and what's left of the ~4 KiB termination message after the metrics JSON. */
@@ -274,14 +298,13 @@ public final class CoverageGuidedRun {
         }
         String corpusJson = "[]";
         try {
-            // Defensive copy under the list's own monitor — the main loop's synchronized add()s and this
-            // snapshot can't interleave, so no ConcurrentModificationException on a SIGTERM race.
-            List<String> lc = lastCorpus;
-            List<String> snapshot;
+            // CostCorpus.snapshotByCost() is internally synchronized, so no ConcurrentModificationException
+            // races the main loop's consider()s on a SIGTERM. Cost-descending order (when enabled) means the
+            // most expensive inputs survive replayCorpusJson's byte-budget truncation below.
+            CostCorpus lc = lastCorpus;
+            List<String> snapshot = new ArrayList<>();
             if (lc != null) {
-                synchronized (lc) { snapshot = new ArrayList<>(lc); }
-            } else {
-                snapshot = java.util.Collections.emptyList();
+                for (CorpusEntry e : lc.snapshotByCost()) snapshot.add(e.input);
             }
             // Budget the corpus to what fits the termination message alongside the actual metrics size.
             int snapBytes = snap.getBytes(StandardCharsets.UTF_8).length;
@@ -409,7 +432,14 @@ public final class CoverageGuidedRun {
         }
     }
 
-    private static void request(String base, String path) throws Exception {
+    /** Target-side cost components parsed from response headers (0 when a header wasn't sent). */
+    static final class CostSample {
+        final long heapDeltaKb; final int threadDelta; final int invariantCount;
+        CostSample(long h, int t, int inv) { heapDeltaKb = h; threadDelta = t; invariantCount = inv; }
+        static final CostSample EMPTY = new CostSample(0, 0, 0);
+    }
+
+    private static CostSample request(String base, String path) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(base + path).openConnection();
         c.setConnectTimeout(2000);
         c.setReadTimeout(10000);
@@ -429,11 +459,22 @@ public final class CoverageGuidedRun {
                 sessionCookie = val.split(";", 2)[0];
             }
         }
+        int invCount = 0;
         String inv = c.getHeaderField("X-Basquin-Invariant-Count");
         if (inv != null) {
+            try { invCount = Integer.parseInt(inv.trim()); } catch (NumberFormatException ignored) {}
             String detail = c.getHeaderField("X-Basquin-Invariant-Detail");
             FuzzIO.saveWithMeta(path.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
                     "route=" + path + "\ncount=" + inv + (detail != null ? "\ndetail=" + detail : ""));
+        }
+        long heapKb = 0; int threadDelta = 0;
+        String costHdr = c.getHeaderField("X-Basquin-Cost");  // "latencyMs,heapDeltaKb,threadDelta"
+        if (costHdr != null) {
+            String[] p = costHdr.split(",");
+            if (p.length == 3) {
+                try { heapKb = Long.parseLong(p[1].trim()); threadDelta = Integer.parseInt(p[2].trim()); }
+                catch (NumberFormatException ignored) {}
+            }
         }
         InputStream is = code >= 400 ? c.getErrorStream() : c.getInputStream();
         StringBuilder body = new StringBuilder();
@@ -449,6 +490,7 @@ public final class CoverageGuidedRun {
         if (code >= 500) {
             throw serverError(code, path, body.toString());
         }
+        return new CostSample(heapKb, threadDelta, invCount);
     }
 
     /**

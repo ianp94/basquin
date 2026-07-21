@@ -210,10 +210,10 @@ spec:
 <span class="c"># jpetstore   jpetstore    Injected   1              30s</span>
 
 kubectl -n basquin-system get basquintarget jpetstore -o jsonpath='{.status.coverageEndpoint}'
-<span class="c"># jpetstore-cjvm-jacoco.basquin-system.svc.cluster.local:6300</span></code></pre>
+<span class="c"># jpetstore-basquin-jacoco.basquin-system.svc.cluster.local:6300</span></code></pre>
   <p>Target phases: <code>Pending → Injecting → Injected</code> (or <code>Reverting</code> /
     <code>Error</code>). With <code>coverageService: true</code> the operator creates a headless
-    Service named after the Deployment it targets — <code>&lt;deploymentRef.name&gt;-cjvm-jacoco</code>
+    Service named after the Deployment it targets — <code>&lt;deploymentRef.name&gt;-basquin-jacoco</code>
     (not the CR's own name; they match in this example) — and writes its DNS name to
     <code>status.coverageEndpoint</code>.</p>
 

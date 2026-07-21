@@ -250,8 +250,8 @@ for i in $(seq 1 20); do
 done
 
 endpoint="$($K -n "$NS" get basquintarget jpetstore -o jsonpath='{.status.coverageEndpoint}')"
-svcip="$($K -n "$NS" get svc jpetstore-cjvm-jacoco -o jsonpath='{.spec.clusterIP}' 2>/dev/null || true)"
-epaddr="$($K -n "$NS" get endpoints jpetstore-cjvm-jacoco -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)"
+svcip="$($K -n "$NS" get svc jpetstore-basquin-jacoco -o jsonpath='{.spec.clusterIP}' 2>/dev/null || true)"
+epaddr="$($K -n "$NS" get endpoints jpetstore-basquin-jacoco -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)"
 
 check "target status is Injected"                         "[ '$phase' = 'Injected' ]"
 check "operator injected the agents initContainer"        "echo '$initc' | grep -q 'basquin/agents'"
@@ -261,7 +261,7 @@ check "agents loaded on the live app JVM"                 "echo '$cmdline' | gre
 check "app serves HTTP 200 with agents loaded"            "[ '$http' = '200' ]"
 check "coverage Service is headless (clusterIP None)"    "[ '$svcip' = 'None' ]"
 check "coverage Service has the pod as an endpoint"      "[ -n '$epaddr' ]"
-check "status.coverageEndpoint published (DD-023 flag)"  "echo '$endpoint' | grep -q 'jpetstore-cjvm-jacoco.*:6300'"
+check "status.coverageEndpoint published (DD-023 flag)"  "echo '$endpoint' | grep -q 'jpetstore-basquin-jacoco.*:6300'"
 
 # ---------------------------------------------------------------------------------------------------
 # Campaign (P5a): now that the target is Injected and exporting coverage, run a real BasquinCampaign

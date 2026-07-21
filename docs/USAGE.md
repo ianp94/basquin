@@ -256,7 +256,7 @@ kubectl -n basquin-system get basquintargets
 
 # the coverage endpoint to point the DD-023 flag at:
 kubectl -n basquin-system get basquintarget myapp -o jsonpath='{.status.coverageEndpoint}'
-# myapp-cjvm-jacoco.basquin-system.svc.cluster.local:6300
+# myapp-basquin-jacoco.basquin-system.svc.cluster.local:6300
 ```
 
 **Uninstall / revert** — delete the target; the operator restores the Deployment to exactly its

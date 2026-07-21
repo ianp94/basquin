@@ -44,7 +44,7 @@ var _ = Describe("BasquinCampaign Controller (P5a)", func() {
 		runnerImg   = "test/runner:v1"
 		dashImg     = "test/dashboard:v1"
 		namespace   = "default"
-		covEndpoint = "camp-cjvm-jacoco.default.svc.cluster.local:6300"
+		covEndpoint = "camp-basquin-jacoco.default.svc.cluster.local:6300"
 	)
 	ctx := context.Background()
 	// Unique names per spec — envtest has no GC controller, so a leftover Job would otherwise bleed

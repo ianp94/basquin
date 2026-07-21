@@ -198,12 +198,12 @@ kubectl -n basquin-system get basquintargets
 # jpetstore   jpetstore    Injected   1              30s
 
 kubectl -n basquin-system get basquintarget jpetstore -o jsonpath='{.status.coverageEndpoint}'
-# jpetstore-cjvm-jacoco.basquin-system.svc.cluster.local:6300
+# jpetstore-basquin-jacoco.basquin-system.svc.cluster.local:6300
 ```
 
 Phases: `Pending → Injecting → Injected` (or `Reverting`/`Error`). With `coverageService: true` the
 operator creates a headless Service named after the **Deployment it targets** —
-`<deploymentRef.name>-cjvm-jacoco` (not the `BasquinTarget` CR's own name; they match in this
+`<deploymentRef.name>-basquin-jacoco` (not the `BasquinTarget` CR's own name; they match in this
 example) — and writes its DNS name to `status.coverageEndpoint`.
 
 **Or with the CLI.** The `basquin` CLI (download a binary for your platform from the
@@ -219,7 +219,7 @@ basquin instrument -n basquin-system --deployment jpetstore \
   --invariant-mode soft --latency-max-ms 25 --heap-delta-max-kb 256 --wait
 # Applied BasquinTarget basquin-system/jpetstore (deployment "jpetstore")
 #   phase: Injected
-# Injected ✓  coverageEndpoint=jpetstore-cjvm-jacoco.basquin-system.svc.cluster.local:6300
+# Injected ✓  coverageEndpoint=jpetstore-basquin-jacoco.basquin-system.svc.cluster.local:6300
 ```
 
 `basquin instrument -h` lists every flag. Running a campaign / reading status via the CLI is
@@ -443,7 +443,7 @@ kubectl -n basquin-system get basquincampaign jpetstore-campaign -o yaml | less
 # ...or the CLI, which renders targets + campaigns together (add --watch to follow):
 basquin status -n basquin-system
 # TARGET      DEPLOYMENT   PHASE      COVERAGE-ENDPOINT
-# jpetstore   jpetstore    Injected   jpetstore-cjvm-jacoco...:6300
+# jpetstore   jpetstore    Injected   jpetstore-basquin-jacoco...:6300
 #
 # CAMPAIGN             TARGET      PHASE       COVERAGE   FINDINGS   DASHBOARD
 # jpetstore-campaign   jpetstore   Completed   22.5       72         http://jpetstore-campaign-dashboard...:7070

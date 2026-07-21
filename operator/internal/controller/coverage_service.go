@@ -33,7 +33,7 @@ import (
 // (-Dbasquin.coverage.jacoco=<host>:<port>) + InetAddress.getAllByName consume to union-merge
 // coverage across replicas. status.coverageEndpoint publishes the host:port to point the flag at.
 
-const coverageServiceSuffix = "-cjvm-jacoco"
+const coverageServiceSuffix = "-basquin-jacoco"
 
 func coverageServiceName(target *basquinv1alpha1.BasquinTarget) string {
 	return target.Spec.DeploymentRef.Name + coverageServiceSuffix

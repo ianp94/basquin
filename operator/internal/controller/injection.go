@@ -59,8 +59,8 @@ const (
 	agentsInitName   = "basquin-agents"
 	agentsVolumeName = "basquin-agents"
 	agentsMountPath  = "/basquin"
-	// Container port names are IANA_SVC_NAME: max 15 chars. "basquin-jacoco" (17) is too long.
-	coveragePortName = "cjvm-jacoco"
+	// Container port names are IANA_SVC_NAME: max 15 chars; "basquin-jacoco" is 14, so it fits.
+	coveragePortName = "basquin-jacoco"
 )
 
 // defaultAgentsImage is used when the operator is not configured with one. Overridable via the
@@ -309,7 +309,7 @@ func revertInjection(deploy *appsv1.Deployment) {
 	original, originalPresent := deploy.Annotations[annOriginalOpts]
 	for i := range tmpl.Containers {
 		// The volume mount and coverage port carry names namespaced to us (basquin-agents,
-		// cjvm-jacoco), so removing them from any container is safe.
+		// basquin-jacoco), so removing them from any container is safe.
 		removeVolumeMount(&tmpl.Containers[i], agentsVolumeName)
 		removeContainerPort(&tmpl.Containers[i], coveragePortName)
 		// The env var name is generic (CATALINA_OPTS/JAVA_TOOL_OPTIONS), so restore/remove it ONLY on

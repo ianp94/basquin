@@ -33,9 +33,9 @@ public class HttpDockerFuzzTarget implements IterationTarget, InputReceiver {
         c.setRequestMethod("GET");
         code = c.getResponseCode();
         // Save invariant if server signals via headers
-        String invCount = c.getHeaderField("X-ClosureJVM-Invariant-Count");
+        String invCount = c.getHeaderField("X-Basquin-Invariant-Count");
         if (invCount != null) {
-            String detail = c.getHeaderField("X-ClosureJVM-Invariant-Detail");
+            String detail = c.getHeaderField("X-Basquin-Invariant-Detail");
             FuzzIO.saveWithMeta(last != null ? last : new byte[0], "Invariant-Remote", "count=" + invCount + (detail != null ? "\ndetail=" + detail : ""));
         }
         try (BufferedReader r = new BufferedReader(new InputStreamReader(

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the closurejvm/dashboard image the operator runs as a per-campaign dashboard (P5b,
+# Build the basquin/dashboard image the operator runs as a per-campaign dashboard (P5b,
 # docs/CAMPAIGN-DESIGN.md, DD-025). Stages the harness fat jar from the Gradle build into ./, then
 # docker-builds the image. Optionally loads it into a kind cluster for local e2e.
 #
@@ -9,15 +9,15 @@
 #     KIND_CLUSTER  if set, `kind load docker-image` into that cluster after building.
 #
 # Examples:
-#   deploy/dashboard-image/build.sh                     # closurejvm/dashboard:<version> + :latest
-#   deploy/dashboard-image/build.sh 0.2.0 closurejvm    # ...and load into the `closurejvm` kind cluster
+#   deploy/dashboard-image/build.sh                     # basquin/dashboard:<version> + :latest
+#   deploy/dashboard-image/build.sh 0.2.0 basquin    # ...and load into the `basquin` kind cluster
 set -euo pipefail
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CTX="$(dirname "${BASH_SOURCE[0]}")"
-IMAGE="closurejvm/dashboard"
+IMAGE="basquin/dashboard"
 
 cd "$REPO_ROOT"
 
@@ -37,10 +37,10 @@ TAG="${1:-${VERSION:-dev}}"
 KIND_CLUSTER="${2:-}"
 
 echo "==> Staging harness jar into $CTX/"
-JAR="build/libs/closurejvm-${VERSION:-0.2.0}.jar"
-[ -f "$JAR" ] || JAR="$(ls build/libs/closurejvm-*.jar 2>/dev/null | grep -v -- '-runner.jar' | head -1)"
-[ -n "$JAR" ] && [ -f "$JAR" ] || die "harness jar not built (expected build/libs/closurejvm-*.jar)"
-cp "$JAR" "$CTX/closurejvm.jar"
+JAR="build/libs/basquin-${VERSION:-0.2.0}.jar"
+[ -f "$JAR" ] || JAR="$(ls build/libs/basquin-*.jar 2>/dev/null | grep -v -- '-runner.jar' | head -1)"
+[ -n "$JAR" ] && [ -f "$JAR" ] || die "harness jar not built (expected build/libs/basquin-*.jar)"
+cp "$JAR" "$CTX/basquin.jar"
 
 # STAGE_ONLY=1: stage the jar and stop, so a caller (release.yml) can drive `docker buildx` for a
 # multi-arch push itself (the jar is arch-independent, so no per-arch work here). Leaves the staged
@@ -54,7 +54,7 @@ fi
 echo "==> docker build $IMAGE:$TAG (+ :latest)"
 docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" "$CTX"
 # The staged jar is a build product; don't leave it in the source tree.
-rm -f "$CTX/closurejvm.jar"
+rm -f "$CTX/basquin.jar"
 
 if [ -n "$KIND_CLUSTER" ]; then
   echo "==> kind load docker-image $IMAGE:$TAG into cluster '$KIND_CLUSTER'"

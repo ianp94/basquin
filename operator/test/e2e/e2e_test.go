@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/ianp94/closureJVM/operator/test/utils"
+	"github.com/ianp94/basquin/operator/test/utils"
 )
 
 const namespace = "operator-system"

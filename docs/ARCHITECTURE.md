@@ -1,6 +1,6 @@
-# ClosureJVM Architecture
+# Basquin Architecture
 
-This document explains the “why” and “how” behind ClosureJVM. The root README stays short and points here for details.
+This document explains the “why” and “how” behind Basquin. The root README stays short and points here for details.
 
 Significant design choices (and the alternatives we rejected) are logged in
 [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) — consult it before revisiting settled questions.
@@ -13,7 +13,7 @@ Modern JVM web apps often fail due to availability issues rather than crashes:
 - Resource leaks (threads, executors, timers, memory)
 - Iteration contamination (state carried across requests)
 
-These problems are input-dependent, hard to reproduce, and frequently invisible to conventional testing. ClosureJVM systematically explores request space while enforcing clean iteration boundaries and checking availability invariants.
+These problems are input-dependent, hard to reproduce, and frequently invisible to conventional testing. Basquin systematically explores request space while enforcing clean iteration boundaries and checking availability invariants.
 
 ## Core Idea
 
@@ -69,7 +69,7 @@ Inputs → Harness/Runner → App Entry → Metrics & Coverage → Invariants �
 ### Kubernetes operator (deploy-time instrumentation)
 
 The operator instruments an app **at deploy time** rather than requiring a custom image. A namespaced
-`ClosureJVMTarget` custom resource names a Deployment; the operator patches its pod template — an
+`BasquinTarget` custom resource names a Deployment; the operator patches its pod template — an
 initContainer copies the agents from a versioned image into a shared volume, and the agent flags are
 **appended** to the container's `CATALINA_OPTS`/`JAVA_TOOL_OPTIONS` (never replacing the app's own).
 It's fully reversible (a finalizer restores the Deployment exactly on delete) and, when asked, creates

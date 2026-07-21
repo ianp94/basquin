@@ -16,17 +16,17 @@ import java.util.List;
  *
  * Usage:
  *   java -cp <cp> runner.CorpusRunner <targetClass> <corpusDir>
- * or set -Dclosurejvm.target and -Dclosurejvm.corpusDir and pass no args.
+ * or set -Dbasquin.target and -Dbasquin.corpusDir and pass no args.
  */
 public final class CorpusRunner {
 
     public static void main(String[] args) throws Exception {
         runner.util.TriageSink.ensureStarted();
         runner.util.StatusReporter.ensureStarted();
-        String targetClass = (args.length > 0) ? args[0] : System.getProperty("closurejvm.target");
-        String corpusDir = (args.length > 1) ? args[1] : System.getProperty("closurejvm.corpusDir", "corpus");
+        String targetClass = (args.length > 0) ? args[0] : System.getProperty("basquin.target");
+        String corpusDir = (args.length > 1) ? args[1] : System.getProperty("basquin.corpusDir", "corpus");
         if (targetClass == null || targetClass.isBlank()) {
-            throw new IllegalArgumentException("Target class not specified. Pass arg or -Dclosurejvm.target");
+            throw new IllegalArgumentException("Target class not specified. Pass arg or -Dbasquin.target");
         }
 
         IterationTarget target = instantiate(targetClass);
@@ -37,8 +37,8 @@ public final class CorpusRunner {
 
         int failures = 0;
         int violations = 0;
-        boolean stopOnFailure = Boolean.getBoolean("closurejvm.corpus.stopOnFailure");
-        boolean failOnAny = Boolean.getBoolean("closurejvm.corpus.failOnAny");
+        boolean stopOnFailure = Boolean.getBoolean("basquin.corpus.stopOnFailure");
+        boolean failOnAny = Boolean.getBoolean("basquin.corpus.failOnAny");
 
         for (int i = 0; i < inputs.size(); i++) {
             Path p = inputs.get(i);

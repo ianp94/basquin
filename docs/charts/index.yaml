@@ -1,26 +1,26 @@
 apiVersion: v1
 entries:
-  closurejvm-operator:
+  basquin-operator:
   - apiVersion: v2
     appVersion: 0.2.0
-    created: "2026-07-20T19:03:32.128236228-04:00"
-    description: The ClosureJVM Kubernetes operator — instrument an unmodified app
-      with a ClosureJVMTarget and run bounded coverage-guided tests with a ClosureJVMCampaign.
+    created: "2026-07-20T20:30:42.696370489-04:00"
+    description: The Basquin Kubernetes operator — instrument an unmodified app with
+      a BasquinTarget and run bounded coverage-guided tests with a BasquinCampaign.
       Namespaced by design (Role/RoleBinding in one namespace; install one release
       per namespace you want to instrument).
-    digest: 224d8eff376b0402351d0bd7ed775b5b52543a0a7024052fd287d74642e6da9f
-    home: https://ianp94.github.io/closureJVM/
+    digest: 8f28c0c497848f633ede2b2cab2d1bbf9f5c41e48b380e04c49e83ac204ecc38
+    home: https://ianp94.github.io/basquin/
     keywords:
     - testing
     - availability
     - fuzzing
     - jvm
     - operator
-    name: closurejvm-operator
+    name: basquin-operator
     sources:
-    - https://github.com/ianp94/closureJVM
+    - https://github.com/ianp94/basquin
     type: application
     urls:
-    - https://ianp94.github.io/closureJVM/charts/closurejvm-operator-0.1.0.tgz
+    - https://ianp94.github.io/basquin/charts/basquin-operator-0.1.0.tgz
     version: 0.1.0
-generated: "2026-07-20T19:03:32.121370623-04:00"
+generated: "2026-07-20T20:30:42.686824631-04:00"

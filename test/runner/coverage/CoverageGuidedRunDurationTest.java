@@ -5,7 +5,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
 /**
- * {@code -Dclosurejvm.run.duration} is how an operator campaign (DD-025) time-boxes a run so it exits
+ * {@code -Dbasquin.run.duration} is how an operator campaign (DD-025) time-boxes a run so it exits
  * cleanly and still writes its summary. A misparse would silently under- or over-run, so the parser
  * is pinned here. Lives in {@code runner.coverage} to reach the package-private method.
  */

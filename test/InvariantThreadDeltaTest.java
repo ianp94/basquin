@@ -21,7 +21,7 @@ public class InvariantThreadDeltaTest {
         cmd.add(javaBin);
         cmd.add("-cp");
         cmd.add(cp);
-        cmd.add("-Dclosurejvm.invariant.threadDelta.max=0");
+        cmd.add("-Dbasquin.invariant.threadDelta.max=0");
         cmd.add("runner.GenericRunner");
         cmd.add("1");
         cmd.add("examples.targets.ThreadDeltaTarget");

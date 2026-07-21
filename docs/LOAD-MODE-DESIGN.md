@@ -2,10 +2,10 @@
 
 **Status:** proposed, under review. Not yet implemented. On approval this becomes **DD-026** and lands
 as two implementation PRs (producer, then consumer) behind a `spec.mode` field on the existing
-`ClosureJVMCampaign`. Extends [CAMPAIGN-DESIGN.md](CAMPAIGN-DESIGN.md) (DD-025).
+`BasquinCampaign`. Extends [CAMPAIGN-DESIGN.md](CAMPAIGN-DESIGN.md) (DD-025).
 
 Two crux decisions are **already settled** (user, 2026-07-20):
-- **A `mode: explore | load` field on `ClosureJVMCampaign`** — *not* a separate `ClosureJVMLoadTest`
+- **A `mode: explore | load` field on `BasquinCampaign`** — *not* a separate `BasquinLoadTest`
   CRD. Fuzz and load differ in *objective*, not *infrastructure*: both drive HTTP at an instrumented
   target and watch the invariant oracles. Reusing the campaign machinery (target-gating, driver Job,
   dashboard, status, spec-hash rerun, the CLI) is far less code than a parallel controller (§8).
@@ -32,7 +32,7 @@ mode asks *does it stay healthy when that work happens a thousand times a second
 ## 2. The `mode` field
 
 ```yaml
-kind: ClosureJVMCampaign
+kind: BasquinCampaign
 spec:
   mode: explore            # explore (default) | load
   targetRef: { name: jpetstore }
@@ -60,7 +60,7 @@ whole `CampaignDriverSpec`, so new fields auto-join with no special-casing), so 
 exists today, so this is new ground, spelled out concretely rather than left prose):
 
 ```
-// on ClosureJVMCampaignSpec:
+// on BasquinCampaignSpec:
 rule: "self.mode != 'load' || (has(self.driver.corpusConfigMap) && size(self.driver.corpusConfigMap) > 0)"
   message: "mode: load requires driver.corpusConfigMap (the corpus to replay)"
 rule: "self.mode != 'load' || !has(self.driver.grammarConfigMap)"
@@ -83,13 +83,13 @@ rule: "self.mode != 'load' || !has(self.driver.grammarConfigMap)"
 An `explore` run accumulates, in `CoverageGuidedRun`, the inputs that reached new coverage.
 
 - **Runner:** at end-of-run, serialize the interesting corpus to a file, one input per line
-  (`-Dclosurejvm.corpus.out=...`). Crucially this is the **post-mutation, fully-formed route strings**
+  (`-Dbasquin.corpus.out=...`). Crucially this is the **post-mutation, fully-formed route strings**
   the run actually fired (the `loadSeeds()`-shape, not DD-018's pre-mutation raw values) — the right
   shape for verbatim replay (§2). It's a *different artifact wearing the "corpus" name*; call it the
   *replay corpus* to avoid confusion with input corpora.
 - **Operator:** capture that file into a ConfigMap owner-ref'd to the campaign and set
   `status.corpusConfigMap`. The ConfigMap's *mount* into a later load run reuses the existing
-  corpus-volume + `-Dclosurejvm.corpusDir` mechanics — but see the honesty note below on what does
+  corpus-volume + `-Dbasquin.corpusDir` mechanics — but see the honesty note below on what does
   **not** already exist.
 
 Independently useful beyond load mode: reproducibility and the **dashboard corpus view** (TODO, user
@@ -98,7 +98,7 @@ request) — the dashboard can render `status.corpusConfigMap`.
 > **Honest accounting of PR 1's real cost (review #32) — this is new plumbing, not reuse.** Neither a
 > ConfigMap *write-back* path, the operator RBAC for it, nor any driver-pod identity exists today:
 > - The driver summary is read via the **pod termination message + pod-list** (`campaign_resources.go`,
->   `closurejvmcampaign_controller.go`), **not** a ConfigMap. There is no write-back path for *any*
+>   `basquincampaign_controller.go`), **not** a ConfigMap. There is no write-back path for *any*
 >   artifact. The termination message is capped at **~4 KiB** — fine for a one-line summary, too small
 >   for a corpus file. So "reuse the results ConfigMap" is a non-starter: it was never built.
 > - The operator's Role grants `configmaps: get;list;watch` only — **no create/patch/update**. Emitting
@@ -117,7 +117,7 @@ request) — the dashboard can render `status.corpusConfigMap`.
 
 ## 4. Consumer — load mode (PR 2)
 
-- **Runner:** a load driver (either a `-Dclosurejvm.mode=load` branch in the coverage runner or a
+- **Runner:** a load driver (either a `-Dbasquin.mode=load` branch in the coverage runner or a
   small dedicated `runner.load.LoadRun`) that reads the corpus, then fires requests from a fixed-size
   worker pool (`concurrency`) in a tight loop until the deadline — **no mutation, no coverage fetch**
   (that's exploration overhead). Every request still passes through the invariant oracles and
@@ -185,18 +185,18 @@ follow-on load run replays it and reports throughput/latency/drift).
 
 - CRD: `spec.mode` (enum, default explore), `driver.concurrency` + `driver.warmup` (load),
   `status.corpusConfigMap`, `status.load`. CEL rules per §2.
-- `buildDriverJob`: pass `-Dclosurejvm.mode`, `-Dclosurejvm.concurrency`, `-Dclosurejvm.warmup`,
-  `-Dclosurejvm.corpus.out`; in load mode skip the grammar volume, keep the corpus volume.
+- `buildDriverJob`: pass `-Dbasquin.mode`, `-Dbasquin.concurrency`, `-Dbasquin.warmup`,
+  `-Dbasquin.corpus.out`; in load mode skip the grammar volume, keep the corpus volume.
 - **New RBAC + identity (PR 1):** a `configmaps: create;update` grant, and a write-back **sidecar**
   with a Job-scoped SA that writes the replay corpus to the single named output ConfigMap (the driver
   container stays credential-less — §3).
 - Reconciler: on an explore Job's success, set `status.corpusConfigMap` (owner-ref'd to the campaign).
-- Runner: `-Dclosurejvm.corpus.out` write-out of the post-mutation route strings (PR 1); the load loop
+- Runner: `-Dbasquin.corpus.out` write-out of the post-mutation route strings (PR 1); the load loop
   with a pooled/keep-alive HTTP client, warmup exclusion, and periodic drift sampling (PR 2).
 
 ## 8. Alternatives considered
 
-- **Separate `ClosureJVMLoadTest` CRD** — cleaner status separation, but duplicates target-gating, the
+- **Separate `BasquinLoadTest` CRD** — cleaner status separation, but duplicates target-gating, the
   driver Job, the dashboard, GC, and the CLI in a second controller. Rejected: the shared machinery is
   the bulk of the value, and a `mode` field expresses "same infra, different objective" honestly.
 - **PVC for the corpus** — handles very large corpora, but adds StorageClass/PVC lifecycle + RWX-vs-RWO

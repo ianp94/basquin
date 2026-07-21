@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ClosureJVM Dashboard</title>
+<title>Basquin Dashboard</title>
 <style>
 :root{color-scheme:dark}
 *{box-sizing:border-box}
@@ -53,7 +53,7 @@ pre.raw{margin:6px 0 0;white-space:pre-wrap;color:#8b949e;font-size:11px;backgro
 </head>
 <body>
 <header>
-  <span class="dot" id="hdot"></span><h1>ClosureJVM</h1>
+  <span class="dot" id="hdot"></span><h1>Basquin</h1>
   <span id="sub" class="muted"></span>
   <span style="flex:1"></span>
   <a id="back" style="display:none">&larr; all campaigns</a>
@@ -218,7 +218,7 @@ async function tickFleet(){
         '<div class="s">last seen '+c.ageSec+'s ago</div>'+
       '</div>').join('')
       : '<div class="muted">No campaigns reporting yet. Start a driver with '+
-        '<code>-Dclosurejvm.dashboard.push=localhost:'+location.port+'</code></div>';
+        '<code>-Dbasquin.dashboard.push=localhost:'+location.port+'</code></div>';
 
     // Fleet-wide findings: the same defect found on several targets merges into one row.
     const fc = await getJson('/api/clusters');
@@ -362,7 +362,7 @@ document.getElementById('analyzeBtn').onclick = async function(){
   btn.disabled=true; btn.textContent='Analyzing…';
   panel.style.display='block'; panel.textContent='Asking Claude about this campaign’s clusters…';
   try{
-    const r = await (await fetch('/api/analyze/'+encodeURIComponent(current),{method:'POST',headers:{'X-ClosureJVM-Dashboard':'1'}})).json();
+    const r = await (await fetch('/api/analyze/'+encodeURIComponent(current),{method:'POST',headers:{'X-Basquin-Dashboard':'1'}})).json();
     panel.textContent = r.analysis || ('Not available: '+(r.error||'unknown error'));
   }catch(e){ panel.textContent='Request failed: '+e; }
   btn.disabled=false; btn.textContent='Analyze with Claude';

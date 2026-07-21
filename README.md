@@ -1,18 +1,18 @@
-# ClosureJVM
+# Basquin
 
 **Kubernetes-native fuzz and load testing for JVM web apps — where the bug oracle is availability,
 not just crashes.**
 
-Instrument an *unmodified* app with a `ClosureJVMTarget`, run a coverage-guided fuzz campaign to
+Instrument an *unmodified* app with a `BasquinTarget`, run a coverage-guided fuzz campaign to
 discover the inputs that stress it, then replay those exact inputs under load. Latency spikes, heap
 retention, and thread/executor leaks are first-class findings — not just exceptions.
 
-[![CI](https://github.com/ianp94/closureJVM/actions/workflows/ci.yml/badge.svg)](https://github.com/ianp94/closureJVM/actions/workflows/ci.yml)
-[![Operator e2e](https://github.com/ianp94/closureJVM/actions/workflows/operator-e2e.yml/badge.svg)](https://github.com/ianp94/closureJVM/actions/workflows/operator-e2e.yml)
+[![CI](https://github.com/ianp94/basquin/actions/workflows/ci.yml/badge.svg)](https://github.com/ianp94/basquin/actions/workflows/ci.yml)
+[![Operator e2e](https://github.com/ianp94/basquin/actions/workflows/operator-e2e.yml/badge.svg)](https://github.com/ianp94/basquin/actions/workflows/operator-e2e.yml)
 
-📖 **[Documentation, guides & demos → ianp94.github.io/closureJVM](https://ianp94.github.io/closureJVM/)**
+📖 **[Documentation, guides & demos → ianp94.github.io/basquin](https://ianp94.github.io/basquin/)**
 
-![ClosureJVM full stack in a kind cluster](docs/demo-k8s.svg)
+![Basquin full stack in a kind cluster](docs/demo-k8s.svg)
 
 *Above: 250 requests against an unmodified [JPetStore](https://github.com/mybatis/jpetstore-6) pod —
 live **coverage %** (281/6368 edges of the pod's own code, pulled from its JaCoCo agent), **96
@@ -20,18 +20,18 @@ invariant finds** harvested server-side through the valve, 0 crashes.*
 
 ## Built with AI assistance
 
-Much of ClosureJVM's code and documentation was written by Anthropic's Claude (via Claude Code),
+Much of Basquin's code and documentation was written by Anthropic's Claude (via Claude Code),
 with the author directing the design, making the architecture and semantic decisions, and reviewing
 the work. This is noted for transparency — the project is not presented as entirely hand-written.
 
 ## The model: instrument once, then run campaigns
 
-Two custom resources in group `closurejvm.dev/v1alpha1`:
+Two custom resources in group `basquin.dev/v1alpha1`:
 
-- **`ClosureJVMTarget`** — *instrument a Deployment.* Long-lived. Patches an unmodified app
+- **`BasquinTarget`** — *instrument a Deployment.* Long-lived. Patches an unmodified app
   Deployment to load the agents (thread tracker, JaCoCo coverage) via an initContainer + shared
   volume. Fully reversible — deleting it restores the Deployment byte-for-byte.
-- **`ClosureJVMCampaign`** — *run a bounded test.* Ephemeral. Drives the instrumented target and
+- **`BasquinCampaign`** — *run a bounded test.* Ephemeral. Drives the instrumented target and
   aggregates results into status. One target, many campaigns over time.
 
 Campaigns run in one of two **modes**:
@@ -51,34 +51,34 @@ to start cluster-wide. The standing privilege is a `Role`/`RoleBinding`, never a
 Install the operator from the published Helm repo — real images from ghcr, nothing to build:
 
 ```bash
-helm repo add closurejvm https://ianp94.github.io/closureJVM/charts
+helm repo add basquin https://ianp94.github.io/basquin/charts
 helm repo update
-helm install closurejvm closurejvm/closurejvm-operator \
-  --namespace closurejvm-system --create-namespace --set fullnameOverride=closurejvm
+helm install basquin basquin/basquin-operator \
+  --namespace basquin-system --create-namespace --set fullnameOverride=basquin
 ```
 
-Then drive it with the `closurejvm` CLI ([release binaries](https://github.com/ianp94/closureJVM/releases)
+Then drive it with the `basquin` CLI ([release binaries](https://github.com/ianp94/basquin/releases)
 for linux/macOS/Windows × amd64/arm64):
 
 ```bash
 # 1. Instrument a running app — no rebuild, no image changes.
-closurejvm instrument -n closurejvm-system --deployment jpetstore \
+basquin instrument -n basquin-system --deployment jpetstore \
   --jvm-opts-var CATALINA_OPTS --coverage-includes 'org.mybatis.jpetstore.*' --coverage-service --wait
 
 # 2. Fuzz it: coverage-guided exploration, emitting a corpus of interesting inputs.
-closurejvm run -n closurejvm-system --target jpetstore \
-  --base-url http://jpetstore-app.closurejvm-system.svc.cluster.local:8080 \
+basquin run -n basquin-system --target jpetstore \
+  --base-url http://jpetstore-app.basquin-system.svc.cluster.local:8080 \
   --iterations 500 --grammar examples/grammar/jpetstore.grammar \
   --corpus examples/corpus/jpetstore --watch
 
 # 3. Replay what it found, under load.
-closurejvm run -n closurejvm-system --name jpetstore-load --mode load --target jpetstore \
-  --base-url http://jpetstore-app.closurejvm-system.svc.cluster.local:8080 \
+basquin run -n basquin-system --name jpetstore-load --mode load --target jpetstore \
+  --base-url http://jpetstore-app.basquin-system.svc.cluster.local:8080 \
   --duration 30m --concurrency 50 --corpus ./saved-corpus --watch
 
 # 4. Read results / open the per-campaign dashboard.
-closurejvm status -n closurejvm-system
-closurejvm dashboard -n closurejvm-system --campaign jpetstore-campaign   # then open :7070
+basquin status -n basquin-system
+basquin dashboard -n basquin-system --campaign jpetstore-campaign   # then open :7070
 ```
 
 Everything above is also plain YAML if you prefer — see
@@ -90,7 +90,7 @@ instrument → fuzz → load → dashboard) in an ephemeral kind cluster on ever
 
 Fuzzers like Jazzer and JQF are excellent, but their oracle is "did it throw / crash." Load tools
 like k6 and Gatling measure throughput but know nothing about what's happening *inside* the JVM.
-ClosureJVM sits in the gap:
+Basquin sits in the gap:
 
 - **Availability is the oracle.** An input is *interesting* if it exceeds a latency budget, grows
   the heap, or leaks a thread/executor — not only if it throws. Most JVM web apps don't fall over
@@ -118,7 +118,7 @@ Full walkthrough: [THIRD-PARTY-APPS](docs/THIRD-PARTY-APPS.md).
 
 ## How exploration works
 
-![ClosureJVM exploration panel driving JPetStore](docs/demo-explore.svg)
+![Basquin exploration panel driving JPetStore](docs/demo-explore.svg)
 
 *Above: exploring an unmodified JPetStore over HTTP — 220 requests, **0 crashes** (it's robust),
 **48 invariant finds** harvested server-side via the valve.*
@@ -178,10 +178,10 @@ development, for CI on a non-Kubernetes runner, or for driving an app you haven'
 
 # Drive a running web app and watch the live status screen:
 ./gradlew runHttpDrive -Dexamples.http.baseUrl=http://localhost:8080 \
-  -Dclosurejvm.invariant.latency.maxMs=50 -Dclosurejvm.invariant.mode=soft
+  -Dbasquin.invariant.latency.maxMs=50 -Dbasquin.invariant.mode=soft
 ```
 
-![ClosureJVM live status driving JPetStore](docs/demo.svg)
+![Basquin live status driving JPetStore](docs/demo.svg)
 
 Point it at **your** app by implementing a three-method `IterationTarget` — see
 [USAGE](docs/USAGE.md#use-with-your-app). Every flag is documented in [USAGE](docs/USAGE.md).
@@ -208,7 +208,7 @@ Details and the "why" behind each choice: [ARCHITECTURE](docs/ARCHITECTURE.md) �
   unmodified app images, per-campaign dashboards, published multi-arch images
 - **Two campaign modes**: coverage-guided fuzzing (`explore`) and corpus replay under load (`load`),
   with the corpus carrying from one to the other
-- **`closurejvm` CLI**: instrument / run / status / dashboard, for linux, macOS, and Windows
+- **`basquin` CLI**: instrument / run / status / dashboard, for linux, macOS, and Windows
 - **Helm chart** published to a GitHub Pages Helm repo; images on ghcr.io
 - Availability invariants (latency / heap / thread-delta) with hard-fail or soft-signal modes
 - Thread, executor, and timer leak detection with stack evidence, via a JVMTI native agent
@@ -224,7 +224,7 @@ Details and the "why" behind each choice: [ARCHITECTURE](docs/ARCHITECTURE.md) �
 
 - [OPERATOR-USAGE](docs/OPERATOR-USAGE.md) — **start here for Kubernetes**: instrument an app, run
   explore/load campaigns, read results. Install via the
-  [Helm chart](deploy/helm/closurejvm-operator/README.md) or the `closurejvm` CLI
+  [Helm chart](deploy/helm/basquin-operator/README.md) or the `basquin` CLI
 - [USAGE](docs/USAGE.md) — the standalone harness: commands, flags, grammar, every runnable task
 - [OPERATOR-DESIGN](docs/OPERATOR-DESIGN.md) · [CAMPAIGN-DESIGN](docs/CAMPAIGN-DESIGN.md) (DD-025) ·
   [LOAD-MODE-DESIGN](docs/LOAD-MODE-DESIGN.md) (DD-026) — operator, campaign, and load/soak design

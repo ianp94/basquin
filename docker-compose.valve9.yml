@@ -1,5 +1,5 @@
-# Deploy a javax.servlet WAR on Tomcat 9 with the ClosureJVM valve attached to every
-# request. The same closurejvm-valve jar is used as the Tomcat 10 path — its bytecode is
+# Deploy a javax.servlet WAR on Tomcat 9 with the Basquin valve attached to every
+# request. The same basquin-valve jar is used as the Tomcat 10 path — its bytecode is
 # namespace-free, so it loads on both (see docs/DESIGN-DECISIONS.md DD-011).
 #
 # WAR_PATH is required (no demo WAR is javax). Example — JPetStore built locally:
@@ -12,9 +12,9 @@ services:
     ports:
       - "${TOMCAT_HOST_PORT:-8080}:8080"
     environment:
-      - CATALINA_OPTS=-javaagent:/usr/local/tomcat/closurejvm-agent.jar -Xbootclasspath/a:/usr/local/tomcat/closurejvm-agent.jar -Dclosurejvm.invariant.mode=${INVARIANT_MODE:-soft} -Dclosurejvm.invariant.latency.maxMs=${INVARIANT_LATENCY_MS:-50} -Dclosurejvm.invariant.latency.sample=${INVARIANT_LATENCY_SAMPLE:-true} -Dclosurejvm.invariant.heapDelta.maxKb=${INVARIANT_HEAP_KB:-256} ${CATALINA_OPTS_EXTRA:-}
+      - CATALINA_OPTS=-javaagent:/usr/local/tomcat/basquin-agent.jar -Xbootclasspath/a:/usr/local/tomcat/basquin-agent.jar -Dbasquin.invariant.mode=${INVARIANT_MODE:-soft} -Dbasquin.invariant.latency.maxMs=${INVARIANT_LATENCY_MS:-50} -Dbasquin.invariant.latency.sample=${INVARIANT_LATENCY_SAMPLE:-true} -Dbasquin.invariant.heapDelta.maxKb=${INVARIANT_HEAP_KB:-256} ${CATALINA_OPTS_EXTRA:-}
     volumes:
       - ${WAR_PATH:?set WAR_PATH to a javax.servlet WAR}:/usr/local/tomcat/webapps/ROOT.war:ro
-      - ./build/libs/closurejvm-0.2.0.jar:/usr/local/tomcat/closurejvm-agent.jar:ro
-      - ./tomcat-valve/build/libs/closurejvm-valve-0.1.0.jar:/usr/local/tomcat/lib/closurejvm-valve.jar:ro
+      - ./build/libs/basquin-0.2.0.jar:/usr/local/tomcat/basquin-agent.jar:ro
+      - ./tomcat-valve/build/libs/basquin-valve-0.1.0.jar:/usr/local/tomcat/lib/basquin-valve.jar:ro
       - ./deploy/valve/context.xml:/usr/local/tomcat/conf/context.xml:ro

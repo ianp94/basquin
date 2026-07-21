@@ -5,13 +5,13 @@ package agent;
  * Defaults are disabled unless properties are set.
  *
  * Properties (global and per-invariant):
- * - closurejvm.invariant.mode = hard|soft (default: hard)
- * - closurejvm.invariant.latency.maxMs = <long>
- *   - closurejvm.invariant.latency.mode = hard|soft (optional override)
- * - closurejvm.invariant.heapDelta.maxKb = <long>
- *   - closurejvm.invariant.heapDelta.mode = hard|soft
- * - closurejvm.invariant.threadDelta.max = <int>
- *   - closurejvm.invariant.threadDelta.mode = hard|soft
+ * - basquin.invariant.mode = hard|soft (default: hard)
+ * - basquin.invariant.latency.maxMs = <long>
+ *   - basquin.invariant.latency.mode = hard|soft (optional override)
+ * - basquin.invariant.heapDelta.maxKb = <long>
+ *   - basquin.invariant.heapDelta.mode = hard|soft
+ * - basquin.invariant.threadDelta.max = <int>
+ *   - basquin.invariant.threadDelta.mode = hard|soft
  */
 final class Invariants {
 
@@ -32,34 +32,34 @@ final class Invariants {
         java.util.List<Violation> violations = new java.util.ArrayList<>();
 
         // Latency
-        Long latencyMax = getLongProp("closurejvm.invariant.latency.maxMs");
+        Long latencyMax = getLongProp("basquin.invariant.latency.maxMs");
         if (latencyMax != null && elapsedMs > latencyMax) {
             violations.add(new Violation("latency", String.format("%dms > %dms", elapsedMs, latencyMax)));
             logViolation(iteration, "latency", String.format("%dms > %dms", elapsedMs, latencyMax));
-            if (isHard("closurejvm.invariant.latency.mode")) {
+            if (isHard("basquin.invariant.latency.mode")) {
                 agent.Agent.recordInvariantEvidence(ctx, violations);
                 throw new IllegalStateException("Latency invariant violated: elapsedMs=" + elapsedMs + " > maxMs=" + latencyMax);
             }
         }
 
         // Heap delta (Kb)
-        Long heapMaxKb = getLongProp("closurejvm.invariant.heapDelta.maxKb");
+        Long heapMaxKb = getLongProp("basquin.invariant.heapDelta.maxKb");
         long heapDeltaKb = heapDeltaBytes / 1024L;
         if (heapMaxKb != null && heapDeltaKb > heapMaxKb) {
             violations.add(new Violation("heapDelta", String.format("%dKB > %dKB", heapDeltaKb, heapMaxKb)));
             logViolation(iteration, "heapDelta", String.format("%dKB > %dKB", heapDeltaKb, heapMaxKb));
-            if (isHard("closurejvm.invariant.heapDelta.mode")) {
+            if (isHard("basquin.invariant.heapDelta.mode")) {
                 agent.Agent.recordInvariantEvidence(ctx, violations);
                 throw new IllegalStateException("Heap delta invariant violated: deltaKb=" + heapDeltaKb + " > maxKb=" + heapMaxKb);
             }
         }
 
         // Thread count delta
-        Integer thrMax = getIntProp("closurejvm.invariant.threadDelta.max");
+        Integer thrMax = getIntProp("basquin.invariant.threadDelta.max");
         if (thrMax != null && threadsDelta > thrMax) {
             violations.add(new Violation("threadDelta", String.format("%d > %d (threadsNow=%d)", threadsDelta, thrMax, threadsNow)));
             logViolation(iteration, "threadDelta", String.format("%d > %d (threadsNow=%d)", threadsDelta, thrMax, threadsNow));
-            if (isHard("closurejvm.invariant.threadDelta.mode")) {
+            if (isHard("basquin.invariant.threadDelta.mode")) {
                 agent.Agent.recordInvariantEvidence(ctx, violations);
                 throw new IllegalStateException("Thread delta invariant violated: delta=" + threadsDelta + " > max=" + thrMax);
             }
@@ -73,13 +73,13 @@ final class Invariants {
     }
 
     private static void logViolation(int iteration, String name, String detail) {
-        System.err.println("[ClosureJVM][Invariant] Iteration " + iteration + " violated '" + name + "': " + detail);
+        System.err.println("[Basquin][Invariant] Iteration " + iteration + " violated '" + name + "': " + detail);
     }
 
     static boolean isHard(String overrideKey) {
         String v = null;
         if (overrideKey != null) v = System.getProperty(overrideKey);
-        if (v == null) v = System.getProperty("closurejvm.invariant.mode", "hard");
+        if (v == null) v = System.getProperty("basquin.invariant.mode", "hard");
         return "hard".equalsIgnoreCase(v);
     }
 

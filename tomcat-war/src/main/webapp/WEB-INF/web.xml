@@ -4,7 +4,7 @@
          version="6.0">
   <filter>
     <filter-name>iteration</filter-name>
-    <filter-class>com.closurejvm.examples.IterationFilter</filter-class>
+    <filter-class>com.basquin.examples.IterationFilter</filter-class>
   </filter>
   <filter-mapping>
     <filter-name>iteration</filter-name>
@@ -12,7 +12,7 @@
   </filter-mapping>
   <servlet>
     <servlet-name>crash</servlet-name>
-    <servlet-class>com.closurejvm.examples.CrashServlet</servlet-class>
+    <servlet-class>com.basquin.examples.CrashServlet</servlet-class>
   </servlet>
   <servlet-mapping>
     <servlet-name>crash</servlet-name>
@@ -21,7 +21,7 @@
 
   <servlet>
     <servlet-name>latency</servlet-name>
-    <servlet-class>com.closurejvm.examples.LatencyServlet</servlet-class>
+    <servlet-class>com.basquin.examples.LatencyServlet</servlet-class>
   </servlet>
   <servlet-mapping>
     <servlet-name>latency</servlet-name>
@@ -30,7 +30,7 @@
 
   <servlet>
     <servlet-name>heap</servlet-name>
-    <servlet-class>com.closurejvm.examples.HeapServlet</servlet-class>
+    <servlet-class>com.basquin.examples.HeapServlet</servlet-class>
   </servlet>
   <servlet-mapping>
     <servlet-name>heap</servlet-name>
@@ -39,16 +39,16 @@
 
   <servlet>
     <servlet-name>status</servlet-name>
-    <servlet-class>com.closurejvm.examples.StatusServlet</servlet-class>
+    <servlet-class>com.basquin.examples.StatusServlet</servlet-class>
   </servlet>
   <servlet-mapping>
     <servlet-name>status</servlet-name>
-    <url-pattern>/closurejvm/status</url-pattern>
+    <url-pattern>/basquin/status</url-pattern>
   </servlet-mapping>
 
   <servlet>
     <servlet-name>db</servlet-name>
-    <servlet-class>com.closurejvm.examples.DbServlet</servlet-class>
+    <servlet-class>com.basquin.examples.DbServlet</servlet-class>
   </servlet>
   <servlet-mapping>
     <servlet-name>db</servlet-name>

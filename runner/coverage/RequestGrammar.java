@@ -121,19 +121,19 @@ public final class RequestGrammar {
         // Fallback: resolve the ref's basename against a flat corpus dir. A grammar authored with
         // laptop-relative @refs (e.g. @../corpus/jpetstore/values/categoryId.txt, which resolves next
         // to the grammar file on disk) then works unchanged in a container where the operator mounts a
-        // flat corpus ConfigMap and sets -Dclosurejvm.corpusDir — the tree can't survive a flat
+        // flat corpus ConfigMap and sets -Dbasquin.corpusDir — the tree can't survive a flat
         // ConfigMap, but the basename can. (Corpus basenames must be globally unique across the tree
         // for this to be unambiguous — the accepted tradeoff of basename-fallback over key→path, DD-018.)
-        String corpusDir = System.getProperty("closurejvm.corpusDir", "");
+        String corpusDir = System.getProperty("basquin.corpusDir", "");
         if (!corpusDir.isEmpty()) {
             Path alt = Paths.get(corpusDir).resolve(p.getFileName().toString());
             if (readInto(alt, out)) {
-                System.out.println("[ClosureJVM] grammar: resolved values \"" + ref + "\" via corpusDir (" + alt + ")");
+                System.out.println("[Basquin] grammar: resolved values \"" + ref + "\" via corpusDir (" + alt + ")");
                 return out;
             }
-            System.err.println("[ClosureJVM] grammar: values file not found at " + p + " or " + alt);
+            System.err.println("[Basquin] grammar: values file not found at " + p + " or " + alt);
         } else {
-            System.err.println("[ClosureJVM] grammar: could not read values file " + p);
+            System.err.println("[Basquin] grammar: could not read values file " + p);
         }
         return out;
     }

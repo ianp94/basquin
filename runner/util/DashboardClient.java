@@ -22,7 +22,7 @@ import java.util.stream.Stream;
  * are fully decoupled from the process doing the actual measuring and driving. See
  * docs/DESIGN-DECISIONS.md DD-013.
  *
- * Enable with {@code -Dclosurejvm.dashboard.push=host:port}. The campaign id defaults to the
+ * Enable with {@code -Dbasquin.dashboard.push=host:port}. The campaign id defaults to the
  * {@code HOSTNAME} env var (a pod's name in Kubernetes, giving natural per-pod identity for the
  * fleet dashboard) and falls back to the local hostname, then a random id.
  */
@@ -34,28 +34,28 @@ public final class DashboardClient {
 
     public static synchronized void ensureStarted() {
         if (started) return;
-        String target = System.getProperty("closurejvm.dashboard.push");
+        String target = System.getProperty("basquin.dashboard.push");
         if (target == null || target.isEmpty()) {
             return;
         }
         started = true;
         String id = resolveId();
-        long intervalMs = Long.getLong("closurejvm.dashboard.pushIntervalMs", 2000L);
-        Thread t = new Thread(() -> pushLoop(target, id, intervalMs), "ClosureJVM-DashboardPush");
+        long intervalMs = Long.getLong("basquin.dashboard.pushIntervalMs", 2000L);
+        Thread t = new Thread(() -> pushLoop(target, id, intervalMs), "Basquin-DashboardPush");
         t.setDaemon(true);
         t.start();
-        System.out.println("[ClosureJVM] pushing status to dashboard at " + target + " as \"" + id + "\"");
+        System.out.println("[Basquin] pushing status to dashboard at " + target + " as \"" + id + "\"");
     }
 
     private static String resolveId() {
-        String explicit = System.getProperty("closurejvm.dashboard.id");
+        String explicit = System.getProperty("basquin.dashboard.id");
         if (explicit != null && !explicit.isEmpty()) return explicit;
         String hostname = System.getenv("HOSTNAME"); // the pod name, when running in Kubernetes
         if (hostname != null && !hostname.isEmpty()) return hostname;
         try {
             return InetAddress.getLocalHost().getHostName();
         } catch (Exception ignored) {
-            return "closurejvm-" + Long.toHexString(System.nanoTime());
+            return "basquin-" + Long.toHexString(System.nanoTime());
         }
     }
 
@@ -78,7 +78,7 @@ public final class DashboardClient {
                 // Don't spam on every tick if the dashboard is briefly unreachable; report the
                 // first failure and then only occasionally so a real outage is still visible.
                 if (consecutiveFailures == 1 || consecutiveFailures % 30 == 0) {
-                    System.err.println("[ClosureJVM] dashboard push failed (" + consecutiveFailures + "x): " + t);
+                    System.err.println("[Basquin] dashboard push failed (" + consecutiveFailures + "x): " + t);
                 }
             }
             try {
@@ -99,9 +99,9 @@ public final class DashboardClient {
         c.setRequestProperty("Content-Type", "application/json");
         // Required by DashboardServer: proves this is a deliberate client, not a cross-origin
         // form post from a page the operator happens to have open.
-        c.setRequestProperty("X-ClosureJVM-Dashboard", "1");
-        String token = System.getProperty("closurejvm.dashboard.token", "");
-        if (!token.isEmpty()) c.setRequestProperty("X-ClosureJVM-Token", token);
+        c.setRequestProperty("X-Basquin-Dashboard", "1");
+        String token = System.getProperty("basquin.dashboard.token", "");
+        if (!token.isEmpty()) c.setRequestProperty("X-Basquin-Token", token);
         byte[] b = body.getBytes(StandardCharsets.UTF_8);
         try (OutputStream os = c.getOutputStream()) {
             os.write(b);
@@ -134,7 +134,7 @@ public final class DashboardClient {
         StringBuilder params = new StringBuilder();
         java.util.TreeMap<String, String> sorted = new java.util.TreeMap<>();
         for (String name : System.getProperties().stringPropertyNames()) {
-            if (name.startsWith("closurejvm.") || name.startsWith("examples.")) {
+            if (name.startsWith("basquin.") || name.startsWith("examples.")) {
                 sorted.put(name, System.getProperty(name));
             }
         }
@@ -144,7 +144,7 @@ public final class DashboardClient {
             params.append('"').append(esc(e.getKey())).append("\":\"").append(esc(value)).append('"');
         }
 
-        String grammarPath = System.getProperty("closurejvm.grammar", "");
+        String grammarPath = System.getProperty("basquin.grammar", "");
         String grammarText = "";
         if (!grammarPath.isEmpty()) {
             try {
@@ -157,7 +157,7 @@ public final class DashboardClient {
                 + ",\"params\":{" + params + "}"
                 + ",\"grammarPath\":\"" + esc(grammarPath) + "\""
                 + ",\"grammarText\":\"" + esc(grammarText) + "\""
-                + ",\"corpusDir\":\"" + esc(System.getProperty("closurejvm.corpusDir", "")) + "\"}";
+                + ",\"corpusDir\":\"" + esc(System.getProperty("basquin.corpusDir", "")) + "\"}";
     }
 
     private static final long START_MS = System.currentTimeMillis();
@@ -172,7 +172,7 @@ public final class DashboardClient {
     // since only the driver process has the local results directory. ---
 
     private static String findingsJson() {
-        String dir = System.getProperty("closurejvm.fuzz.resultsDir", "fuzz-results");
+        String dir = System.getProperty("basquin.fuzz.resultsDir", "fuzz-results");
         Path root = Paths.get(dir);
         if (!Files.isDirectory(root)) {
             return "[]";

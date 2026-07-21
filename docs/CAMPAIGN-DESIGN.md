@@ -1,15 +1,15 @@
-# ClosureJVMCampaign — design proposal (DD-025, operator P5)
+# BasquinCampaign — design proposal (DD-025, operator P5)
 
 **Status:** proposed, under review. Not yet implemented. On approval this becomes **DD-025** and the
 implementation lands as operator phase **P5**. Extends [OPERATOR-DESIGN.md](OPERATOR-DESIGN.md) §10,
-whose confirmed decisions this fleshes out: **two CRDs** (`ClosureJVMTarget` = instrument, done P1–P4;
-`ClosureJVMCampaign` = test), built after injection works (it does).
+whose confirmed decisions this fleshes out: **two CRDs** (`BasquinTarget` = instrument, done P1–P4;
+`BasquinCampaign` = test), built after injection works (it does).
 
 ---
 
 ## 1. The ask
 
-Today you instrument a target (`ClosureJVMTarget`) and then *manually* run the coverage-guided driver
+Today you instrument a target (`BasquinTarget`) and then *manually* run the coverage-guided driver
 and the dashboard against it (`deploy/e2e/e2e.sh` does the instrument half; the driving is a laptop
 command). P5 makes the operator orchestrate the **whole test**: apply one resource and the operator
 brings up the runner + dashboard against an instrumented target, wires them together, and reports the
@@ -19,29 +19,29 @@ the answer to TODO's long-open "launch runs from the dashboard" question).
 
 ## 2. Why a second CRD (recap)
 
-`ClosureJVMTarget` is Deployment-like — a steady state ("this app carries the agents"). A campaign is
+`BasquinTarget` is Deployment-like — a steady state ("this app carries the agents"). A campaign is
 Job-like — a bounded run. One target may be driven by many campaigns over time (a nightly run, an
 ad-hoc repro), and deleting a campaign must not un-instrument the app. Collapsing them would force
 "instrumented" and "currently under test" to be the same state, which they aren't.
 
-## 3. The `ClosureJVMCampaign` custom resource
+## 3. The `BasquinCampaign` custom resource
 
-Group `closurejvm.dev/v1alpha1`, namespaced. Sketch (exact fields settle during P5a):
+Group `basquin.dev/v1alpha1`, namespaced. Sketch (exact fields settle during P5a):
 
 ```yaml
-apiVersion: closurejvm.dev/v1alpha1
-kind: ClosureJVMCampaign
+apiVersion: basquin.dev/v1alpha1
+kind: BasquinCampaign
 metadata:
   name: nightly-jpetstore
-  namespace: closurejvm-system
+  namespace: basquin-system
 spec:
-  # WHAT to drive — an existing ClosureJVMTarget in this namespace.
+  # WHAT to drive — an existing BasquinTarget in this namespace.
   targetRef: { name: jpetstore }
 
   # REQUIRED: the app's HTTP entrypoint the driver hits. The operator does NOT create a Service in
   # front of the app (it only patches the Deployment + makes the coverage Service), and a target has
   # no app-Service field to default from — so the campaign names it explicitly.
-  baseURL: "http://jpetstore.closurejvm-system.svc:8080"
+  baseURL: "http://jpetstore.basquin-system.svc:8080"
 
   driver:
     # Exploration surface. Provide a grammar inline OR reference a ConfigMap; likewise a seed corpus.
@@ -63,7 +63,7 @@ spec:
 status:
   phase: Running             # Pending | Provisioning | Running | Completed | Failed
   driverJob: nightly-jpetstore-driver
-  dashboardURL: "http://nightly-jpetstore-dashboard.closurejvm-system.svc:7070"
+  dashboardURL: "http://nightly-jpetstore-dashboard.basquin-system.svc:7070"
   startTime: "..."
   completionTime: "..."
   coveragePct: "23.1"
@@ -81,11 +81,11 @@ status:
    `Service` (the standalone `DashboardServer`, DD-013), owner-referenced to the campaign. Set
    `status.dashboardURL`.
 3. **Driver.** Create a `Job` running the coverage-guided runner (`CoverageGuidedRun`) with:
-   `-Dexamples.http.baseUrl=<baseURL>`, `-Dclosurejvm.grammar=<mounted grammar>`,
-   `-Dclosurejvm.coverage.jacoco=<target coverageEndpoint>`,
-   `-Dclosurejvm.coverage.classes=<extracted classes dir>` (§7b),
-   `-Dclosurejvm.dashboard.push=<dashboard Service>`,
-   `-Dclosurejvm.dashboard.id=<campaign name>` (so pushes land at `/api/campaign/<name>/…` rather than
+   `-Dexamples.http.baseUrl=<baseURL>`, `-Dbasquin.grammar=<mounted grammar>`,
+   `-Dbasquin.coverage.jacoco=<target coverageEndpoint>`,
+   `-Dbasquin.coverage.classes=<extracted classes dir>` (§7b),
+   `-Dbasquin.dashboard.push=<dashboard Service>`,
+   `-Dbasquin.dashboard.id=<campaign name>` (so pushes land at `/api/campaign/<name>/…` rather than
    under the pod's random `HOSTNAME`), the invariant flags, and the run bound. Owner-referenced to the
    campaign; grammar/corpus arrive via mounted ConfigMaps; `restartPolicy: Never` + a small
    `backoffLimit`. **The run bound is enforced inside the runner, not by `activeDeadlineSeconds`** —
@@ -98,11 +98,11 @@ status:
 
 ## 5. New build components (prerequisites)
 
-Like the `closurejvm/agents` image unblocked P2, P5 needs two images the operator launches — tracked
+Like the `basquin/agents` image unblocked P2, P5 needs two images the operator launches — tracked
 in TODO's *Operator orchestration* group:
 
-- **`closurejvm/runner`** — a JRE image with the harness jar, entrypoint `runner.coverage.CoverageGuidedRun`.
-- **`closurejvm/dashboard`** — a JRE image with the harness jar, entrypoint `runner.util.DashboardServer`.
+- **`basquin/runner`** — a JRE image with the harness jar, entrypoint `runner.coverage.CoverageGuidedRun`.
+- **`basquin/dashboard`** — a JRE image with the harness jar, entrypoint `runner.util.DashboardServer`.
 
 Both come straight from the existing Gradle build (the tasks `runCoverageGuided` / `runDashboard`
 already run these mainClasses). Could even be one image with two entrypoints. Reuse the
@@ -111,8 +111,8 @@ already run these mainClasses). Could even be one image with two entrypoints. Re
 ## 6. RBAC additions (still namespaced)
 
 The operator gains, in its own namespace only:
-- `closurejvm.dev/closurejvmcampaigns` (+ `/status`, `/finalizers`): `get;list;watch;update;patch` —
-  the campaign's own CR, mirroring the grants `role.yaml` already gives `closurejvmtargets`;
+- `basquin.dev/basquincampaigns` (+ `/status`, `/finalizers`): `get;list;watch;update;patch` —
+  the campaign's own CR, mirroring the grants `role.yaml` already gives `basquintargets`;
 - `batch/jobs`: `get;list;watch;create;delete` (drive the runner);
 - `apps/deployments`: add `create;delete` (P1–P4 only `update;patch` the *target's* existing
   Deployment; the dashboard is one the operator *creates*);
@@ -140,7 +140,7 @@ arbitrary user commands.
    want cross-campaign comparison. Both supported.
 
 2. **Duration vs iterations — RESOLVED (bound is enforced in the runner).** `iterations` uses the
-   runner's existing count cap. `duration` needs a **new runner flag** (`-Dclosurejvm.run.duration`)
+   runner's existing count cap. `duration` needs a **new runner flag** (`-Dbasquin.run.duration`)
    that stops the loop and **exits 0 cleanly** at the deadline — NOT a Job `activeDeadlineSeconds`,
    which SIGKILLs the pod (Job condition `Failed`/`DeadlineExceeded`, and — worse — the driver never
    writes its `summary.json`, §7a). So both bounds end in a clean exit → `Completed` + a summary. A
@@ -161,7 +161,7 @@ For the operator to fill `status.coveragePct`/`findings` without touching the da
 must emit a small, machine-readable summary at end of run. Proposed contract:
 
 - The driver, on completion (or on `activeDeadlineSeconds` expiry), writes a one-line JSON summary to a
-  **known path on a shared `emptyDir`** (e.g. `/closurejvm-out/summary.json`): `{"coveragePct": 23.1,
+  **known path on a shared `emptyDir`** (e.g. `/basquin-out/summary.json`): `{"coveragePct": 23.1,
   "coveredEdges": 549, "totalEdges": 2378, "findings": 19, "crashes": 7, "invariants": 12,
   "iterations": 41233}`. This reuses the numbers `StatusReporter.snapshotJson()` already computes.
 - A tiny **sidecar** in the driver Job (or a `preStop`/final step) copies that summary into a
@@ -171,19 +171,19 @@ must emit a small, machine-readable summary at end of run. Proposed contract:
   can grow into it later.
 - Small runner change required: have `CoverageGuidedRun` write `summary.json` on shutdown (it already
   has all the numbers in `StatusReporter`). This is the one piece of *harness* code P5 touches; it's
-  additive and behind a flag (`-Dclosurejvm.summary.out=/path`).
+  additive and behind a flag (`-Dbasquin.summary.out=/path`).
 
 ## 7b. Coverage classes in-cluster (implementation gap to solve in P5a)
 
 The DD-023 coverage reader (`JacocoCoverageProvider`) needs the app's **`.class` files** to turn the
-JaCoCo execution dump into covered/total probes — `-Dclosurejvm.coverage.classes=<dir>`. On a laptop
+JaCoCo execution dump into covered/total probes — `-Dbasquin.coverage.classes=<dir>`. On a laptop
 that's an extracted `WEB-INF/classes`; the driver Job needs the same in-cluster, and it's the one
 non-obvious dependency. Options considered:
 
 - **A — initContainer extracts classes from the target's app image (recommended).** The driver Job
   runs an initContainer using the *target Deployment's own container image* (which the operator already
   reads), copying `/usr/local/tomcat/webapps/ROOT/WEB-INF/classes` (path configurable) into a shared
-  `emptyDir` the driver mounts at `-Dclosurejvm.coverage.classes`. No extra artifact — the classes come
+  `emptyDir` the driver mounts at `-Dbasquin.coverage.classes`. No extra artifact — the classes come
   from the exact image under test, so they always match. Needs a configurable in-image path
   (`spec.driver.classesPath`, default the Tomcat WAR layout).
 - **B — bake classes into a per-target artifact** (ConfigMap/image) at instrument time. Rejected:
@@ -207,7 +207,7 @@ will assert the driver reports a non-zero coverage % against the raw JPetStore.
   `Completed`. `restartPolicy: Never` + a small `backoffLimit` so a genuinely broken run surfaces as
   `Failed` rather than looping.
 - **Watches.** `Owns(&batchv1.Job{})`, `Owns(&corev1.Service{})`, `Owns(&appsv1.Deployment{})` for the
-  dashboard, plus a watch mapping the referenced `ClosureJVMTarget` back to campaigns (so a campaign
+  dashboard, plus a watch mapping the referenced `BasquinTarget` back to campaigns (so a campaign
   created before its target is `Injected` starts as soon as injection completes).
 - **Target reverted mid-run.** If the referenced target is deleted (or drops out of `Injected`) while a
   campaign is `Running`, the target-→-campaign watch re-reconciles; the campaign moves to a distinct
@@ -217,20 +217,20 @@ will assert the driver reports a non-zero coverage % against the raw JPetStore.
 
 ## 8. Phased delivery within P5 (each its own PR)
 
-- **P5a — CRD + driver Job.** `ClosureJVMCampaign` CRD + reconciler that launches the driver Job
+- **P5a — CRD + driver Job.** `BasquinCampaign` CRD + reconciler that launches the driver Job
   against the target (using its `status.coverageEndpoint`), status = Job state. No dashboard yet.
-  Needs the `closurejvm/runner` image, the **coverage-classes initContainer** (§7b, option A), and the
+  Needs the `basquin/runner` image, the **coverage-classes initContainer** (§7b, option A), and the
   **driver summary** write (§7a). Verified by extending `deploy/e2e/e2e.sh` (apply a campaign, assert
   the driver runs and reports a **non-zero coverage %** against the raw JPetStore).
 - **P5b — dashboard.** Operator brings up the per-campaign dashboard `Deployment` + `Service`, wires
-  the driver's push at it, sets `status.dashboardURL`. Needs the `closurejvm/dashboard` image.
+  the driver's push at it, sets `status.dashboardURL`. Needs the `basquin/dashboard` image.
 - **P5c — aggregate status + completion.** `coveragePct`/`findings` into status (§7.1), phase
   transitions, `activeDeadlineSeconds`.
 - **P5d — docs + demo.** USAGE campaign section; the e2e drives a full campaign end to end.
 
 ## 9. Rejected alternatives
 
-- **Fold orchestration into `ClosureJVMTarget`** — conflates "instrumented" with "under test"; a
+- **Fold orchestration into `BasquinTarget`** — conflates "instrumented" with "under test"; a
   target couldn't outlive a run or host multiple runs (§2).
 - **Dashboard launches the runner** — reverses DD-013's read-only design and needs a control channel
   back to drivers that is effectively RCE on the dashboard host. The operator's existing namespaced
@@ -241,6 +241,6 @@ will assert the driver reports a non-zero coverage % against the raw JPetStore.
 
 ## 10. What this does *not* change
 
-The injection track (P1–P4) is untouched — a `ClosureJVMCampaign` only *consumes* an already-injected
-`ClosureJVMTarget`. The Tomcat valve is still deferred, and the multi-arch agents image is still a
+The injection track (P1–P4) is untouched — a `BasquinCampaign` only *consumes* an already-injected
+`BasquinTarget`. The Tomcat valve is still deferred, and the multi-arch agents image is still a
 separate follow-up.

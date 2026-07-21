@@ -1,15 +1,15 @@
 package agent;
 
 /**
- * Bridge to the optional ClosureJVM JVMTI native agent (native/closurejvmti.c).
+ * Bridge to the optional Basquin JVMTI native agent (native/basquinjvmti.c).
  *
- * When the JVM is started with {@code -agentpath:/abs/libclosurejvmti.so}, the native
+ * When the JVM is started with {@code -agentpath:/abs/libbasquinjvmti.so}, the native
  * agent maintains live/non-daemon thread counts incrementally from ThreadStart/ThreadEnd
  * events — no polling, no safepoint stack walks. This class exposes those counts to the
  * harness, and degrades gracefully to a no-op (isActive() == false) when the agent is not
  * loaded, so callers can fall back to {@code ThreadMXBean}.
  *
- * The library path is provided via {@code -Dclosurejvm.native.lib=/abs/libclosurejvmti.so}
+ * The library path is provided via {@code -Dbasquin.native.lib=/abs/libbasquinjvmti.so}
  * (the same file passed to -agentpath). We System.load() it here so the JNI methods resolve;
  * the counters are shared C globals, so both the agent and JNI views agree.
  */
@@ -20,7 +20,7 @@ public final class NativeThreadTracker {
     private NativeThreadTracker() {}
 
     private static boolean tryLoad() {
-        String path = System.getProperty("closurejvm.native.lib");
+        String path = System.getProperty("basquin.native.lib");
         if (path == null || path.isEmpty()) {
             return false;
         }

@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # Publish the operator Helm chart to the GitHub Pages Helm repo under docs/charts/ (served at
-# https://ianp94.github.io/closureJVM/charts). Run on a chart version bump, then commit
+# https://ianp94.github.io/basquin/charts). Run on a chart version bump, then commit
 # docs/charts/*.tgz + docs/charts/index.yaml — Pages then serves an installable Helm repo:
 #
-#   helm repo add closurejvm https://ianp94.github.io/closureJVM/charts
+#   helm repo add basquin https://ianp94.github.io/basquin/charts
 #   helm repo update
-#   helm install closurejvm closurejvm/closurejvm-operator --namespace closurejvm-system --create-namespace
+#   helm install basquin basquin/basquin-operator --namespace basquin-system --create-namespace
 #
 # The chart version comes from Chart.yaml; bump it there before publishing a new release.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CHART="$REPO_ROOT/deploy/helm/closurejvm-operator"
+CHART="$REPO_ROOT/deploy/helm/basquin-operator"
 OUT="$REPO_ROOT/docs/charts"
-PAGES_URL="https://ianp94.github.io/closureJVM/charts"
+PAGES_URL="https://ianp94.github.io/basquin/charts"
 
 command -v helm >/dev/null || { echo "ERROR: helm not found" >&2; exit 1; }
 
@@ -32,4 +32,4 @@ else
 fi
 
 echo "==> Done. Commit docs/charts/*.tgz + docs/charts/index.yaml, then:"
-echo "    helm repo add closurejvm $PAGES_URL && helm repo update"
+echo "    helm repo add basquin $PAGES_URL && helm repo update"

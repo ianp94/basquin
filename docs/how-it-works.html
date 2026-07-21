@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>How it works — ClosureJVM</title>
+<title>How it works — Basquin</title>
 <meta name="description" content="The iteration boundary, availability invariants, the JVMTI agent, the Tomcat valve, coverage-guided exploration, and the decoupled dashboard.">
 <link rel="stylesheet" href="site.css">
 </head>
@@ -17,7 +17,7 @@
         <path d="M12 9c-3 0-4 2-4 4v2.2c0 1-.4 1.6-1.4 1.8 1 .2 1.4.8 1.4 1.8V23c0 2 1 4 4 4" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
         <path d="M20 9c3 0 4 2 4 4v2.2c0 1 .4 1.6 1.4 1.8-1 .2-1.4.8-1.4 1.8V23c0 2-1 4-4 4" stroke="#c4b3ff" stroke-width="2" stroke-linecap="round" fill="none"/>
       </svg>
-      ClosureJVM
+      Basquin
     </a>
     <nav class="nav-links">
       <a href="index.html">Home</a>
@@ -25,7 +25,7 @@
       <a href="how-it-works.html" class="active">How it works</a>
       <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
       <a href="operator.html">Operator</a>
-      <a class="gh" href="https://github.com/ianp94/closureJVM">GitHub ↗</a>
+      <a class="gh" href="https://github.com/ianp94/basquin">GitHub ↗</a>
     </nav>
   </div>
 </header>
@@ -76,7 +76,7 @@
     <li>
       <h3>Reset</h3>
       <p>Reset prefers enforced cleanliness, falling back to a child-first classloader swap of the
-        target's package (<code>-Dclosurejvm.reset=classloader</code>, preview). The philosophy is
+        target's package (<code>-Dbasquin.reset=classloader</code>, preview). The philosophy is
         <em>enforcement over inference</em> — prove the JVM is clean rather than guess.</p>
     </li>
     <li>
@@ -118,17 +118,17 @@
     <code>ThreadEnd</code> (seeded at VM init from <code>GetAllThreads</code>) and keeps weak global
     refs to live non-daemon threads. No polling, no safepoint walks. When the agent isn't loaded the
     harness transparently falls back to <code>ThreadMXBean</code>. One jar covers JDK 17 and 21.</p>
-  <pre><code>./gradlew buildNativeAgent          <span class="c"># -> build/native/libclosurejvmti.so (needs cc + JDK headers)</span>
-LIB=$PWD/build/native/libclosurejvmti.so
-java -agentpath:$LIB -Dclosurejvm.native.lib=$LIB -cp ... runner.GenericRunner ...</code></pre>
+  <pre><code>./gradlew buildNativeAgent          <span class="c"># -> build/native/libbasquinjvmti.so (needs cc + JDK headers)</span>
+LIB=$PWD/build/native/libbasquinjvmti.so
+java -agentpath:$LIB -Dbasquin.native.lib=$LIB -cp ... runner.GenericRunner ...</code></pre>
 
   <h2>The Tomcat valve</h2>
-  <p>To test an app you can't modify, ClosureJVM attaches its iteration boundaries with a
-    <strong>Tomcat valve</strong> — <code>com.closurejvm.valve.ClosureJVMValve</code>, dropped into
+  <p>To test an app you can't modify, Basquin attaches its iteration boundaries with a
+    <strong>Tomcat valve</strong> — <code>com.basquin.valve.BasquinValve</code>, dropped into
     Tomcat's <code>lib/</code> and registered globally — instead of editing the WAR or its
     <code>web.xml</code>. The valve jar is <strong>namespace-free</strong>: a single artifact runs on
     both Tomcat 9 (<code>javax.servlet</code>) and Tomcat 10+ (<code>jakarta.servlet</code>). Invariant
-    results are exposed per response as <code>X-ClosureJVM-Invariant-*</code> headers, which the HTTP
+    results are exposed per response as <code>X-Basquin-Invariant-*</code> headers, which the HTTP
     driver harvests.</p>
   <div class="note">
     <span class="tag">note</span>
@@ -179,21 +179,21 @@ $categoryId = FISH | DOGS | ~[A-Z]{4,8}
     <span class="tag">design</span>
     <p>Every significant choice — the decoupled dashboard (DD-013), the namespace-free valve (DD-011),
       union coverage across replicas (DD-023) — is recorded with its rejected alternatives in
-      <a href="https://github.com/ianp94/closureJVM/blob/main/docs/DESIGN-DECISIONS.md">DESIGN-DECISIONS.md</a>.
+      <a href="https://github.com/ianp94/basquin/blob/main/docs/DESIGN-DECISIONS.md">DESIGN-DECISIONS.md</a>.
       The fuller architecture writeup is
-      <a href="https://github.com/ianp94/closureJVM/blob/main/docs/ARCHITECTURE.md">ARCHITECTURE.md</a>.</p>
+      <a href="https://github.com/ianp94/basquin/blob/main/docs/ARCHITECTURE.md">ARCHITECTURE.md</a>.</p>
   </div>
 </main>
 
 <footer class="footer">
   <div class="wrap-wide footer-inner">
-    <div>ClosureJVM — Kubernetes-native fuzz and load testing for JVM web apps.</div>
+    <div>Basquin — Kubernetes-native fuzz and load testing for JVM web apps.</div>
     <div class="links">
       <a href="index.html">Home</a>
       <a href="getting-started.html">Get started</a>
       <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
       <a href="operator.html">Operator</a>
-      <a href="https://github.com/ianp94/closureJVM">GitHub</a>
+      <a href="https://github.com/ianp94/basquin">GitHub</a>
     </div>
     <div class="ai-note">Built with AI assistance (Anthropic's Claude / Claude Code), directed and reviewed by the author.</div>
   </div>

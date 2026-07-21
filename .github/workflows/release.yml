@@ -2,8 +2,8 @@ name: Release
 
 # Cut a release by pushing a version tag, e.g.  git tag v0.2.0 && git push origin v0.2.0
 # (or run manually via the Actions tab with a version input). Publishes:
-#   - the four container images to GitHub Container Registry (ghcr.io/ianp94/closurejvm-*)
-#   - the closurejvm CLI binaries (linux/darwin, amd64/arm64) as release assets
+#   - the four container images to GitHub Container Registry (ghcr.io/ianp94/basquin-*)
+#   - the basquin CLI binaries (linux/darwin, amd64/arm64) as release assets
 #   - the packaged Helm chart as a release asset
 #   - the GitHub Pages Helm repo (docs/charts/) — the `pages` job repackages + reindexes + commits to
 #     main automatically (deploy/helm/publish.sh remains for a manual/bootstrap refresh).
@@ -69,7 +69,7 @@ jobs:
           for pair in "operator:operator" "agents:deploy/agents-image" \
                       "runner:deploy/runner-image" "dashboard:deploy/dashboard-image"; do
             img="${pair%%:*}"; ctx="${pair#*:}"
-            dst="$REGISTRY/$OWNER/closurejvm-$img"
+            dst="$REGISTRY/$OWNER/basquin-$img"
             echo "==> buildx $dst ($PLATFORMS) from $ctx"
             docker buildx build --platform "$PLATFORMS" \
               -t "$dst:$T" -t "$dst:latest" \
@@ -86,8 +86,8 @@ jobs:
           go-version: '1.21'
       # Pure-Go (CGO_ENABLED=0), so cross-compiling every target is native and instant — no QEMU or
       # buildx needed here, unlike the images (whose native .so forced the per-arch build, DD-027).
-      # -X main.version stamps the tag so `closurejvm version` identifies a downloaded binary.
-      - name: Cross-compile the closurejvm CLI
+      # -X main.version stamps the tag so `basquin version` identifies a downloaded binary.
+      - name: Cross-compile the basquin CLI
         working-directory: operator
         run: |
           set -e
@@ -99,16 +99,16 @@ jobs:
             if [ "$os" = "windows" ]; then ext=".exe"; else ext=""; fi
             CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
               go build -trimpath -ldflags="-s -w -X main.version=$T" \
-                -o "dist/closurejvm-$os-$arch$ext" ./cmd/closurejvm
+                -o "dist/basquin-$os-$arch$ext" ./cmd/basquin
           done
-          (cd dist && sha256sum closurejvm-* > checksums.txt)
+          (cd dist && sha256sum basquin-* > checksums.txt)
           ls -la dist/
       - name: Upload CLI assets to the release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.version && format('v{0}', github.event.inputs.version) || github.ref_name }}
           files: |
-            operator/dist/closurejvm-*
+            operator/dist/basquin-*
             operator/dist/checksums.txt
 
   chart:
@@ -124,7 +124,7 @@ jobs:
       - name: Package the chart at the release version (--app-version drives all image tags)
         run: |
           mkdir -p dist
-          helm package deploy/helm/closurejvm-operator --destination dist \
+          helm package deploy/helm/basquin-operator --destination dist \
             --version "${{ steps.v.outputs.tag }}" --app-version "${{ steps.v.outputs.tag }}"
       - name: Upload chart asset to the release
         uses: softprops/action-gh-release@v2
@@ -152,9 +152,9 @@ jobs:
         run: echo "tag=${{ github.event.inputs.version || github.ref_name }}" | sed 's/tag=v/tag=/' >> "$GITHUB_OUTPUT"
       - name: Package into docs/charts + regenerate the repo index
         run: |
-          helm package deploy/helm/closurejvm-operator --destination docs/charts \
+          helm package deploy/helm/basquin-operator --destination docs/charts \
             --version "${{ steps.v.outputs.tag }}" --app-version "${{ steps.v.outputs.tag }}"
-          helm repo index docs/charts --url https://ianp94.github.io/closureJVM/charts --merge docs/charts/index.yaml
+          helm repo index docs/charts --url https://ianp94.github.io/basquin/charts --merge docs/charts/index.yaml
       - name: Commit the updated Helm repo to main
         run: |
           git config user.name  "github-actions[bot]"

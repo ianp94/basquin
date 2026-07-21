@@ -100,7 +100,7 @@ public class RequestGrammarTest {
     /**
      * A grammar authored with laptop-relative @refs (grammar and corpus as sibling dirs) must still
      * find its values in a container, where the operator flattens the corpus into one dir and sets
-     * -Dclosurejvm.corpusDir. When the ref misses relative to the grammar file, resolution falls back
+     * -Dbasquin.corpusDir. When the ref misses relative to the grammar file, resolution falls back
      * to corpusDir/<basename>. Without this, campaigns silently run on structure only (DD-018).
      */
     @Test
@@ -111,8 +111,8 @@ public class RequestGrammarTest {
         Files.write(vf, "FISH\nDOGS\n".getBytes(StandardCharsets.UTF_8));
         vf.toFile().deleteOnExit();
 
-        String prev = System.getProperty("closurejvm.corpusDir");
-        System.setProperty("closurejvm.corpusDir", corpusDir.toString());
+        String prev = System.getProperty("basquin.corpusDir");
+        System.setProperty("basquin.corpusDir", corpusDir.toString());
         try {
             // "nope/categoryId.txt" does not exist next to the temp grammar file → basename fallback.
             RequestGrammar g = load("$c = @nope/categoryId.txt\n/x?c=${c}\n");
@@ -122,8 +122,8 @@ public class RequestGrammarTest {
                         out.equals("/x?c=FISH") || out.equals("/x?c=DOGS"));
             }
         } finally {
-            if (prev == null) System.clearProperty("closurejvm.corpusDir");
-            else System.setProperty("closurejvm.corpusDir", prev);
+            if (prev == null) System.clearProperty("basquin.corpusDir");
+            else System.setProperty("basquin.corpusDir", prev);
         }
     }
 
@@ -149,14 +149,14 @@ public class RequestGrammarTest {
         Files.write(good, "FISH\n".getBytes(StandardCharsets.UTF_8));
         good.toFile().deleteOnExit();
 
-        String prev = System.getProperty("closurejvm.corpusDir");
-        System.setProperty("closurejvm.corpusDir", corpusDir.toString());
+        String prev = System.getProperty("basquin.corpusDir");
+        System.setProperty("basquin.corpusDir", corpusDir.toString());
         try {
             RequestGrammar g = RequestGrammar.load(grammarFile, new Random(7));
             assertEquals("empty primary must not defeat the corpusDir fallback", "/x?c=FISH", g.randomRequest());
         } finally {
-            if (prev == null) System.clearProperty("closurejvm.corpusDir");
-            else System.setProperty("closurejvm.corpusDir", prev);
+            if (prev == null) System.clearProperty("basquin.corpusDir");
+            else System.setProperty("basquin.corpusDir", prev);
         }
     }
 

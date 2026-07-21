@@ -1,4 +1,4 @@
-# Deploy an unmodified WAR on Tomcat with the ClosureJVM valve attached to every
+# Deploy an unmodified WAR on Tomcat with the Basquin valve attached to every
 # request (see docs/THIRD-PARTY-APPS.md). Defaults to our own demo WAR so the valve
 # path can be verified without a third-party app; point WAR_PATH at any WAR (e.g. a
 # JPetStore build) to run against it.
@@ -13,13 +13,13 @@ services:
       - "${TOMCAT_HOST_PORT:-8080}:8080"
     environment:
       # Agent injected into the server JVM so invariants (threads/heap/latency) are server-side.
-      - CATALINA_OPTS=-javaagent:/usr/local/tomcat/closurejvm-agent.jar -Xbootclasspath/a:/usr/local/tomcat/closurejvm-agent.jar -Dclosurejvm.invariant.mode=${INVARIANT_MODE:-soft} -Dclosurejvm.invariant.latency.maxMs=${INVARIANT_LATENCY_MS:-50} -Dclosurejvm.invariant.heapDelta.maxKb=${INVARIANT_HEAP_KB:-128} -Dclosurejvm.invariant.latency.sample=${INVARIANT_LATENCY_SAMPLE:-true} ${CATALINA_OPTS_EXTRA:-}
+      - CATALINA_OPTS=-javaagent:/usr/local/tomcat/basquin-agent.jar -Xbootclasspath/a:/usr/local/tomcat/basquin-agent.jar -Dbasquin.invariant.mode=${INVARIANT_MODE:-soft} -Dbasquin.invariant.latency.maxMs=${INVARIANT_LATENCY_MS:-50} -Dbasquin.invariant.heapDelta.maxKb=${INVARIANT_HEAP_KB:-128} -Dbasquin.invariant.latency.sample=${INVARIANT_LATENCY_SAMPLE:-true} ${CATALINA_OPTS_EXTRA:-}
     volumes:
       # The WAR under test (unmodified). Override with WAR_PATH to run a third-party app.
-      - ${WAR_PATH:-./tomcat-war/build/libs/closurejvm-demo-0.1.0.war}:/usr/local/tomcat/webapps/ROOT.war:ro
+      - ${WAR_PATH:-./tomcat-war/build/libs/basquin-demo-0.1.0.war}:/usr/local/tomcat/webapps/ROOT.war:ro
       # Agent classes (bootclasspath) — provides agent.Agent referenced by the valve.
-      - ./build/libs/closurejvm-0.2.0.jar:/usr/local/tomcat/closurejvm-agent.jar:ro
+      - ./build/libs/basquin-0.2.0.jar:/usr/local/tomcat/basquin-agent.jar:ro
       # Valve classes on Tomcat's own classpath.
-      - ./tomcat-valve/build/libs/closurejvm-valve-0.1.0.jar:/usr/local/tomcat/lib/closurejvm-valve.jar:ro
+      - ./tomcat-valve/build/libs/basquin-valve-0.1.0.jar:/usr/local/tomcat/lib/basquin-valve.jar:ro
       # Global context that registers the valve for every deployed app.
       - ./deploy/valve/context.xml:/usr/local/tomcat/conf/context.xml:ro

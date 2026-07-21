@@ -22,33 +22,33 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	closurejvmv1alpha1 "github.com/ianp94/closureJVM/operator/api/v1alpha1"
+	basquinv1alpha1 "github.com/ianp94/basquin/operator/api/v1alpha1"
 )
 
 // P5b (docs/CAMPAIGN-DESIGN.md, DD-025). When a campaign has dashboard.enabled and no externalPush,
 // the operator brings up a per-campaign dashboard: the standalone read-only DashboardServer (DD-013)
 // as a Deployment + ClusterIP Service. The driver Job pushes status/findings to it. Both are
-// owner-referenced to the campaign, so `kubectl delete closurejvmcampaign` GCs them (the dashboard
+// owner-referenced to the campaign, so `kubectl delete basquincampaign` GCs them (the dashboard
 // deliberately outlives the driver Job — results stay viewable until the campaign CR is removed).
 
 const (
-	defaultDashboardImage = "closurejvm/dashboard:latest"
+	defaultDashboardImage = "basquin/dashboard:latest"
 	dashboardPort         = 7070
 )
 
-func dashboardName(c *closurejvmv1alpha1.ClosureJVMCampaign) string { return c.Name + "-dashboard" }
+func dashboardName(c *basquinv1alpha1.BasquinCampaign) string { return c.Name + "-dashboard" }
 
-func dashboardSelector(c *closurejvmv1alpha1.ClosureJVMCampaign) map[string]string {
+func dashboardSelector(c *basquinv1alpha1.BasquinCampaign) map[string]string {
 	return map[string]string{
-		"app.kubernetes.io/managed-by": "closurejvm-operator",
+		"app.kubernetes.io/managed-by": "basquin-operator",
 		"app.kubernetes.io/component":  "dashboard",
-		"closurejvm.dev/campaign":      c.Name,
+		"basquin.dev/campaign":      c.Name,
 	}
 }
 
 // buildDashboardDeployment builds the per-campaign dashboard Deployment (one replica of the
 // DashboardServer image). Config is baked into the image entrypoint (bind 0.0.0.0, port 7070).
-func buildDashboardDeployment(c *closurejvmv1alpha1.ClosureJVMCampaign, image string) *appsv1.Deployment {
+func buildDashboardDeployment(c *basquinv1alpha1.BasquinCampaign, image string) *appsv1.Deployment {
 	replicas := int32(1)
 	labels := dashboardSelector(c)
 	return &appsv1.Deployment{
@@ -77,7 +77,7 @@ func buildDashboardDeployment(c *closurejvmv1alpha1.ClosureJVMCampaign, image st
 }
 
 // buildDashboardService builds the ClusterIP Service fronting the dashboard Deployment.
-func buildDashboardService(c *closurejvmv1alpha1.ClosureJVMCampaign) *corev1.Service {
+func buildDashboardService(c *basquinv1alpha1.BasquinCampaign) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: dashboardName(c), Namespace: c.Namespace, Labels: dashboardSelector(c)},
 		Spec: corev1.ServiceSpec{

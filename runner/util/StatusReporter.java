@@ -3,10 +3,10 @@ package runner.util;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * AFL-style live status for a running harness. Enable with {@code -Dclosurejvm.status=true}.
+ * AFL-style live status for a running harness. Enable with {@code -Dbasquin.status=true}.
  *
  * On a terminal it redraws a compact status block in place every interval
- * ({@code -Dclosurejvm.status.intervalMs}, default 1000). When output is not a TTY
+ * ({@code -Dbasquin.status.intervalMs}, default 1000). When output is not a TTY
  * (piped, CI), it prints a single summary line per interval instead of redrawing.
  * When active, the per-iteration metrics spam from {@link agent.Agent} is suppressed
  * so it does not fight the redraw (Agent checks {@link #isEnabled()}).
@@ -16,12 +16,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class StatusReporter {
 
-    private static final boolean ENABLED = Boolean.getBoolean("closurejvm.status");
-    private static final long INTERVAL_MS = Long.getLong("closurejvm.status.intervalMs", 1000L);
+    private static final boolean ENABLED = Boolean.getBoolean("basquin.status");
+    private static final long INTERVAL_MS = Long.getLong("basquin.status.intervalMs", 1000L);
     // Redraw in place when attached to a terminal; forceTty renders the box even when piped
     // (useful for capturing the rich view to a log).
     private static final boolean TTY =
-            System.console() != null || Boolean.getBoolean("closurejvm.status.forceTty");
+            System.console() != null || Boolean.getBoolean("basquin.status.forceTty");
 
     private static final long START_NANOS = System.nanoTime();
     private static final AtomicBoolean STARTED = new AtomicBoolean(false);
@@ -69,12 +69,12 @@ public final class StatusReporter {
         if (!ENABLED || !STARTED.compareAndSet(false, true)) {
             return;
         }
-        Thread t = new Thread(StatusReporter::renderLoop, "ClosureJVM-Status");
+        Thread t = new Thread(StatusReporter::renderLoop, "Basquin-Status");
         t.setDaemon(true);
         t.start();
         // Guarantee a final frame on exit for any run type (JQF, corpus, generic), not just the
         // runners that call renderFinal() explicitly.
-        Runtime.getRuntime().addShutdownHook(new Thread(StatusReporter::renderFinal, "ClosureJVM-Status-Final"));
+        Runtime.getRuntime().addShutdownHook(new Thread(StatusReporter::renderFinal, "Basquin-Status-Final"));
     }
 
     /** Record one completed iteration's metrics and any violations/leak it carried. */
@@ -164,7 +164,7 @@ public final class StatusReporter {
         double elapsedSec = elapsedNanos / 1_000_000_000.0;         // fractional, for the rate
         double rate = elapsedSec > 0.05 ? iterations / elapsedSec : 0.0;
         double meanLatency = iterations > 0 ? (double) sumLatencyMs / iterations : 0.0;
-        boolean exploring = corpusSaved > 0 || Boolean.getBoolean("closurejvm.status.explore");
+        boolean exploring = corpusSaved > 0 || Boolean.getBoolean("basquin.status.explore");
 
         if (!TTY) {
             String cov = totalEdges > 0
@@ -174,7 +174,7 @@ public final class StatusReporter {
                         corpusSaved, findCrash, findInvariant, rejected, cov, sinceLastFind())
                 : "";
             System.out.printf(
-                "[ClosureJVM] %s iters=%d (%.1f/s) crashes=%d leaks=%d inv[lat=%d heap=%d thr=%d] "
+                "[Basquin] %s iters=%d (%.1f/s) crashes=%d leaks=%d inv[lat=%d heap=%d thr=%d] "
                 + "lat(last/mean/max)=%d/%.0f/%dms heap(last/max)=%d/%dKB threads=%d resets=%d%s%n",
                 fmt(elapsedS), iterations, rate, crashes, leaks, violLatency, violHeap, violThread,
                 lastLatencyMs, meanLatency, maxLatencyMs, lastHeapKb, maxHeapKb, lastThreads, resets, explore);
@@ -183,7 +183,7 @@ public final class StatusReporter {
 
         StringBuilder sb = new StringBuilder();
         sb.append("[H[2J"); // cursor home + clear screen
-        sb.append("┌─ ClosureJVM ──────────────────────────────────┐\n");
+        sb.append("┌─ Basquin ──────────────────────────────────┐\n");
         row(sb, "run time", fmt(elapsedS));
         row(sb, "iterations", String.format("%d  (%.1f/s)", iterations, rate));
         row(sb, "crashes", String.valueOf(crashes));

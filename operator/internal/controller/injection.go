@@ -25,7 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 
-	closurejvmv1alpha1 "github.com/ianp94/closureJVM/operator/api/v1alpha1"
+	basquinv1alpha1 "github.com/ianp94/basquin/operator/api/v1alpha1"
 )
 
 // P2 injection (docs/OPERATOR-DESIGN.md §4, DD-024). The operator instruments an unmodified app
@@ -40,36 +40,36 @@ import (
 
 const (
 	// Finalizer that guarantees the Deployment is reverted before a target is deleted.
-	finalizerName = "closurejvm.dev/revert"
+	finalizerName = "basquin.dev/revert"
 
 	// Annotation on the Deployment recording the spec hash we last injected, so a steady target is a
 	// no-op on every resync and re-injection only happens when the spec actually changes.
-	annInjectedHash = "closurejvm.dev/injected"
+	annInjectedHash = "basquin.dev/injected"
 	// Annotation stashing the app container's original jvmOptsVar value, so revert is exact. Present
 	// with value "" means the var was originally unset/empty (revert then removes it).
-	annOriginalOpts = "closurejvm.dev/original-jvmopts"
+	annOriginalOpts = "basquin.dev/original-jvmopts"
 	// Records which env var name we appended to, so revert targets the right one even if the spec's
 	// jvmOptsVar changed between inject and revert.
-	annOptsVar = "closurejvm.dev/jvmopts-var"
+	annOptsVar = "basquin.dev/jvmopts-var"
 	// Records WHICH container we injected into, so revert restores the env var on exactly that
 	// container — never an unrelated sidecar that happens to set the same (generic) var name.
-	annOptsContainer = "closurejvm.dev/jvmopts-container"
+	annOptsContainer = "basquin.dev/jvmopts-container"
 
 	// Names for the injected initContainer / shared volume, and where the agents are mounted.
-	agentsInitName   = "closurejvm-agents"
-	agentsVolumeName = "closurejvm-agents"
-	agentsMountPath  = "/closurejvm"
-	// Container port names are IANA_SVC_NAME: max 15 chars. "closurejvm-jacoco" (17) is too long.
-	coveragePortName = "cjvm-jacoco"
+	agentsInitName   = "basquin-agents"
+	agentsVolumeName = "basquin-agents"
+	agentsMountPath  = "/basquin"
+	// Container port names are IANA_SVC_NAME: max 15 chars; "basquin-jacoco" is 14, so it fits.
+	coveragePortName = "basquin-jacoco"
 )
 
 // defaultAgentsImage is used when the operator is not configured with one. Overridable via the
 // reconciler's AgentsImage field (set from a flag/env in main.go).
-const defaultAgentsImage = "closurejvm/agents:latest"
+const defaultAgentsImage = "basquin/agents:latest"
 
 // resolveContainer picks the app container to instrument: spec.container if set, else the sole
 // container. Returns its index, or an error the caller surfaces as a status condition.
-func resolveContainer(spec *closurejvmv1alpha1.ClosureJVMTargetSpec, tmpl *corev1.PodSpec) (int, error) {
+func resolveContainer(spec *basquinv1alpha1.BasquinTargetSpec, tmpl *corev1.PodSpec) (int, error) {
 	if spec.Container != "" {
 		for i := range tmpl.Containers {
 			if tmpl.Containers[i].Name == spec.Container {
@@ -85,7 +85,7 @@ func resolveContainer(spec *closurejvmv1alpha1.ClosureJVMTargetSpec, tmpl *corev
 }
 
 // jvmOptsVarName returns the env var the JVM reads flags from, defaulting per the CRD default.
-func jvmOptsVarName(spec *closurejvmv1alpha1.ClosureJVMTargetSpec) string {
+func jvmOptsVarName(spec *basquinv1alpha1.BasquinTargetSpec) string {
 	if spec.JVMOptsVar != "" {
 		return spec.JVMOptsVar
 	}
@@ -97,15 +97,15 @@ func jvmOptsVarName(spec *closurejvmv1alpha1.ClosureJVMTargetSpec) string {
 // bootstrap-loaded code), then the JaCoCo coverage agent, then the -D config. The valve is NOT a
 // JVM flag (it needs a Tomcat context.xml Valve entry) and is handled separately (deferred; see the
 // backlog) — enabling agents.valve alone does not add anything here.
-func buildAgentArgs(spec *closurejvmv1alpha1.ClosureJVMTargetSpec) string {
+func buildAgentArgs(spec *basquinv1alpha1.BasquinTargetSpec) string {
 	var args []string
 	if spec.Agents.ThreadTracker == nil || *spec.Agents.ThreadTracker { // nil = default (on)
-		args = append(args, "-agentpath:"+agentsMountPath+"/libclosurejvmti.so")
+		args = append(args, "-agentpath:"+agentsMountPath+"/libbasquinjvmti.so")
 	}
 	// The Java agent carries the invariant oracle; inject it whenever any agent/invariant is wanted.
 	args = append(args,
-		"-javaagent:"+agentsMountPath+"/closurejvm-agent.jar",
-		"-Xbootclasspath/a:"+agentsMountPath+"/closurejvm-agent.jar")
+		"-javaagent:"+agentsMountPath+"/basquin-agent.jar",
+		"-Xbootclasspath/a:"+agentsMountPath+"/basquin-agent.jar")
 
 	if spec.Agents.Coverage.Enabled {
 		port := spec.Agents.Coverage.Port
@@ -118,16 +118,16 @@ func buildAgentArgs(spec *closurejvmv1alpha1.ClosureJVMTargetSpec) string {
 	}
 
 	if spec.Invariants.Mode != "" {
-		args = append(args, "-Dclosurejvm.invariant.mode="+spec.Invariants.Mode)
+		args = append(args, "-Dbasquin.invariant.mode="+spec.Invariants.Mode)
 	}
 	if spec.Invariants.LatencyMaxMs > 0 {
-		args = append(args, fmt.Sprintf("-Dclosurejvm.invariant.latency.maxMs=%d", spec.Invariants.LatencyMaxMs))
+		args = append(args, fmt.Sprintf("-Dbasquin.invariant.latency.maxMs=%d", spec.Invariants.LatencyMaxMs))
 	}
 	if spec.Invariants.HeapDeltaMaxKb > 0 {
-		args = append(args, fmt.Sprintf("-Dclosurejvm.invariant.heapDelta.maxKb=%d", spec.Invariants.HeapDeltaMaxKb))
+		args = append(args, fmt.Sprintf("-Dbasquin.invariant.heapDelta.maxKb=%d", spec.Invariants.HeapDeltaMaxKb))
 	}
 	if spec.DashboardPush != "" {
-		args = append(args, "-Dclosurejvm.dashboard.push="+spec.DashboardPush)
+		args = append(args, "-Dbasquin.dashboard.push="+spec.DashboardPush)
 	}
 	return strings.Join(args, " ")
 }
@@ -135,7 +135,7 @@ func buildAgentArgs(spec *closurejvmv1alpha1.ClosureJVMTargetSpec) string {
 // specHash is a stable fingerprint of the parts of the spec that affect the injected patch. Injecting
 // is a no-op while this matches the Deployment's annInjectedHash annotation. spec.Container is
 // included: retargeting from one container to another with nothing else changed must still re-derive.
-func specHash(spec *closurejvmv1alpha1.ClosureJVMTargetSpec, agentsImage string) string {
+func specHash(spec *basquinv1alpha1.BasquinTargetSpec, agentsImage string) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "img=%s;container=%s;var=%s;args=%s;covPort=%d;covEnabled=%t",
 		agentsImage, spec.Container, jvmOptsVarName(spec), buildAgentArgs(spec),
@@ -150,7 +150,7 @@ func specHash(spec *closurejvmv1alpha1.ClosureJVMTargetSpec, agentsImage string)
 // rather than reported as steady-state Injected forever. Checking only the annotation + initContainer
 // would miss the worst drift: the env flags being stripped, which silently stops the agents loading
 // while everything else still looks injected (P2 review).
-func injectionApplied(deploy *appsv1.Deployment, spec *closurejvmv1alpha1.ClosureJVMTargetSpec, wantHash string) bool {
+func injectionApplied(deploy *appsv1.Deployment, spec *basquinv1alpha1.BasquinTargetSpec, wantHash string) bool {
 	if deploy.Annotations[annInjectedHash] != wantHash {
 		return false
 	}
@@ -218,7 +218,7 @@ func wasInjected(deploy *appsv1.Deployment) bool {
 // so re-reconciling never double-appends. Returns an error if the target container can't be resolved
 // or if its jvmOptsVar is sourced from valueFrom (which we could not restore on revert). Callers that
 // re-derive after a spec change should revertInjection first so this reads a clean original.
-func applyInjection(deploy *appsv1.Deployment, spec *closurejvmv1alpha1.ClosureJVMTargetSpec, agentsImage string) error {
+func applyInjection(deploy *appsv1.Deployment, spec *basquinv1alpha1.BasquinTargetSpec, agentsImage string) error {
 	tmpl := &deploy.Spec.Template.Spec
 	ci, err := resolveContainer(spec, tmpl)
 	if err != nil {
@@ -308,8 +308,8 @@ func revertInjection(deploy *appsv1.Deployment) {
 	cname := deploy.Annotations[annOptsContainer]
 	original, originalPresent := deploy.Annotations[annOriginalOpts]
 	for i := range tmpl.Containers {
-		// The volume mount and coverage port carry names namespaced to us (closurejvm-agents,
-		// cjvm-jacoco), so removing them from any container is safe.
+		// The volume mount and coverage port carry names namespaced to us (basquin-agents,
+		// basquin-jacoco), so removing them from any container is safe.
 		removeVolumeMount(&tmpl.Containers[i], agentsVolumeName)
 		removeContainerPort(&tmpl.Containers[i], coveragePortName)
 		// The env var name is generic (CATALINA_OPTS/JAVA_TOOL_OPTIONS), so restore/remove it ONLY on

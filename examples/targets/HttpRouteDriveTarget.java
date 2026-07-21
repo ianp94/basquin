@@ -14,8 +14,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Client-side HTTP driver: issues one request per iteration to a configured route of a running
  * web app, so the harness measures real end-to-end latency and treats 5xx as a crash. When the
- * app has the ClosureJVM valve/filter, this also harvests the server-side invariant findings it
- * exposes via {@code X-ClosureJVM-Invariant-*} headers and saves them as triage.
+ * app has the Basquin valve/filter, this also harvests the server-side invariant findings it
+ * exposes via {@code X-Basquin-Invariant-*} headers and saves them as triage.
  *
  * Complements the in-server valve (DD-009): the valve captures heap/thread/leak inside the app
  * JVM; this driver captures request latency and crashes from the outside and explores routes.
@@ -67,9 +67,9 @@ public class HttpRouteDriveTarget implements IterationTarget, InputReceiver {
         int code = c.getResponseCode();
 
         // Harvest server-side invariant evidence surfaced by the valve/filter.
-        String invCount = c.getHeaderField("X-ClosureJVM-Invariant-Count");
+        String invCount = c.getHeaderField("X-Basquin-Invariant-Count");
         if (invCount != null) {
-            String detail = c.getHeaderField("X-ClosureJVM-Invariant-Detail");
+            String detail = c.getHeaderField("X-Basquin-Invariant-Detail");
             FuzzIO.saveWithMeta(route.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
                     "route=" + route + "\ncount=" + invCount + (detail != null ? "\ndetail=" + detail : ""));
         }

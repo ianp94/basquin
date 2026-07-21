@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ClosureJVM — Kubernetes-native fuzz and load testing for JVM web apps</title>
+<title>Basquin — Kubernetes-native fuzz and load testing for JVM web apps</title>
 <meta name="description" content="Fuzz and load test JVM web apps in Kubernetes, unmodified. Coverage-guided fuzzing finds the inputs that stress your app; load mode replays them at volume — with latency, heap growth, and thread/executor leaks as first-class findings.">
 <link rel="stylesheet" href="site.css">
 </head>
@@ -17,7 +17,7 @@
         <path d="M12 9c-3 0-4 2-4 4v2.2c0 1-.4 1.6-1.4 1.8 1 .2 1.4.8 1.4 1.8V23c0 2 1 4 4 4" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/>
         <path d="M20 9c3 0 4 2 4 4v2.2c0 1 .4 1.6 1.4 1.8-1 .2-1.4.8-1.4 1.8V23c0 2-1 4-4 4" stroke="#c4b3ff" stroke-width="2" stroke-linecap="round" fill="none"/>
       </svg>
-      ClosureJVM
+      Basquin
     </a>
     <nav class="nav-links">
       <a href="index.html" class="active">Home</a>
@@ -25,7 +25,7 @@
       <a href="how-it-works.html">How it works</a>
       <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
       <a href="operator.html">Operator</a>
-      <a class="gh" href="https://github.com/ianp94/closureJVM">GitHub ↗</a>
+      <a class="gh" href="https://github.com/ianp94/basquin">GitHub ↗</a>
     </nav>
   </div>
 </header>
@@ -35,7 +35,7 @@
     <div class="wrap">
       <span class="kicker">kubernetes-native fuzz + load testing</span>
       <h1>Fuzz and load test your JVM web apps — unmodified, in Kubernetes.</h1>
-      <p class="lede">Instrument a running app with a <code>ClosureJVMTarget</code> — no rebuild, no
+      <p class="lede">Instrument a running app with a <code>BasquinTarget</code> — no rebuild, no
         image changes. Run a <strong>coverage-guided fuzz</strong> campaign to discover the inputs
         that stress it, then <strong>replay those exact inputs under load</strong>. And because the
         bug oracle is <strong>availability</strong> — latency budgets, heap retention,
@@ -43,14 +43,14 @@
       <div class="btn-row">
         <a class="btn btn-primary" href="operator.html">Run it in Kubernetes →</a>
         <a class="btn btn-secondary" href="getting-started.html">Get started</a>
-        <a class="btn btn-secondary" href="https://github.com/ianp94/closureJVM">GitHub repo</a>
+        <a class="btn btn-secondary" href="https://github.com/ianp94/basquin">GitHub repo</a>
       </div>
     </div>
   </section>
 
   <section class="wrap">
     <figure class="demo-figure">
-      <img src="demo-k8s.svg" alt="ClosureJVM driving an unmodified JPetStore pod in a kind cluster">
+      <img src="demo-k8s.svg" alt="Basquin driving an unmodified JPetStore pod in a kind cluster">
       <figcaption>250 requests against an unmodified
         <a href="https://github.com/mybatis/jpetstore-6">JPetStore</a> <strong>pod</strong> — live
         coverage % (281/6368 edges of the pod's own code, pulled from its JaCoCo agent), 96 invariant
@@ -60,18 +60,18 @@
 
   <section class="section wrap">
     <h2>Instrument once, then run campaigns</h2>
-    <p class="lead">Two custom resources in group <code>closurejvm.dev/v1alpha1</code>. You
+    <p class="lead">Two custom resources in group <code>basquin.dev/v1alpha1</code>. You
       instrument an app once, then run any number of bounded tests against it.</p>
     <div class="cards">
       <div class="card">
         <span class="ico">// long-lived</span>
-        <h3>ClosureJVMTarget — instrument</h3>
+        <h3>BasquinTarget — instrument</h3>
         <p>Patches an unmodified app Deployment to load the agents via an initContainer + shared
           volume. Fully reversible — deleting it restores the Deployment byte-for-byte.</p>
       </div>
       <div class="card">
         <span class="ico">// ephemeral</span>
-        <h3>ClosureJVMCampaign — test</h3>
+        <h3>BasquinCampaign — test</h3>
         <p>Drives the instrumented target and aggregates results into status. Runs in one of two
           modes: <code>explore</code> (coverage-guided fuzzing) or <code>load</code> (corpus replay
           at volume).</p>
@@ -97,7 +97,7 @@
       </table>
     </div>
     <p style="margin-top:18px;"><em>Fuzz to discover the interesting states, then hammer those
-      states under load.</em> Install with Helm, drive it with the <code>closurejvm</code> CLI —
+      states under load.</em> Install with Helm, drive it with the <code>basquin</code> CLI —
       see the <a href="operator.html">operator guide</a>.</p>
   </section>
 
@@ -106,7 +106,7 @@
       <h2>Why it's different</h2>
       <p class="lead">Fuzzers like Jazzer and JQF are excellent, but their oracle is
         <em>"did it throw / crash."</em> Load tools like k6 and Gatling measure throughput but know
-        nothing about what's happening <em>inside</em> the JVM. ClosureJVM sits in the gap — and the
+        nothing about what's happening <em>inside</em> the JVM. Basquin sits in the gap — and the
         corpus carries from fuzzing straight into the load test.</p>
       <div class="cards">
         <div class="card">
@@ -155,7 +155,7 @@
     </div>
 
     <figure class="demo-figure">
-      <img src="demo-explore.svg" alt="ClosureJVM exploration panel: execs/sec, corpus, finds, coverage">
+      <img src="demo-explore.svg" alt="Basquin exploration panel: execs/sec, corpus, finds, coverage">
       <figcaption>Exploring an unmodified JPetStore over HTTP — 220 requests, <strong>0 crashes</strong>
         (it's robust), <strong>48 invariant finds</strong> harvested server-side via the valve.</figcaption>
     </figure>
@@ -202,7 +202,7 @@
           <h3>Kubernetes operator</h3>
           <p>Two CRDs, namespaced RBAC (never a <code>ClusterRole</code>), reversible in-place
             instrumentation of unmodified images, and a per-campaign dashboard. Installed with Helm,
-            driven by the <code>closurejvm</code> CLI.</p>
+            driven by the <code>basquin</code> CLI.</p>
         </div>
         <div class="card">
           <span class="ico">// load</span>
@@ -228,13 +228,13 @@
 
 <footer class="footer">
   <div class="wrap-wide footer-inner">
-    <div>ClosureJVM — Kubernetes-native fuzz and load testing for JVM web apps.</div>
+    <div>Basquin — Kubernetes-native fuzz and load testing for JVM web apps.</div>
     <div class="links">
       <a href="getting-started.html">Get started</a>
       <a href="how-it-works.html">How it works</a>
       <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
       <a href="operator.html">Operator</a>
-      <a href="https://github.com/ianp94/closureJVM">GitHub</a>
+      <a href="https://github.com/ianp94/basquin">GitHub</a>
     </div>
     <div class="ai-note">Built with AI assistance (Anthropic's Claude / Claude Code), directed and reviewed by the author.</div>
   </div>

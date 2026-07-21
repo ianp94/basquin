@@ -18,10 +18,10 @@ import java.util.concurrent.atomic.AtomicLongArray;
  * to discover the interesting states, then hammer those states under load and watch the invariants
  * hold.</em>
  *
- * Reached from {@link CoverageGuidedRun} when {@code -Dclosurejvm.mode=load}. Config:
- * {@code examples.http.baseUrl}, {@code closurejvm.corpusDir} (the mounted replay corpus),
- * {@code closurejvm.run.duration}, {@code closurejvm.concurrency}, {@code closurejvm.warmup},
- * {@code closurejvm.invariant.latency.maxMs}, {@code closurejvm.summary.out}.
+ * Reached from {@link CoverageGuidedRun} when {@code -Dbasquin.mode=load}. Config:
+ * {@code examples.http.baseUrl}, {@code basquin.corpusDir} (the mounted replay corpus),
+ * {@code basquin.run.duration}, {@code basquin.concurrency}, {@code basquin.warmup},
+ * {@code basquin.invariant.latency.maxMs}, {@code basquin.summary.out}.
  */
 public final class LoadRun {
 
@@ -29,19 +29,19 @@ public final class LoadRun {
 
     public static void run() throws Exception {
         String baseUrl = System.getProperty("examples.http.baseUrl", "http://localhost:8080");
-        String corpusDir = System.getProperty("closurejvm.corpusDir", "");
+        String corpusDir = System.getProperty("basquin.corpusDir", "");
         List<String> corpus = readCorpus(corpusDir);
         if (corpus.isEmpty()) {
-            System.err.println("[ClosureJVM] load: no corpus routes under " + corpusDir + "; nothing to replay");
+            System.err.println("[Basquin] load: no corpus routes under " + corpusDir + "; nothing to replay");
             corpus.add("/");
         }
-        long durationMs = CoverageGuidedRun.parseDurationMillis(System.getProperty("closurejvm.run.duration", "60s"));
-        long warmupMs = System.getProperty("closurejvm.warmup", "").isEmpty()
-                ? 0L : CoverageGuidedRun.parseDurationMillis(System.getProperty("closurejvm.warmup"));
-        int concurrency = Integer.getInteger("closurejvm.concurrency", 10);
-        long latencyMaxMs = Long.getLong("closurejvm.invariant.latency.maxMs", 0L);
+        long durationMs = CoverageGuidedRun.parseDurationMillis(System.getProperty("basquin.run.duration", "60s"));
+        long warmupMs = System.getProperty("basquin.warmup", "").isEmpty()
+                ? 0L : CoverageGuidedRun.parseDurationMillis(System.getProperty("basquin.warmup"));
+        int concurrency = Integer.getInteger("basquin.concurrency", 10);
+        long latencyMaxMs = Long.getLong("basquin.invariant.latency.maxMs", 0L);
 
-        System.out.printf("[ClosureJVM] load: %d route(s), concurrency=%d, warmup=%dms, duration=%dms%n",
+        System.out.printf("[Basquin] load: %d route(s), concurrency=%d, warmup=%dms, duration=%dms%n",
                 corpus.size(), concurrency, warmupMs, durationMs);
 
         final long startNanos = System.nanoTime();
@@ -82,7 +82,7 @@ public final class LoadRun {
                         latencyViol.incrementAndGet();
                     }
                 }
-            }, "ClosureJVM-Load-" + w);
+            }, "Basquin-Load-" + w);
             workers[w].start();
         }
         for (Thread t : workers) {
@@ -109,8 +109,8 @@ public final class LoadRun {
                 percentile(hist, total, 0.99), maxBucket(hist),
                 heapDrift, threadDrift, latencyViol.get());
 
-        System.out.println("[ClosureJVM] load done: " + json);
-        String summaryOut = System.getProperty("closurejvm.summary.out");
+        System.out.println("[Basquin] load done: " + json);
+        String summaryOut = System.getProperty("basquin.summary.out");
         if (summaryOut != null && !summaryOut.isEmpty()) {
             try {
                 Files.write(Paths.get(summaryOut), json.getBytes(StandardCharsets.UTF_8));
@@ -159,7 +159,7 @@ public final class LoadRun {
                 }
             }
         } catch (Exception e) {
-            System.err.println("[ClosureJVM] load: failed reading corpus " + dir + ": " + e);
+            System.err.println("[Basquin] load: failed reading corpus " + dir + ": " + e);
         }
         return routes;
     }

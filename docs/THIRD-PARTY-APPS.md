@@ -1,7 +1,7 @@
-# Running ClosureJVM against a third-party WAR (Tomcat valve)
+# Running Basquin against a third-party WAR (Tomcat valve)
 
 Our own demo WAR bundles `IterationFilter` in its `web.xml`. Third-party apps
-(JPetStore, JSPWiki, …) can't be modified, so ClosureJVM attaches iteration
+(JPetStore, JSPWiki, …) can't be modified, so Basquin attaches iteration
 boundaries with a **Tomcat valve** instead — no WAR repacking, no `web.xml` edits.
 Rationale and rejected alternatives: `DESIGN-DECISIONS.md` DD-009.
 
@@ -26,11 +26,11 @@ To check an app: `unzip -l app.war | grep -E 'spring-web|servlet'` and look at
 
 ## Pieces
 
-- `tomcat-valve/` — `com.closurejvm.valve.ClosureJVMValve` (extends `ValveBase`), built
-  to `closurejvm-valve-<v>.jar`. Goes in Tomcat's `lib/`.
+- `tomcat-valve/` — `com.basquin.valve.BasquinValve` (extends `ValveBase`), built
+  to `basquin-valve-<v>.jar`. Goes in Tomcat's `lib/`.
 - `deploy/valve/context.xml` — global context that registers the valve for every
   deployed app. Mounted over `conf/context.xml`.
-- `build/libs/closurejvm-<v>.jar` — the agent, injected via `CATALINA_OPTS`
+- `build/libs/basquin-<v>.jar` — the agent, injected via `CATALINA_OPTS`
   (`-javaagent` + bootclasspath) so invariants are captured inside the server JVM.
 - `docker-compose.valve.yml` — wires all of the above around a WAR under test.
 
@@ -43,8 +43,8 @@ To check an app: `unzip -l app.war | grep -E 'spring-web|servlet'` and look at
 docker compose -f docker-compose.valve.yml up tomcat-valve
 ```
 
-Verified deploy signals: `ClosureJVM Agent initialized` in the log (premain ran),
-WAR deploys with no `SEVERE`, routes serve, and `GET /closurejvm/status` shows
+Verified deploy signals: `Basquin Agent initialized` in the log (premain ran),
+WAR deploys with no `SEVERE`, routes serve, and `GET /basquin/status` shows
 server-side `requests`/`crashes`/`invariants` counters advancing.
 
 ## JPetStore (MyBatis) — first real target — DONE
@@ -68,9 +68,9 @@ runs on **Tomcat 9** with the (namespace-free) valve.
    JPetStore has no `IterationFilter`, so the valve is the sole boundary — no double-wrap
    (iteration numbers increment 1,2,3,… one per request).
 3. **Drive it** — hit real routes and read findings from the server-side agent log
-   (`[ClosureJVM][Invariant] …`) and the `X-ClosureJVM-Invariant-*` response headers:
+   (`[Basquin][Invariant] …`) and the `X-Basquin-Invariant-*` response headers:
    ```
-   curl -s -D - "http://localhost:8080/actions/Catalog.action?viewCategory=&categoryId=FISH" | grep X-ClosureJVM
+   curl -s -D - "http://localhost:8080/actions/Catalog.action?viewCategory=&categoryId=FISH" | grep X-Basquin
    ```
 
 ### Verified findings (2026-07-19, soft invariants latency>5ms / heap>64KB)

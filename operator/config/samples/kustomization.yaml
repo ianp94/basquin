@@ -1,5 +1,5 @@
 ## Append samples of your project ##
 resources:
-- closurejvm_v1alpha1_closurejvmtarget.yaml
-- closurejvm_v1alpha1_closurejvmcampaign.yaml
+- basquin_v1alpha1_basquintarget.yaml
+- basquin_v1alpha1_basquincampaign.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

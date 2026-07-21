@@ -1,0 +1,19 @@
+apiVersion: v2
+name: basquin-operator
+description: |-
+  The Basquin Kubernetes operator — instrument an unmodified app with a BasquinTarget and run
+  bounded coverage-guided tests with a BasquinCampaign. Namespaced by design (Role/RoleBinding in
+  one namespace; install one release per namespace you want to instrument).
+type: application
+# Chart version — bump on chart changes. appVersion tracks the operator/image release.
+version: 0.1.0
+appVersion: "0.2.0"
+keywords:
+  - testing
+  - availability
+  - fuzzing
+  - jvm
+  - operator
+home: https://ianp94.github.io/basquin/
+sources:
+  - https://github.com/ianp94/basquin

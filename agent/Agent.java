@@ -18,7 +18,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Core agent for ClosureJVM - a persistent execution harness for JVM web applications
+ * Core agent for Basquin - a persistent execution harness for JVM web applications
  * that uses coverage-guided exploration to discover availability, performance, and
  * correctness failures.
  *
@@ -37,7 +37,7 @@ public class Agent {
     // Keep weak references so tracking doesn't retain executors/timers long-term.
     private static final Set<java.lang.ref.WeakReference<ExecutorService>> trackedExecutorRefs = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private static final Set<java.lang.ref.WeakReference<Timer>> trackedTimerRefs = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private static final Timer invariantSampler = new Timer("ClosureJVM-InvariantSampler", true);
+    private static final Timer invariantSampler = new Timer("Basquin-InvariantSampler", true);
     private static final ThreadMXBean THREAD_MX = ManagementFactory.getThreadMXBean();
 
     // "Last completed iteration" evidence, exposed to servlet integrations (filter/valve,
@@ -55,7 +55,7 @@ public class Agent {
      * @param instrumentation instrumentation object for the JVM
      */
     public static void premain(String agentArgs, java.lang.instrument.Instrumentation instrumentation) {
-        System.out.println("ClosureJVM Agent initialized");
+        System.out.println("Basquin Agent initialized");
         // Agent initialization logic would go here
     }
 
@@ -69,7 +69,7 @@ public class Agent {
         }
         // Keep baseline and end-of-iteration heap readings symmetric (see end());
         // GC runs before the latency clock starts so it never counts against the iteration.
-        if (Boolean.getBoolean("closurejvm.heap.gcBeforeMeasure")) {
+        if (Boolean.getBoolean("basquin.heap.gcBeforeMeasure")) {
             System.gc();
         }
         ctx.startNanos = System.nanoTime();
@@ -99,7 +99,7 @@ public class Agent {
         // Simple metrics snapshot and print-only signal
         // Opt-in GC so heap delta reflects retention rather than allocation noise.
         // Off by default: System.gc() is slow and distorts iteration throughput.
-        if (Boolean.getBoolean("closurejvm.heap.gcBeforeMeasure")) {
+        if (Boolean.getBoolean("basquin.heap.gcBeforeMeasure")) {
             System.gc();
         }
         final long heapNow = usedHeapBytes();
@@ -112,7 +112,7 @@ public class Agent {
         ctx.threadDelta = threadsDelta;
         if (!runner.util.StatusReporter.isEnabled()) {
             System.out.println(String.format(
-                    "[ClosureJVM] Iteration %d metrics: latency=%dms, heapDelta=%+d KB, threads=%d (%+d)",
+                    "[Basquin] Iteration %d metrics: latency=%dms, heapDelta=%+d KB, threads=%d (%+d)",
                     ctx.iterationNumber, elapsedMs, heapDeltaBytes / 1024, threadsNow, threadsDelta));
         }
 
@@ -125,8 +125,8 @@ public class Agent {
             cancelLatencySample(ctx);
             recordStatus(ctx);
             // If configured to fail-hard, rethrow to stop the iteration loop fast
-            if (Boolean.getBoolean("closurejvm.forceExitOnLeak")) {
-                System.err.println("[ClosureJVM] Forcing process exit due to invariant violation (closurejvm.forceExitOnLeak=true)");
+            if (Boolean.getBoolean("basquin.forceExitOnLeak")) {
+                System.err.println("[Basquin] Forcing process exit due to invariant violation (basquin.forceExitOnLeak=true)");
                 System.exit(2);
             }
             throw e;
@@ -143,7 +143,7 @@ public class Agent {
 
         boolean leakDetected = false;
         if (!newNonDaemon.isEmpty()) {
-            System.err.println("[ClosureJVM] Thread leak detected after iteration " + ctx.iterationNumber + ": " + newNonDaemon.size() + " new non-daemon thread(s) remain");
+            System.err.println("[Basquin] Thread leak detected after iteration " + ctx.iterationNumber + ": " + newNonDaemon.size() + " new non-daemon thread(s) remain");
             for (Long id : newNonDaemon) {
                 Thread t = currentNonDaemon.get(id);
                 if (t == null) {
@@ -172,7 +172,7 @@ public class Agent {
             }
         }
         if (!newActiveExecutors.isEmpty()) {
-            System.err.println("[ClosureJVM] Executor leak detected after iteration " + ctx.iterationNumber + ": " + newActiveExecutors.size() + " executor(s) not shutdown");
+            System.err.println("[Basquin] Executor leak detected after iteration " + ctx.iterationNumber + ": " + newActiveExecutors.size() + " executor(s) not shutdown");
             for (ExecutorService ex : newActiveExecutors) {
                 String type = ex.getClass().getName();
                 String extra = "";
@@ -206,7 +206,7 @@ public class Agent {
             }
         }
         if (!newActiveTimers.isEmpty()) {
-            System.err.println("[ClosureJVM] Timer leak (best-effort) after iteration " + ctx.iterationNumber + ": " + newActiveTimers.size() + " timer(s) may be active");
+            System.err.println("[Basquin] Timer leak (best-effort) after iteration " + ctx.iterationNumber + ": " + newActiveTimers.size() + " timer(s) may be active");
             for (Timer t : newActiveTimers) {
                 System.err.println("  - Timer " + t.getClass().getName() + "@" + Integer.toHexString(System.identityHashCode(t)) + " (daemon=" + timerDaemonStatus(t) + ")");
             }
@@ -217,8 +217,8 @@ public class Agent {
         recordStatus(ctx);
         if (leakDetected) {
             // Optional hard-exit for demos/CI so leaked non-daemon threads don't keep JVM alive
-            if (Boolean.getBoolean("closurejvm.forceExitOnLeak")) {
-                System.err.println("[ClosureJVM] Forcing process exit due to leak detection (closurejvm.forceExitOnLeak=true)");
+            if (Boolean.getBoolean("basquin.forceExitOnLeak")) {
+                System.err.println("[Basquin] Forcing process exit due to leak detection (basquin.forceExitOnLeak=true)");
                 System.exit(2);
             }
             // Fail fast for v0.1 to make leaks obvious
@@ -255,7 +255,7 @@ public class Agent {
             // Defensive: end without a matching begin. Synthesize a context so we still run the
             // checks rather than NPE — but its metrics measure ~nothing, so warn loudly that
             // this is a caller-ordering bug rather than reporting plausible all-zero numbers.
-            System.err.println("[ClosureJVM] endIteration() called without a matching beginIteration() "
+            System.err.println("[Basquin] endIteration() called without a matching beginIteration() "
                     + "on this thread; this iteration's metrics are not meaningful (caller-ordering bug).");
             ctx = begin();
         }
@@ -407,7 +407,7 @@ public class Agent {
     }
 
     private static String buildStackSnapshot(IterationContext ctx) {
-        String mode = System.getProperty("closurejvm.invariant.stack", "current");
+        String mode = System.getProperty("basquin.invariant.stack", "current");
         StringBuilder sb = new StringBuilder();
         String sampled = ctx.sampledExecStack;
         if (sampled != null && !sampled.isEmpty()) {
@@ -417,7 +417,7 @@ public class Agent {
             return "";
         }
         if ("all".equalsIgnoreCase(mode)) {
-            int maxFrames = Integer.getInteger("closurejvm.invariant.stack.maxFrames", 10);
+            int maxFrames = Integer.getInteger("basquin.invariant.stack.maxFrames", 10);
             for (Map.Entry<Thread, StackTraceElement[]> e : Thread.getAllStackTraces().entrySet()) {
                 Thread t = e.getKey();
                 if (t == null || !t.isAlive()) continue;
@@ -437,16 +437,16 @@ public class Agent {
         sb.append("Thread '").append(t.getName()).append("' (id=").append(t.getId())
           .append(", state=").append(t.getState()).append(")\n");
         StackTraceElement[] st = t.getStackTrace();
-        int limit = Math.min(Integer.getInteger("closurejvm.invariant.stack.maxFrames", 15), st.length);
+        int limit = Math.min(Integer.getInteger("basquin.invariant.stack.maxFrames", 15), st.length);
         for (int i = 0; i < limit; i++) sb.append("  at ").append(st[i]).append('\n');
         if (st.length > limit) sb.append("  ...").append(st.length - limit).append(" more\n");
         return sb.toString();
     }
 
     private static void scheduleLatencySampleIfConfigured(IterationContext ctx) {
-        if (!Boolean.getBoolean("closurejvm.invariant.latency.sample")) return;
+        if (!Boolean.getBoolean("basquin.invariant.latency.sample")) return;
         Long latencyMax = null;
-        try { latencyMax = Long.getLong("closurejvm.invariant.latency.maxMs"); } catch (Exception ignored) {}
+        try { latencyMax = Long.getLong("basquin.invariant.latency.maxMs"); } catch (Exception ignored) {}
         if (latencyMax == null || latencyMax <= 0) return;
         final Thread threadToSample = ctx.monitoredThread;
         if (threadToSample == null) return;
@@ -458,7 +458,7 @@ public class Agent {
                       .append(threadToSample.getId()).append(", state=")
                       .append(threadToSample.getState()).append(")\n");
                     StackTraceElement[] st = threadToSample.getStackTrace();
-                    int limit = Math.min(Integer.getInteger("closurejvm.invariant.stack.maxFrames", 15), st.length);
+                    int limit = Math.min(Integer.getInteger("basquin.invariant.stack.maxFrames", 15), st.length);
                     for (int i = 0; i < limit; i++) sb.append("  at ").append(st[i]).append('\n');
                     if (st.length > limit) sb.append("  ...").append(st.length - limit).append(" more\n");
                     ctx.sampledExecStack = sb.toString();

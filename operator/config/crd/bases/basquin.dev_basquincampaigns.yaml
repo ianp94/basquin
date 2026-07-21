@@ -1,0 +1,358 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+  name: basquincampaigns.basquin.dev
+spec:
+  group: basquin.dev
+  names:
+    kind: BasquinCampaign
+    listKind: BasquinCampaignList
+    plural: basquincampaigns
+    singular: basquincampaign
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.targetRef.name
+      name: Target
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.coveragePct
+      name: Coverage
+      type: string
+    - jsonPath: .status.findings
+      name: Findings
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: BasquinCampaign is the Schema for the basquincampaigns
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              BasquinCampaignSpec defines the desired state of BasquinCampaign.
+              Exactly one of driver.duration / driver.iterations must be set.
+              load mode replays a saved corpus at volume — it requires driver.corpusConfigMap, and ignores a
+              grammar / an iteration count (it is duration-bounded). DD-026.
+              load is duration-bounded; iterations is ignored by the load driver, so require duration explicitly
+              (the duration-XOR-iterations rule alone would let an iterations-only load run silently default to 60s).
+            properties:
+              baseURL:
+                description: |-
+                  BaseURL is the app's HTTP entrypoint the driver hits. REQUIRED — the operator doesn't front the
+                  app with a Service of its own, so the campaign names it.
+                minLength: 1
+                type: string
+              dashboard:
+                description: CampaignDashboardSpec configures the dashboard for a
+                  campaign.
+                properties:
+                  enabled:
+                    default: true
+                    description: |-
+                      Enabled (default true): the operator creates a per-campaign dashboard Deployment+Service,
+                      garbage-collected with the campaign. A *bool (not a plain bool) so `enabled: false` survives
+                      admission — with a plain bool + omitempty + a true default, false marshals as "unset" and gets
+                      re-defaulted to true, making the dashboard impossible to disable programmatically.
+                    type: boolean
+                  externalPush:
+                    description: 'ExternalPush (host:port): push to an existing/shared
+                      dashboard instead of creating one.'
+                    type: string
+                type: object
+              driver:
+                description: CampaignDriverSpec configures the coverage-guided runner
+                  (CoverageGuidedRun).
+                properties:
+                  classesPath:
+                    default: /usr/local/tomcat/webapps/ROOT/WEB-INF/classes
+                    description: |-
+                      ClassesPath is where the app's .class files live inside the TARGET's container image; an
+                      initContainer copies them out for JaCoCo coverage analysis (DD-025 §7b).
+                    type: string
+                  concurrency:
+                    description: |-
+                      Concurrency is the number of parallel in-flight requests in load mode (DD-026). Ignored in
+                      explore mode. Defaults to 10 when mode=load.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  corpusConfigMap:
+                    type: string
+                  duration:
+                    description: |-
+                      One of Duration / Iterations bounds the run (validated on the campaign). Duration is a Go-style
+                      string (e.g. "10m", "30s"); the runner exits cleanly at the deadline so its summary is written.
+                    type: string
+                  grammarConfigMap:
+                    description: Grammar / corpus come from a ConfigMap (structure/values
+                      as data, DD-016/DD-018).
+                    type: string
+                  grammarKey:
+                    type: string
+                  invariants:
+                    description: Invariants passed through to the driver JVM as -Dbasquin.invariant.*
+                      flags.
+                    properties:
+                      heapDeltaMaxKb:
+                        description: HeapDeltaMaxKb is the per-iteration heap-delta
+                          threshold in KB.
+                        format: int32
+                        type: integer
+                      latencyMaxMs:
+                        description: LatencyMaxMs is the per-iteration latency threshold
+                          in milliseconds.
+                        format: int32
+                        type: integer
+                      mode:
+                        default: soft
+                        description: Mode is "soft" (collect signals) or "hard" (fail
+                          the iteration).
+                        enum:
+                        - soft
+                        - hard
+                        type: string
+                    type: object
+                  iterations:
+                    format: int64
+                    minimum: 1
+                    type: integer
+                  warmup:
+                    description: |-
+                      Warmup (load mode) is a Go-style duration excluded from the reported latency percentiles and
+                      invariant enforcement, to skip JIT / connection-pool warmup noise (e.g. "30s"). Optional.
+                    type: string
+                type: object
+              mode:
+                default: explore
+                description: |-
+                  Mode selects the run objective: explore (coverage-guided fuzz, default) or load (replay a saved
+                  corpus at volume, watching the same invariant oracles under sustained traffic). DD-026.
+                enum:
+                - explore
+                - load
+                type: string
+              targetRef:
+                description: TargetRef is the BasquinTarget to drive (must be Injected
+                  before the run starts).
+                properties:
+                  name:
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+            required:
+            - baseURL
+            - driver
+            - targetRef
+            type: object
+            x-kubernetes-validations:
+            - message: set exactly one of driver.duration or driver.iterations
+              rule: (has(self.driver.duration) && size(self.driver.duration) > 0)
+                != (has(self.driver.iterations) && self.driver.iterations > 0)
+            - message: 'mode: load requires driver.corpusConfigMap (the corpus to
+                replay)'
+              rule: self.mode != 'load' || (has(self.driver.corpusConfigMap) && size(self.driver.corpusConfigMap)
+                > 0)
+            - message: 'mode: load replays a fixed corpus and ignores a grammar; remove
+                driver.grammarConfigMap'
+              rule: self.mode != 'load' || !(has(self.driver.grammarConfigMap) &&
+                size(self.driver.grammarConfigMap) > 0)
+            - message: 'mode: load is duration-bounded; set driver.duration (driver.iterations
+                is ignored)'
+              rule: self.mode != 'load' || (has(self.driver.duration) && size(self.driver.duration)
+                > 0)
+          status:
+            description: BasquinCampaignStatus defines the observed state of BasquinCampaign.
+            properties:
+              completionTime:
+                format: date-time
+                type: string
+              conditions:
+                items:
+                  description: "Condition contains details for one aspect of the current
+                    state of this API Resource.\n---\nThis struct is intended for
+                    direct use as an array at the field path .status.conditions.  For
+                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
+                    observations of a foo's current state.\n\t    // Known .status.conditions.type
+                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
+                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
+                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
+                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
+                    \   // other fields\n\t}"
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: |-
+                        type of condition in CamelCase or in foo.example.com/CamelCase.
+                        ---
+                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
+                        useful (see .node.status.conditions), the ability to deconflict is important.
+                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              corpusConfigMap:
+                description: |-
+                  CorpusConfigMap names a ConfigMap the operator emits at end-of-run holding the run's interesting
+                  "replay corpus" (the inputs that reached new coverage), for reproducibility, the dashboard corpus
+                  view, and load-mode replay (DD-026 PR 1). Owner-referenced to the campaign, so it GCs with it.
+                type: string
+              coveragePct:
+                description: CoveragePct/Findings are read from the driver's end-of-run
+                  summary (DD-025 §7a).
+                type: string
+              dashboardURL:
+                type: string
+              driverJob:
+                type: string
+              findings:
+                format: int32
+                type: integer
+              load:
+                description: 'Load holds load-mode results (throughput, latency percentiles,
+                  drift) — set only for mode: load.'
+                properties:
+                  heapDriftKb:
+                    description: HeapDriftKb / ThreadDrift are end-minus-start deltas
+                      over the soak (slow-leak signal).
+                    format: int64
+                    type: integer
+                  latencyMs:
+                    description: LatencyMs holds percentile latencies over the measured
+                      window.
+                    properties:
+                      max:
+                        format: int32
+                        type: integer
+                      p50:
+                        format: int32
+                        type: integer
+                      p90:
+                        format: int32
+                        type: integer
+                      p99:
+                        format: int32
+                        type: integer
+                    type: object
+                  requests:
+                    description: Requests is the total requests fired during the measured
+                      (post-warmup) window.
+                    format: int64
+                    type: integer
+                  threadDrift:
+                    format: int32
+                    type: integer
+                  throughputRps:
+                    description: ThroughputRps is requests/second over the measured
+                      window (formatted, e.g. "713.4").
+                    type: string
+                  violations:
+                    description: Violations counts invariant breaches under load.
+                    properties:
+                      heap:
+                        format: int32
+                        type: integer
+                      latency:
+                        format: int32
+                        type: integer
+                      thread:
+                        format: int32
+                        type: integer
+                    type: object
+                type: object
+              observedGeneration:
+                format: int64
+                type: integer
+              phase:
+                description: CampaignPhase is a coarse lifecycle summary.
+                enum:
+                - Pending
+                - Provisioning
+                - Running
+                - Completed
+                - Failed
+                type: string
+              startTime:
+                format: date-time
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

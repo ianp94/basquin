@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the closurejvm/agents image the operator injects (docs/OPERATOR-DESIGN.md §4, DD-024).
+# Build the basquin/agents image the operator injects (docs/OPERATOR-DESIGN.md §4, DD-024).
 # Stages the agent artifacts from the Gradle build into ./agents/, then docker-builds the image.
 # Optionally loads it into a kind cluster for local e2e.
 #
@@ -9,15 +9,15 @@
 #     KIND_CLUSTER  if set, `kind load docker-image` into that cluster after building.
 #
 # Examples:
-#   deploy/agents-image/build.sh                     # closurejvm/agents:<version> + :latest
-#   deploy/agents-image/build.sh 0.2.0 closurejvm    # ...and load into the `closurejvm` kind cluster
+#   deploy/agents-image/build.sh                     # basquin/agents:<version> + :latest
+#   deploy/agents-image/build.sh 0.2.0 basquin    # ...and load into the `basquin` kind cluster
 set -euo pipefail
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CTX="$(dirname "${BASH_SOURCE[0]}")"
-IMAGE="closurejvm/agents"
+IMAGE="basquin/agents"
 
 cd "$REPO_ROOT"
 
@@ -45,13 +45,13 @@ echo "==> Staging agents into $CTX/agents/ (+ native source into $CTX/native/)"
 rm -rf "$CTX/agents" "$CTX/native"
 mkdir -p "$CTX/agents" "$CTX/native"
 # Explicit checks so a missing artifact is a clear message, not a bare `cp: cannot stat`.
-for f in build/stage/closurejvm-agent.jar build/stage/closurejvm-valve.jar \
+for f in build/stage/basquin-agent.jar build/stage/basquin-valve.jar \
          build/jacoco/jacocoagent.jar; do
   [ -f "$f" ] || die "expected artifact not built: $f"
   cp "$f" "$CTX/agents/"
 done
 # Native SOURCE (not the built .so): the Dockerfile compiles it per-arch (DD-027).
-for f in native/closurejvmti.c native/Makefile; do
+for f in native/basquinjvmti.c native/Makefile; do
   [ -f "$f" ] || die "expected native source missing: $f"
   cp "$f" "$CTX/native/"
 done

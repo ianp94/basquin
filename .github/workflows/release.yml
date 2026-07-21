@@ -140,12 +140,22 @@ jobs:
     needs: [images, chart]
     runs-on: ubuntu-latest
     steps:
+      # Mint a basquin-bot installation token: its push to protected main bypasses the branch ruleset
+      # (the bot is a protect-main bypass actor — the generic GITHUB_TOKEN/Actions app cannot be, on a
+      # personal repo, which is why the direct push failed for v0.2.0). See docs/BOT-SETUP.md.
+      - name: Mint basquin-bot token
+        id: bot
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
       # Check out main (a tag build is detached HEAD) so we can commit the packaged chart + index back.
+      # Use the bot token so the push below is attributed to the bypass-actor bot, not GITHUB_TOKEN.
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.bot.outputs.token }}
       - uses: azure/setup-helm@v4
       - name: Resolve version
         id: v
@@ -157,8 +167,8 @@ jobs:
           helm repo index docs/charts --url https://ianp94.github.io/basquin/charts --merge docs/charts/index.yaml
       - name: Commit the updated Helm repo to main
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "basquin-bot[bot]"
+          git config user.email "307641014+basquin-bot[bot]@users.noreply.github.com"
           git add docs/charts
           if git diff --cached --quiet; then
             echo "no chart changes to publish"; exit 0

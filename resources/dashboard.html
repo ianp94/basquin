@@ -244,6 +244,9 @@ async function tick(){
     const st = await getJson('/api/campaign/'+encodeURIComponent(current)+'/status');
     if(gen !== generation) return;
     lastStatus = st;
+    if (st.mode !== 'load') {
+      document.getElementById('sub').textContent = 'campaign: '+current+' — '+fmtDur(st.elapsedSec||0)+' · '+((st.rate||0).toFixed(1))+'/s';
+    }
     const inv = st.invariants||{latency:0,heap:0,thread:0};
     const ex = st.exploration||{};
 
@@ -254,7 +257,7 @@ async function tick(){
     if (st.mode === 'load' && ld) {
       const lm = ld.latencyMs || {};
       document.getElementById('cards').innerHTML =
-        card('throughput', (ld.throughputRps||'0')+'/s', ld.requests+' reqs') +
+        card('throughput', (ld.throughputRps||0)+'/s', ld.requests+' reqs') +
         card('p50 / p90 / p99', (lm.p50||0)+' / '+(lm.p90||0)+' / '+(lm.p99||0)+' ms', 'max '+(lm.max||0)+'ms') +
         card('heap drift', (ld.heapDriftKb||0)+' KiB', 'over the soak') +
         card('thread drift', ld.threadDrift||0) +
@@ -262,7 +265,6 @@ async function tick(){
       document.getElementById('sub').textContent = 'campaign: '+current+' — load · '+(ld.throughputRps||0)+'/s';
       document.getElementById('covCard').style.display = 'none';
     } else {
-      document.getElementById('sub').textContent = 'campaign: '+current+' — '+fmtDur(st.elapsedSec||0)+' · '+((st.rate||0).toFixed(1))+'/s';
       // Invariants come from two different places and conflating them is misleading: the harness
       // measures some in ITS OWN jvm (latency/heap/thread of the driver), while the app's agent
       // reports its own via response headers, which arrive as Invariant-Remote findings. Showing

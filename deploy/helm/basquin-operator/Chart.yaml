@@ -5,8 +5,10 @@ description: |-
   bounded coverage-guided tests with a BasquinCampaign. Namespaced by design (Role/RoleBinding in
   one namespace; install one release per namespace you want to instrument).
 type: application
-# Chart version — bump on chart changes. appVersion tracks the operator/image release.
-version: 0.1.0
+# The PUBLISHED chart version is the release tag (release.yml packages with --version <tag>
+# --app-version <tag>, overriding these). Keep both in step with the latest release so a plain
+# `helm package` from a checkout doesn't regress to an older version. (#47 review)
+version: 0.2.0
 appVersion: "0.2.0"
 keywords:
   - testing

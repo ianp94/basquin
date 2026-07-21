@@ -483,6 +483,9 @@ func newDashboardToken() (string, error) {
 
 // deleteDashboard removes a per-campaign dashboard Deployment + Service if present (idempotent). Used
 // when a campaign's dashboard config flips away from "own a dashboard" after one was already created.
+// The token Secret is deliberately NOT deleted here: RBAC grants no delete verb on secrets, and the
+// Secret is owner-referenced to the campaign so Kubernetes GCs it with the campaign — until then a
+// disabled/externalPush campaign keeps a consumer-less credential in the namespace (#43 review).
 func (r *BasquinCampaignReconciler) deleteDashboard(ctx context.Context, c *basquinv1alpha1.BasquinCampaign) error {
 	name := types.NamespacedName{Namespace: c.Namespace, Name: dashboardName(c)}
 	if err := r.Delete(ctx, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: name.Name, Namespace: name.Namespace}}); err != nil && !apierrors.IsNotFound(err) {

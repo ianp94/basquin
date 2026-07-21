@@ -1,0 +1,85 @@
+{
+  "generated": "2026-07-21",
+  "methodology": {
+    "harness": "Basquin valve + agent on Tomcat 9, soft invariants (latency>25ms, heapDelta>256KB)",
+    "driver": "HttpRouteDriveTarget, single-flight, ~20 req/s, 12000 requests per app",
+    "note": "All numbers from real runs. Server-side findings from the in-JVM valve; client latency from k6 at 1 VU (matches the single-flight driver, avoids the valve's serialization-under-concurrency). No fabricated figures.",
+    "apps_unmodified": true,
+    "coverage_guided_gap": "This pass ran the round-robin/load driver; JaCoCo coverage-guided-vs-naive is a documented future addition (needs JaCoCo in each app JVM)."
+  },
+  "apps": {
+    "jspwiki": {
+      "label": "Apache JSPWiki 2.12.4",
+      "kind": "wiki CMS (filesystem store)",
+      "requests": 12000,
+      "throughput_rps": 20.0,
+      "crashes": 0,
+      "findings_total": 14354,
+      "findings_heap": 12007,
+      "findings_latency": 2347,
+      "heap_pct_requests_over_budget": 100.0,
+      "heap_kb": {
+        "p50": 945,
+        "p90": 1054,
+        "p99": 1540,
+        "max": 10713
+      },
+      "server_latency_ms": {
+        "p50": 72,
+        "p90": 145,
+        "p99": 504,
+        "max": 8408
+      },
+      "k6_1vu_ms": {
+        "med": 33.0,
+        "p90": 73.6,
+        "p95": 99.3,
+        "p99": 195.2,
+        "max": 435.6
+      }
+    },
+    "jpetstore": {
+      "label": "MyBatis JPetStore-6",
+      "kind": "e-commerce (MyBatis + HSQLDB)",
+      "requests": 12000,
+      "throughput_rps": 19.4,
+      "crashes": 0,
+      "findings_total": 2347,
+      "findings_heap": 2343,
+      "findings_latency": 4,
+      "heap_pct_requests_over_budget": 19.5,
+      "heap_kb": {
+        "p50": 298,
+        "p90": 392,
+        "p99": 513,
+        "max": 15645
+      },
+      "server_latency_ms": {
+        "note": "only 4 violations",
+        "values": [
+          50,
+          78,
+          84,
+          580
+        ]
+      },
+      "k6_1vu_ms": {
+        "med": 26.0,
+        "p90": 26.2,
+        "p95": 26.3,
+        "p99": 26.7,
+        "max": 31.5
+      },
+      "k6_10vu_serialized_ms": {
+        "note": "valve serializes (DD-005) so concurrent latency queues",
+        "med": 256.2,
+        "p99": 258.9
+      }
+    }
+  },
+  "headline": {
+    "combined_findings": 16701,
+    "combined_crashes": 0,
+    "claim": "A crash-only oracle (a plain fuzzer, a load tool's error count) reports 0 of these 16,701 availability findings \u2014 both apps served every request with a 2xx/3xx while allocating up to 10.7MB (JSPWiki) / 15.6MB (JPetStore) on a single unmodified request."
+  }
+}

@@ -1,0 +1,4 @@
+# Raw per-iteration driver stdout + full finding logs: reproducible, noisy (1MB+ repetitive lines).
+# The committed evidence is soak.csv (time-series), k6*.json, report-data.json, and *-summary.txt.
+*/driver.log
+*/server-findings.log

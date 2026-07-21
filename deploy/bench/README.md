@@ -43,3 +43,14 @@ HSQLDB), so "surfaces DB-driven pathologies" is demonstrated without Roller. A n
 (Roller, or the JSPWiki-JDBC variant against Postgres) is a **documented future extension**; the
 `deploy/bench/roller/` compose is kept as a resumable starting point (KNOWN ISSUE: context-listener
 init failure).
+
+
+## JPetStore-6 — proven baseline (built for identical-harness comparison)
+
+- **Build:** `mybatis/jpetstore-6` @ `c8f62cc7…` (pinned SHA, same as the operator e2e), Maven 3.9,
+  `-DskipTests -Denforcer.skip=true -Dmaven.gitcommitid.skip=true package` → `target/jpetstore.war`
+  (in-memory HSQLDB, no external DB). `javax`/Servlet → Tomcat 9 + namespace-free valve.
+- **Stand up:** `cd deploy/bench/jpetstore && TOMCAT_HOST_PORT=8092 docker compose up -d`
+  (mounts the WAR as `ROOT.war`). Unlike JSPWiki, JPetStore does NOT flush early, so the valve's
+  `X-Basquin-Invariant-*` response headers work and `HttpRouteDriveTarget` saves findings directly.
+- Prior documented findings (docs/THIRD-PARTY-APPS.md): cold `Catalog.action` 531ms, up to 44MB/req heap.

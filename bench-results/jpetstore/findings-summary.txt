@@ -1,0 +1,14 @@
+# jpetstore — server-side invariant findings summary (from 2347 findings)
+## heap-delta violations (KB):
+  count=2343 min=257 p50=298 p90=392 p99=513 max=15645 mean=334
+## latency violations (ms):
+  count=4 min=50 p50=78 p90=84 p99=84 max=580
+## sample findings:
+jpetstore-1  | [Basquin][Invariant] Iteration 1 violated 'latency': 580ms > 25ms
+jpetstore-1  | [Basquin][Invariant] Iteration 1 violated 'heapDelta': 15645KB > 256KB
+jpetstore-1  | [Basquin][Invariant] Iteration 2 violated 'heapDelta': 900KB > 256KB
+jpetstore-1  | [Basquin][Invariant] Iteration 4 violated 'latency': 78ms > 25ms
+jpetstore-1  | [Basquin][Invariant] Iteration 4 violated 'heapDelta': 14258KB > 256KB
+jpetstore-1  | [Basquin][Invariant] Iteration 5 violated 'latency': 84ms > 25ms
+jpetstore-1  | [Basquin][Invariant] Iteration 6 violated 'heapDelta': 430KB > 256KB
+jpetstore-1  | [Basquin][Invariant] Iteration 7 violated 'heapDelta': 323KB > 256KB

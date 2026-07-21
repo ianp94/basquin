@@ -1125,9 +1125,17 @@ credit is the correct v1; a genuine ant-trail needs parent links that don't exis
 **Verified.** Bench-validated only (`docs/BENCH-AB.md`), not CI-validated: the in-cluster e2e only
 smoke-tests the default-off path (plumbing, not the pheromone-vs-uniform question), and unit tests
 cover `selectParent` (ε=0 dominated by the high-pheromone entry, ε=1 uniform, cold-start/zero-total
-uniform), `reinforce` (capped deposit, harmless no-op on an evicted parent), `evaporate` (decay applied,
-running total stays consistent, sticky-spike recovers within the computed cycle count), pheromone-aware
-eviction, and the kill-switch (`pheromone=off` ≡ DD-031/today byte-for-byte).
+uniform), `reinforce` (the deposit cap is unit-tested — `depositIsCappedAtDepositCapTimesEma` — while
+the ~325-iteration sticky-spike recovery is a derived-from-the-defaults property, decay 0.7 / cap
+10×EMA, not a separately tested one), `evaporate` (decay applied, running total stays consistent),
+pheromone-aware eviction, and the kill-switch (`pheromone=off` ≡ DD-031/today byte-for-byte).
+Reinforcing an already-evicted parent is **not** a harmless no-op: because `CostCorpus` maintains a
+running `totalPheromone`, a post-eviction `reinforce` would silently drift that total above the sum
+actually held by live entries, corrupting every subsequent
+`selectParent` roulette draw — which is exactly why `reinforce()` must run before `consider()` (the
+only evictor); the ordering keeps the parent live and the total exact. The negative test
+`PheromoneLoopTest.reinforceAfterEvictionWouldCorruptTheRunningTotal` pins this failure mode, so it's
+a tested invariant, not a latent bug.
 
 **Rejected.** Multi-hop lineage propagation now (needs parent links exploration doesn't track yet —
 immediate-parent first); operator/CRD enablement now (a CRD field is a much bigger commitment than a

@@ -1178,7 +1178,10 @@ list scrape additionally greps `mode` so the fleet view distinguishes explore vs
   bucket read is atomic, but scanning it while workers concurrently increment is not a consistent
   snapshot — live percentiles are approximate *by design* for a 2s display. `status.load` and the
   end-of-run metrics remain the authoritative record. No lock is added to the hot path to reconcile a
-  transient live/terminal discrepancy — that would defeat DD-029's lock-free load.
+  transient live/terminal discrepancy — that would defeat DD-029's lock-free load. (The dashboard's
+  last shown value is the last *live* snapshot, which has converged to terminal; the JVM may exit
+  before the daemon push loop ships an explicit final push, so `status.load` — not the dashboard — is
+  the authoritative terminal record.)
 - **Live throughput uses the same post-warmup window as the terminal number**, anchored at the same
   post-warmup mark the baseline drift snapshot already uses — so the live value *converges to* the
   terminal one instead of diverging (a live/terminal disagreement would otherwise read as a bug).

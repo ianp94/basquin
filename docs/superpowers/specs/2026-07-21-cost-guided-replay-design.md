@@ -143,10 +143,13 @@ the mutate pool — a mild, intentional "explore around expensive states" effect
 | `basquin.cost.emaAlpha` | `0.1` | EMA smoothing for the cost baseline |
 | `basquin.corpus.max` | `1000` | corpus size cap (evict cheapest cost-find) |
 
-**`basquin.cost.enabled=false` must gate the *entire* feature** — header emission (boundary), cost
-computation, expanded retention, eviction, and cost-ranked replay all revert to today's behavior
-(insertion-order replay, no `X-Basquin-Cost` read). This is the A/B baseline, so any one of them leaking
-through would corrupt the comparison. The plan tests the kill-switch explicitly.
+**`basquin.cost.enabled=false` gates the feature driver-side.** The `X-Basquin-Cost` header is emitted
+*unconditionally* by the boundary (it is a target property — one target serves many campaigns, so the
+target cannot know a given campaign's cost intent; the header is cheap, explore-only, and inert if
+unread). The kill-switch lives in the **driver**: with `enabled=false` the driver does not read the
+header, does not compute cost, does not expand retention or evict, and emits the replay corpus in
+today's insertion order. That fully restores today's exploration/replay behavior — the A/B baseline —
+regardless of the header being present. The plan tests the driver-side kill-switch explicitly.
 
 ## Testing
 
@@ -193,5 +196,7 @@ through would corrupt the comparison. The plan tests the kill-switch explicitly.
   baseline is an **EMA** (α=0.1), not a cumulative mean (heavy-tailed latency drifts a mean upward).
 - **Attributability:** the cost statics are read inside `onExit` **before** `ITERATION_LOCK` is
   released (where the invariant header is already computed) — the next `begin()` overwrites them.
-- **Kill-switch totality:** `basquin.cost.enabled=false` reverts header emission, cost computation,
-  retention, eviction, and replay ordering to today's behavior — nothing leaks through.
+- **Kill-switch is driver-side:** the boundary emits `X-Basquin-Cost` unconditionally (a target
+  property, inert if unread); `basquin.cost.enabled=false` makes the *driver* skip reading it, cost
+  computation, retention, eviction, and cost-ranked replay — restoring today's behavior. That's the
+  A/B baseline; nothing driver-side leaks through.

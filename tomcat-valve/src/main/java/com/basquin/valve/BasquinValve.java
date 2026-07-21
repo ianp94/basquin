@@ -1,6 +1,8 @@
 package com.basquin.valve;
 
 import agent.Agent;
+import agent.LoadMode;
+import agent.LoadModeControl;
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
 import org.apache.catalina.valves.ValveBase;
@@ -46,6 +48,32 @@ public class BasquinValve extends ValveBase {
     // namespace out of this method's signature and bytecode.
     @Override
     public void invoke(Request request, Response response) throws IOException {
+        // DD-029 control requests (mode toggle / drift snapshot) on the app's own port: handled here,
+        // never locked, never passed to the app. A stray /__basquin/* path returns an error body, not
+        // the app, so it can't leak through.
+        String control = LoadModeControl.handle(request.getRequestURI(), request.getQueryString());
+        if (control != null) {
+            response.setStatus(200);
+            response.setContentType("text/plain");
+            response.getWriter().print(control);
+            return;
+        }
+        // DD-029 load mode: run lock-free/passthrough so the target can be driven concurrently. The
+        // per-request heap/thread deltas the lock protects are given up; the app's drift is read
+        // absolutely via /__basquin/drift instead. Explore mode (below) is unchanged.
+        if (LoadMode.isLoad(System.currentTimeMillis())) {
+            try {
+                getNext().invoke(request, response);
+            } catch (Throwable t) {
+                // Re-raise the next valve's exception namespace-free (checked ServletException too).
+                if (t instanceof IOException) throw (IOException) t;
+                if (t instanceof RuntimeException) throw (RuntimeException) t;
+                if (t instanceof Error) throw (Error) t;
+                sneakyThrow(t);
+            }
+            return;
+        }
+        // explore (default): serialize every request and capture per-request deltas (DD-005/DD-010).
         ITERATION_LOCK.lock();
         try {
             // beginIteration is inside the try so that if it throws (it does GC, snapshots),

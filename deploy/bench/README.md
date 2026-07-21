@@ -16,6 +16,15 @@ Reproducible setups for the benchmarking campaign
   `jspwiki.fileSystemPath` set + a seeded pages dir (content to render).
 - **DB-backed option:** the same release ships `jspwiki-it-test-custom-jdbc-2.12.4.war` — a
   JDBC-backed JSPWiki. Candidate for the DB-driven-pathology target if Roller (Task 0.2) fights its build.
+- **WAR sha256:** `3e4affef0e03ec9a…` (pin).
+- **Stand up:** `bash deploy/bench/jspwiki/setup.sh` (explodes WAR → `webapp/`, seeds 70 pages →
+  `pages/`), then `cd deploy/bench/jspwiki && TOMCAT_HOST_PORT=8090 docker compose up -d`.
+- **Smoke result (2026-07-21) — GREEN ✅, findings flow:** agent loaded (`Basquin Agent initialized`),
+  Tomcat 9 deploy clean, routes 200. Valve captured latency invariants server-side. Cold-vs-warm on
+  `/Wiki.jsp?page=Main`: **8260ms cold → 847ms → ~34ms steady** (first-request-after-deploy cliff:
+  JSP compile + cold-cache markup render); 10 invariant finds in the smoke. Steady state (~34ms) still
+  clips a 25ms budget. **JSPWiki is IN as the core CMS target.** (Phase 2 will add a warmup phase so
+  steady-state metrics aren't dominated by the one-time JSP compile — the cold cliff is captured separately.)
 
 ## Roller — stretch (DB-backed) — Task 0.2, pending
 

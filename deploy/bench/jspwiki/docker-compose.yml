@@ -1,0 +1,16 @@
+# JSPWiki (javax) on Tomcat 9 with the Basquin valve + agent. Run setup.sh first (explodes the WAR
+# into ./webapp and seeds ./pages). Reproducible bench deployment — see deploy/bench/README.md.
+services:
+  jspwiki:
+    image: tomcat:9.0-jdk17-temurin
+    ports:
+      - "${TOMCAT_HOST_PORT:-8080}:8080"
+    environment:
+      - CATALINA_OPTS=-javaagent:/usr/local/tomcat/basquin-agent.jar -Xbootclasspath/a:/usr/local/tomcat/basquin-agent.jar -Dbasquin.invariant.mode=${INVARIANT_MODE:-soft} -Dbasquin.invariant.latency.maxMs=${INVARIANT_LATENCY_MS:-25} -Dbasquin.invariant.latency.sample=${INVARIANT_LATENCY_SAMPLE:-true} -Dbasquin.invariant.heapDelta.maxKb=${INVARIANT_HEAP_KB:-256} ${CATALINA_OPTS_EXTRA:-}
+    volumes:
+      - ./webapp:/usr/local/tomcat/webapps/ROOT:ro
+      - ./pages:/var/jspwiki/pages
+      - ./work:/var/jspwiki/work
+      - ../../../build/libs/basquin-0.2.0.jar:/usr/local/tomcat/basquin-agent.jar:ro
+      - ../../../tomcat-valve/build/libs/basquin-valve-0.2.0.jar:/usr/local/tomcat/lib/basquin-valve.jar:ro
+      - ../../../deploy/valve/context.xml:/usr/local/tomcat/conf/context.xml:ro

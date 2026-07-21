@@ -3,6 +3,11 @@
 In-JVM measurement layer: iteration boundaries, availability invariants, leak detection, reset.
 Release-level changelog: [`../CHANGELOG.md`](../CHANGELOG.md).
 
+## [Unreleased]
+
+- **Lock-free load mode (DD-029):** `LoadMode` flag (serialized explore vs lock-free load, TTL auto-revert) + a `/__basquin/drift` absolute-`Runtime` snapshot for target-side heap/thread drift; `LoadModeControl` handles the control requests.
+
+
 ## [0.2.0] — 2026-07-21
 
 First published release (ships inside `ghcr.io/ianp94/basquin-agents`).

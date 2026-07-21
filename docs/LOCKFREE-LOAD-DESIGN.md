@@ -1,6 +1,6 @@
 # DD-029 — Lock-free load-mode instrumentation profile
 
-**Status:** accepted (2026-07-21), pending implementation. Extends [LOAD-MODE-DESIGN.md](LOAD-MODE-DESIGN.md)
+**Status:** implemented (2026-07-21) — agent LoadMode + valve two-state + LoadRun toggle/drift/5xx + e2e. Extends [LOAD-MODE-DESIGN.md](LOAD-MODE-DESIGN.md)
 (DD-026) and the concurrency decision in [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) DD-005/DD-010.
 
 ## Context — load mode can't actually load

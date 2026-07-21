@@ -3,6 +3,11 @@
 Drivers, exploration, load mode, triage, and the dashboard (server + client).
 Release-level changelog: [`../CHANGELOG.md`](../CHANGELOG.md).
 
+## [Unreleased]
+
+- **Lock-free load mode (DD-029):** `LoadRun` toggles the target lock-free for the run, polls `/__basquin/drift` for the app's real heap/thread drift, counts 5xx (`fire()` returns status), and reverts on exit.
+
+
 ## [0.2.0] — 2026-07-21
 
 First published release (ships inside `ghcr.io/ianp94/basquin-runner` and

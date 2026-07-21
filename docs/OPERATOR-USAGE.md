@@ -310,8 +310,18 @@ A campaign runs in one of two modes (`spec.mode`, default `explore`):
   "replay corpus"** (the inputs that reached new coverage) as a campaign-owned ConfigMap named
   `<campaign>-corpus-out`, recorded in `status.corpusConfigMap`.
 - **`load`** — replays a saved corpus at a fixed **concurrency** for a **duration**, no mutation and no
-  coverage sampling, watching the same invariant oracles (latency budget) under sustained traffic.
+  coverage sampling, watching the same invariant oracles under sustained traffic.
   *Fuzz to discover the interesting states, then hammer those states under load.*
+
+  > **Lock-free load (DD-029).** Explore mode serializes requests through the valve so per-request
+  > heap/thread deltas are attributable — which would cap a load run at concurrency 1. In load mode the
+  > driver toggles the target's valve **lock-free** for the run (over a `/__basquin/mode` control request
+  > on the app's own port; auto-reverts on a TTL if the driver dies), so the app is driven concurrently.
+  > It then reports end-to-end **latency percentiles + 5xx** (client-side) and the app's **heap/thread
+  > drift** (polled from `/__basquin/drift`, an absolute in-JVM reading). Per-request heap *attribution*
+  > is given up in load mode — that's explore's job. **Security:** the `/__basquin/*` control surface is
+  > unauthenticated on the app port (in-cluster trust, same posture as the JaCoCo coverage port, DD-022);
+  > don't expose the target's port outside the cluster. Hardening is a tracked follow-up.
 
 So the workflow is: run an `explore` campaign, then point a `load` campaign at the corpus it emitted:
 

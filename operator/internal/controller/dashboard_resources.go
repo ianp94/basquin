@@ -110,11 +110,11 @@ func buildDashboardDeployment(c *basquinv1alpha1.BasquinCampaign, image string, 
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						Env:             env,
 						Ports:           []corev1.ContainerPort{{ContainerPort: dashboardPort, Name: "http"}},
-						// /api/campaigns is a READ endpoint and deliberately unguarded (the browser UI
-						// can't send a custom header), so the token does not break this probe.
+						// /healthz is the one deliberately unauthenticated endpoint (no campaign data):
+						// probes can't send the token, and reads are token-gated since DD-028.
 						ReadinessProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{
-								Path: "/api/campaigns", Port: intstr.FromInt(dashboardPort)}},
+								Path: "/healthz", Port: intstr.FromInt(dashboardPort)}},
 							InitialDelaySeconds: 3, PeriodSeconds: 5,
 						},
 					}},

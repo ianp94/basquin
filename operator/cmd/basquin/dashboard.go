@@ -108,9 +108,22 @@ func runDashboard(args []string) error {
 	if err != nil {
 		return err
 	}
+	// Reads are token-gated when the operator minted a token (DD-028); the browser authenticates
+	// once via ?token=, which the server swaps for an HttpOnly cookie and strips with a redirect.
+	// Best-effort: an absent Secret (dashboard predating token support, or standalone) just means
+	// the bare URL works.
+	token := ""
+	if sec, serr := clientset.CoreV1().Secrets(ns).Get(ctx, campaign+"-dashboard-token", metav1.GetOptions{}); serr == nil {
+		token = string(sec.Data["token"])
+	}
 	go func() {
 		<-readyCh
-		fmt.Printf("Dashboard for %q at http://localhost:%d  (Ctrl-C to stop)\n", campaign, localPort)
+		if token != "" {
+			fmt.Printf("Dashboard for %q at http://localhost:%d/?token=%s  (Ctrl-C to stop)\n", campaign, localPort, token)
+			fmt.Printf("  (for header-based tooling: X-Basquin-Token against http://localhost:%d)\n", localPort)
+		} else {
+			fmt.Printf("Dashboard for %q at http://localhost:%d  (Ctrl-C to stop)\n", campaign, localPort)
+		}
 	}()
 	return fw.ForwardPorts() // blocks until stopCh closed
 }

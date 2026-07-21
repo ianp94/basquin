@@ -72,11 +72,17 @@ public final class DashboardServer {
         server.createContext("/ingest/status", ex -> ingest(ex, true));
         server.createContext("/ingest/findings", ex -> ingest(ex, false));
         server.createContext("/ingest/config", DashboardServer::ingestConfig);
-        server.createContext("/api/campaigns", DashboardServer::listCampaigns);
-        server.createContext("/api/clusters", DashboardServer::fleetClusters);
-        server.createContext("/api/campaign/", DashboardServer::campaignDetail);
+        // Unauthenticated on purpose: the Kubernetes readiness/liveness probe can't send a token,
+        // and this endpoint exposes no campaign data. Everything read-shaped below is token-gated
+        // (DD-028) when a token is configured.
+        server.createContext("/healthz", ex -> respond(ex, "text/plain", "ok"));
+        server.createContext("/api/campaigns", ex -> { if (readAuthed(ex)) listCampaigns(ex); });
+        server.createContext("/api/clusters", ex -> { if (readAuthed(ex)) fleetClusters(ex); });
+        server.createContext("/api/campaign/", ex -> { if (readAuthed(ex)) campaignDetail(ex); });
         server.createContext("/api/analyze/", DashboardServer::analyze);
-        server.createContext("/", ex -> respond(ex, "text/html; charset=utf-8", page()));
+        server.createContext("/", ex -> {
+            if (readAuthed(ex)) respond(ex, "text/html; charset=utf-8", page());
+        });
 
         server.setExecutor(Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "Basquin-DashboardServer");
@@ -94,7 +100,7 @@ public final class DashboardServer {
             ex.sendResponseHeaders(405, -1);
             return;
         }
-        if (!guarded(ex)) return;
+        if (!guarded(ex, false)) return;
         String id = queryParam(ex, "id");
         if (id == null || id.isEmpty()) {
             ex.sendResponseHeaders(400, -1);
@@ -114,7 +120,7 @@ public final class DashboardServer {
     /** Config is immutable per run, so it is pushed once rather than on every interval. */
     private static void ingestConfig(HttpExchange ex) throws IOException {
         if (!"POST".equals(ex.getRequestMethod())) { ex.sendResponseHeaders(405, -1); return; }
-        if (!guarded(ex)) return;
+        if (!guarded(ex, false)) return;
         String id = queryParam(ex, "id");
         if (id == null || id.isEmpty()) { ex.sendResponseHeaders(400, -1); return; }
         Campaign c = CAMPAIGNS.computeIfAbsent(id, k -> new Campaign());
@@ -180,7 +186,7 @@ public final class DashboardServer {
             ex.sendResponseHeaders(405, -1);
             return;
         }
-        if (!guarded(ex)) return;
+        if (!guarded(ex, true)) return;
         if (!isLoopbackBind() && TOKEN.isEmpty()) {
             respond(ex, "application/json",
                 "{\"error\":\"analysis disabled: dashboard is bound to a non-loopback address"
@@ -241,17 +247,102 @@ public final class DashboardServer {
         }
     }
 
-    /** Enforce the CSRF guard header, and the shared token when one is configured. */
-    private static boolean guarded(HttpExchange ex) throws IOException {
+    /**
+     * Enforce the CSRF guard header, and the shared token when one is configured.
+     * allowCookie widens token acceptance to the DD-028 session cookie — ONLY for the browser-facing
+     * analyze endpoint (whose JS cannot know the token and was silently 401ing since #43). The
+     * driver-only /ingest/* writes stay header-only: only drivers call them and they always have the
+     * header, so the browser session gains no write path it doesn't need (#55 review).
+     */
+    private static boolean guarded(HttpExchange ex, boolean allowCookie) throws IOException {
         if (ex.getRequestHeaders().getFirst(GUARD_HEADER) == null) {
             respond(ex, "application/json", "{\"error\":\"missing " + GUARD_HEADER + " header\"}");
             return false;
         }
-        if (!TOKEN.isEmpty() && !TOKEN.equals(ex.getRequestHeaders().getFirst("X-Basquin-Token"))) {
+        boolean ok = TOKEN.isEmpty()
+            || tokenMatches(ex.getRequestHeaders().getFirst("X-Basquin-Token"))
+            || (allowCookie && tokenMatches(cookieValue(ex, cookieName(TOKEN))));
+        if (!ok) {
             respond(ex, "application/json", "{\"error\":\"bad or missing X-Basquin-Token\"}");
             return false;
         }
         return true;
+    }
+
+    /**
+     * Cookie carrying the read-session token (DD-028). Named per campaign — derived from the token
+     * itself, which is per-campaign — because browser cookies ignore ports: two concurrently
+     * port-forwarded dashboards on localhost would otherwise overwrite a shared cookie name.
+     */
+    public static String cookieName(String token) {
+        try {
+            byte[] h = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(token.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder("basquin_dash_");
+            for (int i = 0; i < 4; i++) sb.append(String.format("%02x", h[i]));
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e); // SHA-256 is mandatory in every JRE
+        }
+    }
+
+    /** Constant-time token comparison (#43 review) — shared by the write and read guards. */
+    private static boolean tokenMatches(String candidate) {
+        return tokensEqual(TOKEN, candidate);
+    }
+
+    /** Pure, testable core of {@link #tokenMatches}: constant-time equality. */
+    public static boolean tokensEqual(String expected, String candidate) {
+        return candidate != null && java.security.MessageDigest.isEqual(
+            expected.getBytes(StandardCharsets.UTF_8), candidate.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String cookieValue(HttpExchange ex, String name) {
+        return cookieValue(ex.getRequestHeaders().get("Cookie"), name);
+    }
+
+    /** Parse one cookie value out of the Cookie header(s); null if absent. Pure for testability. */
+    public static String cookieValue(List<String> cookieHeaders, String name) {
+        if (cookieHeaders == null) return null;
+        for (String header : cookieHeaders) {
+            if (header == null) continue;
+            for (String part : header.split(";")) {
+                int i = part.indexOf('=');
+                if (i > 0 && part.substring(0, i).trim().equals(name)) {
+                    return part.substring(i + 1).trim();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Read-path gate (DD-028). No token configured (standalone laptop use) — open, as always.
+     * With a token: accept the X-Basquin-Token header (drivers, curl) or the session cookie
+     * (browsers); a correct one-time {@code ?token=} query sets the cookie and redirects to the
+     * bare path so the token leaves the address bar. Anything else: 401. Never log the request
+     * URI here — the query string can carry the token.
+     */
+    private static boolean readAuthed(HttpExchange ex) throws IOException {
+        if (TOKEN.isEmpty()) return true;
+        String qt = queryParam(ex, "token");
+        if (qt != null && tokenMatches(qt)) {
+            ex.getResponseHeaders().add("Set-Cookie",
+                cookieName(TOKEN) + "=" + TOKEN + "; HttpOnly; SameSite=Lax; Path=/");
+            ex.getResponseHeaders().set("Location", ex.getRequestURI().getPath());
+            ex.sendResponseHeaders(302, -1);
+            ex.close();
+            return false; // handled (redirect); the retry arrives with the cookie
+        }
+        if (tokenMatches(ex.getRequestHeaders().getFirst("X-Basquin-Token"))
+            || tokenMatches(cookieValue(ex, cookieName(TOKEN)))) {
+            return true;
+        }
+        respond(ex, 401, "text/html; charset=utf-8",
+            "<h3>401 — this dashboard requires its campaign token</h3>"
+                + "<p>Open the tokenized URL printed by <code>basquin dashboard</code>, or send "
+                + "<code>X-Basquin-Token</code>.</p>");
+        return false;
     }
 
     private static String queryParam(HttpExchange ex, String key) {
@@ -285,9 +376,13 @@ public final class DashboardServer {
     }
 
     private static void respond(HttpExchange ex, String type, String body) throws IOException {
+        respond(ex, 200, type, body);
+    }
+
+    private static void respond(HttpExchange ex, int status, String type, String body) throws IOException {
         byte[] b = body.getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().set("Content-Type", type);
-        ex.sendResponseHeaders(200, b.length);
+        ex.sendResponseHeaders(status, b.length);
         try (OutputStream os = ex.getResponseBody()) {
             os.write(b);
         }

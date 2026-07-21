@@ -577,6 +577,10 @@ var _ = Describe("BasquinCampaign Controller (P5a)", func() {
 		Expect(k8sClient.Get(ctx, dashKey(), dep)).To(Succeed())
 		Expect(dep.Spec.Template.Spec.Containers[0].Image).To(Equal(dashImg))
 		Expect(dep.OwnerReferences).To(ContainElement(HaveField("Name", campaignName)))
+		// The probe must stay on the ONE unauthenticated endpoint: probes can't send the token,
+		// and every data-bearing read is token-gated since DD-028 — /api/* here would deadlock
+		// readiness against auth.
+		Expect(dep.Spec.Template.Spec.Containers[0].ReadinessProbe.HTTPGet.Path).To(Equal("/healthz"))
 		svc := &corev1.Service{}
 		Expect(k8sClient.Get(ctx, dashKey(), svc)).To(Succeed())
 		Expect(svc.Spec.Ports[0].Port).To(Equal(int32(dashboardPort)))

@@ -62,10 +62,14 @@ public class BasquinValve extends ValveBase {
             appError = t;
         }
         RequestBoundary.ExitResult r = RequestBoundary.onExit(appError);
-        if (!r.headers.isEmpty() && !response.isCommitted()) {
-            for (Map.Entry<String, String> h : r.headers.entrySet()) {
-                response.setHeader(h.getKey(), h.getValue());
+        try {
+            if (!r.headers.isEmpty() && !response.isCommitted()) {
+                for (Map.Entry<String, String> h : r.headers.entrySet()) {
+                    response.setHeader(h.getKey(), h.getValue());
+                }
             }
+        } catch (Throwable ignored) {
+            // header reporting is best-effort; never let it fail a request
         }
         if (r.toThrow != null) {
             if (r.toThrow instanceof IOException) throw (IOException) r.toThrow;

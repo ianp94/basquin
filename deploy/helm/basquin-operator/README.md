@@ -138,10 +138,10 @@ left in place. Keep `crds/` and the RBAC in step with the operator's generated m
 
 - All four images are **multi-arch manifest lists** (`linux/amd64` + `linux/arm64`), so an arm64
   cluster (Graviton, Apple-Silicon `kind`) pulls the right variant automatically.
-  ⚠️ **arm64 is build-validated only:** CI compiles the native agent's `.so` for arm64 under
-  emulation, but no arm64 runner has yet *loaded* it in a real JVM. A bad `-agentpath` library is
-  fatal at JVM startup rather than degrading gracefully — so treat arm64 as unproven until a real
-  arm64 functional run lands.
+  arm64 is **functionally validated in CI on real arm64 hardware** (`arm64-smoke.yml`: native
+  `.so` build, `-agentpath` load in a real arm64 JVM, JVMTI hooks asserted active, full iteration
+  loop). Note the published v0.2.0 images predate that check; releases after 2026-07-21 ship
+  images backed by it.
 - RBAC is **Roles + RoleBindings** (namespaced), not ClusterRoles — matching the operator's
   namespaced design. The rules mirror `operator/config/rbac/role.yaml`.
 - One `imageTag` value (default: the chart's `appVersion`) sets all four image tags, so a release is

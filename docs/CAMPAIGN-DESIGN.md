@@ -1,7 +1,8 @@
 # BasquinCampaign — design proposal (DD-025, operator P5)
 
-**Status:** proposed, under review. Not yet implemented. On approval this becomes **DD-025** and the
-implementation lands as operator phase **P5**. Extends [OPERATOR-DESIGN.md](OPERATOR-DESIGN.md) §10,
+**Status:** **accepted and implemented (DD-025)** — the `BasquinCampaign` CRD and its reconciler
+shipped across operator phase **P5** (P5a driver Job, P5b per-campaign dashboard). Implemented as
+operator phase **P5**. Extends [OPERATOR-DESIGN.md](OPERATOR-DESIGN.md) §10,
 whose confirmed decisions this fleshes out: **two CRDs** (`BasquinTarget` = instrument, done P1–P4;
 `BasquinCampaign` = test), built after injection works (it does).
 

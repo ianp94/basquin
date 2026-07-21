@@ -40,9 +40,9 @@ deploy/agents-image/build.sh 0.2.0 basquin
   `linux/arm64`): `release.yml` runs `docker buildx --platform`, and the Dockerfile's builder stage
   compiles `libbasquinjvmti.so` once per target arch (natively on amd64, QEMU-emulated on arm64).
   A plain local `build.sh` still produces a single **host-arch** image, which is what kind/e2e want.
-  ⚠️ **arm64 is build-validated only** — CI compiles the arm64 `.so` under emulation but no arm64
-  runner has *loaded* it yet. A bad `-agentpath` library is fatal at JVM startup, so treat arm64 as
-  unproven until the `ubuntu-24.04-arm` functional check lands (TODO).
+  arm64 is **functionally validated in CI on real arm64 hardware** (`arm64-smoke.yml` on
+  `ubuntu-24.04-arm`: native `.so` build, `-agentpath` load in a real arm64 JVM, JVMTI hooks
+  asserted active, full iteration loop) on every native/agent change.
 - **Versioning.** Prefer a fixed tag over `:latest` in real deployments (DD-022: a stale `:latest`
   silently serves an old build). Point the operator at it with `--agents-image=basquin/agents:TAG`.
 - **Publishing.** `build.sh` builds locally and (optionally) loads into kind. Publishing is

@@ -62,10 +62,12 @@ cluster or a private registry).
 
 > **Architectures (DD-027).** Published images are multi-arch manifest lists — `linux/amd64` and
 > `linux/arm64` — so an arm64 cluster (Graviton, Apple-Silicon `kind`) pulls the right variant
-> automatically. ⚠️ **arm64 is build-validated only:** CI compiles the native agent's `.so` for arm64
-> under emulation, but no arm64 runner has yet *loaded* it in a real JVM. A bad `-agentpath` library
-> is fatal at JVM startup rather than degrading gracefully, so treat arm64 as unproven until the
-> functional check lands. amd64 is exercised end-to-end by the in-cluster e2e on every change.
+> automatically. arm64 is **functionally validated in CI on real arm64 hardware**
+> (`arm64-smoke.yml`: native `.so` build, `-agentpath` load in a real arm64 JVM, JVMTI hooks
+> asserted active, full leak-oracle iteration loop) on every native/agent change. amd64 is
+> exercised end-to-end by the in-cluster e2e on every change. One historical note: the v0.2.0
+> images predate that check (their arm64 `.so` was QEMU-cross-compiled from the same source);
+> releases after 2026-07-21 ship images backed by it.
 
 **Build the three images** (each `build.sh` takes `[TAG] [KIND_CLUSTER]`; with a cluster name it also
 `kind load`s the image):

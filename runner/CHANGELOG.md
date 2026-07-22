@@ -3,13 +3,14 @@
 Drivers, exploration, load mode, triage, and the dashboard (server + client).
 Release-level changelog: [`../CHANGELOG.md`](../CHANGELOG.md).
 
-## [Unreleased]
+## [0.3.0] — 2026-07-22
 
 - **Lock-free load mode (DD-029):** `LoadRun` toggles the target lock-free for the run, polls `/__basquin/drift` for the app's real heap/thread drift, counts 5xx (`fire()` returns status), and reverts on exit.
 - **Cost-ranked replay corpus (DD-031):** `CostModel` scores each fired input from the boundary's `X-Basquin-Cost` header (driver's own round-trip latency is the always-available floor); `CostCorpus`/`CorpusEntry` retain coverage finds plus EMA/cold-start-gated expensive inputs, never evict a coverage find, and emit the replay ConfigMap sorted by cost descending instead of insertion order. Driver-side kill-switch `-Dbasquin.cost.enabled=false` restores today's insertion-order behavior (A/B baseline). Top costs are logged (`[Basquin] replay cost-ranked (top N): ...`), not added to the termination summary JSON (kubelet's ~4KB budget is shared with the corpus).
 - **Added (DD-032):** opt-in `-Dbasquin.pheromone=on` ε-greedy cost-biased selection with immediate-parent credit assignment + evaporation; `-Dbasquin.seed`.
 - **Added (DD-033):** live load-mode dashboard (throughput/percentiles/drift/5xx) + mode-aware CLI status; metrics typed for a future OTLP export.
 - **Added (DD-034):** running time-series sparklines on the per-campaign dashboard — mode-aware (load: throughput/p99/heap-drift, explore: iterations/coverage/finds), history accumulated client-side (the server keeps only the latest snapshot) as inline-SVG polylines, no server or API changes.
+- **Honest load (DD-035):** load-mode replay is method-, session-, and sequence-aware. Corpus format v2 (a line is a TAB-separated ordered sequence of `METHOD? path( SP body )?` steps; a bare `/…` line = a 1-step GET, backward-compatible; new `RequestLine`). Explore emits the *whole* cost-ranked sequence (not the orphaned tail) and issues method+body+session; each `LoadRun` worker replays a random sequence in order with its own `JSESSIONID` cookie jar. Drift-poll/toggle failure now surfaces as `driftUnavailable` (heap/thread omitted) instead of a fabricated `heapDriftKb:0`. Replay-only sequences are guarded out of single-request mutation.
 
 
 ## [0.2.0] — 2026-07-21

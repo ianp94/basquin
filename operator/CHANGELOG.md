@@ -3,6 +3,11 @@
 The `basquin.dev/v1alpha1` control plane (Go / kubebuilder) and the `basquin` CLI.
 Release-level changelog: [`../CHANGELOG.md`](../CHANGELOG.md).
 
+## [0.3.0] — 2026-07-22
+
+### Added
+- **Mode-aware `basquin status` (DD-033):** a `MODE` column and per-mode row summaries — `explore` rows show `cov% · N finds`, `load` rows show `rps · p99ms` (from `status.load`), and a load campaign that hasn't reported a snapshot yet shows `pending`.
+
 ## [0.2.0] — 2026-07-21
 
 First published release (`ghcr.io/ianp94/basquin-operator`; CLI binaries on the GitHub Release).

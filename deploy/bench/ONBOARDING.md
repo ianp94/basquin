@@ -10,9 +10,9 @@ The operator's advertised flow is two steps — **instrument** a Deployment (`Ba
 
 - A kind cluster with the operator installed and the four images loaded. The canonical setup is
   [`deploy/e2e/e2e.sh`](../e2e/e2e.sh) (run it once, or `--no-teardown` to leave the cluster up).
-- **Keep the cluster images current.** They are tagged `0.2.0` but built from source; if the cluster
+- **Keep the cluster images current.** They are tagged `0.3.0` but built from source; if the cluster
   has been up across code changes, rebuild the driver so it runs current code:
-  `deploy/runner-image/build.sh 0.2.0 basquin`. A stale runner will crash on new corpus/grammar
+  `deploy/runner-image/build.sh 0.3.0 basquin`. A stale runner will crash on new corpus/grammar
   features (e.g. DD-035 method/sequence entries) — the symptom is a driver `IndexOutOfBounds` at
   startup.
 - `KUBECONFIG=/tmp/kc-basquin`, `K="kubectl --context kind-basquin"`, `NS=basquin-system`.

@@ -73,9 +73,9 @@
     <li>A kind cluster with the operator installed and the four images loaded. The canonical setup is
       <a href="https://github.com/ianp94/basquin/blob/main/deploy/e2e/e2e.sh"><code>deploy/e2e/e2e.sh</code></a>
       (run it once, or <code>--no-teardown</code> to leave the cluster up).</li>
-    <li><strong>Keep the cluster images current.</strong> They are tagged <code>0.2.0</code> but built
+    <li><strong>Keep the cluster images current.</strong> They are tagged <code>0.3.0</code> but built
       from source; if the cluster has been up across code changes, rebuild the driver so it runs
-      current code: <code>deploy/runner-image/build.sh 0.2.0 basquin</code>. A stale runner will crash
+      current code: <code>deploy/runner-image/build.sh 0.3.0 basquin</code>. A stale runner will crash
       on new corpus/grammar features (e.g. DD-035 method/sequence entries) — the symptom is a driver
       <code>IndexOutOfBounds</code> at startup.</li>
     <li><code>KUBECONFIG=/tmp/kc-basquin</code>, <code>K="kubectl --context kind-basquin"</code>,

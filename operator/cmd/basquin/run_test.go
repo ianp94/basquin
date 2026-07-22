@@ -17,9 +17,16 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestReadCorpusDir(t *testing.T) {
@@ -78,6 +85,41 @@ func mustWrite(t *testing.T, path, content string) {
 	}
 }
 
+func TestReadEmittedCorpus(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "exp-corpus-out", Namespace: "ns"},
+			Data:       map[string]string{"corpus.txt": "/a\n/b\n"},
+		},
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "empty-corpus-out", Namespace: "ns"},
+		},
+	).Build()
+	ctx := context.Background()
+
+	data, err := readEmittedCorpus(ctx, c, "exp", "ns")
+	if err != nil {
+		t.Fatalf("readEmittedCorpus: %v", err)
+	}
+	if data["corpus.txt"] != "/a\n/b\n" {
+		t.Errorf("corpus.txt = %q", data["corpus.txt"])
+	}
+
+	if _, err := readEmittedCorpus(ctx, c, "nope", "ns"); err == nil {
+		t.Error("expected an error for a missing -corpus-out ConfigMap")
+	} else if !strings.Contains(err.Error(), "nope-corpus-out") {
+		t.Errorf("missing-CM error should name the ConfigMap looked for, got %v", err)
+	}
+
+	if _, err := readEmittedCorpus(ctx, c, "empty", "ns"); err == nil {
+		t.Error("expected an error for an empty -corpus-out ConfigMap")
+	}
+}
+
 func TestBuildCampaignIterations(t *testing.T) {
 	cp := buildCampaign(runOpts{
 		name: "c", namespace: "ns", target: "app", baseURL: "http://svc:8080",
@@ -126,6 +168,12 @@ func TestValidateRun(t *testing.T) {
 		{"both bounds", runOpts{target: "app", baseURL: "http://x", iterations: 1, duration: "10m"}, false},
 		{"iterations ok", runOpts{target: "app", baseURL: "http://x", iterations: 1}, true},
 		{"duration ok", runOpts{target: "app", baseURL: "http://x", duration: "10m"}, true},
+		{"load with corpus dir ok", runOpts{target: "app", baseURL: "http://x", duration: "10m", mode: "load", corpusDir: "./c"}, true},
+		{"load with corpus-from ok", runOpts{target: "app", baseURL: "http://x", duration: "10m", mode: "load", corpusFrom: "exp"}, true},
+		{"load with both corpus sources", runOpts{target: "app", baseURL: "http://x", duration: "10m", mode: "load", corpusDir: "./c", corpusFrom: "exp"}, false},
+		{"load with neither corpus source", runOpts{target: "app", baseURL: "http://x", duration: "10m", mode: "load"}, false},
+		{"explore with corpus-from", runOpts{target: "app", baseURL: "http://x", iterations: 1, mode: "explore", corpusFrom: "exp"}, false},
+		{"default mode with corpus-from", runOpts{target: "app", baseURL: "http://x", iterations: 1, corpusFrom: "exp"}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -97,18 +97,21 @@ basquin instrument -n basquin-system --deployment jpetstore \
   <p>A <code>BasquinCampaign</code> drives an already-instrumented target. It runs in one of two
     modes — explore first, to discover the interesting inputs, then load, to hammer them:</p>
   <pre><code><span class="c"># 2. Fuzz it: coverage-guided exploration, emitting a corpus of interesting inputs.</span>
+<span class="c">#    (The campaign name defaults to &lt;target&gt;-campaign, i.e. jpetstore-campaign.)</span>
 basquin run -n basquin-system --target jpetstore \
   --base-url http://jpetstore-app.basquin-system.svc.cluster.local:8080 \
   --iterations 500 --grammar examples/grammar/jpetstore.grammar \
   --corpus examples/corpus/jpetstore --watch
 
-<span class="c"># 3. Replay what it found, under load.</span>
+<span class="c"># 3. Replay what it found, under load: --corpus-from reuses the corpus step 2 emitted.</span>
 basquin run -n basquin-system --name jpetstore-load --mode load --target jpetstore \
   --base-url http://jpetstore-app.basquin-system.svc.cluster.local:8080 \
-  --duration 30m --concurrency 50 --corpus ./saved-corpus --watch</code></pre>
+  --duration 30m --concurrency 50 --corpus-from jpetstore-campaign --watch</code></pre>
   <p><strong>explore</strong> (default) mutates requests, keeps the ones that reach new code in the
-    app's own JaCoCo coverage, and emits the interesting inputs as a corpus ConfigMap when it
-    completes. <strong>load</strong> replays a saved corpus verbatim at a fixed concurrency for a
+    app's own JaCoCo coverage, and on completion emits its cost-ranked replay corpus as the
+    <code>&lt;campaign&gt;-corpus-out</code> ConfigMap — which <code>--corpus-from
+    &lt;campaign&gt;</code> feeds straight into a load run (use <code>--corpus &lt;dir&gt;</code>
+    instead to replay local files). <strong>load</strong> replays a saved corpus verbatim at a fixed concurrency for a
     duration — no mutation, no coverage — watching the same latency/heap/thread invariants under
     sustained traffic. <code>--watch</code> tails the campaign to completion, printing
     coverage/findings/dashboard as they land.</p>

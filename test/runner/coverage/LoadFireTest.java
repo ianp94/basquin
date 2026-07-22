@@ -12,8 +12,10 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 /**
  * Task 3: {@link LoadRun#fire} must replay a {@link RequestLine} faithfully — method, body (with the
@@ -92,5 +94,25 @@ public class LoadFireTest {
         assertEquals(200, code1);
         assertEquals(200, code2);
         assertEquals("JSESSIONID=abc123", seenCookie[0]);
+    }
+
+    @Test
+    public void firePatchFailsLoudWithoutSilentlyDowngradingToGet() throws IOException {
+        final AtomicBoolean handlerWasInvoked = new AtomicBoolean(false);
+
+        server.createContext("/x", (HttpExchange ex) -> {
+            handlerWasInvoked.set(true);
+            byte[] resp = new byte[0];
+            ex.sendResponseHeaders(200, resp.length);
+            ex.getResponseBody().close();
+        });
+        server.start();
+        base = "http://127.0.0.1:" + server.getAddress().getPort();
+
+        RequestLine step = RequestLine.parse("PATCH /x");
+        int code = LoadRun.fire(base, step, new HashMap<>());
+
+        assertEquals(-1, code);
+        assertFalse("Handler should not have been invoked for unsupported PATCH method", handlerWasInvoked.get());
     }
 }

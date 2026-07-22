@@ -188,7 +188,12 @@ public final class LoadRun {
             c.setConnectTimeout(5000);
             c.setReadTimeout(MAX_MS);
             c.setInstanceFollowRedirects(true);
-            c.setRequestMethod(step.method());
+            try {
+                c.setRequestMethod(step.method());
+            } catch (java.net.ProtocolException pe) {
+                System.err.println("[Basquin] load: unsupported HTTP method " + step.method() + " for " + step.path() + "; not sent");
+                return -1;   // fail loud: do NOT fall through to a silent GET
+            }
             byte[] bodyBytes = null;
             if (step.body() != null) {
                 bodyBytes = step.body().getBytes(StandardCharsets.UTF_8);

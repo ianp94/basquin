@@ -87,7 +87,7 @@ jobs:
           java -agentpath:"$LIB" -Dbasquin.native.lib="$LIB" \
             -Dbasquin.target=examples.targets.ThreadLeakTarget \
             -Dexamples.mode=proper -Dexamples.sleepMs=1 -Dexamples.threads=2 \
-            -cp build/libs/basquin-0.2.0.jar runner.GenericRunner 20 examples.targets.ThreadLeakTarget
+            -cp build/libs/basquin-0.3.0.jar runner.GenericRunner 20 examples.targets.ThreadLeakTarget
 
   leak-demo:
     runs-on: ubuntu-latest

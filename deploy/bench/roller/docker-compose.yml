@@ -24,6 +24,6 @@ services:
       - ./webapp:/usr/local/tomcat/webapps/ROOT:ro
       - ./roller_data:/var/roller/data
       - ./postgresql.jar:/usr/local/tomcat/lib/postgresql.jar:ro
-      - ../../../build/libs/basquin-0.2.0.jar:/usr/local/tomcat/basquin-agent.jar:ro
-      - ../../../tomcat-valve/build/libs/basquin-valve-0.2.0.jar:/usr/local/tomcat/lib/basquin-valve.jar:ro
+      - ../../../build/libs/basquin-0.3.0.jar:/usr/local/tomcat/basquin-agent.jar:ro
+      - ../../../tomcat-valve/build/libs/basquin-valve-0.3.0.jar:/usr/local/tomcat/lib/basquin-valve.jar:ro
       - ../../../deploy/valve/context.xml:/usr/local/tomcat/conf/context.xml:ro

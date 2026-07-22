@@ -5,12 +5,12 @@
 #
 # Usage:
 #   deploy/dashboard-image/build.sh [TAG] [KIND_CLUSTER]
-#     TAG           image tag (default: the Gradle project version, e.g. 0.2.0). Also tags :latest.
+#     TAG           image tag (default: the Gradle project version, e.g. 0.3.0). Also tags :latest.
 #     KIND_CLUSTER  if set, `kind load docker-image` into that cluster after building.
 #
 # Examples:
 #   deploy/dashboard-image/build.sh                     # basquin/dashboard:<version> + :latest
-#   deploy/dashboard-image/build.sh 0.2.0 basquin    # ...and load into the `basquin` kind cluster
+#   deploy/dashboard-image/build.sh 0.3.0 basquin    # ...and load into the `basquin` kind cluster
 set -euo pipefail
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -38,7 +38,7 @@ TAG="${1:-${VERSION:-dev}}"
 KIND_CLUSTER="${2:-}"
 
 echo "==> Staging harness jar into $CTX/"
-JAR="build/libs/basquin-${VERSION:-0.2.0}.jar"
+JAR="build/libs/basquin-${VERSION:-0.3.0}.jar"
 [ -f "$JAR" ] || JAR="$(ls build/libs/basquin-*.jar 2>/dev/null | grep -v -- '-runner.jar' | head -1)"
 [ -n "$JAR" ] && [ -f "$JAR" ] || die "harness jar not built (expected build/libs/basquin-*.jar)"
 cp "$JAR" "$CTX/basquin.jar"

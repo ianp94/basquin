@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'com.basquin'
-version = '0.2.0'
+version = '0.3.0'
 // Target Java 17 bytecode so artifacts run on JDK 17 and 21+ alike.
 // CI verifies the build and tests on both 17 and 21 (see .github/workflows/ci.yml).
 sourceCompatibility = '17'

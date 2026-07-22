@@ -55,7 +55,7 @@ jobs:
       JPETSTORE_SHA: c8f62cc76b8ac08066bb79618cf5824144f24e03
       # Single source for the image tag: the prebuild step tags with it AND e2e.sh receives it, so
       # the two can't silently drift apart (a mismatch would quietly forfeit the prebuild cache win).
-      TAG: 0.2.0
+      TAG: 0.3.0
     steps:
       - uses: actions/checkout@v4
       - run: chmod +x gradlew

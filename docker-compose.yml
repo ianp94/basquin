@@ -8,7 +8,7 @@ services:
       - CATALINA_OPTS=-javaagent:/usr/local/tomcat/basquin-agent.jar -Xbootclasspath/a:/usr/local/tomcat/basquin-agent.jar -Dbasquin.invariant.mode=${INVARIANT_MODE:-soft} -Dbasquin.invariant.latency.maxMs=${INVARIANT_LATENCY_MS:-50} -Dbasquin.invariant.heapDelta.maxKb=${INVARIANT_HEAP_KB:-128} -Dbasquin.invariant.latency.sample=${INVARIANT_LATENCY_SAMPLE:-true} ${CATALINA_OPTS_EXTRA:-}
     volumes:
       - ./tomcat-war/build/libs/basquin-demo-0.1.0.war:/usr/local/tomcat/webapps/ROOT.war:ro
-      - ./build/libs/basquin-0.2.0.jar:/usr/local/tomcat/basquin-agent.jar:ro
+      - ./build/libs/basquin-0.3.0.jar:/usr/local/tomcat/basquin-agent.jar:ro
   mysql:
     image: mysql:8.0
     environment:

@@ -5,12 +5,12 @@
 #
 # Usage:
 #   deploy/runner-image/build.sh [TAG] [KIND_CLUSTER]
-#     TAG           image tag (default: the Gradle project version, e.g. 0.2.0). Also tags :latest.
+#     TAG           image tag (default: the Gradle project version, e.g. 0.3.0). Also tags :latest.
 #     KIND_CLUSTER  if set, `kind load docker-image` into that cluster after building.
 #
 # Examples:
 #   deploy/runner-image/build.sh                     # basquin/runner:<version> + :latest
-#   deploy/runner-image/build.sh 0.2.0 basquin    # ...and load into the `basquin` kind cluster
+#   deploy/runner-image/build.sh 0.3.0 basquin    # ...and load into the `basquin` kind cluster
 set -euo pipefail
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -38,7 +38,7 @@ TAG="${1:-${VERSION:-dev}}"
 KIND_CLUSTER="${2:-}"
 
 echo "==> Staging runner jar into $CTX/"
-JAR="build/libs/basquin-${VERSION:-0.2.0}-runner.jar"
+JAR="build/libs/basquin-${VERSION:-0.3.0}-runner.jar"
 [ -f "$JAR" ] || JAR="$(ls build/libs/*-runner.jar 2>/dev/null | head -1)"
 [ -n "$JAR" ] && [ -f "$JAR" ] || die "runner jar not built (expected build/libs/*-runner.jar)"
 cp "$JAR" "$CTX/basquin-runner.jar"

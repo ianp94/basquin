@@ -8,8 +8,8 @@ type: application
 # The PUBLISHED chart version is the release tag (release.yml packages with --version <tag>
 # --app-version <tag>, overriding these). Keep both in step with the latest release so a plain
 # `helm package` from a checkout doesn't regress to an older version. (#47 review)
-version: 0.2.0
-appVersion: "0.2.0"
+version: 0.3.0
+appVersion: "0.3.0"
 keywords:
   - testing
   - availability

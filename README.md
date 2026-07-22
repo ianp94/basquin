@@ -237,6 +237,19 @@ Details and the "why" behind each choice: [ARCHITECTURE](docs/ARCHITECTURE.md) �
 - Tomcat valve for unmodified third-party WARs — one jar for `javax` and `jakarta`
 - Standalone web dashboard with optional Claude-backed analysis; AFL-style live status screen
 
+## Etymology
+
+**Basquin** · /ˈbæs.kɪn/ · *BAS-kin*
+
+Named for **Olin Hanson Basquin**, whose 1910 paper *The Exponential Law of Endurance Tests* gave
+materials science **Basquin's law** — the relationship between the stress placed on a material and
+the number of load cycles it survives before it fatigues and fails (`σₐ = σ′f · (2·N_f)ᵇ`, the shape
+of the S–N curve).
+
+Basquin measured metal. Basquin measures your JVM: it applies cyclic stress — load and fuzz — and
+watches for the point where *availability* fatigues, when latency, heap, and threads stop holding
+under repetition. Same curve, different material.
+
 ## Docs
 
 - [OPERATOR-USAGE](docs/OPERATOR-USAGE.md) — **start here for Kubernetes**: instrument an app, run

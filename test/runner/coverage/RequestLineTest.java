@@ -26,4 +26,10 @@ public class RequestLineTest {
     assertEquals("/x", RequestLine.firstPath("/x"));
     assertEquals("", RequestLine.firstPath("cat"));
   }
+  @Test public void sequenceRoundTripsWithTrailingEmptyStep() {
+    List<RequestLine> seq = RequestLine.parseSequence("/x\t");
+    assertEquals(2, seq.size());
+    assertEquals("", seq.get(1).path());
+    assertEquals("/x\t", RequestLine.formatSequence(seq));
+  }
 }

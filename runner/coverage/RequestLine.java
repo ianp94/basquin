@@ -2,9 +2,11 @@ package runner.coverage;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public record RequestLine(String method, String path, String body) {
-    private static final String[] METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"};
+    private static final Set<String> METHODS = Set.of("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD");
 
     public static RequestLine parse(String step) {
         if (step == null || step.isEmpty()) {
@@ -55,7 +57,7 @@ public record RequestLine(String method, String path, String body) {
     }
 
     private static boolean isMethod(String token) {
-        return Arrays.asList(METHODS).contains(token);
+        return METHODS.contains(token);
     }
 
     public String format() {
@@ -63,14 +65,14 @@ public record RequestLine(String method, String path, String body) {
     }
 
     public static List<RequestLine> parseSequence(String line) {
-        String[] fields = line.split("\t");
+        String[] fields = line.split("\t", -1);
         return Arrays.stream(fields)
             .map(RequestLine::parse)
             .toList();
     }
 
     public static String formatSequence(List<RequestLine> seq) {
-        return String.join("\t", seq.stream().map(RequestLine::format).toArray(String[]::new));
+        return seq.stream().map(RequestLine::format).collect(Collectors.joining("\t"));
     }
 
     public static String firstPath(String line) {

@@ -241,6 +241,17 @@ public final class RequestGrammar {
             if (open < 0) { out.append(template, i, template.length()); break; }
             int close = template.indexOf('}', open);
             if (close < 0) { out.append(template, i, template.length()); break; }
+            // A correlation reference (${{name}}) is NOT a ${name} rule placeholder — it is filled
+            // in later from a captured response value. Copy it verbatim so it survives expansion
+            // instead of being read as name "{name" (no rule ever matches that) and silently
+            // destroyed (DD-036).
+            if (open + 2 < template.length() && template.charAt(open + 2) == '{') {
+                int dbl = template.indexOf("}}", open + 2);
+                if (dbl < 0) { out.append(template, i, template.length()); break; }
+                out.append(template, i, dbl + 2);   // copy the pre-text AND the ${{name}} verbatim
+                i = dbl + 2;
+                continue;
+            }
             out.append(template, i, open);
             String name = template.substring(open + 2, close);
             out.append(bindings.computeIfAbsent(name, this::value));

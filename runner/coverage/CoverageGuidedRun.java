@@ -642,6 +642,11 @@ public final class CoverageGuidedRun {
                 }
             }
         }
+        // Capture from any code < 500, INCLUDING a 4xx — intentional, not an oversight: a form GET
+        // that returns 4xx can still carry the token in its (error-stream) body, and explore reads
+        // getErrorStream() above for code >= 400, so the value is there to extract. This is the
+        // deliberate load-vs-explore asymmetry noted in the DD-036 PR: LoadRun.fire uses
+        // getInputStream() (throws on 4xx) and so cannot capture from a 4xx; explore can.
         if (r.capture() != null && bindings != null && code < 500) {
             String val = r.capture().extract(c::getHeaderField, body.toString());
             if (val != null) {

@@ -1,1 +1,1 @@
-/actions/Order.action?newOrder=
+POST /actions/Order.action?newOrder=

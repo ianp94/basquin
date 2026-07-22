@@ -383,6 +383,15 @@ Notes:
   **no operator/CRD surface** — it's a driver flag, run against a bench target, not something a
   `BasquinCampaign` can turn on yet — deliberately, until a bench A/B proves it beats uniform selection.
   See [`docs/BENCH-AB.md`](BENCH-AB.md) for the protocol.
+- **Honest replay (DD-035).** Corpus entries can now be **method-aware sequences**, not just bare
+  `GET` paths: a step is `METHOD? path( body )?` (a bare `/foo` line is still `GET /foo` — old corpora
+  replay unchanged), and a TAB-separated line is a **whole sequence** replayed **in order** as one flow
+  (e.g. a login step followed by the authenticated steps it unlocks). Each load worker keeps its own
+  **session** (cookie jar) for its whole run, so a sequence's later steps see the cookie its earlier
+  steps set. If `status.load` (or the driver log's terminal summary) reports `driftUnavailable:true`
+  instead of `heapDriftKb`/`threadDrift`, the target's heap/thread drift genuinely couldn't be measured
+  this run (a drift poll failed, or the target never confirmed load mode) — it is **not** a flat-heap
+  `0`; see `LOAD-MODE-DESIGN.md` §9 and DD-035.
 
 Read the results from `status.load`:
 

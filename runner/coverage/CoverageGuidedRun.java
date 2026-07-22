@@ -72,7 +72,10 @@ public final class CoverageGuidedRun {
                     for (String line : new String(java.nio.file.Files.readAllBytes(p),
                             StandardCharsets.UTF_8).split("\n")) {
                         String t = line.trim();
-                        if (!t.isEmpty() && t.startsWith("/")) seeds.add(t);
+                        // firstPath (not a bare startsWith) so a TAB-joined multi-step sequence line —
+                        // whose first field is "POST /..." rather than "/..." — isn't dropped; it's
+                        // routed to pendingSequences below instead of being fired as one garbled URL.
+                        if (!t.isEmpty() && RequestLine.firstPath(t).startsWith("/")) seeds.add(t);
                     }
                 }
             } catch (Exception e) {
@@ -87,6 +90,50 @@ public final class CoverageGuidedRun {
             System.out.println("[Basquin] loaded " + seeds.size() + " seed route(s) from " + dir);
         }
         return seeds;
+    }
+
+    /** Result of {@link #splitSeeds}: single-step seeds (fired via {@code request}) separated from
+     *  multi-step sequences (a TAB-joined line — e.g. round-tripped from an emitted replay corpus —
+     *  merged into {@code pendingSequences} and run in order instead). */
+    static final class SeedSplit {
+        final List<String> singleStep;
+        final List<List<String>> sequences;
+        SeedSplit(List<String> singleStep, List<List<String>> sequences) {
+            this.singleStep = singleStep;
+            this.sequences = sequences;
+        }
+    }
+
+    /**
+     * Partition loaded seed lines: a bare line (no TAB) is a single request, fired via {@code
+     * request(base, line)}. A TAB-joined line is a whole transaction — firing it as one URL would
+     * build garbage (the TABs and later steps would land in the path/query of the first). Package-
+     * private for testing.
+     */
+    /**
+     * Format a raw multi-step sequence (as fired by {@link #runSequence}) into the TAB-joined
+     * corpus-emission form used for whole-sequence coverage finds — the whole ordered transaction,
+     * method-aware, not just its last step. Package-private for testing.
+     */
+    static String formatSequenceForCorpus(List<String> sequence) {
+        List<RequestLine> parsed = new ArrayList<>();
+        for (String step : sequence) parsed.add(RequestLine.parse(step));
+        return RequestLine.formatSequence(parsed);
+    }
+
+    static SeedSplit splitSeeds(List<String> rawSeeds) {
+        List<String> singleStep = new ArrayList<>();
+        List<List<String>> sequences = new ArrayList<>();
+        for (String s : rawSeeds) {
+            if (s.indexOf('\t') >= 0) {
+                List<String> steps = new ArrayList<>();
+                for (RequestLine r : RequestLine.parseSequence(s)) steps.add(r.format());
+                sequences.add(steps);
+            } else {
+                singleStep.add(s);
+            }
+        }
+        return new SeedSplit(singleStep, sequences);
     }
 
     public static void main(String[] args) throws Exception {
@@ -143,7 +190,12 @@ public final class CoverageGuidedRun {
         //  2. a plain seed corpus (routes only, fixed values)
         // Either way the reachable surface is data, never compiled-in (DD-016/DD-017).
         RequestGrammar grammar = loadGrammar(rnd);
-        List<String> seeds = grammar != null ? grammar.expandAll() : loadSeeds();
+        List<String> loadedSeeds = grammar != null ? grammar.expandAll() : loadSeeds();
+        // Multi-step seed lines (TAB-joined, e.g. round-tripped from an emitted replay corpus) must
+        // not be fired as a single URL — split them out now so `seeds` below is single-step-only and
+        // the sequence steps instead feed pendingSequences (initialized further down).
+        SeedSplit seedSplit = splitSeeds(loadedSeeds);
+        List<String> seeds = seedSplit.singleStep;
         // Start the corpus as the full seed set so every seeded endpoint is exercised, rather than
         // relying on random discovery to stumble onto them. Cost-driven retention/eviction/ranking
         // (DD-031) is gated behind basquin.cost.enabled; disabled restores today's grow-only,
@@ -168,8 +220,12 @@ public final class CoverageGuidedRun {
         // Multi-step transactions: some code (order placement) is only reachable after an ordered
         // sequence of requests against one session — a populated cart, not just a login. Run each
         // declared sequence once up front, then mix them in probabilistically.
-        List<List<String>> pendingSequences = grammar != null && grammar.hasSequences()
-                ? new ArrayList<>(grammar.expandAllSequences()) : new ArrayList<>();
+        // NOT gated on grammar != null: a grammar-less run (plain seed corpus) must still replay any
+        // seeded multi-step sequences (seedSplit.sequences) — only the grammar-authored half was
+        // previously conditional.
+        List<List<String>> pendingSequences = new ArrayList<>();
+        if (grammar != null && grammar.hasSequences()) pendingSequences.addAll(grammar.expandAllSequences());
+        pendingSequences.addAll(seedSplit.sequences);
         int sequencePercent = Integer.getInteger("basquin.sequencePercent", 25);
 
         for (int i = 0; i < iterations; i++) {
@@ -195,8 +251,10 @@ public final class CoverageGuidedRun {
                 if (coveredAfterSeq > best) {
                     best = coveredAfterSeq;
                     // A sequence coverage-find: cost of a whole sequence isn't a single request, so
-                    // record it as a coverage-find with zero cost — retained, never evicted.
-                    corpus.consider(sequence.get(sequence.size() - 1), 0.0, 0, 0, 0, 0, true);
+                    // record it as a coverage-find with zero cost — retained, never evicted. Emit the
+                    // WHOLE ordered sequence (not just its last step) so replay re-runs the full
+                    // transaction instead of firing an orphaned tail step that 500s on its own.
+                    corpus.consider(formatSequenceForCorpus(sequence), 0.0, 0, 0, 0, 0, true);
                     StatusReporter.recordSaved("Coverage");
                 }
                 continue;
@@ -475,14 +533,29 @@ public final class CoverageGuidedRun {
         static final CostSample EMPTY = new CostSample(0, 0, 0);
     }
 
-    private static CostSample request(String base, String path) throws Exception {
-        HttpURLConnection c = (HttpURLConnection) new URL(base + path).openConnection();
+    static CostSample request(String base, String step) throws Exception {
+        RequestLine r = RequestLine.parse(step);
+        HttpURLConnection c = (HttpURLConnection) new URL(base + r.path()).openConnection();
         c.setConnectTimeout(2000);
         c.setReadTimeout(10000);
-        c.setRequestMethod("GET");
+        try {
+            c.setRequestMethod(r.method());
+        } catch (java.net.ProtocolException pe) {
+            System.err.println("[Basquin] explore: unsupported HTTP method " + r.method()
+                    + " for " + r.path() + "; not sent");
+            return CostSample.EMPTY;   // fail loud: do NOT fall through to a silent GET
+        }
         c.setInstanceFollowRedirects(true);
         if (sessionCookie != null) {
             c.setRequestProperty("Cookie", sessionCookie);
+        }
+        if (r.body() != null) {
+            byte[] bodyBytes = r.body().getBytes(StandardCharsets.UTF_8);
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+            try (java.io.OutputStream out = c.getOutputStream()) {
+                out.write(bodyBytes);
+            }
         }
         int code = c.getResponseCode();
         // Capture/refresh JSESSIONID so subsequent requests stay in the same session.
@@ -500,8 +573,8 @@ public final class CoverageGuidedRun {
         if (inv != null) {
             try { invCount = Integer.parseInt(inv.trim()); } catch (NumberFormatException ignored) {}
             String detail = c.getHeaderField("X-Basquin-Invariant-Detail");
-            FuzzIO.saveWithMeta(path.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
-                    "route=" + path + "\ncount=" + inv + (detail != null ? "\ndetail=" + detail : ""));
+            FuzzIO.saveWithMeta(step.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
+                    "route=" + step + "\ncount=" + inv + (detail != null ? "\ndetail=" + detail : ""));
         }
         long heapKb = 0; int threadDelta = 0;
         String costHdr = c.getHeaderField("X-Basquin-Cost");  // "latencyMs,heapDeltaKb,threadDelta"
@@ -515,16 +588,16 @@ public final class CoverageGuidedRun {
         InputStream is = code >= 400 ? c.getErrorStream() : c.getInputStream();
         StringBuilder body = new StringBuilder();
         if (is != null) {
-            try (BufferedReader r = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
                 String line;
-                while ((line = r.readLine()) != null) {
+                while ((line = br.readLine()) != null) {
                     // Keep the body only for server errors — that's where the app's own stack is.
                     if (code >= 500 && body.length() < 16384) body.append(line).append('\n');
                 }
             }
         }
         if (code >= 500) {
-            throw serverError(code, path, body.toString());
+            throw serverError(code, step, body.toString());
         }
         return new CostSample(heapKb, threadDelta, invCount);
     }
@@ -621,7 +694,12 @@ public final class CoverageGuidedRun {
         return sb.toString().replace("&amp;", "&");
     }
 
-    private static String mutate(String input, Random r) {
+    /** Package-private for testing. */
+    static String mutate(String input, Random r) {
+        // Replay-only guard: a TAB-joined multi-step sequence is not a single mutatable request —
+        // scanning past the TAB with replaceParam's indexOf/substring logic would splice or corrupt
+        // steps. Matches the method's existing "un-mutatable input returned as-is" contract.
+        if (input.indexOf('\t') >= 0) return input;
         // No route synthesis here: an un-mutatable input is returned as-is and the caller's
         // seed-picking branch supplies variety. Endpoints come from the corpus, not from code.
         if (!input.contains("=")) { return input; }

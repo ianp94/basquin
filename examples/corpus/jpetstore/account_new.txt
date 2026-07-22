@@ -1,1 +1,1 @@
-/actions/Account.action?newAccount=
+POST /actions/Account.action?newAccount= username=ACID&password=j2ee&repeatedPassword=j2ee

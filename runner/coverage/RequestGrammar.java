@@ -79,7 +79,7 @@ public final class RequestGrammar {
                 g.sequences.add(current);
                 continue;
             }
-            if (current != null && indented && line.startsWith("/")) {
+            if (current != null && indented && RequestLine.parse(line).path().startsWith("/")) {
                 current.steps.add(line);
                 continue;
             }
@@ -102,7 +102,7 @@ public final class RequestGrammar {
                     }
                 }
                 if (!alts.isEmpty()) g.rules.put(name, alts);
-            } else if (line.startsWith("/")) {
+            } else if (RequestLine.parse(line).path().startsWith("/")) {
                 g.routes.add(line);
             }
         }
@@ -206,8 +206,12 @@ public final class RequestGrammar {
         return template != null ? expand(template, new LinkedHashMap<>()) : randomRequest();
     }
 
-    /** Find the template whose literal (non-placeholder) parts match this concrete request. */
-    private String templateFor(String concrete) {
+    /**
+     * Find the template whose literal (non-placeholder) parts match this concrete request.
+     * Package-private (rather than private) so {@code GrammarMethodTest} — deliberately placed
+     * in this package — can pin the method-prefix round-trip directly.
+     */
+    String templateFor(String concrete) {
         for (String t : routes) {
             if (t.indexOf("${") < 0) {
                 if (t.equals(concrete)) return t;

@@ -30,18 +30,19 @@ public final class LoadRun {
     public static void run() throws Exception {
         String baseUrl = System.getProperty("examples.http.baseUrl", "http://localhost:8080");
         String corpusDir = System.getProperty("basquin.corpusDir", "");
-        List<String> corpus = readCorpus(corpusDir);
-        if (corpus.isEmpty()) {
+        List<List<RequestLine>> read = readCorpus(corpusDir);
+        if (read.isEmpty()) {
             System.err.println("[Basquin] load: no corpus routes under " + corpusDir + "; nothing to replay");
-            corpus.add("/");
         }
+        final List<List<RequestLine>> corpus = read.isEmpty()
+                ? List.of(List.of(new RequestLine("GET", "/", null))) : read;
         long durationMs = CoverageGuidedRun.parseDurationMillis(System.getProperty("basquin.run.duration", "60s"));
         long warmupMs = System.getProperty("basquin.warmup", "").isEmpty()
                 ? 0L : CoverageGuidedRun.parseDurationMillis(System.getProperty("basquin.warmup"));
         int concurrency = Integer.getInteger("basquin.concurrency", 10);
         long latencyMaxMs = Long.getLong("basquin.invariant.latency.maxMs", 0L);
 
-        System.out.printf("[Basquin] load: %d route(s), concurrency=%d, warmup=%dms, duration=%dms%n",
+        System.out.printf("[Basquin] load: %d sequence(s), concurrency=%d, warmup=%dms, duration=%dms%n",
                 corpus.size(), concurrency, warmupMs, durationMs);
 
         final long startNanos = System.nanoTime();
@@ -57,7 +58,10 @@ public final class LoadRun {
 
         // DD-029: put the target's valve in lock-free load mode for the run (+ slack) so it can be driven
         // concurrently. The TTL auto-reverts if this driver dies mid-run; we also revert explicitly below.
-        setTargetMode(baseUrl, "load", warmupMs + durationMs + 30_000L);
+        // DD-035: whether the target actually CONFIRMED load mode feeds driftUnavailable below — a
+        // failed/unconfirmed toggle means the target may still be serializing (or unreachable), so any
+        // drift number we'd report is not trustworthy.
+        boolean modeConfirmed = setTargetMode(baseUrl, "load", warmupMs + durationMs + 30_000L);
         runner.util.StatusReporter.setMode("load");
 
         // DD-033: the snapshotter owns the ONE drift poller (both live pushes and the terminal
@@ -75,8 +79,12 @@ public final class LoadRun {
                 DriftDelta d = driftDelta(baselineDrift.get(), cur);
                 LoadSnapshot s = computeLoadSnapshot(hist, total, serverError.get(), windowSec,
                         d.heapDriftKb, d.threadDrift);
+                // DD-035: current-state drift honesty, same rule as the terminal check below — a
+                // baseline that never landed (not yet baselined, or the poll itself came back null),
+                // OR this poll (cur) coming back null, OR a target that never confirmed load mode.
+                boolean driftUnavailableNow = driftUnavailable(baselined.get(), baselineDrift.get(), cur, modeConfirmed);
                 runner.util.StatusReporter.recordLoad(s.throughputRps, s.p50, s.p90, s.p99, s.max,
-                        s.heapDriftKb, s.threadDrift, s.serverErrors, s.requests);
+                        s.heapDriftKb, s.threadDrift, s.serverErrors, s.requests, driftUnavailableNow);
             }
         }, "Basquin-Load-Snapshot");
         snapshotter.setDaemon(true);
@@ -87,23 +95,32 @@ public final class LoadRun {
             final long seed = w;
             workers[w] = new Thread(() -> {
                 Random rnd = new Random(seed);
+                // Each worker owns one session jar for its whole run: sequences replay as a logged-in
+                // user would exercise them (e.g. POST /signon then authenticated GETs), so the cookie
+                // set on step 1 must still be present on step N.
+                java.util.Map<String, String> jar = new java.util.HashMap<>();
                 while (System.nanoTime() < deadlineNanos) {
-                    String path = corpus.get(rnd.nextInt(corpus.size()));
-                    long t0 = System.nanoTime();
-                    int code = fire(baseUrl, path);
-                    long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
-                    if (System.nanoTime() < measureFromNanos) {
-                        continue; // warmup: don't record
-                    }
-                    // First post-warmup sample: snapshot the TARGET's drift baseline exactly once (DD-029).
-                    if (baselined.compareAndSet(false, true)) {
-                        baselineDrift.set(pollDrift(baseUrl));
-                    }
-                    hist.incrementAndGet((int) Math.min(elapsedMs, MAX_MS + 1));
-                    requests.incrementAndGet();
-                    if (code >= 500) serverError.incrementAndGet();
-                    if (latencyMaxMs > 0 && elapsedMs > latencyMaxMs) {
-                        latencyViol.incrementAndGet();
+                    List<RequestLine> seq = corpus.get(rnd.nextInt(corpus.size()));
+                    for (RequestLine step : seq) {
+                        // A long sequence must not run past the deadline: check BEFORE firing each step,
+                        // not just at the outer loop, so a worker can't overshoot the window mid-sequence.
+                        if (System.nanoTime() >= deadlineNanos) break;
+                        long t0 = System.nanoTime();
+                        int code = fire(baseUrl, step, jar);
+                        long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
+                        if (System.nanoTime() < measureFromNanos) {
+                            continue; // warmup: don't record
+                        }
+                        // First post-warmup sample: snapshot the TARGET's drift baseline exactly once (DD-029).
+                        if (baselined.compareAndSet(false, true)) {
+                            baselineDrift.set(pollDrift(baseUrl));
+                        }
+                        hist.incrementAndGet((int) Math.min(elapsedMs, MAX_MS + 1));
+                        requests.incrementAndGet();
+                        if (code >= 500) serverError.incrementAndGet();
+                        if (latencyMaxMs > 0 && elapsedMs > latencyMaxMs) {
+                            latencyViol.incrementAndGet();
+                        }
                     }
                 }
             }, "Basquin-Load-" + w);
@@ -129,27 +146,30 @@ public final class LoadRun {
         Drift terminalDrift = lastDrift.get();
         if (terminalDrift == null) terminalDrift = pollDrift(baseUrl);
         DriftDelta drift = driftDelta(baselineDrift.get(), terminalDrift);
-        long heapDrift = drift.heapDriftKb;
-        int threadDrift = drift.threadDrift;
+
+        // DD-035: driftUnavailable is a first-class signal, not a fake heapDriftKb:0. "The baseline
+        // drift poll never succeeded" covers two cases: (a) !baselined.get() — no worker ever reached
+        // the first post-warmup sample (e.g. duration shorter than warmup), so the CAS in the worker
+        // loop never fired at all; (b) baselined is true but pollDrift returned null (target
+        // unreachable when the baseline WAS attempted), leaving baselineDrift.get() == null. A THIRD
+        // case (the review fix): the baseline landed fine but terminalDrift itself is null — the drift
+        // endpoint got starved once load ramped, a failed poll on the OTHER side of the delta.
+        // driftDelta() silently degrades any of these to a zero delta — indistinguishable from a real
+        // flat heap — so it must not be relied on here; check the raw state instead. The final case is
+        // the target never confirming load mode at all.
+        boolean driftUnavailable = driftUnavailable(baselined.get(), baselineDrift.get(), terminalDrift, modeConfirmed);
 
         // DD-033: push the terminal snapshot to the dashboard before reverting the target's mode, so the
         // authoritative numbers land there too.
         LoadSnapshot fin = computeLoadSnapshot(hist, total, serverError.get(), measuredSec, drift.heapDriftKb, drift.threadDrift);
         runner.util.StatusReporter.recordLoad(fin.throughputRps, fin.p50, fin.p90, fin.p99, fin.max,
-                fin.heapDriftKb, fin.threadDrift, fin.serverErrors, fin.requests);
+                fin.heapDriftKb, fin.threadDrift, fin.serverErrors, fin.requests, driftUnavailable);
         setTargetMode(baseUrl, "explore", 0);
 
-        String json = String.format(java.util.Locale.ROOT,
-                "{\"load\":{\"requests\":%d,\"throughputRps\":\"%.1f\","
-              + "\"latencyMs\":{\"p50\":%d,\"p90\":%d,\"p99\":%d,\"max\":%d},"
-              + "\"heapDriftKb\":%d,\"threadDrift\":%d,\"serverErrors\":%d,"
-              // Only latency is threshold-gated in this first cut; heap/thread are reported as drift
-              // above, not as violation counts (see LoadViolations godoc / DD-026 deferred items).
-              + "\"violations\":{\"latency\":%d,\"heap\":0,\"thread\":0}}}",
-                total, total / measuredSec,
+        String json = summaryJson(total, total / measuredSec,
                 percentile(hist, total, 0.50), percentile(hist, total, 0.90),
                 percentile(hist, total, 0.99), maxBucket(hist),
-                heapDrift, threadDrift, serverError.get(), latencyViol.get());
+                drift, serverError.get(), latencyViol.get(), driftUnavailable);
 
         System.out.println("[Basquin] load done: " + json);
         String summaryOut = System.getProperty("basquin.summary.out");
@@ -161,18 +181,74 @@ public final class LoadRun {
     }
 
     /**
-     * Fire one request, drain the body, and return the HTTP status (or -1 on a transport error). A
-     * status ≥ 500 is a server error — the availability signal load mode DOES want (DD-029; the old
-     * "measures behavior, not crashes" swallow is why 5xx were invisible).
+     * Build the terminal load-summary JSON (DD-026), extracted from {@link #run} so it's unit-testable
+     * without a server. DD-035: when {@code driftUnavailable} is true, the block carries
+     * {@code "driftUnavailable":true} and OMITS {@code heapDriftKb}/{@code threadDrift} entirely — a
+     * heap/thread number the target never actually confirmed must never be printed as if it were real
+     * (even a real flat heap prints {@code heapDriftKb:0}, so silently defaulting to it here would be
+     * indistinguishable from that). When false, heap/thread print as-is (a value may legitimately be
+     * ≤ 0, e.g. a heap that shrank) and no {@code driftUnavailable} key appears.
      */
-    private static int fire(String base, String path) {
+    static String summaryJson(long total, double rps, int p50, int p90, int p99, int max, DriftDelta drift,
+            long serverErr, long latViol, boolean driftUnavailable) {
+        String driftJson = driftUnavailable
+                ? "\"driftUnavailable\":true"
+                : "\"heapDriftKb\":" + drift.heapDriftKb + ",\"threadDrift\":" + drift.threadDrift;
+        return String.format(java.util.Locale.ROOT,
+                "{\"load\":{\"requests\":%d,\"throughputRps\":\"%.1f\","
+              + "\"latencyMs\":{\"p50\":%d,\"p90\":%d,\"p99\":%d,\"max\":%d},"
+              + "%s,\"serverErrors\":%d,"
+              // Only latency is threshold-gated in this first cut; heap/thread are reported as drift
+              // above, not as violation counts (see LoadViolations godoc / DD-026 deferred items).
+              + "\"violations\":{\"latency\":%d,\"heap\":0,\"thread\":0}}}",
+                total, rps, p50, p90, p99, max, driftJson, serverErr, latViol);
+    }
+
+    /**
+     * Fire one request — method, body, and session-aware (Task 3) — drain the response, and return the
+     * HTTP status (or -1 on a transport error). A status ≥ 500 is a server error — the availability
+     * signal load mode DOES want (DD-029; the old "measures behavior, not crashes" swallow is why 5xx
+     * were invisible).
+     *
+     * <p>{@code jar} is a per-worker session cookie store, keyed by cookie name (just {@code
+     * JSESSIONID} in practice): it's read to build the request's {@code Cookie} header and written from
+     * the response's {@code Set-Cookie}, so a sequence's later steps see the session its earlier steps
+     * established.
+     */
+    static int fire(String base, RequestLine step, java.util.Map<String, String> jar) {
         HttpURLConnection c = null;
         try {
-            c = (HttpURLConnection) new URL(base + path).openConnection();
+            c = (HttpURLConnection) new URL(base + step.path()).openConnection();
             c.setConnectTimeout(5000);
             c.setReadTimeout(MAX_MS);
             c.setInstanceFollowRedirects(true);
+            try {
+                c.setRequestMethod(step.method());
+            } catch (java.net.ProtocolException pe) {
+                System.err.println("[Basquin] load: unsupported HTTP method " + step.method() + " for " + step.path() + "; not sent");
+                return -1;   // fail loud: do NOT fall through to a silent GET
+            }
+            byte[] bodyBytes = null;
+            if (step.body() != null) {
+                bodyBytes = step.body().getBytes(StandardCharsets.UTF_8);
+                c.setDoOutput(true);
+                c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+            }
+            if (!jar.isEmpty()) {
+                StringBuilder cookieHeader = new StringBuilder();
+                for (java.util.Map.Entry<String, String> e : jar.entrySet()) {
+                    if (cookieHeader.length() > 0) cookieHeader.append("; ");
+                    cookieHeader.append(e.getKey()).append('=').append(e.getValue());
+                }
+                c.setRequestProperty("Cookie", cookieHeader.toString());
+            }
+            if (bodyBytes != null) {
+                try (java.io.OutputStream out = c.getOutputStream()) {
+                    out.write(bodyBytes);
+                }
+            }
             int code = c.getResponseCode();
+            captureSessionCookie(c, jar);
             try (java.io.InputStream in = c.getInputStream()) {
                 byte[] buf = new byte[8192];
                 while (in.read(buf) != -1) { /* drain so the connection can be keep-alive'd */ }
@@ -182,11 +258,35 @@ public final class LoadRun {
             int code = -1;
             if (c != null) {
                 try { code = c.getResponseCode(); } catch (Exception e) { /* keep -1 */ }
+                captureSessionCookie(c, jar);
                 try (java.io.InputStream err = c.getErrorStream()) {
                     if (err != null) { byte[] b = new byte[8192]; while (err.read(b) != -1) {} }
                 } catch (Exception ignored2) { /* drain error stream too, for keep-alive */ }
             }
             return code;
+        }
+    }
+
+    /** Pull {@code JSESSIONID=<value>} out of any {@code Set-Cookie} response headers into {@code jar},
+     *  stripping attributes (Path, HttpOnly, Max-Age, …) at the first {@code ;}. Walks the indexed
+     *  header API (not {@code getHeaderFields().get("Set-Cookie")}) — that map is keyed by the exact
+     *  case the server sent (e.g. JDK's {@code HttpServer} sends {@code Set-cookie}), so an exact-case
+     *  lookup silently misses it. */
+    private static void captureSessionCookie(HttpURLConnection c, java.util.Map<String, String> jar) {
+        for (int i = 0; ; i++) {
+            String key = c.getHeaderFieldKey(i);
+            if (key == null) {
+                if (c.getHeaderField(i) == null) break; // key null only for the status line at index 0
+                continue;
+            }
+            if (!key.equalsIgnoreCase("Set-Cookie")) continue;
+            String sc = c.getHeaderField(i);
+            int eq = sc.indexOf("JSESSIONID=");
+            if (eq == -1) continue;
+            String rest = sc.substring(eq + "JSESSIONID=".length());
+            int semi = rest.indexOf(';');
+            String value = semi == -1 ? rest : rest.substring(0, semi);
+            jar.put("JSESSIONID", value.trim());
         }
     }
 
@@ -221,6 +321,20 @@ public final class LoadRun {
         return new DriftDelta(last.heapKb - first.heapKb, last.threads - first.threads);
     }
 
+    /**
+     * DD-035 review fix: whether the drift value about to be reported (fed to {@link #driftDelta}) is a
+     * FABRICATED zero rather than a real measurement. {@link #driftDelta} silently degrades to
+     * {@code (0, 0)} when EITHER sample is missing — so driftUnavailable must be true whenever either
+     * side of the delta is missing, not just the one-time baseline. The original bug checked only
+     * {@code baselineOk}/{@code baseline}: a baseline that landed fine followed by a LATER poll failure
+     * (the {@code sample} argument here — the current live poll or the terminal poll) still reported
+     * {@code driftUnavailable=false} with a fabricated {@code heapDriftKb:0}/{@code threadDrift:0} — the
+     * exact false-negative DD-035 exists to prevent. Package-private so it's directly unit-testable.
+     */
+    static boolean driftUnavailable(boolean baselineOk, Drift baseline, Drift sample, boolean modeConfirmed) {
+        return !baselineOk || baseline == null || sample == null || !modeConfirmed;
+    }
+
     /** Poll the target's absolute drift snapshot; null if unreachable. */
     private static Drift pollDrift(String base) {
         try {
@@ -234,36 +348,62 @@ public final class LoadRun {
         }
     }
 
-    /** Toggle the target's valve into/out of load mode over its own HTTP port; best-effort. */
-    private static void setTargetMode(String base, String to, long ttlMs) {
+    /**
+     * Toggle the target's valve into/out of load mode over its own HTTP port; best-effort. Returns
+     * whether the target confirmed LOAD mode specifically — {@code true} iff the response body is
+     * exactly {@code "ok:load"} (the token {@link agent.LoadModeControl#handle} returns for
+     * {@code to=load}) — regardless of what {@code to} was requested here, so a caller toggling
+     * "explore" simply gets {@code false} back (it doesn't care). Logs one line when the response
+     * doesn't match what THIS request asked for (mismatch or transport failure) — not silent.
+     */
+    static boolean setTargetMode(String base, String to, long ttlMs) {
+        String expected = "ok:" + to;
         try {
             String q = "to=" + to + (ttlMs > 0 ? "&ttlMs=" + ttlMs : "");
             HttpURLConnection c = (HttpURLConnection) new URL(base + "/__basquin/mode?" + q).openConnection();
             c.setRequestMethod("POST"); c.setConnectTimeout(3000); c.setReadTimeout(3000);
             c.getResponseCode();
-            try (java.io.InputStream in = c.getInputStream()) { in.readAllBytes(); }
+            String body;
+            try (java.io.InputStream in = c.getInputStream()) {
+                body = new String(in.readAllBytes(), StandardCharsets.UTF_8).trim();
+            }
+            if (!expected.equals(body)) {
+                System.err.println("[Basquin] load: mode " + to + " toggle not confirmed (got \"" + body + "\")");
+            }
+            return "ok:load".equals(body);
         } catch (Exception e) {
             System.err.println("[Basquin] load: mode " + to + " toggle failed (" + e + ")");
+            return false;
         }
     }
 
-    /** Route lines (start with '/') from every file under the corpus dir (the mounted replay corpus). */
-    static List<String> readCorpus(String dir) {
-        List<String> routes = new ArrayList<>();
-        if (dir == null || dir.isEmpty()) return routes;
+    /**
+     * Route sequences from every file under the corpus dir (the mounted replay corpus). A line is kept
+     * iff its FIRST STEP's path starts with '/' ({@link RequestLine#firstPath(String)}) — this excludes
+     * grammar value files (e.g. {@code values/keyword.txt}, one bare token like {@code cat} per line)
+     * while still keeping v2 sequences whose first token is an HTTP method (e.g.
+     * {@code "POST /actions/Account.action?signon= u=j2ee"}), which a raw {@code startsWith("/")} check
+     * on the line itself would incorrectly drop.
+     */
+    static List<List<RequestLine>> readCorpus(String dir) {
+        List<List<RequestLine>> sequences = new ArrayList<>();
+        if (dir == null || dir.isEmpty()) return sequences;
         java.nio.file.Path root = Paths.get(dir);
-        if (!Files.isDirectory(root)) return routes;
+        if (!Files.isDirectory(root)) return sequences;
         try (java.util.stream.Stream<java.nio.file.Path> s = Files.walk(root)) {
             for (java.nio.file.Path p : s.filter(Files::isRegularFile).collect(java.util.stream.Collectors.toList())) {
                 for (String line : new String(Files.readAllBytes(p), StandardCharsets.UTF_8).split("\n")) {
                     String t = line.trim();
-                    if (t.startsWith("/")) routes.add(t);
+                    if (t.isEmpty()) continue;
+                    if (RequestLine.firstPath(t).startsWith("/")) {
+                        sequences.add(RequestLine.parseSequence(t));
+                    }
                 }
             }
         } catch (Exception e) {
             System.err.println("[Basquin] load: failed reading corpus " + dir + ": " + e);
         }
-        return routes;
+        return sequences;
     }
 
     /** The p-th percentile latency (ms) from the histogram, or 0 if no samples. Package-private for tests. */

@@ -382,7 +382,11 @@ YAML
   ccorpus="$($K -n "$NS" get basquincampaign jpetstore-campaign -o jsonpath='{.status.corpusConfigMap}' 2>/dev/null || true)"
   ccount=0; cowner2=""
   if [ -n "$ccorpus" ]; then
-    ccount="$($K -n "$NS" get configmap "$ccorpus" -o jsonpath='{.data.corpus\.txt}' 2>/dev/null | grep -c '^/' || true)"
+    # DD-035: a route line can be a v1 bare path ("/foo"), a method-prefixed single step
+    # ("POST /foo body"), or a TAB-separated sequence whose FIRST field is either of those — in every
+    # case the line itself starts with either '/' or an HTTP method token, so this pattern counts all
+    # three shapes without needing to split on TAB here.
+    ccount="$($K -n "$NS" get configmap "$ccorpus" -o jsonpath='{.data.corpus\.txt}' 2>/dev/null | grep -cE '^([A-Z]+ )?/' || true)"
     cowner2="$($K -n "$NS" get configmap "$ccorpus" -o jsonpath='{.metadata.ownerReferences[0].kind}' 2>/dev/null || true)"
   fi
   check "campaign emitted status.corpusConfigMap"            "echo '$ccorpus' | grep -q 'jpetstore-campaign-corpus-out'"
@@ -437,9 +441,23 @@ spec:
     corpusConfigMap: ${ccorpus}
 YAML
     lphase=""
+    # DD-035: while the campaign is confirmed Running — comfortably inside the 45s duration, well past
+    # driver Job build/startup — sample /__basquin/drift over the app's Service cluster-DNS name (the
+    # SAME route the driver itself polls, not localhost-in-pod like the DD-030 check above), captured
+    # exactly ONCE. This proves drift is actually SAMPLED DURING the run, not just recoverable after the
+    # fact from a log line — assert sampled-ness (200 + a parseable body) below, not drift>0 (GC can
+    # legitimately make drift <= 0).
+    lmidcode=""; lmidbody=""; lmidsampled="no"
     for i in $(seq 1 60); do   # 45s run + build/startup
       lphase="$($K -n "$NS" get basquincampaign jpetstore-load -o jsonpath='{.status.phase}' 2>/dev/null || true)"
       case "$lphase" in Completed|Failed) break;; esac
+      if [ "$lphase" = "Running" ] && [ "$lmidsampled" = "no" ] && [ -n "$apod" ]; then
+        lmidcode="$($K -n "$NS" exec "$apod" -c jpetstore -- sh -c \
+          "curl -s -o /dev/null -w '%{http_code}' http://jpetstore-app.${NS}.svc.cluster.local:8080/__basquin/drift" 2>/dev/null || true)"
+        lmidbody="$($K -n "$NS" exec "$apod" -c jpetstore -- sh -c \
+          "curl -s http://jpetstore-app.${NS}.svc.cluster.local:8080/__basquin/drift" 2>/dev/null || true)"
+        lmidsampled="yes"
+      fi
       sleep 3
     done
     lreq="$($K -n "$NS" get basquincampaign jpetstore-load -o jsonpath='{.status.load.requests}' 2>/dev/null || true)"
@@ -457,6 +475,27 @@ YAML
     check "load run reported throughput + p99 latency"         "[ -n '$lrps' ] && [ -n '$lp99' ]"
     check "load driver Job has NO coverage initContainers"     "echo ':$linit:' | grep -qv extract-classes"
     echo "  (load: requests=${lreq:-<none>}, throughputRps=${lrps:-<none>}, p99=${lp99:-<none>}ms)"
+
+    # DD-035: honest drift, in two independent ways.
+    # (a) mid-run, in-cluster, over Service DNS (sampled above while lphase was still Running): assert
+    #     it was SAMPLED (200 + a parseable "heapKb,threads,epochMs" body), not that drift>0 — a healthy
+    #     GC pause can legitimately shrink heap between samples.
+    check "DD-035: mid-run drift sample returned HTTP 200 over Service DNS" "[ '$lmidcode' = '200' ]"
+    check "DD-035: mid-run drift sample was a parseable CSV body"          "echo '$lmidbody' | grep -qE '^[0-9]+,[0-9]+,[0-9]+$'"
+    echo "  (mid-run drift: sampled=$lmidsampled, http=${lmidcode:-<none>}, body=${lmidbody:-<none>})"
+
+    # (b) the driver's own terminal accounting agrees: its mode toggle to load was never logged as
+    #     failed, and its "[Basquin] load done: {...}" JSON never carries "driftUnavailable":true — i.e.
+    #     it never had to fall back to a fabricated heapDriftKb:0. There is no status.load.driftUnavailable
+    #     CRD field (driftUnavailable only ever appears in this log line), so this must be a Job-log grep,
+    #     not a kubectl jsonpath query.
+    ldlog="$(mktemp)"; $K -n "$NS" logs "job/$ljob" > "$ldlog" 2>/dev/null || true
+    ltogglefail="$(grep -c 'mode load toggle failed' "$ldlog" || true)"
+    ldriftunavail="$(grep '\[Basquin\] load done:' "$ldlog" | grep -c '"driftUnavailable":true' || true)"
+    check "DD-035: driver's mode-load toggle was NOT logged as failed"    "[ '${ltogglefail:-0}' = '0' ]"
+    check "DD-035: driver's terminal summary did NOT report driftUnavailable" "[ '${ldriftunavail:-0}' = '0' ]"
+    echo "  (driver log: toggle-fail-lines=${ltogglefail:-0}, driftUnavailable-lines=${ldriftunavail:-0})"
+    rm -f "$ldlog"
 
     # DD-033: the load campaign's own per-campaign dashboard (jpetstore-load-dashboard, same
     # naming/token scheme as the explore dashboard asserted below) received a mode:load push with a

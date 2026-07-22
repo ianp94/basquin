@@ -2,7 +2,9 @@
 
 **Status:** **accepted and implemented (DD-026)** — shipped as two PRs (producer: corpus persisted
 to a ConfigMap; consumer: `runner.coverage.LoadRun` + `spec.mode: load`) behind a `spec.mode` field
-on the existing `BasquinCampaign`. Extends [CAMPAIGN-DESIGN.md](CAMPAIGN-DESIGN.md) (DD-025).
+on the existing `BasquinCampaign`. Extends [CAMPAIGN-DESIGN.md](CAMPAIGN-DESIGN.md) (DD-025). §9 below
+covers **DD-035** ("honest load"): corpus format v2 (method/session/sequence-aware replay) and the
+`driftUnavailable` signal, which replaced PR 2's method-unaware replay + silent-zero-drift behavior.
 
 Two crux decisions are **already settled** (user, 2026-07-20):
 - **A `mode: explore | load` field on `BasquinCampaign`** — *not* a separate `BasquinLoadTest`
@@ -205,3 +207,56 @@ follow-on load run replays it and reports throughput/latency/drift).
   ~1 MB.
 - **Load bound by iterations instead of duration** — soak testing is inherently time-based (watch
   drift *over time*); `concurrency` × `duration` is the natural knob. `iterations` stays explore-only.
+
+## 9. Corpus format v2 + drift honesty (DD-035)
+
+PR 2 shipped a **method-unaware** replay: every corpus line was fired as a bare `GET <line>`, no body,
+no cookies. Against jpetstore that meant every `POST /actions/...` route the explore run had discovered
+(logins, cart mutations, checkout) replayed under load as a `GET` — mostly 404/405/redirect-loop noise,
+not the real endpoint. Enough of that traffic under `concurrency: 50` **saturated the target** (5xx +
+timeouts), which in turn **starved the `/__basquin/drift` poller** (the same HTTP client competing for
+the target's request-handling threads), and the driver's `driftDelta()` silently degraded a missing
+poll to a zero delta — reporting `heapDriftKb:0` for a run whose heap was, in truth, never actually
+sampled. A fabricated "no drift" is worse than no number at all. **DD-035 fixes both ends**: the replay
+itself becomes honest (method, body, session), and the reported numbers become honest about when a
+measurement didn't happen. See DD-035 in [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) for the full
+record; this section is the corpus-format reference.
+
+**Corpus format v2** (`RequestLine`/`RequestLine.parseSequence`), backward-compatible with every v1
+corpus already on disk or in a ConfigMap:
+
+- **A step** is `METHOD? path( SP body )?` — an optional HTTP method token (`GET`, `POST`, `PUT`,
+  `DELETE`, `PATCH`, `HEAD`; first space-delimited token, else it's not a method and the whole line is
+  treated as a bare path), then the path, then an optional space-separated body (form-encoded, sent
+  with `Content-Type: application/x-www-form-urlencoded` when present). A bare `/actions/foo` (no
+  method token) is still `GET /actions/foo` — **v1 lines parse identically under v2**.
+- **A line** is either **one step** or a **TAB-separated sequence of steps**, replayed **in order** as
+  one logical user flow (e.g. `POST /actions/Account.action?signon= u=j2ee\tGET /actions/Cart.action`).
+  TAB is the separator specifically because it can't appear in a URL or an urlencoded form body, so it
+  never collides with real request content.
+- **Corpus-file filtering** (`readCorpus`) keeps a line iff its **first step's** path starts with `/`
+  (`RequestLine.firstPath`) — this is what lets a v2 sequence whose line literally starts with `POST `
+  still get recognized as a route line (not a grammar value file, e.g. `values/keyword.txt`'s one bare
+  token per line), without a naive `line.startsWith("/")` incorrectly dropping it.
+
+**Whole-sequence replay.** A worker picks a random sequence from the corpus and fires **every step in
+order**, not one route at a time — the unit of replay is the flow, not the request. A step is skipped
+only if the run's deadline arrives mid-sequence (checked before each step, not just once per outer
+loop), so a worker never overshoots the configured duration mid-flow.
+
+**Per-worker session.** Each load worker owns one cookie jar (`Map<String,String>`, keyed by cookie
+name — `JSESSIONID` in practice) for its **entire run**: the `Set-Cookie` a step 1 login response
+sends is captured and replayed as the `Cookie` header on every later step of every later sequence that
+worker fires, so an authenticated flow (login → cart → checkout) actually replays authenticated, the
+way a real session would exercise it. Sessions are **not shared across workers** — one cookie jar per
+worker thread, deliberately, so the discovered corpus explores as many independent sessions as
+`concurrency` allows rather than serializing on one.
+
+**The `driftUnavailable` signal.** `status.load`/the terminal `[Basquin] load done: {...}` JSON now
+carries either a real `heapDriftKb`/`threadDrift` pair, **or** `"driftUnavailable":true` — never a
+fabricated `heapDriftKb:0` standing in for "couldn't measure it." `driftUnavailable` is `true` whenever
+ANY of: the baseline drift poll never landed, the terminal/current drift poll came back null, or the
+target never explicitly confirmed load mode (`ok:load` from `/__basquin/mode`) — i.e. any condition
+under which the reported delta would otherwise silently be `(0, 0)`. When `driftUnavailable` is
+present, `heapDriftKb`/`threadDrift` are **omitted from the JSON entirely** (not printed as `0`) so a
+dashboard/CLI reading the summary can't mistake "unavailable" for "flat."

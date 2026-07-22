@@ -55,7 +55,7 @@ cd basquin
 ./gradlew build
 
 <span class="c"># build the fat jar (agent + runner + examples)</span>
-./gradlew jar   <span class="c"># -> build/libs/basquin-0.2.0.jar</span></code></pre>
+./gradlew jar   <span class="c"># -> build/libs/basquin-0.3.0.jar</span></code></pre>
 
   <h2>2 &nbsp;See a leak get caught</h2>
   <p>The fastest way to see the point of the tool: run the deliberate thread-leak demo. It
@@ -109,7 +109,7 @@ public class YourTarget implements IterationTarget {
   public void executeIteration() throws Exception { <span class="c">/* one request / unit of work */</span> }
   public void close()            throws Exception { <span class="c">/* cleanup */</span> }
 }</code></pre>
-  <pre><code>java -cp build/libs/basquin-0.2.0.jar:&lt;your-cp&gt; \
+  <pre><code>java -cp build/libs/basquin-0.3.0.jar:&lt;your-cp&gt; \
   runner.GenericRunner 100 your.pkg.YourTarget</code></pre>
 
   <h2>Key flags</h2>

@@ -111,15 +111,18 @@ public final class LoadRun {
                 java.util.Map<String, String> jar = new java.util.HashMap<>();
                 while (System.nanoTime() < deadlineNanos) {
                     Seq seq = corpus.get(rnd.nextInt(corpus.size()));
-                    // DD-036: only a correlated sequence pays for a bindings map — an uncorrelated one
-                    // takes the identical no-alloc path as before this feature.
-                    java.util.Map<String, String> bindings = seq.correlated() ? new java.util.HashMap<>(4) : null;
+                    // DD-036: only a correlated sequence pays for a bindings map AND the per-step
+                    // substitution scan — an uncorrelated one takes the identical no-alloc, no-scan
+                    // path as before this feature (correlated == anyMatch(needsSubstitution), so an
+                    // uncorrelated seq can have no substitutable step to skip anyway).
+                    boolean correlated = seq.correlated();
+                    java.util.Map<String, String> bindings = correlated ? new java.util.HashMap<>(4) : null;
                     for (RequestLine step : seq.steps()) {
                         // A long sequence must not run past the deadline: check BEFORE firing each step,
                         // not just at the outer loop, so a worker can't overshoot the window mid-sequence.
                         if (System.nanoTime() >= deadlineNanos) break;
                         RequestLine toFire = step;
-                        if (step.needsSubstitution()) {
+                        if (correlated && step.needsSubstitution()) {
                             String b = substitute(step.body(), bindings);
                             if (b == null) {
                                 if (System.nanoTime() >= measureFromNanos) captureMisses.incrementAndGet();

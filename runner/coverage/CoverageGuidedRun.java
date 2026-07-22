@@ -475,14 +475,29 @@ public final class CoverageGuidedRun {
         static final CostSample EMPTY = new CostSample(0, 0, 0);
     }
 
-    private static CostSample request(String base, String path) throws Exception {
-        HttpURLConnection c = (HttpURLConnection) new URL(base + path).openConnection();
+    static CostSample request(String base, String step) throws Exception {
+        RequestLine r = RequestLine.parse(step);
+        HttpURLConnection c = (HttpURLConnection) new URL(base + r.path()).openConnection();
         c.setConnectTimeout(2000);
         c.setReadTimeout(10000);
-        c.setRequestMethod("GET");
+        try {
+            c.setRequestMethod(r.method());
+        } catch (java.net.ProtocolException pe) {
+            System.err.println("[Basquin] explore: unsupported HTTP method " + r.method()
+                    + " for " + r.path() + "; not sent");
+            return CostSample.EMPTY;   // fail loud: do NOT fall through to a silent GET
+        }
         c.setInstanceFollowRedirects(true);
         if (sessionCookie != null) {
             c.setRequestProperty("Cookie", sessionCookie);
+        }
+        if (r.body() != null) {
+            byte[] bodyBytes = r.body().getBytes(StandardCharsets.UTF_8);
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+            try (java.io.OutputStream out = c.getOutputStream()) {
+                out.write(bodyBytes);
+            }
         }
         int code = c.getResponseCode();
         // Capture/refresh JSESSIONID so subsequent requests stay in the same session.
@@ -500,8 +515,8 @@ public final class CoverageGuidedRun {
         if (inv != null) {
             try { invCount = Integer.parseInt(inv.trim()); } catch (NumberFormatException ignored) {}
             String detail = c.getHeaderField("X-Basquin-Invariant-Detail");
-            FuzzIO.saveWithMeta(path.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
-                    "route=" + path + "\ncount=" + inv + (detail != null ? "\ndetail=" + detail : ""));
+            FuzzIO.saveWithMeta(step.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
+                    "route=" + step + "\ncount=" + inv + (detail != null ? "\ndetail=" + detail : ""));
         }
         long heapKb = 0; int threadDelta = 0;
         String costHdr = c.getHeaderField("X-Basquin-Cost");  // "latencyMs,heapDeltaKb,threadDelta"
@@ -515,16 +530,16 @@ public final class CoverageGuidedRun {
         InputStream is = code >= 400 ? c.getErrorStream() : c.getInputStream();
         StringBuilder body = new StringBuilder();
         if (is != null) {
-            try (BufferedReader r = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
                 String line;
-                while ((line = r.readLine()) != null) {
+                while ((line = br.readLine()) != null) {
                     // Keep the body only for server errors — that's where the app's own stack is.
                     if (code >= 500 && body.length() < 16384) body.append(line).append('\n');
                 }
             }
         }
         if (code >= 500) {
-            throw serverError(code, path, body.toString());
+            throw serverError(code, step, body.toString());
         }
         return new CostSample(heapKb, threadDelta, invCount);
     }

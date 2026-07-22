@@ -62,8 +62,20 @@ helm install basquin basquin/basquin-operator \
   --namespace basquin-system --create-namespace --set fullnameOverride=basquin
 ```
 
-Then drive it with the `basquin` CLI ([release binaries](https://github.com/ianp94/basquin/releases)
-for linux/macOS/Windows × amd64/arm64):
+Then drive it with the `basquin` CLI. Install it any of these ways:
+
+```bash
+# a) Download a release binary — linux/macOS/Windows × amd64/arm64.
+#    Swap the suffix for your platform: basquin-{linux,darwin,windows}-{amd64,arm64}(.exe)
+curl -sSL -o basquin https://github.com/ianp94/basquin/releases/latest/download/basquin-linux-amd64
+chmod +x basquin && sudo mv basquin /usr/local/bin/basquin
+#    (each release also ships checksums.txt to verify against)
+
+# b) go install — pure Go, nothing to package.
+go install github.com/ianp94/basquin/operator/cmd/basquin@latest
+```
+
+Snap (Ubuntu) is planned — see the roadmap in `TODO.md`. Then:
 
 ```bash
 # 1. Instrument a running app — no rebuild, no image changes.

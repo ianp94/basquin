@@ -343,6 +343,29 @@ scrapes `mode`, and the CLI status table is mode-aware. e2e-asserted in-cluster
 - Ties in: **clustered runners** (aggregating load across N runners — merge histograms/t-digests, don't
   average percentiles) and the **pheromone/cost** work (load is where cost-concentration shows up).
 
+### Snap packaging for the `basquin` CLI *(roadmap, user 2026-07-21)*
+The CLI is pure Go (`operator/cmd/basquin`, `CGO_ENABLED=0`) → the easiest case to snap: a static
+binary, no runtime deps. The one real decision is **confinement**, driven by the CLI reading
+`~/.kube/config` (`dashboard.go`/`kube.go`/`instrument.go`): strict confinement's `home` interface
+excludes hidden dot-dirs, so a strict snap can't read kubeconfig. Options: (1) **classic** confinement
+— what kubectl/helm/k9s do; needs a `store-requests` forum approval (routinely granted for kubectl-like
+tools, ~days–weeks); (2) strict + a `personal-files` plug scoped to `$HOME/.kube` (privileged; also
+needs approval + auto-connect); (3) strict `home`+`network` only — publishable immediately, but users
+must pass `--kubeconfig` at a non-hidden path (poor UX). **Go with classic** (ecosystem convention).
+
+- [ ] Register the name early (`snapcraft register basquin` — globally unique, first-come) + accounts.
+- [ ] Write `snap/snapcraft.yaml`: base `core24`, `plugin: go`, `source: operator/`, `override-build`
+  = `CGO_ENABLED=0 go build -o $CRAFT_PART_INSTALL/bin/basquin ./cmd/basquin`, `confinement: classic`,
+  `adopt-info`/version.
+- [ ] **File the classic-confinement `store-requests` forum post FIRST** — it's the long pole (~days–weeks).
+- [ ] Build/test: `snapcraft` via LXD, or `snapcraft remote-build` (Launchpad, amd64+arm64 in one shot —
+  likely needed under WSL2); `sudo snap install ./basquin_*.snap --dangerous --classic`; then
+  `snapcraft upload --release=stable`.
+- [ ] Automate in `release.yml`: `snapcraft export-login` → `SNAPCRAFT_STORE_CREDENTIALS` secret →
+  `snapcore/action-build` + `action-publish` on each tag (edge/candidate from `main` for pre-release).
+- Install UX: classic snaps install with `sudo snap install basquin --classic` (plain `snap install` is
+  strict-only). Ties to the CLI-install-methods docs (`go install` + curl one-liner shipped in the README).
+
 ### Optional OTLP metrics export — off by default, alongside the dashboard *(roadmap, user 2026-07-21)*
 DD-033 types every load/explore signal in OTel-native terms (histogram/counter/gauge, stable names,
 units, attributes — `docs/DESIGN-DECISIONS.md`) but ships no exporter. The next step: an **optional**

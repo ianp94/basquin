@@ -489,11 +489,23 @@ public final class CoverageGuidedRun {
      * recorded as a finding but does not abort the sequence — later steps may still reach code,
      * and stopping early would hide it.
      */
-    private static void runSequence(String baseUrl, List<String> steps) {
+    static void runSequence(String baseUrl, List<String> steps) {
+        java.util.Map<String, String> bindings = new java.util.HashMap<>();
         for (String step : steps) {
+            RequestLine r = RequestLine.parse(step);
+            if (r.needsSubstitution()) {
+                String b = LoadRun.substitute(r.body(), bindings);
+                if (b == null) {
+                    // A required ${{name}} never bound (its capture step didn't match / didn't run):
+                    // skip firing rather than send a literal ${{...}} the app can't use.
+                    System.err.println("[Basquin] explore: unresolved correlation ref in " + r.format() + "; step skipped");
+                    continue;
+                }
+                r = new RequestLine(r.method(), r.path(), b, r.capture());
+            }
             Agent.beginIteration();
             try {
-                request(baseUrl, step);
+                request(baseUrl, r, bindings);
             } catch (Throwable t) {
                 StatusReporter.recordCrash();
                 FuzzIO.saveInteresting(step.getBytes(StandardCharsets.UTF_8), t);
@@ -534,7 +546,19 @@ public final class CoverageGuidedRun {
     }
 
     static CostSample request(String base, String step) throws Exception {
-        RequestLine r = RequestLine.parse(step);
+        return request(base, RequestLine.parse(step), null);
+    }
+
+    /**
+     * Task 5 (DD-036) overload: same as {@link #request(String, String)} but takes an
+     * already-parsed {@link RequestLine} (parse-once, so {@link #runSequence} doesn't reparse
+     * after substitution) and, when {@code r.capture()} is non-null and {@code bindings} is
+     * non-null, also retains the response body and runs {@link Capture#extract} against it,
+     * recording a new binding on success — mirroring {@link LoadRun#fire}'s capture branch,
+     * including its {@code bindings != null} guard (required: the 2-arg path above passes null).
+     */
+    static CostSample request(String base, RequestLine r, java.util.Map<String, String> bindings) throws Exception {
+        String label = r.format();
         HttpURLConnection c = (HttpURLConnection) new URL(base + r.path()).openConnection();
         c.setConnectTimeout(2000);
         c.setReadTimeout(10000);
@@ -573,8 +597,8 @@ public final class CoverageGuidedRun {
         if (inv != null) {
             try { invCount = Integer.parseInt(inv.trim()); } catch (NumberFormatException ignored) {}
             String detail = c.getHeaderField("X-Basquin-Invariant-Detail");
-            FuzzIO.saveWithMeta(step.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
-                    "route=" + step + "\ncount=" + inv + (detail != null ? "\ndetail=" + detail : ""));
+            FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
+                    "route=" + label + "\ncount=" + inv + (detail != null ? "\ndetail=" + detail : ""));
         }
         long heapKb = 0; int threadDelta = 0;
         String costHdr = c.getHeaderField("X-Basquin-Cost");  // "latencyMs,heapDeltaKb,threadDelta"
@@ -591,13 +615,24 @@ public final class CoverageGuidedRun {
             try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = br.readLine()) != null) {
-                    // Keep the body only for server errors — that's where the app's own stack is.
-                    if (code >= 500 && body.length() < 16384) body.append(line).append('\n');
+                    // Keep the body for server errors (the app's own stack) OR — DD-036 — for a
+                    // capture step, so Capture.extract has something to search; still capped, and
+                    // draining continues to EOF regardless so keep-alive is preserved either way.
+                    if ((code >= 500 && body.length() < 16384)
+                            || (r.capture() != null && bindings != null && code < 500 && body.length() < 262144)) {
+                        body.append(line).append('\n');
+                    }
                 }
             }
         }
+        if (r.capture() != null && bindings != null && code < 500) {
+            String val = r.capture().extract(c::getHeaderField, body.toString());
+            if (val != null) {
+                bindings.put(r.capture().name(), val);
+            }
+        }
         if (code >= 500) {
-            throw serverError(code, step, body.toString());
+            throw serverError(code, label, body.toString());
         }
         return new CostSample(heapKb, threadDelta, invCount);
     }

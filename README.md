@@ -243,7 +243,7 @@ Details and the "why" behind each choice: [ARCHITECTURE](docs/ARCHITECTURE.md) �
 
 Named for **Olin Hanson Basquin**, whose 1910 paper *The Exponential Law of Endurance Tests* gave
 materials science **Basquin's law** — the relationship between the stress placed on a material and
-the number of load cycles it survives before it fatigues and fails (`σₐ = σ′f · (2·N_f)ᵇ`, the shape
+the number of load cycles it survives before it fatigues and fails (`σ_a = σ'_f · (2·N_f)^b`, the shape
 of the S–N curve).
 
 Basquin measured metal. Basquin measures your JVM: it applies cyclic stress — load and fuzz — and

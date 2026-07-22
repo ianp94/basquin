@@ -44,7 +44,7 @@ public record Capture(String name, Kind kind, String arg) {
 
     /** Inverse of {@link #parse(String)}. */
     public String format() {
-        return "<<" + name + "=" + kind.name().toLowerCase() + ":" + arg;
+        return "<<" + name + "=" + kind.name().toLowerCase(java.util.Locale.ROOT) + ":" + arg;
     }
 
     /**
@@ -63,12 +63,11 @@ public record Capture(String name, Kind kind, String arg) {
         // INPUT
         if (body == null) return null;
         Pattern namePattern = Pattern.compile("name\\s*=\\s*([\"'])" + Pattern.quote(arg) + "\\1");
-        Pattern valuePattern = Pattern.compile("value\\s*=\\s*([\"'])(.*?)\\1");
         Matcher tagMatcher = INPUT_TAG_PATTERN.matcher(body);
         while (tagMatcher.find()) {
             String tag = tagMatcher.group();
             if (!namePattern.matcher(tag).find()) continue;
-            Matcher valueMatcher = valuePattern.matcher(tag);
+            Matcher valueMatcher = VALUE_PATTERN.matcher(tag);
             if (!valueMatcher.find()) continue;
             return CoverageGuidedRun.unescapeHtml(valueMatcher.group(2));
         }
@@ -76,4 +75,5 @@ public record Capture(String name, Kind kind, String arg) {
     }
 
     private static final Pattern INPUT_TAG_PATTERN = Pattern.compile("<input\\b[^>]*>");
+    private static final Pattern VALUE_PATTERN = Pattern.compile("value\\s*=\\s*([\"'])(.*?)\\1");
 }

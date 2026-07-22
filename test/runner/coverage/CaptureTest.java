@@ -87,4 +87,21 @@ public class CaptureTest {
         Function<String, String> lookup = h -> null;
         assertNull(c.extract(lookup, "irrelevant body"));
     }
+
+    @Test public void multiInputPicksMatchingTagsValue() {
+        Capture c = Capture.parse("<<t=input:X-XSRF-TOKEN");
+        String body = "<input name=\"other\" value=\"WRONG\"><input name=\"X-XSRF-TOKEN\" value=\"RIGHT\">";
+        assertEquals("RIGHT", c.extract(h -> null, body));
+    }
+
+    @Test public void nameSubstringDoesNotFalseMatch() {
+        Capture c = Capture.parse("<<t=input:X-XSRF-TOKEN");
+        String body = "<input name=\"X-XSRF-TOKEN-2\" value=\"NO\">";
+        assertNull(c.extract(h -> null, body));
+
+        // Reverse: searching for TOKEN shouldn't match X-XSRF-TOKEN
+        Capture c2 = Capture.parse("<<t=input:TOKEN");
+        String body2 = "<input name=\"X-XSRF-TOKEN\" value=\"NO\">";
+        assertNull(c2.extract(h -> null, body2));
+    }
 }

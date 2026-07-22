@@ -8,6 +8,11 @@ import java.util.stream.Collectors;
 public record RequestLine(String method, String path, String body, List<Capture> captures) {
     private static final Set<String> METHODS = Set.of("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD");
 
+    // Never let captures be null — callers do step.captures().isEmpty()/iterate it unconditionally.
+    public RequestLine {
+        if (captures == null) captures = List.of();
+    }
+
     public RequestLine(String method, String path, String body) {
         this(method, path, body, List.of());
     }

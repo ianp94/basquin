@@ -30,6 +30,23 @@ public class RequestLineV3Test {
         assertTrue(seq.get(1).needsSubstitution());
     }
 
+    @Test public void parsesThreeTrailingCapturesInSourceOrderAndRoundTrips() {
+        String line = "/Edit.jsp?page=Main <<a=input:X <<b=header:Set-Cookie <<c=inputpair:[a-z]{6}=-?[0-9]+";
+        RequestLine r = RequestLine.parse(line);
+        assertEquals("/Edit.jsp?page=Main", r.path());
+        assertEquals(3, r.captures().size());
+        assertEquals("a", r.captures().get(0).name());
+        assertEquals("b", r.captures().get(1).name());
+        assertEquals("c", r.captures().get(2).name());
+        assertEquals(Capture.Kind.INPUTPAIR, r.captures().get(2).kind());
+        assertEquals(line, r.format());   // 3-capture round-trip
+    }
+
+    @Test public void nullCapturesListNormalizedToEmpty() {
+        RequestLine r = new RequestLine("GET", "/x", null, null);
+        assertTrue(r.captures().isEmpty());   // compact ctor guards against a null list
+    }
+
     @Test public void v2LineHasNullCaptureAndByteIdenticalFormat() {
         String line = "POST /actions/Account.action?signon= username=j2ee&password=j2ee";
         RequestLine r = RequestLine.parse(line);

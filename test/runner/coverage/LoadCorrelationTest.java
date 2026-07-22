@@ -44,13 +44,13 @@ public class LoadCorrelationTest {
     }
 
     @Test
-    public void substituteUrlEncodesPlusAndEqualsInBoundValue() {
-        Map<String, String> bindings = new HashMap<>();
-        bindings.put("csrf", "a+b=c");
+    public void extractUrlEncodesPlusAndEquals() {
+        // DD-037 model A: encoding responsibility moved from LoadRun.substitute into Capture.extract.
+        Capture x = Capture.parse("<<x=input:F");
 
-        String out = LoadRun.substitute("X-XSRF-TOKEN=${{csrf}}&page=Main", bindings);
+        String extracted = x.extract(h -> null, "<input name=\"F\" value=\"a+b=c\">");
 
-        assertEquals("X-XSRF-TOKEN=a%2Bb%3Dc&page=Main", out);
+        assertEquals("a%2Bb%3Dc", extracted);
     }
 
     @Test
@@ -84,7 +84,7 @@ public class LoadCorrelationTest {
         base = "http://127.0.0.1:" + server.getAddress().getPort();
 
         Capture csrf = Capture.parse("<<csrf=input:X-XSRF-TOKEN");
-        RequestLine step1 = new RequestLine("GET", "/login", null, csrf);
+        RequestLine step1 = new RequestLine("GET", "/login", null, List.of(csrf));
         RequestLine step2 = RequestLine.parse("POST /submit X-XSRF-TOKEN=${{csrf}}&page=Main");
 
         Map<String, String> jar = new HashMap<>();
@@ -97,7 +97,7 @@ public class LoadCorrelationTest {
         String substituted = LoadRun.substitute(step2.body(), bindings);
         assertEquals("X-XSRF-TOKEN=tok123&page=Main", substituted);
 
-        RequestLine toFire = new RequestLine(step2.method(), step2.path(), substituted, step2.capture());
+        RequestLine toFire = new RequestLine(step2.method(), step2.path(), substituted, step2.captures());
         int code2 = LoadRun.fire(base, toFire, jar, bindings);
 
         assertEquals(200, code2);
@@ -117,7 +117,7 @@ public class LoadCorrelationTest {
         base = "http://127.0.0.1:" + server.getAddress().getPort();
 
         Capture csrf = Capture.parse("<<csrf=input:X-XSRF-TOKEN");
-        RequestLine step1 = new RequestLine("GET", "/login", null, csrf);
+        RequestLine step1 = new RequestLine("GET", "/login", null, List.of(csrf));
         RequestLine step2 = RequestLine.parse("POST /submit X-XSRF-TOKEN=${{csrf}}&page=Main");
 
         Map<String, String> jar = new HashMap<>();

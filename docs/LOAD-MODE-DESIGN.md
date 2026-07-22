@@ -278,3 +278,11 @@ responses), so a broken correlation shows up as a number instead of silently deg
 DD-036 in [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) for the full record, including the rejected
 alternatives (a full HTML parser, JSON-lines, recording live tokens, automatic CSRF forwarding,
 capture-once caching across executions).
+
+## 11. Corpus format v3.1 — dynamic-name pairs + multi-capture (DD-037)
+
+**Corpus format v3.1** adds an `inputpair` capture kind — a regex-selected whole `name=value`
+form-input pair, for randomized-name anti-CSRF/spam fields like JSPWiki's SpamFilter hash — and lets a
+step carry more than one capture, so a single response can bind several downstream references. Both are
+backward-compatible with v1/v2/v3. See DD-037 in [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) for the full
+record.

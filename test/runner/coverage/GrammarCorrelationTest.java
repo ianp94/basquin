@@ -79,4 +79,40 @@ public class GrammarCorrelationTest {
         RequestGrammar g = load("$page = ONLYVALUE\n/x?page=${page}\n");
         assertEquals("/x?page=ONLYVALUE", g.randomRequest());
     }
+
+    /**
+     * DD-037: a step carrying TWO captures (a static-name {@code input:} token AND a dynamic-name
+     * {@code inputpair:} pair — the JSPWiki {@code edit_save} shape) survives grammar expansion with
+     * both captures parseable and BOTH {@code ${{…}}} references preserved in the later POST, while
+     * the real {@code ${…}} placeholders resolve. Mirrors the shipped {@code examples/grammar/
+     * jspwiki.grammar} edit_save with a synthetic grammar (robust to that file's data changing).
+     */
+    @Test
+    public void expandPreservesTwoCapturesAndBothRefsInACorrelatedWriteSequence() throws IOException {
+        RequestGrammar g = load(
+            "$page = home | account\n"
+          + "$text = hello | world\n"
+          + "@sequence edit\n"
+          + "  /Edit.jsp?page=${page} <<csrf=input:X-XSRF-TOKEN <<spam=inputpair:[a-z]{6}=-?[0-9]+\n"
+          + "  POST /Edit.jsp page=${page}&X-XSRF-TOKEN=${{csrf}}&${{spam}}&_editedtext=${text}\n");
+
+        for (int run = 0; run < 20; run++) {
+            List<String> steps = g.randomSequence();
+            assertEquals(2, steps.size());
+
+            // step 1: both captures survive expansion and parse (INPUT + INPUTPAIR), ${page} substituted
+            RequestLine s1 = RequestLine.parse(steps.get(0));
+            assertEquals("step1 must carry both captures: " + steps.get(0), 2, s1.captures().size());
+            assertEquals(Capture.Kind.INPUT, s1.captures().get(0).kind());
+            assertEquals(Capture.Kind.INPUTPAIR, s1.captures().get(1).kind());
+            assertFalse("step1 ${page} must be substituted: " + steps.get(0), steps.get(0).contains("${page}"));
+
+            // step 2: BOTH correlation refs survive verbatim; the real placeholders resolve
+            String post = steps.get(1);
+            assertTrue("both refs must survive expansion: " + post,
+                    post.contains("${{csrf}}") && post.contains("${{spam}}"));
+            assertFalse("real placeholders must resolve, not stay literal: " + post,
+                    post.contains("${page}") || post.contains("${text}"));
+        }
+    }
 }

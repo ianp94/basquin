@@ -10,10 +10,15 @@ import java.util.regex.Pattern;
  *
  * <p>Wire format: {@code "<<name=kind:arg"}, e.g. {@code "<<csrf=input:X-XSRF-TOKEN"} or
  * {@code "<<sess=header:Set-Cookie"}.
+ *
+ * <p>{@code INPUTPAIR} arg is {@code "<nameRegex>=<valueRegex>"}, split on its FIRST literal
+ * {@code '='} (everything after it is the value regex). So a value regex may contain {@code '='}, but
+ * a <em>name</em> regex must not — a {@code '='} in the name half would be read as the separator. Both
+ * halves are matched ANCHORED (whole attribute value) against a form {@code <input>}'s name and value.
  */
 public record Capture(String name, Kind kind, String arg) {
 
-    public enum Kind { HEADER, INPUT }
+    public enum Kind { HEADER, INPUT, INPUTPAIR }
 
     private static final Pattern NAME_PATTERN = Pattern.compile("[A-Za-z0-9_]+");
 
@@ -36,6 +41,16 @@ public record Capture(String name, Kind kind, String arg) {
             kind = Kind.HEADER;
         } else if ("input".equals(kindStr)) {
             kind = Kind.INPUT;
+        } else if ("inputpair".equals(kindStr)) {
+            int a = arg.indexOf('=');
+            if (a <= 0 || a == arg.length() - 1) return null;   // need non-empty name AND value regex
+            try {
+                Pattern.compile(arg.substring(0, a));
+                Pattern.compile(arg.substring(a + 1));
+            } catch (java.util.regex.PatternSyntaxException e) {
+                return null;
+            }
+            kind = Kind.INPUTPAIR;
         } else {
             return null;
         }
@@ -54,11 +69,34 @@ public record Capture(String name, Kind kind, String arg) {
      * INPUT: finds the {@code <input ...>} tag whose {@code name} attribute equals {@code arg}
      * and returns its (HTML-entity-unescaped) {@code value} attribute.
      *
-     * @return the extracted value, or null on any miss.
+     * <p>The returned value is URL-encoded (DD-037 model A) so it is ready to splice verbatim into a
+     * form body via {@link runner.coverage.LoadRun#substitute}.
+     *
+     * @return the URL-encoded extracted value, or null on any miss.
      */
     public String extract(Function<String, String> headerLookup, String body) {
         if (kind == Kind.HEADER) {
-            return headerLookup.apply(arg);
+            return enc(headerLookup.apply(arg));
+        }
+        if (kind == Kind.INPUTPAIR) {
+            if (body == null) return null;
+            int a = arg.indexOf('=');
+            Pattern nameRe = Pattern.compile(arg.substring(0, a));
+            Pattern valRe  = Pattern.compile(arg.substring(a + 1));
+            Matcher tags = INPUT_TAG_PATTERN.matcher(body);
+            while (tags.find()) {
+                String tag = tags.group();
+                Matcher nm = NAME_ATTR_PATTERN.matcher(tag);
+                if (!nm.find()) continue;
+                Matcher vm = VALUE_PATTERN.matcher(tag);
+                if (!vm.find()) continue;
+                String nameVal = CoverageGuidedRun.unescapeHtml(nm.group(2));
+                String valVal  = CoverageGuidedRun.unescapeHtml(vm.group(2));
+                if (nameRe.matcher(nameVal).matches() && valRe.matcher(valVal).matches()) {
+                    return enc(nameVal) + "=" + enc(valVal);
+                }
+            }
+            return null;
         }
         // INPUT
         if (body == null) return null;
@@ -69,11 +107,17 @@ public record Capture(String name, Kind kind, String arg) {
             if (!namePattern.matcher(tag).find()) continue;
             Matcher valueMatcher = VALUE_PATTERN.matcher(tag);
             if (!valueMatcher.find()) continue;
-            return CoverageGuidedRun.unescapeHtml(valueMatcher.group(2));
+            return enc(CoverageGuidedRun.unescapeHtml(valueMatcher.group(2)));
         }
         return null;
     }
 
+    /** URL-encode for splicing into a form body; null-safe so a header/input miss stays null. */
+    static String enc(String s) {
+        return s == null ? null : java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
     private static final Pattern INPUT_TAG_PATTERN = Pattern.compile("<input\\b[^>]*>");
     private static final Pattern VALUE_PATTERN = Pattern.compile("value\\s*=\\s*([\"'])(.*?)\\1");
+    private static final Pattern NAME_ATTR_PATTERN = Pattern.compile("(?<![\\w-])name\\s*=\\s*([\"'])(.*?)\\1");
 }

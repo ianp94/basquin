@@ -26,15 +26,19 @@ $wikitext = ~[a-z ]{20,120} | <string>
 /PageInfo.jsp?page=${page}
 /Edit.jsp?page=${page}
 
-# ---- CSRF-protected write (DD-036) --------------------------------------------------
-# JSPWiki guards saves with a per-session anti-CSRF token: <wiki:CsrfProtection/> renders a
-# hidden <input name="X-XSRF-TOKEN" value="..."> in the edit form, and a POST /Edit.jsp save
-# without the matching token is rejected. A static replay corpus therefore can never save a
-# page — the token is minted fresh per session. Response correlation closes that gap: GET the
-# edit form, capture X-XSRF-TOKEN from it, and inject the captured value into the save POST.
-# (Save-form field names verified against templates/210/editors/plain.jsp: page, action=save,
-#  _editedtext (EditorManager.REQ_EDITEDTEXT), the CsrfProtection X-XSRF-TOKEN, and ok=Save.)
+# ---- CSRF-protected write (DD-036 + DD-037) -----------------------------------------
+# A JSPWiki save is guarded by TWO per-session tokens, both from the same edit-form GET:
+#  1. the anti-CSRF token — <wiki:CsrfProtection/> renders <input name="X-XSRF-TOKEN" value="…">;
+#     a missing/wrong one → 302 /error/Forbidden.html. Captured by its STATIC name (DD-036).
+#  2. the SpamFilter hash — <input name="ztbams" value="…"> where BOTH the name (6 random
+#     lowercase letters, session-pinned, rotated daily) and the value (lastModified ^ hash(clientIP),
+#     changes after every save) are dynamic; a missing one → 302 /Wiki.jsp?page=SessionExpired
+#     (SpamFilter.checkHash, hard-wired in Edit.jsp — no config can bypass it). Captured as a whole
+#     name=value pair by regex (DD-037 inputpair). The value regex ANCHORS to digits so it can't be
+#     confused with the UUID-valued CSRF field or the non-numeric `action`/`_editedtext` decoys.
+# A static replay corpus can never save (both tokens are minted per session); correlation replays them.
+# (Field names verified live + against templates/210/editors/plain.jsp; root cause in the DD-037 spec.)
 @sequence edit_save
-  /Edit.jsp?page=${page} <<csrf=input:X-XSRF-TOKEN
-  POST /Edit.jsp page=${page}&action=save&X-XSRF-TOKEN=${{csrf}}&_editedtext=${wikitext}&ok=Save
+  /Edit.jsp?page=${page} <<csrf=input:X-XSRF-TOKEN <<spam=inputpair:[a-z]{6}=-?[0-9]+
+  POST /Edit.jsp page=${page}&action=save&X-XSRF-TOKEN=${{csrf}}&${{spam}}&_editedtext=${wikitext}&ok=Save
   /Wiki.jsp?page=${page}

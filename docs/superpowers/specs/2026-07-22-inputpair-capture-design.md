@@ -92,6 +92,12 @@ DD-036's `RequestLine` carries a single `Capture capture` and `parse` peels exac
 - Both engines' capture branches (`LoadRun.fire`, `CoverageGuidedRun.request`) iterate
   `step.captures()`, extract each, and `bindings.put(c.name(), value)` (or count a miss) per capture —
   the existing single-capture logic wrapped in a loop. `needsSubstitution()` (body-based) is unchanged.
+- **Design constraint (state it in the grammar/docs): captures are TRAILING** — all `<<…` tokens come
+  after the method/path/body, and the peel loop consumes only from the end. A body cannot be followed
+  by a non-capture token and then a capture. This matches DD-036 and keeps the round-trip and the
+  back-compat guard (a trailing token that fails `Capture.parse` stops the loop and stays in the body)
+  intact; it slightly widens the theoretical body-vs-capture ambiguity DD-036 already carries, with no
+  new failure the round-trip test doesn't cover.
 
 ### Components
 
@@ -106,15 +112,33 @@ DD-036's `RequestLine` carries a single `Capture capture` and `parse` peels exac
      `urlEncode(name)=urlEncode(value)` for the **first** input whose name matches `nameRegex` AND
      value matches `valueRegex`; `null` if none. (Name extraction needs a `NAME_ATTR_PATTERN` analogous
      to the existing `VALUE_PATTERN`.)
+   - **Matching is ANCHORED — the whole attribute value must match the regex** (`Pattern.matches` /
+     `Matcher.matches()`, not `find()`). This is load-bearing and follows DD-036's exact-match
+     precedent (`Capture.java:65`, `CaptureTest.nameSubstringDoesNotFalseMatch`): with `find()`,
+     `[a-z]{6}` would match inside `_editedtext` and `-?[0-9]+` would match the digits inside the
+     `X-XSRF-TOKEN` UUID, so the spam field would be selected only by luck of the current form. Anchored,
+     the UUID value fails `-?[0-9]+` outright and the `action` decoy (name literally matches `[a-z]{6}`)
+     is cleanly excluded by its non-numeric `save` value — the disambiguation this design relies on. The
+     `NAME_ATTR_PATTERN` must capture the exact `name` attribute value (like `VALUE_PATTERN` does for
+     `value`), and the caller anchors the regex against that whole captured string — so a `data-name="…"`
+     substring can never be mistaken for `name="…"`.
    - `format`: round-trips `inputpair` (`format(parse(x)) == x`).
 2. **`runner/coverage/RequestLine.java`** — `capture` field → `List<Capture> captures` (accessor
    `captures()`); `parse` loops to peel multiple trailing `<<…` tokens; `format` re-emits all;
    3-arg ctor delegates with `List.of()`. (See "Multiple captures per step" above.)
 3. **`runner/coverage/LoadRun.java`** — `substitute`: drop the `URLEncoder` call; verbatim replace.
-   `fire`'s capture branch loops over `step.captures()`. Everything else (null-on-unbound, the
-   `${{name}}` scan) unchanged.
+   `fire`'s capture branch (single `step.capture()` today) loops over `step.captures()`, extracting +
+   binding each (or counting a miss per capture). The 4-arg `RequestLine` reconstruction after
+   substitution (`LoadRun.java:131`) passes `step.captures()` (was `step.capture()`).
+   **`lintCorrelationOrdering` (`LoadRun.java:~526`) also reads `step.capture()`** — it must iterate
+   `step.captures()` and add **every** capture's name to `capturedSoFar`, else step 1's two captures
+   register only one and the lint would falsely warn that `${{spam}}` has no preceding capture — on the
+   very grammar this feature targets.
 4. **`runner/coverage/CoverageGuidedRun.java`** — `request`'s capture branch loops over
-   `step.captures()` (was a single `step.capture()`).
+   `step.captures()` (was a single `step.capture()`), including the `r.capture() != null` guard
+   (`CoverageGuidedRun.java:~639`, becomes `!r.captures().isEmpty()`) and the 4-arg `RequestLine`
+   reconstruction (`CoverageGuidedRun.java:~504`). The token-leak fix (findings labeled with the raw
+   `step`, never the substituted body) is unaffected.
 5. **`examples/grammar/jspwiki.grammar`** — add the `<<spam=inputpair:[a-z]{6}=-?[0-9]+` capture to
    step 1 of `edit_save` and `&${{spam}}` to the save POST body.
 6. **Docs** — DD-037 record in `docs/DESIGN-DECISIONS.md`; a corpus-v3.1 note in
@@ -145,15 +169,30 @@ GET `/Edit.jsp?page=Main` → `extract` binds `csrf`→`urlEncode(uuid)` and `sp
 - `RequestLine` multi-capture: `parse` of `path <<a=input:X <<b=inputpair:[a-z]{2}=[0-9]+` yields two
   captures in source order; `format(parse(line)) == line`; a v1/v2 line (no `<<`, or a trailing
   non-capture token) is byte-identical (back-compat) and yields an empty capture list.
-- `extract` INPUTPAIR: selects the right input among decoys (`action=save` present but excluded by the
-  numeric value regex); returns `name=value` with each half URL-encoded; a name/value containing `+`,
-  `=`, or `&` is encoded so it can't inject extra params.
-- `extract` INPUT/HEADER now URL-encode (the migrated assertion).
+- `extract` INPUTPAIR: **anchored** selection among decoys — a form carrying both `action=save` (name
+  matches `[a-z]{6}` but value isn't numeric) and `_editedtext=…` (value could contain digits but name
+  isn't 6 lowercase) must pick only the `ztbams=1719016235` input; returns `name=value` with each half
+  URL-encoded; a name/value containing `+`, `=`, or `&` is encoded so it can't inject extra params; a
+  `data-name="ztbams"` attribute must NOT be mistaken for `name="ztbams"`.
+- `extract` INPUT/HEADER now URL-encode (the migrated assertion, see the migration list below).
 - `substitute` verbatim: adjacent `${{csrf}}${{spam}}`, unbound-name → `null`.
 - End-to-end (`ExploreCorrelationTest`-style, JDK `HttpServer`): a form with a random-named numeric
   input + a static-named CSRF input; `runSequence` binds both and the server receives a POST whose body
   carries `ztbams=<value>` and the substituted CSRF.
 - Full suite stays green.
+
+**Existing tests/callers to migrate (from the `capture` → `captures()` change + encoding move) —
+enumerate in the plan so none is missed:**
+- `LoadCorrelationTest.substituteUrlEncodesPlusAndEqualsInBoundValue` (asserts `substitute` encodes)
+  → **rewrite** to assert `Capture.extract` encodes (model A moves the encoding); `LoadCorrelationTest`
+  also references `.capture()` (~line 100).
+- `RequestLineV3Test` — multiple `.capture()` / single-capture assertions (round-trip, back-compat,
+  the recipe-preservation guard) → update to `captures()` / `List<Capture>`.
+- `CaptureTest` — keep the existing INPUT/HEADER cases (now asserting the encoded return) and add the
+  INPUTPAIR + anchoring cases.
+- Non-test callers already covered in Components §3/§4: `LoadRun.java:131` + `:~526`
+  (`lintCorrelationOrdering`), `CoverageGuidedRun.java:~504` + `:~639`. The plan must `grep -rn
+  '\.capture()' runner/ test/` and repoint every hit.
 
 ## Rejected alternatives
 

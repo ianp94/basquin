@@ -546,7 +546,10 @@ public final class CoverageGuidedRun {
     }
 
     static CostSample request(String base, String step) throws Exception {
-        return request(base, RequestLine.parse(step), null);
+        // Recorded-finding text must stay the RAW input on this path — byte-for-byte unchanged
+        // from before DD-036 — since RequestLine.format() canonicalizes a no-body GET by dropping
+        // an explicit "GET " prefix, which would silently rewrite what a real finding records.
+        return request(base, RequestLine.parse(step), null, step);
     }
 
     /**
@@ -556,9 +559,20 @@ public final class CoverageGuidedRun {
      * non-null, also retains the response body and runs {@link Capture#extract} against it,
      * recording a new binding on success — mirroring {@link LoadRun#fire}'s capture branch,
      * including its {@code bindings != null} guard (required: the 2-arg path above passes null).
+     * Recorded-finding text here is {@code r.format()} — the actually-sent (possibly substituted)
+     * form, correct for a correlated step since it reflects what was really sent on the wire.
      */
     static CostSample request(String base, RequestLine r, java.util.Map<String, String> bindings) throws Exception {
-        String label = r.format();
+        return request(base, r, bindings, r.format());
+    }
+
+    /**
+     * Core of the two public overloads above, taking an explicit {@code label} for the
+     * recorded-finding text (at the {@code X-Basquin-Invariant-*} save sites and the
+     * {@code serverError} throw) — see the two callers for which text each path records.
+     */
+    private static CostSample request(String base, RequestLine r, java.util.Map<String, String> bindings,
+            String label) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(base + r.path()).openConnection();
         c.setConnectTimeout(2000);
         c.setReadTimeout(10000);

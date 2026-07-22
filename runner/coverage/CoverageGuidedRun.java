@@ -676,7 +676,7 @@ public final class CoverageGuidedRun {
         return new StackTraceElement(cls, method, file, lineNo);
     }
 
-    private static String unescapeHtml(String s) {
+    static String unescapeHtml(String s) {
         String out = s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
                 .replace("&#39;", "'").replace("&nbsp;", " ");
         // Tomcat escapes '/' in class paths as &#47;, so resolve numeric entities too.

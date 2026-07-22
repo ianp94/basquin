@@ -108,11 +108,43 @@ public class SequenceEmissionTest {
 
     @Test
     public void mutateStillMutatesASingleStepInputWithADictionaryParam() {
-        Random rnd = new Random(1);
+        // Unlike the TAB guard (which must return its input verbatim, unconditionally), a non-TAB
+        // dictionary-backed input must be genuinely mutatable: across many draws the categoryId
+        // value must actually change at least once. A prefix-only assertion here would also pass
+        // for the (buggy) case where mutate silently returned the input unchanged.
         String single = "/actions/Catalog.action?categoryId=FISH";
-        String mutated = CoverageGuidedRun.mutate(single, rnd);
-        assertTrue("single-step inputs are still mutated as before",
-                mutated.startsWith("/actions/Catalog.action?categoryId="));
+        boolean sawADifferentValue = false;
+        for (long seed = 0; seed < 50 && !sawADifferentValue; seed++) {
+            String mutated = CoverageGuidedRun.mutate(single, new Random(seed));
+            assertTrue("single-step inputs are still mutated as before",
+                    mutated.startsWith("/actions/Catalog.action?categoryId="));
+            if (!mutated.equals(single)) sawADifferentValue = true;
+        }
+        assertTrue("mutate must actually be able to change a mutatable single-step input, "
+                        + "not just return a same-shaped string",
+                sawADifferentValue);
+    }
+
+    @Test
+    public void mutateGuardOnlyShortCircuitsTabInputsNotOrdinaryOnes() {
+        // Pins the guard's scope: TAB inputs are ALWAYS returned identical (replay-only contract),
+        // while a non-TAB dictionary input can differ from itself across draws — the guard must not
+        // have accidentally widened to swallow ordinary mutation too.
+        Random rnd = new Random(42);
+        String tabInput = "POST /a x=1\tPOST /b y=2";
+        assertEquals("TAB input: guard returns it unchanged",
+                tabInput, CoverageGuidedRun.mutate(tabInput, rnd));
+
+        String nonTabInput = "/actions/Catalog.action?categoryId=FISH";
+        boolean differedAtLeastOnce = false;
+        for (long seed = 0; seed < 50; seed++) {
+            if (!CoverageGuidedRun.mutate(nonTabInput, new Random(seed)).equals(nonTabInput)) {
+                differedAtLeastOnce = true;
+                break;
+            }
+        }
+        assertTrue("non-TAB input: mutation can actually differ from the input, unlike the guard",
+                differedAtLeastOnce);
     }
 
     // --- (d) replayCorpusJson: a whole multi-step entry that overflows the budget is dropped whole

@@ -51,22 +51,36 @@ public final class CostCorpus {
     /**
      * ε-greedy parent selection (DD-032): with probability ε (or when pheromone is off / the total is
      * zero / cold start) draw UNIFORMLY — the coverage guardrail; otherwise roulette by pheromone.
-     * Returns the ENTRY so the caller can reinforce it. Null only if the corpus is empty. Synchronized.
+     * Returns the ENTRY so the caller can reinforce it. Null if the corpus is empty OR has no entry
+     * eligible to be a single-request mutation parent. Synchronized.
      * Single O(n) locate scan against the running total — no re-summing.
+     *
+     * <p>A replay-only, TAB-joined multi-step sequence entry (Task 6's whole-sequence corpus
+     * emission, load-mode replay only) is never eligible here — mutate/request would fire it as one
+     * garbled request and manufacture a false-positive crash finding. It still belongs to the corpus
+     * (retained, replayed via {@link #snapshotByCost()}); it is only excluded from PARENT selection,
+     * so this filters the working set rather than touching storage or eviction. Review DD-035.
      */
     public synchronized CorpusEntry selectParent(Random rnd) {
-        int n = entries.size();
-        if (n == 0) return null;
-        if (!pheromone || totalPheromone <= 0.0 || rnd.nextDouble() < epsilon) {
-            return entries.get(rnd.nextInt(n));   // uniform (off / cold-start / ε-explore)
+        List<CorpusEntry> eligible = new ArrayList<>(entries.size());
+        double eligibleTotal = 0.0;
+        for (CorpusEntry e : entries) {
+            if (e.input.indexOf('\t') >= 0) continue;   // replay-only sequence: never a mutation parent
+            eligible.add(e);
+            eligibleTotal += e.pheromone;
         }
-        double r = rnd.nextDouble() * totalPheromone;
+        int n = eligible.size();
+        if (n == 0) return null;
+        if (!pheromone || eligibleTotal <= 0.0 || rnd.nextDouble() < epsilon) {
+            return eligible.get(rnd.nextInt(n));   // uniform (off / cold-start / ε-explore)
+        }
+        double r = rnd.nextDouble() * eligibleTotal;
         double cum = 0.0;
         for (int i = 0; i < n; i++) {
-            cum += entries.get(i).pheromone;
-            if (cum >= r) return entries.get(i);
+            cum += eligible.get(i).pheromone;
+            if (cum >= r) return eligible.get(i);
         }
-        return entries.get(n - 1);   // float-rounding safety
+        return eligible.get(n - 1);   // float-rounding safety
     }
 
     /**

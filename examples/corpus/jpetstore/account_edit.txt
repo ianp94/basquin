@@ -1,1 +1,1 @@
-/actions/Account.action?editAccount=
+POST /actions/Account.action?editAccount= username=ACID

@@ -1,1 +1,1 @@
-/actions/Account.action?signon=&username=j2ee&password=j2ee
+POST /actions/Account.action?signon= username=j2ee&password=j2ee

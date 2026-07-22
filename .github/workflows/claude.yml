@@ -55,3 +55,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The action has its own non-human-actor gate, SEPARATE from the job-level `if:` above:
+          # by default it rejects any bot-initiated run ("Workflow initiated by non-human actor").
+          # Allow ONLY the basquin-bot App (both the bare login the action logs and the [bot]-suffixed
+          # GitHub username, so the match holds regardless of which form it compares) — not '*', which
+          # would let any bot spend Claude runs. This is what lets the Programmer agent's bot PRs get
+          # their own @claude review (paired with the job-level bot allowance added in #87).
+          allowed_bots: "basquin-bot,basquin-bot[bot]"

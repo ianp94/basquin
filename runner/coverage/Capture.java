@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
  */
 public record Capture(String name, Kind kind, String arg) {
 
-    public enum Kind { HEADER, INPUT }
+    public enum Kind { HEADER, INPUT, INPUTPAIR }
 
     private static final Pattern NAME_PATTERN = Pattern.compile("[A-Za-z0-9_]+");
 
@@ -36,6 +36,16 @@ public record Capture(String name, Kind kind, String arg) {
             kind = Kind.HEADER;
         } else if ("input".equals(kindStr)) {
             kind = Kind.INPUT;
+        } else if ("inputpair".equals(kindStr)) {
+            int a = arg.indexOf('=');
+            if (a <= 0 || a == arg.length() - 1) return null;   // need non-empty name AND value regex
+            try {
+                Pattern.compile(arg.substring(0, a));
+                Pattern.compile(arg.substring(a + 1));
+            } catch (java.util.regex.PatternSyntaxException e) {
+                return null;
+            }
+            kind = Kind.INPUTPAIR;
         } else {
             return null;
         }
@@ -63,6 +73,26 @@ public record Capture(String name, Kind kind, String arg) {
         if (kind == Kind.HEADER) {
             return enc(headerLookup.apply(arg));
         }
+        if (kind == Kind.INPUTPAIR) {
+            if (body == null) return null;
+            int a = arg.indexOf('=');
+            Pattern nameRe = Pattern.compile(arg.substring(0, a));
+            Pattern valRe  = Pattern.compile(arg.substring(a + 1));
+            Matcher tags = INPUT_TAG_PATTERN.matcher(body);
+            while (tags.find()) {
+                String tag = tags.group();
+                Matcher nm = NAME_ATTR_PATTERN.matcher(tag);
+                if (!nm.find()) continue;
+                Matcher vm = VALUE_PATTERN.matcher(tag);
+                if (!vm.find()) continue;
+                String nameVal = CoverageGuidedRun.unescapeHtml(nm.group(2));
+                String valVal  = CoverageGuidedRun.unescapeHtml(vm.group(2));
+                if (nameRe.matcher(nameVal).matches() && valRe.matcher(valVal).matches()) {
+                    return enc(nameVal) + "=" + enc(valVal);
+                }
+            }
+            return null;
+        }
         // INPUT
         if (body == null) return null;
         Pattern namePattern = Pattern.compile("name\\s*=\\s*([\"'])" + Pattern.quote(arg) + "\\1");
@@ -84,4 +114,5 @@ public record Capture(String name, Kind kind, String arg) {
 
     private static final Pattern INPUT_TAG_PATTERN = Pattern.compile("<input\\b[^>]*>");
     private static final Pattern VALUE_PATTERN = Pattern.compile("value\\s*=\\s*([\"'])(.*?)\\1");
+    private static final Pattern NAME_ATTR_PATTERN = Pattern.compile("(?<![\\w-])name\\s*=\\s*([\"'])(.*?)\\1");
 }

@@ -106,4 +106,43 @@ public class CaptureTest {
         String body2 = "<input name=\"X-XSRF-TOKEN\" value=\"NO\">";
         assertNull(c2.extract(h -> null, body2));
     }
+
+    @Test public void parseFormatRoundTripsInputPair() {
+        Capture c = Capture.parse("<<spam=inputpair:[a-z]{6}=-?[0-9]+");
+        assertNotNull(c);
+        assertEquals("spam", c.name());
+        assertEquals(Capture.Kind.INPUTPAIR, c.kind());
+        assertEquals("[a-z]{6}=-?[0-9]+", c.arg());
+        assertEquals("<<spam=inputpair:[a-z]{6}=-?[0-9]+", c.format());
+    }
+
+    @Test public void inputPairParseNullOnMissingEquals() {
+        assertNull(Capture.parse("<<spam=inputpair:[a-z]{6}"));      // no name=value split
+        assertNull(Capture.parse("<<spam=inputpair:[a-z]{6}="));     // empty value regex
+        assertNull(Capture.parse("<<spam=inputpair:=[0-9]+"));       // empty name regex
+        assertNull(Capture.parse("<<spam=inputpair:[a-z(=[0-9]+"));  // name regex doesn't compile
+    }
+
+    @Test public void inputPairExtractsPairEncodedAmongDecoys() {
+        Capture c = Capture.parse("<<spam=inputpair:[a-z]{6}=-?[0-9]+");
+        String body =
+            "<input type='hidden' name='action' value='save' />" +          // name matches [a-z]{6}, value not numeric
+            "<input type='hidden' name='_editedtext' value='12' />" +       // value numeric, name not 6-lower
+            "<input type='hidden' name='ztbams' value='1719016235' />";     // the one
+        assertEquals("ztbams=1719016235", c.extract(h -> null, body));
+    }
+
+    @Test public void inputPairAnchoredAndEncodes() {
+        Capture c = Capture.parse("<<p=inputpair:[a-z]{3}=[a-z+]+");
+        // value contains '+', name is exactly 3 lowercase; both halves URL-encoded, joined by literal '='
+        String body = "<input name=\"abc\" value=\"x+y\" />";
+        assertEquals("abc=x%2By", c.extract(h -> null, body));
+    }
+
+    @Test public void inputPairDataNameNotMistakenForName() {
+        Capture c = Capture.parse("<<p=inputpair:[a-z]{6}=[0-9]+");
+        // only a data-name attribute matches; there is no real name=, so no match
+        String body = "<input data-name=\"ztbams\" value=\"123\" />";
+        assertNull(c.extract(h -> null, body));
+    }
 }

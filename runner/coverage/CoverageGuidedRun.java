@@ -505,7 +505,13 @@ public final class CoverageGuidedRun {
             }
             Agent.beginIteration();
             try {
-                request(baseUrl, r, bindings);
+                // DD-036 invariant: the persisted label must be the raw recipe (`step`, with
+                // ${{name}} un-substituted), never r.format() of the substituted RequestLine —
+                // the substituted form carries the real captured token, which must never reach
+                // disk. Only the recipe is persisted, mirroring formatSequenceForCorpus. The
+                // request itself still fires the substituted `r` — the real token still goes
+                // over the wire, which is correct; only the recorded finding text changes.
+                request(baseUrl, r, bindings, step);
             } catch (Throwable t) {
                 StatusReporter.recordCrash();
                 FuzzIO.saveInteresting(step.getBytes(StandardCharsets.UTF_8), t);
@@ -553,23 +559,20 @@ public final class CoverageGuidedRun {
     }
 
     /**
-     * Task 5 (DD-036) overload: same as {@link #request(String, String)} but takes an
-     * already-parsed {@link RequestLine} (parse-once, so {@link #runSequence} doesn't reparse
-     * after substitution) and, when {@code r.capture()} is non-null and {@code bindings} is
-     * non-null, also retains the response body and runs {@link Capture#extract} against it,
-     * recording a new binding on success — mirroring {@link LoadRun#fire}'s capture branch,
-     * including its {@code bindings != null} guard (required: the 2-arg path above passes null).
-     * Recorded-finding text here is {@code r.format()} — the actually-sent (possibly substituted)
-     * form, correct for a correlated step since it reflects what was really sent on the wire.
-     */
-    static CostSample request(String base, RequestLine r, java.util.Map<String, String> bindings) throws Exception {
-        return request(base, r, bindings, r.format());
-    }
-
-    /**
-     * Core of the two public overloads above, taking an explicit {@code label} for the
-     * recorded-finding text (at the {@code X-Basquin-Invariant-*} save sites and the
-     * {@code serverError} throw) — see the two callers for which text each path records.
+     * Core of the request path, taking an explicit {@code label} for the recorded-finding text
+     * (at the {@code X-Basquin-Invariant-*} save sites and the {@code serverError} throw).
+     *
+     * <p>Task 5 (DD-036): when {@code r.capture()} is non-null and {@code bindings} is non-null,
+     * also retains the response body and runs {@link Capture#extract} against it, recording a new
+     * binding on success — mirroring {@link LoadRun#fire}'s capture branch, including its
+     * {@code bindings != null} guard (required: the 2-arg overload above passes null).
+     *
+     * <p>{@code label} MUST NOT be derived from a substituted {@code r} — a correlated step's
+     * substituted body carries the real captured token (e.g. a live CSRF value), and that must
+     * never reach disk (DD-036 invariant). The 2-arg overload above passes the raw {@code step}
+     * text. {@link #runSequence} — the other caller — passes its own raw, un-substituted
+     * {@code step} too, even though it fires the substituted {@code r} over the wire; only the
+     * safe recipe is ever recorded in a finding.
      */
     private static CostSample request(String base, RequestLine r, java.util.Map<String, String> bindings,
             String label) throws Exception {

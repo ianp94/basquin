@@ -54,11 +54,14 @@ public record Capture(String name, Kind kind, String arg) {
      * INPUT: finds the {@code <input ...>} tag whose {@code name} attribute equals {@code arg}
      * and returns its (HTML-entity-unescaped) {@code value} attribute.
      *
-     * @return the extracted value, or null on any miss.
+     * <p>The returned value is URL-encoded (DD-037 model A) so it is ready to splice verbatim into a
+     * form body via {@link runner.coverage.LoadRun#substitute}.
+     *
+     * @return the URL-encoded extracted value, or null on any miss.
      */
     public String extract(Function<String, String> headerLookup, String body) {
         if (kind == Kind.HEADER) {
-            return headerLookup.apply(arg);
+            return enc(headerLookup.apply(arg));
         }
         // INPUT
         if (body == null) return null;
@@ -69,9 +72,14 @@ public record Capture(String name, Kind kind, String arg) {
             if (!namePattern.matcher(tag).find()) continue;
             Matcher valueMatcher = VALUE_PATTERN.matcher(tag);
             if (!valueMatcher.find()) continue;
-            return CoverageGuidedRun.unescapeHtml(valueMatcher.group(2));
+            return enc(CoverageGuidedRun.unescapeHtml(valueMatcher.group(2)));
         }
         return null;
+    }
+
+    /** URL-encode for splicing into a form body; null-safe so a header/input miss stays null. */
+    static String enc(String s) {
+        return s == null ? null : java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8);
     }
 
     private static final Pattern INPUT_TAG_PATTERN = Pattern.compile("<input\\b[^>]*>");

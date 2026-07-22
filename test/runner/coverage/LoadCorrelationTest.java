@@ -44,13 +44,13 @@ public class LoadCorrelationTest {
     }
 
     @Test
-    public void substituteUrlEncodesPlusAndEqualsInBoundValue() {
-        Map<String, String> bindings = new HashMap<>();
-        bindings.put("csrf", "a+b=c");
+    public void extractUrlEncodesPlusAndEquals() {
+        // DD-037 model A: encoding responsibility moved from LoadRun.substitute into Capture.extract.
+        Capture x = Capture.parse("<<x=input:F");
 
-        String out = LoadRun.substitute("X-XSRF-TOKEN=${{csrf}}&page=Main", bindings);
+        String extracted = x.extract(h -> null, "<input name=\"F\" value=\"a+b=c\">");
 
-        assertEquals("X-XSRF-TOKEN=a%2Bb%3Dc&page=Main", out);
+        assertEquals("a%2Bb%3Dc", extracted);
     }
 
     @Test

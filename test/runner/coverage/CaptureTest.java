@@ -38,25 +38,27 @@ public class CaptureTest {
     @Test public void inputExtractBasic() {
         Capture c = Capture.parse("<<csrf=input:X-XSRF-TOKEN");
         String body = "<input type=\"hidden\" name=\"X-XSRF-TOKEN\" value=\"abc+/=\">";
-        assertEquals("abc+/=", c.extract(h -> null, body));
+        // inputExtractBasic: value in the form is "abc+/="; extract now returns it URL-encoded
+        assertEquals("abc%2B%2F%3D", c.extract(h -> null, body));
     }
 
     @Test public void inputExtractValueBeforeName() {
         Capture c = Capture.parse("<<csrf=input:X-XSRF-TOKEN");
         String body = "<input value=\"abc+/=\" type=\"hidden\" name=\"X-XSRF-TOKEN\">";
-        assertEquals("abc+/=", c.extract(h -> null, body));
+        assertEquals("abc%2B%2F%3D", c.extract(h -> null, body));
     }
 
     @Test public void inputExtractSingleQuotes() {
         Capture c = Capture.parse("<<csrf=input:X-XSRF-TOKEN");
         String body = "<input type='hidden' name='X-XSRF-TOKEN' value='abc+/='>";
-        assertEquals("abc+/=", c.extract(h -> null, body));
+        assertEquals("abc%2B%2F%3D", c.extract(h -> null, body));
     }
 
     @Test public void inputExtractUnescapesEntities() {
         Capture c = Capture.parse("<<csrf=input:X-XSRF-TOKEN");
         String body = "<input name=\"X-XSRF-TOKEN\" value=\"a&amp;b\">";
-        assertEquals("a&b", c.extract(h -> null, body));
+        // unescape "a&amp;b" -> "a&b", then extract URL-encodes it -> "a%26b"
+        assertEquals("a%26b", c.extract(h -> null, body));
     }
 
     @Test public void inputExtractMissReturnsNull() {
@@ -79,7 +81,7 @@ public class CaptureTest {
     @Test public void headerExtract() {
         Capture c = Capture.parse("<<sess=header:Set-Cookie");
         Function<String, String> lookup = h -> "Set-Cookie".equals(h) ? "JSESSIONID=z" : null;
-        assertEquals("JSESSIONID=z", c.extract(lookup, "irrelevant body"));
+        assertEquals("JSESSIONID%3Dz", c.extract(lookup, "irrelevant body"));
     }
 
     @Test public void headerExtractMissReturnsNull() {

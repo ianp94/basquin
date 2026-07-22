@@ -75,7 +75,7 @@ chmod +x basquin && sudo mv basquin /usr/local/bin/basquin
 go install github.com/ianp94/basquin/operator/cmd/basquin@latest
 ```
 
-Snap (Ubuntu) is planned — see the roadmap in `TODO.md`. Then:
+Snap packaging (Ubuntu) is planned — see `TODO.md`. Once installed:
 
 ```bash
 # 1. Instrument a running app — no rebuild, no image changes.

@@ -147,10 +147,10 @@ function card(k,v,sub){
 // switching campaigns (or coming back from the fleet view) drops the old buffers instead of
 // splicing two campaigns' values into one chart.
 const HISTORY_CAP = 120;
-let historyId = null, history = {};
+let historyId = null, trendHistory = {};
 
 function pushHist(key, val){
-  const buf = history[key] || (history[key] = []);
+  const buf = trendHistory[key] || (trendHistory[key] = []);
   buf.push(typeof val === 'number' && isFinite(val) ? val : 0);
   if(buf.length > HISTORY_CAP) buf.shift();
 }
@@ -293,7 +293,7 @@ async function tickFleet(){
 
 async function tick(){
   if(!current) return;
-  if(current !== historyId){ history = {}; historyId = current; }   // campaign switch: drop old history
+  if(current !== historyId){ trendHistory = {}; historyId = current; }   // campaign switch: drop old history
   const gen = ++generation;
   try{
     const st = await getJson('/api/campaign/'+encodeURIComponent(current)+'/status');
@@ -324,9 +324,9 @@ async function tick(){
       pushHist('p99', lm.p99||0);
       pushHist('heapDriftKb', ld.heapDriftKb||0);
       document.getElementById('trends').innerHTML =
-        trendCard('throughput', history.throughputRps, '#3fb950', v => v+' rps') +
-        trendCard('p99 latency', history.p99, '#a371f7', v => v+' ms') +
-        trendCard('heap drift', history.heapDriftKb, '#e3b341', v => v+' KiB');
+        trendCard('throughput', trendHistory.throughputRps, '#3fb950', v => v+' rps') +
+        trendCard('p99 latency', trendHistory.p99, '#a371f7', v => v+' ms') +
+        trendCard('heap drift', trendHistory.heapDriftKb, '#e3b341', v => v+' KiB');
     } else {
       // Invariants come from two different places and conflating them is misleading: the harness
       // measures some in ITS OWN jvm (latency/heap/thread of the driver), while the app's agent
@@ -360,9 +360,9 @@ async function tick(){
       pushHist('coveragePct', pct||0);
       pushHist('finds', findsTotal);
       document.getElementById('trends').innerHTML =
-        trendCard('iterations', history.iterations, '#3fb950', v => String(v)) +
-        trendCard('coverage', history.coveragePct, '#a371f7', v => v.toFixed(1)+'%') +
-        trendCard('finds', history.finds, '#ff7b72', v => String(v));
+        trendCard('iterations', trendHistory.iterations, '#3fb950', v => String(v)) +
+        trendCard('coverage', trendHistory.coveragePct, '#a371f7', v => v.toFixed(1)+'%') +
+        trendCard('finds', trendHistory.finds, '#ff7b72', v => String(v));
     }
 
     const total = cl.reduce((a,c)=>a+c.count,0);

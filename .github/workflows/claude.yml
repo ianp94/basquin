@@ -22,9 +22,16 @@ jobs:
     # repo comment/issue events fire immediately for ANY account (the "first-time contributor
     # requires approval" net only covers pull_request-class events) — this gate stops the free-but-
     # noisy runner spin-up before checkout.
+    #
+    # The basquin-bot[bot] App identity is also allowed (issue_comment only) so the Programmer agent's
+    # bot-authored PRs can request their own @claude review — its author_association is CONTRIBUTOR,
+    # which the permission list deliberately excludes. This is scoped to the EXACT bot login, not to
+    # CONTRIBUTOR at large: a stranger cannot post as basquin-bot[bot] without the App's token, so it
+    # does not reopen the free-but-abusable path the permission gate exists to close.
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') &&
-        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+        (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) ||
+         github.event.comment.user.login == 'basquin-bot[bot]')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') &&
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') &&

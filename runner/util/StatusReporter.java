@@ -73,6 +73,10 @@ public final class StatusReporter {
     private static int loadP50, loadP90, loadP99, loadMax, loadThreadDrift;
     private static long loadHeapDriftKb, loadServerErrors, loadRequests;
     private static boolean loadRecorded;
+    // DD-035: true when the target's heap/thread drift is not a trustworthy number this interval (the
+    // baseline drift poll never succeeded, or the target never confirmed load mode) — surfaced as
+    // "driftUnavailable":true instead of a fake heapDriftKb:0.
+    private static boolean loadDriftUnavailable;
 
     private StatusReporter() {}
 
@@ -128,12 +132,15 @@ public final class StatusReporter {
     /** DD-033: campaign mode ("explore"|"load"); tags snapshotJson so the dashboard/CLI pick a view. */
     public static synchronized void setMode(String m) { mode = (m == null ? "explore" : m); }
 
-    /** DD-033: publish the current load snapshot for the dashboard (fed live by LoadRun's snapshotter). */
+    /** DD-033: publish the current load snapshot for the dashboard (fed live by LoadRun's snapshotter).
+     *  DD-035: {@code driftUnavailable} is true when the heap/thread drift for THIS snapshot is not a
+     *  trustworthy number (baseline poll never succeeded, or the target never confirmed load mode) —
+     *  {@link #loadBlockJson} then omits heapDriftKb/threadDrift and emits driftUnavailable:true instead. */
     public static synchronized void recordLoad(double throughputRps, int p50, int p90, int p99, int max,
-            long heapDriftKb, int threadDrift, long serverErrors, long requests) {
+            long heapDriftKb, int threadDrift, long serverErrors, long requests, boolean driftUnavailable) {
         loadThroughputRps = throughputRps; loadP50 = p50; loadP90 = p90; loadP99 = p99; loadMax = max;
         loadHeapDriftKb = heapDriftKb; loadThreadDrift = threadDrift; loadServerErrors = serverErrors;
-        loadRequests = requests; loadRecorded = true;
+        loadRequests = requests; loadRecorded = true; loadDriftUnavailable = driftUnavailable;
     }
 
     /** The load block, or "" unless we're in load mode AND a load snapshot has been recorded. Gating on
@@ -141,11 +148,14 @@ public final class StatusReporter {
      *  — so an explore snapshot never carries a stale block (also removes a test-ordering dependency). */
     private static String loadBlockJson() {
         if (!loadRecorded || !"load".equals(mode)) return "";
+        String driftJson = loadDriftUnavailable
+                ? "\"driftUnavailable\":true"
+                : "\"heapDriftKb\":" + loadHeapDriftKb + ",\"threadDrift\":" + loadThreadDrift;
         return String.format(java.util.Locale.ROOT,
             ",\"load\":{\"throughputRps\":\"%.1f\",\"latencyMs\":{\"p50\":%d,\"p90\":%d,\"p99\":%d,\"max\":%d},"
-          + "\"heapDriftKb\":%d,\"threadDrift\":%d,\"serverErrors\":%d,\"requests\":%d}",
+          + "%s,\"serverErrors\":%d,\"requests\":%d}",
             loadThroughputRps, loadP50, loadP90, loadP99, loadMax,
-            loadHeapDriftKb, loadThreadDrift, loadServerErrors, loadRequests);
+            driftJson, loadServerErrors, loadRequests);
     }
 
     public static synchronized void recordCrash() { if (TRACKING) crashes++; }

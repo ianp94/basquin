@@ -58,7 +58,10 @@ public final class LoadRun {
 
         // DD-029: put the target's valve in lock-free load mode for the run (+ slack) so it can be driven
         // concurrently. The TTL auto-reverts if this driver dies mid-run; we also revert explicitly below.
-        setTargetMode(baseUrl, "load", warmupMs + durationMs + 30_000L);
+        // DD-035: whether the target actually CONFIRMED load mode feeds driftUnavailable below — a
+        // failed/unconfirmed toggle means the target may still be serializing (or unreachable), so any
+        // drift number we'd report is not trustworthy.
+        boolean modeConfirmed = setTargetMode(baseUrl, "load", warmupMs + durationMs + 30_000L);
         runner.util.StatusReporter.setMode("load");
 
         // DD-033: the snapshotter owns the ONE drift poller (both live pushes and the terminal
@@ -76,8 +79,12 @@ public final class LoadRun {
                 DriftDelta d = driftDelta(baselineDrift.get(), cur);
                 LoadSnapshot s = computeLoadSnapshot(hist, total, serverError.get(), windowSec,
                         d.heapDriftKb, d.threadDrift);
+                // DD-035: current-state drift honesty, same rule as the terminal check below — a
+                // baseline that never landed (not yet baselined, or the poll itself came back null)
+                // OR a target that never confirmed load mode.
+                boolean driftUnavailableNow = !baselined.get() || baselineDrift.get() == null || !modeConfirmed;
                 runner.util.StatusReporter.recordLoad(s.throughputRps, s.p50, s.p90, s.p99, s.max,
-                        s.heapDriftKb, s.threadDrift, s.serverErrors, s.requests);
+                        s.heapDriftKb, s.threadDrift, s.serverErrors, s.requests, driftUnavailableNow);
             }
         }, "Basquin-Load-Snapshot");
         snapshotter.setDaemon(true);
@@ -139,27 +146,28 @@ public final class LoadRun {
         Drift terminalDrift = lastDrift.get();
         if (terminalDrift == null) terminalDrift = pollDrift(baseUrl);
         DriftDelta drift = driftDelta(baselineDrift.get(), terminalDrift);
-        long heapDrift = drift.heapDriftKb;
-        int threadDrift = drift.threadDrift;
+
+        // DD-035: driftUnavailable is a first-class signal, not a fake heapDriftKb:0. "The baseline
+        // drift poll never succeeded" covers two cases: (a) !baselined.get() — no worker ever reached
+        // the first post-warmup sample (e.g. duration shorter than warmup), so the CAS in the worker
+        // loop never fired at all; (b) baselined is true but pollDrift returned null (target
+        // unreachable when the baseline WAS attempted), leaving baselineDrift.get() == null.
+        // driftDelta() silently degrades either case to a zero delta — indistinguishable from a real
+        // flat heap — so it must not be relied on here; check the raw state instead. The other half of
+        // the OR is the target never confirming load mode at all.
+        boolean driftUnavailable = !baselined.get() || baselineDrift.get() == null || !modeConfirmed;
 
         // DD-033: push the terminal snapshot to the dashboard before reverting the target's mode, so the
         // authoritative numbers land there too.
         LoadSnapshot fin = computeLoadSnapshot(hist, total, serverError.get(), measuredSec, drift.heapDriftKb, drift.threadDrift);
         runner.util.StatusReporter.recordLoad(fin.throughputRps, fin.p50, fin.p90, fin.p99, fin.max,
-                fin.heapDriftKb, fin.threadDrift, fin.serverErrors, fin.requests);
+                fin.heapDriftKb, fin.threadDrift, fin.serverErrors, fin.requests, driftUnavailable);
         setTargetMode(baseUrl, "explore", 0);
 
-        String json = String.format(java.util.Locale.ROOT,
-                "{\"load\":{\"requests\":%d,\"throughputRps\":\"%.1f\","
-              + "\"latencyMs\":{\"p50\":%d,\"p90\":%d,\"p99\":%d,\"max\":%d},"
-              + "\"heapDriftKb\":%d,\"threadDrift\":%d,\"serverErrors\":%d,"
-              // Only latency is threshold-gated in this first cut; heap/thread are reported as drift
-              // above, not as violation counts (see LoadViolations godoc / DD-026 deferred items).
-              + "\"violations\":{\"latency\":%d,\"heap\":0,\"thread\":0}}}",
-                total, total / measuredSec,
+        String json = summaryJson(total, total / measuredSec,
                 percentile(hist, total, 0.50), percentile(hist, total, 0.90),
                 percentile(hist, total, 0.99), maxBucket(hist),
-                heapDrift, threadDrift, serverError.get(), latencyViol.get());
+                drift, serverError.get(), latencyViol.get(), driftUnavailable);
 
         System.out.println("[Basquin] load done: " + json);
         String summaryOut = System.getProperty("basquin.summary.out");
@@ -168,6 +176,30 @@ public final class LoadRun {
                 Files.write(Paths.get(summaryOut), json.getBytes(StandardCharsets.UTF_8));
             } catch (Exception ignored) { /* never let summary-writing break exit */ }
         }
+    }
+
+    /**
+     * Build the terminal load-summary JSON (DD-026), extracted from {@link #run} so it's unit-testable
+     * without a server. DD-035: when {@code driftUnavailable} is true, the block carries
+     * {@code "driftUnavailable":true} and OMITS {@code heapDriftKb}/{@code threadDrift} entirely — a
+     * heap/thread number the target never actually confirmed must never be printed as if it were real
+     * (even a real flat heap prints {@code heapDriftKb:0}, so silently defaulting to it here would be
+     * indistinguishable from that). When false, heap/thread print as-is (a value may legitimately be
+     * ≤ 0, e.g. a heap that shrank) and no {@code driftUnavailable} key appears.
+     */
+    static String summaryJson(long total, double rps, int p50, int p90, int p99, int max, DriftDelta drift,
+            long serverErr, long latViol, boolean driftUnavailable) {
+        String driftJson = driftUnavailable
+                ? "\"driftUnavailable\":true"
+                : "\"heapDriftKb\":" + drift.heapDriftKb + ",\"threadDrift\":" + drift.threadDrift;
+        return String.format(java.util.Locale.ROOT,
+                "{\"load\":{\"requests\":%d,\"throughputRps\":\"%.1f\","
+              + "\"latencyMs\":{\"p50\":%d,\"p90\":%d,\"p99\":%d,\"max\":%d},"
+              + "%s,\"serverErrors\":%d,"
+              // Only latency is threshold-gated in this first cut; heap/thread are reported as drift
+              // above, not as violation counts (see LoadViolations godoc / DD-026 deferred items).
+              + "\"violations\":{\"latency\":%d,\"heap\":0,\"thread\":0}}}",
+                total, rps, p50, p90, p99, max, driftJson, serverErr, latViol);
     }
 
     /**
@@ -300,16 +332,32 @@ public final class LoadRun {
         }
     }
 
-    /** Toggle the target's valve into/out of load mode over its own HTTP port; best-effort. */
-    private static void setTargetMode(String base, String to, long ttlMs) {
+    /**
+     * Toggle the target's valve into/out of load mode over its own HTTP port; best-effort. Returns
+     * whether the target confirmed LOAD mode specifically — {@code true} iff the response body is
+     * exactly {@code "ok:load"} (the token {@link agent.LoadModeControl#handle} returns for
+     * {@code to=load}) — regardless of what {@code to} was requested here, so a caller toggling
+     * "explore" simply gets {@code false} back (it doesn't care). Logs one line when the response
+     * doesn't match what THIS request asked for (mismatch or transport failure) — not silent.
+     */
+    static boolean setTargetMode(String base, String to, long ttlMs) {
+        String expected = "ok:" + to;
         try {
             String q = "to=" + to + (ttlMs > 0 ? "&ttlMs=" + ttlMs : "");
             HttpURLConnection c = (HttpURLConnection) new URL(base + "/__basquin/mode?" + q).openConnection();
             c.setRequestMethod("POST"); c.setConnectTimeout(3000); c.setReadTimeout(3000);
             c.getResponseCode();
-            try (java.io.InputStream in = c.getInputStream()) { in.readAllBytes(); }
+            String body;
+            try (java.io.InputStream in = c.getInputStream()) {
+                body = new String(in.readAllBytes(), StandardCharsets.UTF_8).trim();
+            }
+            if (!expected.equals(body)) {
+                System.err.println("[Basquin] load: mode " + to + " toggle not confirmed (got \"" + body + "\")");
+            }
+            return "ok:load".equals(body);
         } catch (Exception e) {
             System.err.println("[Basquin] load: mode " + to + " toggle failed (" + e + ")");
+            return false;
         }
     }
 

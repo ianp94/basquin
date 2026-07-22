@@ -1,0 +1,40 @@
+# JSPWiki request grammar (bench target #2 — Apache JSPWiki 2.12.4, a wiki CMS).
+# Structure = grammar; values = corpus (DD-018). Render/search-heavy paths are the availability
+# interest: on this target a page VIEW warms to ~9ms, but Search/Diff/Edit-form render cost 150-175ms.
+#
+#   $name = alt | alt | ...     alt = literal | @valuesFile | ~structure | <generator>
+#   /path?x=${name}             route template
+#   ... <<name=input:field      capture: bind `name` from the response's <input name="field"> value
+#   ...body...${{name}}         reference: substitute a value captured earlier in this sequence (DD-036)
+
+$page     = @../corpus/jspwiki/values/pages.txt | ~Page[0-9]{1,2} | Main | SandBox | <empty> | <string>
+$query    = @../corpus/jspwiki/values/queries.txt | ~[a-z]{3,9} | <empty> | <long>
+$wikitext = ~[a-z ]{20,120} | <string>
+
+# ---- View / render (cheap when warm) ----
+/
+/Wiki.jsp?page=${page}
+/Wiki.jsp
+
+# ---- Full-text search: index scan (expensive: ~173ms) ----
+/Search.jsp?query=${query}
+
+# ---- Revision diff render (expensive: ~164ms) ----
+/Diff.jsp?page=${page}
+
+# ---- Page metadata + edit-form display (render-heavy: ~47-157ms) ----
+/PageInfo.jsp?page=${page}
+/Edit.jsp?page=${page}
+
+# ---- CSRF-protected write (DD-036) --------------------------------------------------
+# JSPWiki guards saves with a per-session anti-CSRF token: <wiki:CsrfProtection/> renders a
+# hidden <input name="X-XSRF-TOKEN" value="..."> in the edit form, and a POST /Edit.jsp save
+# without the matching token is rejected. A static replay corpus therefore can never save a
+# page — the token is minted fresh per session. Response correlation closes that gap: GET the
+# edit form, capture X-XSRF-TOKEN from it, and inject the captured value into the save POST.
+# (Save-form field names verified against templates/210/editors/plain.jsp: page, action=save,
+#  _editedtext (EditorManager.REQ_EDITEDTEXT), the CsrfProtection X-XSRF-TOKEN, and ok=Save.)
+@sequence edit_save
+  /Edit.jsp?page=${page} <<csrf=input:X-XSRF-TOKEN
+  POST /Edit.jsp page=${page}&action=save&X-XSRF-TOKEN=${{csrf}}&_editedtext=${wikitext}&ok=Save
+  /Wiki.jsp?page=${page}

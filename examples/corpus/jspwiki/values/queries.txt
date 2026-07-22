@@ -1,0 +1,6 @@
+wiki
+search
+edit
+plugin
+attachment
+markup

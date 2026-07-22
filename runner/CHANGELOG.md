@@ -3,6 +3,10 @@
 Drivers, exploration, load mode, triage, and the dashboard (server + client).
 Release-level changelog: [`../CHANGELOG.md`](../CHANGELOG.md).
 
+## [Unreleased]
+
+- **Response correlation (DD-036):** load- and explore-mode replay can capture a value from a response (a response header or an `<input>` field) and substitute it into a later request body via `${{name}}`, unlocking CSRF-protected write paths (JSPWiki `X-XSRF-TOKEN`, JPetStore Stripes `_sourcePage`) a static replay could never reach. Corpus format v3 (optional trailing `<<name=kind:arg` capture + `${{name}}` reference) is backward-compatible with v1/v2. The corpus stores only the recipe, never a token; `captureMisses`/`clientErrors` counters surface a broken correlation. Correlated `edit_save`/`order_with_sourcepage` example sequences included.
+
 ## [0.3.0] — 2026-07-22
 
 - **Dashboard read-path auth (DD-028):** the dashboard server token-gates the read path via a token-to-cookie handoff (one-time URL token → `HttpOnly` cookie); reads were previously open. Covered by `DashboardAuthTest`.

@@ -1277,3 +1277,87 @@ viewers a consistent trend, but out of scope here per the task's explicit "do no
 and the client-side buffer already satisfies "graph what this browser tab has observed this session."
 An external charting library — one more dependency for a ~40-line polyline the existing inline-SVG/
 no-dependency style of this file already handles.
+
+## DD-035: Honest load: method/session/sequence-aware replay + drift honesty (2026-07-22)
+
+**Context.** DD-026 PR 2's `LoadRun` replayed every corpus line as a bare `GET <line>` — no HTTP
+method, no body, no session. Against jpetstore, a meaningful share of the corpus an `explore` run
+emits is `POST` (logins, cart mutations, checkout); replaying those as `GET` mostly produced
+404/405/redirect noise instead of exercising the endpoint the explore run actually found interesting.
+Under `concurrency: 20+` that noise was enough to **saturate the target** — 5xx responses and
+timeouts piling up — which in turn **starved the `/__basquin/drift` poller**: it shares the target's
+request-handling capacity with the load traffic, so a saturated target means the poll itself times
+out or fails. `driftDelta()` silently degrades a missing baseline-or-terminal sample to a zero delta,
+indistinguishable from a real flat heap — so the run's summary reported `heapDriftKb:0`, a **fabricated
+"no drift"** for a heap that was never actually sampled. That's the "honest load" bug: not that load
+mode lied about a number, but that its plumbing could produce a plausible-looking number with nothing
+real behind it.
+
+**Decision.** Two independent fixes, both required — fixing only the replay leaves drift honesty
+unaddressed for the *next* way a poll can fail; fixing only drift honesty ships a load tester that
+still stress-tests the wrong requests.
+
+1. **Corpus format v2 — method/session/sequence-aware replay**, backward-compatible with every v1
+   corpus on disk today. A step is `METHOD? path( SP body )?` (`RequestLine.parse` — a bare `/foo`
+   with no method token is still `GET /foo`, so v1 lines parse unchanged). A line is either one step
+   or a **TAB-separated sequence** of steps (`RequestLine.parseSequence`), replayed **in order** as one
+   logical flow (e.g. `POST /actions/Account.action?signon= u=j2ee` then the authenticated GETs it
+   unlocks) — TAB was chosen specifically because it cannot appear in a URL or a form-urlencoded body,
+   so it never collides with real request content. Corpus-file filtering (`readCorpus`) keeps a line
+   iff its **first step's** path starts with `/` (`RequestLine.firstPath`), which is what lets a
+   `POST /...`-leading v2 line still be recognized as a route line rather than mistaken for a grammar
+   value file (whose lines are bare tokens, e.g. `values/keyword.txt`). Each load **worker** now owns
+   one session cookie jar for its whole run, capturing `Set-Cookie` from one step and replaying it as
+   `Cookie` on every later step so an authenticated sequence actually replays authenticated.
+2. **`driftUnavailable` as a first-class signal**, not a fabricated zero. `status.load` (and the
+   terminal `[Basquin] load done: {...}` log JSON) now carries either a real `heapDriftKb`/
+   `threadDrift` pair, **or** `"driftUnavailable":true` with those two fields omitted entirely — never
+   a `0` standing in for "couldn't measure it" (a real flat/shrinking heap legitimately prints `0` or a
+   negative delta; that must stay visually indistinguishable from a genuine reading, which is exactly
+   why the omit-vs-print split, not a sentinel value, is the mechanism). **The correct definition**
+   (`LoadRun.driftUnavailable`, review-fixed from an earlier narrower version): `driftUnavailable` is
+   `true` when **any** of — the baseline drift poll never landed (no worker ever reached its first
+   post-warmup sample, or the poll came back null when it was attempted), **or** the current/terminal
+   drift sample is missing (a later poll failure, independent of whether the baseline succeeded),
+   **or** the target never confirmed load mode at all (`setTargetMode` didn't get back exactly
+   `"ok:load"` — a target that's still serializing requests, or unreachable, cannot be trusted for a
+   concurrent-load drift reading even if a drift poll happens to succeed). The narrower, buggy version
+   checked only the baseline: a baseline that landed fine followed by a later poll failure still
+   reported `driftUnavailable=false` with a fabricated `heapDriftKb:0` — the exact false-negative this
+   decision exists to close.
+
+**Verified.** Unit tests exercise `RequestLine.parse`/`parseSequence`/`firstPath` (v1 backward-compat,
+method/body parsing, TAB sequences, value-file exclusion via `firstPath`), `LoadRun.driftUnavailable`
+(all four inputs independently, including the review-fixed terminal-sample case), and
+`LoadRun.summaryJson` (the omit-vs-print split). In-cluster e2e (`deploy/e2e/e2e.sh`): the emitted
+replay corpus's route-count grep now recognizes v1/method-prefixed/sequence lines alike; after a load
+campaign, the driver Job log is asserted to carry neither a failed mode-toggle line nor a
+`"driftUnavailable":true` terminal summary, and `/__basquin/drift` is curled over the app's Service
+DNS **while the campaign is still `Running`** and asserted to return HTTP 200 with a parseable body —
+sampled-ness, deliberately not `drift > 0` (a GC pause can legitimately shrink heap between samples).
+
+**Rejected alternatives.**
+- **JSON-lines corpus** (one JSON object per line: `{"method":...,"path":...,"body":...,"seq":...}`) —
+  self-describing and trivially extensible, but roughly doubles the byte cost of every route (field
+  names repeated per line) against a corpus that's already budget-constrained by the ~4 KiB
+  termination-message transport (DD-026 §3), and forces every existing corpus file, every operator
+  hand-authoring a corpus, and every doc example to change format. Rejected: the byte budget is the
+  binding constraint, and TAB-separated steps cost zero bytes over today's format for the common
+  single-step case.
+- **Blank-line-separated sequence blocks** (a sequence is a run of consecutive non-blank lines; a blank
+  line ends it) — reads naturally for a hand-authored corpus, but collides with the existing
+  `readCorpus` line-at-a-time contract and creates real backward-compat ambiguity: nothing today
+  distinguishes "blank line as a deliberate sequence separator" from "blank line the file happened to
+  have" (trailing newline artifacts, hand-edited corpora), so an existing corpus could silently splice
+  unrelated lines into one bogus "sequence" the moment this shipped. Rejected: TAB-in-one-line makes a
+  sequence's boundary syntactically unambiguous — a sequence either is or isn't the whole line, no
+  cross-line state to accidentally get wrong.
+- **A dedicated drift port** (serve `/__basquin/drift` on its own listener/thread pool, insulated from
+  the app's request-handling capacity, so load traffic can never starve it) — the instinctive fix once
+  "drift polling was starved" is diagnosed, but a benchmark against a **healthy** target (not saturated
+  by method-unaware 404 noise) showed the shared-port poll succeeds reliably; the real root cause
+  wasn't port contention, it was the undersized **512 MB** heap (`-Xmx512m`, DD-023's baseline) getting
+  driven into GC pressure by traffic that was mostly failing anyway. Rejected for this cut: it adds a
+  second listener/thread pool to every instrumented target for a problem the replay fix (1) already
+  resolves at the source; `driftUnavailable` (2) remains the honest fallback for whatever narrower
+  starvation case survives on a target that's merely under-provisioned, not broken.

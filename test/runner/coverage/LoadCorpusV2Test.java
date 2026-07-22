@@ -33,17 +33,17 @@ public class LoadCorpusV2Test {
         Files.write(corpusFile, contents.getBytes(StandardCharsets.UTF_8));
         corpusFile.toFile().deleteOnExit();
 
-        List<List<RequestLine>> sequences = LoadRun.readCorpus(dir.toString());
+        List<LoadRun.Seq> sequences = LoadRun.readCorpus(dir.toString());
 
         assertEquals("value lines (cat/dog) must be excluded; exactly 3 route sequences remain",
                 3, sequences.size());
 
-        List<RequestLine> bareGet = sequences.get(0);
+        List<RequestLine> bareGet = sequences.get(0).steps();
         assertEquals(1, bareGet.size());
         assertEquals("GET", bareGet.get(0).method());
         assertEquals("/actions/Catalog.action", bareGet.get(0).path());
 
-        List<RequestLine> twoStep = sequences.get(1);
+        List<RequestLine> twoStep = sequences.get(1).steps();
         assertEquals(2, twoStep.size());
         assertEquals("POST", twoStep.get(0).method());
         assertEquals("/a?x=", twoStep.get(0).path());
@@ -51,7 +51,7 @@ public class LoadCorpusV2Test {
         assertEquals("/b?y=", twoStep.get(1).path());
 
         // Old filter (raw-line startsWith("/")) would drop this: the line starts with "POST", not "/".
-        List<RequestLine> signon = sequences.get(2);
+        List<RequestLine> signon = sequences.get(2).steps();
         assertEquals(1, signon.size());
         assertEquals("POST", signon.get(0).method());
         assertEquals("/actions/Account.action?signon=", signon.get(0).path());

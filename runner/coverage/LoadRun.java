@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Load / soak driver (DD-026 PR 2). Replays a saved "replay corpus" of route strings at a fixed
@@ -26,16 +28,22 @@ import java.util.concurrent.atomic.AtomicLongArray;
 public final class LoadRun {
 
     private static final int MAX_MS = 30_000; // latency histogram ceiling; anything slower buckets here
+    private static final int CAPTURE_MAX_BYTES = 262_144; // 256KB cap on a retained response body (DD-036)
+
+    /** DD-036: a sequence, plus whether ANY step's body references {@code ${{name}}} — computed once at
+     *  corpus-read time so the hot worker loop never re-scans for it. When false, the worker loop skips
+     *  allocating a bindings map at all (identical no-alloc path to before this feature). */
+    record Seq(List<RequestLine> steps, boolean correlated) {}
 
     public static void run() throws Exception {
         String baseUrl = System.getProperty("examples.http.baseUrl", "http://localhost:8080");
         String corpusDir = System.getProperty("basquin.corpusDir", "");
-        List<List<RequestLine>> read = readCorpus(corpusDir);
+        List<Seq> read = readCorpus(corpusDir);
         if (read.isEmpty()) {
             System.err.println("[Basquin] load: no corpus routes under " + corpusDir + "; nothing to replay");
         }
-        final List<List<RequestLine>> corpus = read.isEmpty()
-                ? List.of(List.of(new RequestLine("GET", "/", null))) : read;
+        final List<Seq> corpus = read.isEmpty()
+                ? List.of(new Seq(List.of(new RequestLine("GET", "/", null)), false)) : read;
         long durationMs = CoverageGuidedRun.parseDurationMillis(System.getProperty("basquin.run.duration", "60s"));
         long warmupMs = System.getProperty("basquin.warmup", "").isEmpty()
                 ? 0L : CoverageGuidedRun.parseDurationMillis(System.getProperty("basquin.warmup"));
@@ -53,6 +61,8 @@ public final class LoadRun {
         final AtomicLong requests = new AtomicLong();
         final AtomicLong latencyViol = new AtomicLong();
         final AtomicLong serverError = new AtomicLong(); // 5xx responses (DD-029)
+        final AtomicLong captureMisses = new AtomicLong(); // DD-036: a ${{name}} ref whose capture never bound
+        final AtomicLong clientErrors = new AtomicLong(); // 4xx responses (DD-036)
         final java.util.concurrent.atomic.AtomicReference<Drift> baselineDrift = new java.util.concurrent.atomic.AtomicReference<>();
         final java.util.concurrent.atomic.AtomicBoolean baselined = new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -100,13 +110,25 @@ public final class LoadRun {
                 // set on step 1 must still be present on step N.
                 java.util.Map<String, String> jar = new java.util.HashMap<>();
                 while (System.nanoTime() < deadlineNanos) {
-                    List<RequestLine> seq = corpus.get(rnd.nextInt(corpus.size()));
-                    for (RequestLine step : seq) {
+                    Seq seq = corpus.get(rnd.nextInt(corpus.size()));
+                    // DD-036: only a correlated sequence pays for a bindings map — an uncorrelated one
+                    // takes the identical no-alloc path as before this feature.
+                    java.util.Map<String, String> bindings = seq.correlated() ? new java.util.HashMap<>(4) : null;
+                    for (RequestLine step : seq.steps()) {
                         // A long sequence must not run past the deadline: check BEFORE firing each step,
                         // not just at the outer loop, so a worker can't overshoot the window mid-sequence.
                         if (System.nanoTime() >= deadlineNanos) break;
+                        RequestLine toFire = step;
+                        if (step.needsSubstitution()) {
+                            String b = substitute(step.body(), bindings);
+                            if (b == null) {
+                                if (System.nanoTime() >= measureFromNanos) captureMisses.incrementAndGet();
+                                continue; // skip this step: a required prior capture never bound
+                            }
+                            toFire = new RequestLine(step.method(), step.path(), b, step.capture());
+                        }
                         long t0 = System.nanoTime();
-                        int code = fire(baseUrl, step, jar);
+                        int code = fire(baseUrl, toFire, jar, bindings, captureMisses);
                         long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
                         if (System.nanoTime() < measureFromNanos) {
                             continue; // warmup: don't record
@@ -118,6 +140,7 @@ public final class LoadRun {
                         hist.incrementAndGet((int) Math.min(elapsedMs, MAX_MS + 1));
                         requests.incrementAndGet();
                         if (code >= 500) serverError.incrementAndGet();
+                        else if (code >= 400 && code < 500) clientErrors.incrementAndGet();
                         if (latencyMaxMs > 0 && elapsedMs > latencyMaxMs) {
                             latencyViol.incrementAndGet();
                         }
@@ -169,7 +192,8 @@ public final class LoadRun {
         String json = summaryJson(total, total / measuredSec,
                 percentile(hist, total, 0.50), percentile(hist, total, 0.90),
                 percentile(hist, total, 0.99), maxBucket(hist),
-                drift, serverError.get(), latencyViol.get(), driftUnavailable);
+                drift, serverError.get(), latencyViol.get(),
+                captureMisses.get(), clientErrors.get(), driftUnavailable);
 
         System.out.println("[Basquin] load done: " + json);
         String summaryOut = System.getProperty("basquin.summary.out");
@@ -190,18 +214,18 @@ public final class LoadRun {
      * ≤ 0, e.g. a heap that shrank) and no {@code driftUnavailable} key appears.
      */
     static String summaryJson(long total, double rps, int p50, int p90, int p99, int max, DriftDelta drift,
-            long serverErr, long latViol, boolean driftUnavailable) {
+            long serverErr, long latViol, long captureMisses, long clientErrors, boolean driftUnavailable) {
         String driftJson = driftUnavailable
                 ? "\"driftUnavailable\":true"
                 : "\"heapDriftKb\":" + drift.heapDriftKb + ",\"threadDrift\":" + drift.threadDrift;
         return String.format(java.util.Locale.ROOT,
                 "{\"load\":{\"requests\":%d,\"throughputRps\":\"%.1f\","
               + "\"latencyMs\":{\"p50\":%d,\"p90\":%d,\"p99\":%d,\"max\":%d},"
-              + "%s,\"serverErrors\":%d,"
+              + "%s,\"serverErrors\":%d,\"captureMisses\":%d,\"clientErrors\":%d,"
               // Only latency is threshold-gated in this first cut; heap/thread are reported as drift
               // above, not as violation counts (see LoadViolations godoc / DD-026 deferred items).
               + "\"violations\":{\"latency\":%d,\"heap\":0,\"thread\":0}}}",
-                total, rps, p50, p90, p99, max, driftJson, serverErr, latViol);
+                total, rps, p50, p90, p99, max, driftJson, serverErr, captureMisses, clientErrors, latViol);
     }
 
     /**
@@ -216,6 +240,18 @@ public final class LoadRun {
      * established.
      */
     static int fire(String base, RequestLine step, java.util.Map<String, String> jar) {
+        return fire(base, step, jar, null, null);
+    }
+
+    /**
+     * Task 4 (DD-036) overload: same as {@link #fire(String, RequestLine, java.util.Map)} but, when
+     * {@code step.capture()} is non-null and {@code bindings} is non-null, also retains the response
+     * body (capped at {@link #CAPTURE_MAX_BYTES}) — while STILL draining to EOF, so the connection can
+     * still be keep-alive'd — and runs {@link Capture#extract} against it, recording either a new
+     * binding or a capture miss.
+     */
+    static int fire(String base, RequestLine step, java.util.Map<String, String> jar,
+            java.util.Map<String, String> bindings, AtomicLong captureMisses) {
         HttpURLConnection c = null;
         try {
             c = (HttpURLConnection) new URL(base + step.path()).openConnection();
@@ -249,9 +285,32 @@ public final class LoadRun {
             }
             int code = c.getResponseCode();
             captureSessionCookie(c, jar);
-            try (java.io.InputStream in = c.getInputStream()) {
-                byte[] buf = new byte[8192];
-                while (in.read(buf) != -1) { /* drain so the connection can be keep-alive'd */ }
+            if (step.capture() == null || bindings == null) {
+                try (java.io.InputStream in = c.getInputStream()) {
+                    byte[] buf = new byte[8192];
+                    while (in.read(buf) != -1) { /* drain so the connection can be keep-alive'd */ }
+                }
+            } else {
+                // Retain at most CAPTURE_MAX_BYTES of the body while still draining to EOF (keep-alive).
+                java.io.ByteArrayOutputStream retained = new java.io.ByteArrayOutputStream(8192);
+                try (java.io.InputStream in = c.getInputStream()) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) != -1) {
+                        if (retained.size() < CAPTURE_MAX_BYTES) {
+                            int room = CAPTURE_MAX_BYTES - retained.size();
+                            retained.write(buf, 0, Math.min(n, room));
+                        }
+                        // keep reading past the cap so the connection still drains to EOF
+                    }
+                }
+                String body = retained.toString(StandardCharsets.UTF_8);
+                String val = step.capture().extract(c::getHeaderField, body);
+                if (val != null) {
+                    bindings.put(step.capture().name(), val);
+                } else if (captureMisses != null) {
+                    captureMisses.incrementAndGet();
+                }
             }
             return code;
         } catch (Exception ignored) {
@@ -265,6 +324,30 @@ public final class LoadRun {
             }
             return code;
         }
+    }
+
+    private static final Pattern CORRELATION_REF_PATTERN = Pattern.compile("\\$\\{\\{([^}]+)\\}\\}");
+
+    /**
+     * Replaces each {@code ${{name}}} reference in {@code body} with the URL-encoded value bound to
+     * {@code name} in {@code bindings}. Returns null if ANY referenced name is missing a binding — the
+     * worker loop treats a null return as "skip firing this step" (a required prior capture never
+     * bound).
+     */
+    static String substitute(String body, java.util.Map<String, String> bindings) {
+        Matcher m = CORRELATION_REF_PATTERN.matcher(body);
+        StringBuilder out = new StringBuilder();
+        int last = 0;
+        while (m.find()) {
+            String name = m.group(1);
+            String value = bindings == null ? null : bindings.get(name);
+            if (value == null) return null;
+            out.append(body, last, m.start());
+            out.append(java.net.URLEncoder.encode(value, StandardCharsets.UTF_8));
+            last = m.end();
+        }
+        out.append(body, last, body.length());
+        return out.toString();
     }
 
     /** Pull {@code JSESSIONID=<value>} out of any {@code Set-Cookie} response headers into {@code jar},
@@ -385,8 +468,8 @@ public final class LoadRun {
      * {@code "POST /actions/Account.action?signon= u=j2ee"}), which a raw {@code startsWith("/")} check
      * on the line itself would incorrectly drop.
      */
-    static List<List<RequestLine>> readCorpus(String dir) {
-        List<List<RequestLine>> sequences = new ArrayList<>();
+    static List<Seq> readCorpus(String dir) {
+        List<Seq> sequences = new ArrayList<>();
         if (dir == null || dir.isEmpty()) return sequences;
         java.nio.file.Path root = Paths.get(dir);
         if (!Files.isDirectory(root)) return sequences;
@@ -396,7 +479,10 @@ public final class LoadRun {
                     String t = line.trim();
                     if (t.isEmpty()) continue;
                     if (RequestLine.firstPath(t).startsWith("/")) {
-                        sequences.add(RequestLine.parseSequence(t));
+                        List<RequestLine> steps = RequestLine.parseSequence(t);
+                        boolean correlated = steps.stream().anyMatch(RequestLine::needsSubstitution);
+                        lintCorrelationOrdering(steps);
+                        sequences.add(new Seq(steps, correlated));
                     }
                 }
             }
@@ -404,6 +490,33 @@ public final class LoadRun {
             System.err.println("[Basquin] load: failed reading corpus " + dir + ": " + e);
         }
         return sequences;
+    }
+
+    // DD-036: best-effort, log-once for the whole run — a ${{name}} referenced before any earlier step
+    // in the sequence captures it will simply never bind, which is silent and confusing without a hint.
+    private static final java.util.concurrent.atomic.AtomicBoolean CORRELATION_LINT_WARNED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /** Walks {@code steps} in order, accumulating names captured so far; for each step's body, flags any
+     *  {@code ${{name}}} reference whose name was not captured by a STRICTLY EARLIER step. Logs at most
+     *  one warning line for the whole run (not per sequence). Never throws — lint only. */
+    private static void lintCorrelationOrdering(List<RequestLine> steps) {
+        java.util.Set<String> capturedSoFar = new java.util.HashSet<>();
+        for (RequestLine step : steps) {
+            if (step.body() != null) {
+                Matcher m = CORRELATION_REF_PATTERN.matcher(step.body());
+                while (m.find()) {
+                    String name = m.group(1);
+                    if (!capturedSoFar.contains(name) && CORRELATION_LINT_WARNED.compareAndSet(false, true)) {
+                        System.err.println("[Basquin] load: correlation ref ${{" + name + "}} has no preceding <<"
+                                + name + "= capture in a sequence; it will never bind");
+                    }
+                }
+            }
+            if (step.capture() != null) {
+                capturedSoFar.add(step.capture().name());
+            }
+        }
     }
 
     /** The p-th percentile latency (ms) from the histogram, or 0 if no samples. Package-private for tests. */

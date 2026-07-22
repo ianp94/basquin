@@ -70,16 +70,22 @@
 
   <h2>Prerequisites (one-time)</h2>
   <ul style="color:var(--text-muted)">
-    <li>A kind cluster with the operator installed and the four images loaded. The canonical setup is
-      <a href="https://github.com/ianp94/basquin/blob/main/deploy/e2e/e2e.sh"><code>deploy/e2e/e2e.sh</code></a>
-      (run it once, or <code>--no-teardown</code> to leave the cluster up).</li>
-    <li><strong>Keep the cluster images current.</strong> They are tagged <code>0.3.0</code> but built
-      from source; if the cluster has been up across code changes, rebuild the driver so it runs
-      current code: <code>deploy/runner-image/build.sh 0.3.0 basquin</code>. A stale runner will crash
-      on new corpus/grammar features (e.g. DD-035 method/sequence entries) — the symptom is a driver
-      <code>IndexOutOfBounds</code> at startup.</li>
-    <li><code>KUBECONFIG=/tmp/kc-basquin</code>, <code>K="kubectl --context kind-basquin"</code>,
-      <code>NS=basquin-system</code>.</li>
+    <li><strong>A Kubernetes cluster with the Basquin operator installed &mdash; from the published
+      images.</strong> Follow the <a href="../README.md#quick-start-kubernetes">README quickstart</a>:
+      <code>helm repo add basquin https://ianp94.github.io/basquin/charts</code> then
+      <code>helm install basquin basquin/basquin-operator …</code>. The chart pulls the <strong>released
+      multi-arch <code>ghcr.io/ianp94/basquin-{operator,agents,runner,dashboard}</code> images</strong>
+      at its <code>appVersion</code> (0.3.0) &mdash; <strong>nothing to build or repackage.</strong>
+      (For a throwaway local cluster, <code>kind create cluster</code> first.)</li>
+    <li><strong>The app-under-test</strong> is either an app you already run (the operator instruments
+      it in place) or, for a <em>reproducible</em> bench target, packaged as a <code>raw</code> image
+      in step 2 &mdash; that's <em>your app</em>, not Basquin.</li>
+    <li><em>(Contributors only.)</em> If you're iterating on Basquin's <strong>own</strong> source in a
+      from-source local cluster (<a href="https://github.com/ianp94/basquin/blob/main/deploy/e2e/e2e.sh"><code>deploy/e2e/e2e.sh</code></a>),
+      rebuild the changed image after edits and <code>kind load</code> it, e.g.
+      <code>deploy/runner-image/build.sh 0.3.0 basquin</code> &mdash; otherwise the cluster keeps running
+      stale code. <strong>Users on the published images never need this.</strong></li>
+    <li><code>KUBECONFIG=…</code>, <code>K="kubectl …"</code>, <code>NS=basquin-system</code>.</li>
   </ul>
 
   <ol class="steps">

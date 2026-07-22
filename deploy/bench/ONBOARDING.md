@@ -8,14 +8,21 @@ The operator's advertised flow is two steps — **instrument** a Deployment (`Ba
 
 ## Prerequisites (one-time)
 
-- A kind cluster with the operator installed and the four images loaded. The canonical setup is
-  [`deploy/e2e/e2e.sh`](../e2e/e2e.sh) (run it once, or `--no-teardown` to leave the cluster up).
-- **Keep the cluster images current.** They are tagged `0.3.0` but built from source; if the cluster
-  has been up across code changes, rebuild the driver so it runs current code:
-  `deploy/runner-image/build.sh 0.3.0 basquin`. A stale runner will crash on new corpus/grammar
-  features (e.g. DD-035 method/sequence entries) — the symptom is a driver `IndexOutOfBounds` at
-  startup.
-- `KUBECONFIG=/tmp/kc-basquin`, `K="kubectl --context kind-basquin"`, `NS=basquin-system`.
+- **A Kubernetes cluster with the Basquin operator installed — from the published images.** Follow
+  the [README quickstart](../../README.md#quick-start-kubernetes): `helm repo add basquin
+  https://ianp94.github.io/basquin/charts` then `helm install basquin basquin/basquin-operator …`.
+  The chart pulls the **released multi-arch `ghcr.io/ianp94/basquin-{operator,agents,runner,dashboard}`
+  images** at its `appVersion` (0.3.0) — **nothing to build or repackage.** (For a throwaway local
+  cluster, `kind create cluster` first.)
+- **The app-under-test** is either an app you already run (the operator instruments it in place) or,
+  for a *reproducible* bench target, packaged as a `raw` image in step 2 — that's *your app*, not
+  Basquin.
+- *(Contributors only.)* If you're iterating on Basquin's **own** source in a from-source local
+  cluster (`deploy/e2e/e2e.sh`), rebuild the changed image after edits and `kind load` it, e.g.
+  `deploy/runner-image/build.sh 0.3.0 basquin` — otherwise the cluster keeps running stale code (a
+  stale runner crashes on newer corpus/grammar features). **Users on the published images never need
+  this.**
+- `KUBECONFIG=…`, `K="kubectl …"`, `NS=basquin-system`.
 
 ## 1. Prepare the app artifact
 
@@ -181,7 +188,7 @@ generator, not boundary state. See [`BENCHMARKS.md`](../../docs/BENCHMARKS.md) f
 
 ## Gotchas checklist
 
-- [ ] Runner image current (rebuild if the cluster is stale) — else driver crashes on new features.
+- [ ] *(Contributors on a from-source cluster only)* rebuild + `kind load` the changed Basquin image — users on the published `ghcr.io` images skip this.
 - [ ] Classes in jars → extract into `/basquin-app-classes`, set `classesPath`.
 - [ ] Target heap `-Xmx2g` — 512m GC-thrashes and starves the drift poll.
 - [ ] All k8s object/configmap names **lowercase**.

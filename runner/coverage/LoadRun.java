@@ -88,14 +88,18 @@ public final class LoadRun {
             final long seed = w;
             workers[w] = new Thread(() -> {
                 Random rnd = new Random(seed);
+                // Each worker owns one session jar for its whole run: sequences replay as a logged-in
+                // user would exercise them (e.g. POST /signon then authenticated GETs), so the cookie
+                // set on step 1 must still be present on step N.
+                java.util.Map<String, String> jar = new java.util.HashMap<>();
                 while (System.nanoTime() < deadlineNanos) {
-                    // GET-only shim (Task 2): sequences are picked and walked step by step, but each
-                    // step is still fired as a plain GET against `path()` — Task 3 makes replay
-                    // method/session-aware (POST bodies, cookies, etc).
                     List<RequestLine> seq = corpus.get(rnd.nextInt(corpus.size()));
                     for (RequestLine step : seq) {
+                        // A long sequence must not run past the deadline: check BEFORE firing each step,
+                        // not just at the outer loop, so a worker can't overshoot the window mid-sequence.
+                        if (System.nanoTime() >= deadlineNanos) break;
                         long t0 = System.nanoTime();
-                        int code = fire(baseUrl, step.path());
+                        int code = fire(baseUrl, step, jar);
                         long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
                         if (System.nanoTime() < measureFromNanos) {
                             continue; // warmup: don't record
@@ -167,18 +171,45 @@ public final class LoadRun {
     }
 
     /**
-     * Fire one request, drain the body, and return the HTTP status (or -1 on a transport error). A
-     * status ≥ 500 is a server error — the availability signal load mode DOES want (DD-029; the old
-     * "measures behavior, not crashes" swallow is why 5xx were invisible).
+     * Fire one request — method, body, and session-aware (Task 3) — drain the response, and return the
+     * HTTP status (or -1 on a transport error). A status ≥ 500 is a server error — the availability
+     * signal load mode DOES want (DD-029; the old "measures behavior, not crashes" swallow is why 5xx
+     * were invisible).
+     *
+     * <p>{@code jar} is a per-worker session cookie store, keyed by cookie name (just {@code
+     * JSESSIONID} in practice): it's read to build the request's {@code Cookie} header and written from
+     * the response's {@code Set-Cookie}, so a sequence's later steps see the session its earlier steps
+     * established.
      */
-    private static int fire(String base, String path) {
+    static int fire(String base, RequestLine step, java.util.Map<String, String> jar) {
         HttpURLConnection c = null;
         try {
-            c = (HttpURLConnection) new URL(base + path).openConnection();
+            c = (HttpURLConnection) new URL(base + step.path()).openConnection();
             c.setConnectTimeout(5000);
             c.setReadTimeout(MAX_MS);
             c.setInstanceFollowRedirects(true);
+            c.setRequestMethod(step.method());
+            byte[] bodyBytes = null;
+            if (step.body() != null) {
+                bodyBytes = step.body().getBytes(StandardCharsets.UTF_8);
+                c.setDoOutput(true);
+                c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+            }
+            if (!jar.isEmpty()) {
+                StringBuilder cookieHeader = new StringBuilder();
+                for (java.util.Map.Entry<String, String> e : jar.entrySet()) {
+                    if (cookieHeader.length() > 0) cookieHeader.append("; ");
+                    cookieHeader.append(e.getKey()).append('=').append(e.getValue());
+                }
+                c.setRequestProperty("Cookie", cookieHeader.toString());
+            }
+            if (bodyBytes != null) {
+                try (java.io.OutputStream out = c.getOutputStream()) {
+                    out.write(bodyBytes);
+                }
+            }
             int code = c.getResponseCode();
+            captureSessionCookie(c, jar);
             try (java.io.InputStream in = c.getInputStream()) {
                 byte[] buf = new byte[8192];
                 while (in.read(buf) != -1) { /* drain so the connection can be keep-alive'd */ }
@@ -188,11 +219,35 @@ public final class LoadRun {
             int code = -1;
             if (c != null) {
                 try { code = c.getResponseCode(); } catch (Exception e) { /* keep -1 */ }
+                captureSessionCookie(c, jar);
                 try (java.io.InputStream err = c.getErrorStream()) {
                     if (err != null) { byte[] b = new byte[8192]; while (err.read(b) != -1) {} }
                 } catch (Exception ignored2) { /* drain error stream too, for keep-alive */ }
             }
             return code;
+        }
+    }
+
+    /** Pull {@code JSESSIONID=<value>} out of any {@code Set-Cookie} response headers into {@code jar},
+     *  stripping attributes (Path, HttpOnly, Max-Age, …) at the first {@code ;}. Walks the indexed
+     *  header API (not {@code getHeaderFields().get("Set-Cookie")}) — that map is keyed by the exact
+     *  case the server sent (e.g. JDK's {@code HttpServer} sends {@code Set-cookie}), so an exact-case
+     *  lookup silently misses it. */
+    private static void captureSessionCookie(HttpURLConnection c, java.util.Map<String, String> jar) {
+        for (int i = 0; ; i++) {
+            String key = c.getHeaderFieldKey(i);
+            if (key == null) {
+                if (c.getHeaderField(i) == null) break; // key null only for the status line at index 0
+                continue;
+            }
+            if (!key.equalsIgnoreCase("Set-Cookie")) continue;
+            String sc = c.getHeaderField(i);
+            int eq = sc.indexOf("JSESSIONID=");
+            if (eq == -1) continue;
+            String rest = sc.substring(eq + "JSESSIONID=".length());
+            int semi = rest.indexOf(';');
+            String value = semi == -1 ? rest : rest.substring(0, semi);
+            jar.put("JSESSIONID", value.trim());
         }
     }
 

@@ -5,11 +5,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public record RequestLine(String method, String path, String body, Capture capture) {
+public record RequestLine(String method, String path, String body, List<Capture> captures) {
     private static final Set<String> METHODS = Set.of("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD");
 
     public RequestLine(String method, String path, String body) {
-        this(method, path, body, null);
+        this(method, path, body, List.of());
     }
 
     public boolean needsSubstitution() {
@@ -21,17 +21,18 @@ public record RequestLine(String method, String path, String body, Capture captu
             return parseCore(step);
         }
 
-        Capture cap = null;
-        int ls = step.lastIndexOf(' ');
-        if (ls >= 0 && step.startsWith("<<", ls + 1)) {
-            cap = Capture.parse(step.substring(ls + 1));
-            if (cap != null) {
-                step = step.substring(0, ls);
-            }
+        java.util.ArrayList<Capture> caps = new java.util.ArrayList<>();
+        while (true) {
+            int ls = step.lastIndexOf(' ');
+            if (ls < 0 || !step.startsWith("<<", ls + 1)) break;
+            Capture cap = Capture.parse(step.substring(ls + 1));
+            if (cap == null) break;               // back-compat guard: a non-capture trailing token stays in the body
+            caps.add(0, cap);                      // prepend → preserve left-to-right source order
+            step = step.substring(0, ls);
         }
 
         RequestLine r = parseCore(step);
-        return new RequestLine(r.method(), r.path(), r.body(), cap);
+        return new RequestLine(r.method(), r.path(), r.body(), caps);
     }
 
     private static RequestLine parseCore(String step) {
@@ -87,8 +88,10 @@ public record RequestLine(String method, String path, String body, Capture captu
     }
 
     public String format() {
-        return (method.equals("GET") ? "" : method + " ") + path + (body == null ? "" : " " + body)
-            + (capture == null ? "" : " " + capture.format());
+        StringBuilder sb = new StringBuilder(
+            (method.equals("GET") ? "" : method + " ") + path + (body == null ? "" : " " + body));
+        for (Capture c : captures) sb.append(' ').append(c.format());
+        return sb.toString();
     }
 
     public static List<RequestLine> parseSequence(String line) {

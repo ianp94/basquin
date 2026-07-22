@@ -128,7 +128,7 @@ public final class LoadRun {
                                 if (System.nanoTime() >= measureFromNanos) captureMisses.incrementAndGet();
                                 continue; // skip this step: a required prior capture never bound
                             }
-                            toFire = new RequestLine(step.method(), step.path(), b, step.capture());
+                            toFire = new RequestLine(step.method(), step.path(), b, step.captures());
                         }
                         long t0 = System.nanoTime();
                         int code = fire(baseUrl, toFire, jar, bindings);
@@ -248,7 +248,7 @@ public final class LoadRun {
 
     /**
      * Task 4 (DD-036) overload: same as {@link #fire(String, RequestLine, java.util.Map)} but, when
-     * {@code step.capture()} is non-null and {@code bindings} is non-null, also retains the response
+     * {@code step.captures()} is non-empty and {@code bindings} is non-null, also retains the response
      * body (capped at {@link #CAPTURE_MAX_BYTES}) — while STILL draining to EOF, so the connection can
      * still be keep-alive'd — and runs {@link Capture#extract} against it, recording a new binding on
      * success. Review fix (single-count captureMisses): a failed extraction does NOT increment any
@@ -289,7 +289,7 @@ public final class LoadRun {
             }
             int code = c.getResponseCode();
             captureSessionCookie(c, jar);
-            if (step.capture() == null || bindings == null) {
+            if (step.captures().isEmpty() || bindings == null) {
                 try (java.io.InputStream in = c.getInputStream()) {
                     byte[] buf = new byte[8192];
                     while (in.read(buf) != -1) { /* drain so the connection can be keep-alive'd */ }
@@ -309,15 +309,15 @@ public final class LoadRun {
                     }
                 }
                 String body = retained.toString(StandardCharsets.UTF_8);
-                String val = step.capture().extract(c::getHeaderField, body);
                 // Single source of truth for captureMisses (review fix): a failed extraction here is
                 // only meaningful if a LATER step actually references it — and when it does,
                 // substitute() in the worker loop returns null and THAT site counts one warmup-gated
                 // miss and skips the request. A capture that fails but is never referenced downstream
                 // is a no-op and must not inflate the metric, so this branch does nothing on a miss
                 // beyond simply not populating bindings.
-                if (val != null) {
-                    bindings.put(step.capture().name(), val);
+                for (Capture cap : step.captures()) {
+                    String val = cap.extract(c::getHeaderField, body);
+                    if (val != null) bindings.put(cap.name(), val);
                 }
             }
             return code;
@@ -523,9 +523,7 @@ public final class LoadRun {
                     }
                 }
             }
-            if (step.capture() != null) {
-                capturedSoFar.add(step.capture().name());
-            }
+            for (Capture cap : step.captures()) capturedSoFar.add(cap.name());
         }
     }
 

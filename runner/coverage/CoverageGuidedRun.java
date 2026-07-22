@@ -501,7 +501,7 @@ public final class CoverageGuidedRun {
                     System.err.println("[Basquin] explore: unresolved correlation ref in " + r.format() + "; step skipped");
                     continue;
                 }
-                r = new RequestLine(r.method(), r.path(), b, r.capture());
+                r = new RequestLine(r.method(), r.path(), b, r.captures());
             }
             Agent.beginIteration();
             try {
@@ -562,7 +562,7 @@ public final class CoverageGuidedRun {
      * Core of the request path, taking an explicit {@code label} for the recorded-finding text
      * (at the {@code X-Basquin-Invariant-*} save sites and the {@code serverError} throw).
      *
-     * <p>Task 5 (DD-036): when {@code r.capture()} is non-null and {@code bindings} is non-null,
+     * <p>Task 5 (DD-036): when {@code r.captures()} is non-empty and {@code bindings} is non-null,
      * also retains the response body and runs {@link Capture#extract} against it, recording a new
      * binding on success — mirroring {@link LoadRun#fire}'s capture branch, including its
      * {@code bindings != null} guard (required: the 2-arg overload above passes null).
@@ -636,7 +636,7 @@ public final class CoverageGuidedRun {
                     // capture step, so Capture.extract has something to search; still capped, and
                     // draining continues to EOF regardless so keep-alive is preserved either way.
                     if ((code >= 500 && body.length() < 16384)
-                            || (r.capture() != null && bindings != null && code < 500 && body.length() < 262144)) {
+                            || (!r.captures().isEmpty() && bindings != null && code < 500 && body.length() < 262144)) {
                         body.append(line).append('\n');
                     }
                 }
@@ -647,10 +647,10 @@ public final class CoverageGuidedRun {
         // getErrorStream() above for code >= 400, so the value is there to extract. This is the
         // deliberate load-vs-explore asymmetry noted in the DD-036 PR: LoadRun.fire uses
         // getInputStream() (throws on 4xx) and so cannot capture from a 4xx; explore can.
-        if (r.capture() != null && bindings != null && code < 500) {
-            String val = r.capture().extract(c::getHeaderField, body.toString());
-            if (val != null) {
-                bindings.put(r.capture().name(), val);
+        if (!r.captures().isEmpty() && bindings != null && code < 500) {
+            for (Capture cap : r.captures()) {
+                String val = cap.extract(c::getHeaderField, body.toString());
+                if (val != null) bindings.put(cap.name(), val);
             }
         }
         if (code >= 500) {

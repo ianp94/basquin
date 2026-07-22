@@ -15,6 +15,52 @@ Component-level detail lives with each component:
 | Kubernetes operator + `basquin` CLI | [`operator/CHANGELOG.md`](operator/CHANGELOG.md) |
 | Helm chart | [`deploy/helm/basquin-operator/CHANGELOG.md`](deploy/helm/basquin-operator/CHANGELOG.md) |
 
+## [0.3.0] — 2026-07-22
+
+**Load becomes real, steerable, and honest.** This release turns load-mode replay into a
+first-class, faithful, and self-measuring path — from a lock-free driving model through
+cost-ranked, method/session/sequence-aware replay to honest drift reporting — alongside a live
+per-campaign dashboard. One tag stamps everything: the four ghcr images, the Helm chart
+`appVersion`, and the `basquin` CLI.
+
+### Added
+- **Dashboard read-path auth (DD-028):** dashboard *reads* are now token-gated — a one-time
+  token in the URL is handed off to an `HttpOnly` cookie — closing the open read path that 0.2.0
+  shipped as a known limitation (writes were already token-authenticated).
+- **Lock-free load mode (DD-029):** the driver toggles the target lock-free for the run, polls the
+  app's real heap/thread drift, and counts 5xx — replay can finally be driven concurrently.
+- **Server-side request boundary on the operator path (DD-030):** a ByteBuddy `premain` boundary
+  (`-Dbasquin.boundary=agent`) shares `RequestBoundary` with the valve, bringing the
+  availability-is-the-oracle model to instrumented Deployments.
+- **Cost-ranked replay corpus (DD-031)** + **opt-in pheromone selection (DD-032):** explore scores
+  each fired input (`X-Basquin-Cost`), retains + emits the replay corpus cost-descending, and can
+  bias selection toward the expensive inputs (`-Dbasquin.pheromone=on`, ε-greedy with credit
+  assignment + evaporation).
+- **Load as a first-class citizen (DD-033):** live load-mode dashboard
+  (throughput / p50·p90·p99 / heap-drift / 5xx) and a mode-aware CLI `status` (`MODE` column);
+  metrics typed for a future OTLP export.
+- **Running time-series graph (DD-034):** per-campaign dashboard sparklines, mode-aware
+  (load: throughput/p99/heap-drift · explore: iterations/coverage/finds), history accumulated
+  client-side (no server or API change).
+- **Honest load (DD-035):** load-mode replay is method-, session-, and sequence-aware — corpus
+  format v2 (a line = a TAB-separated ordered sequence of `METHOD? path( SP body )?` steps; a bare
+  `/…` line = a 1-step GET, backward-compatible). Explore emits *whole* cost-ranked sequences (not
+  orphaned tails); each worker replays a sequence in order with its own `JSESSIONID` cookie jar; a
+  failed drift poll/toggle now surfaces as `driftUnavailable` instead of a fabricated
+  `heapDriftKb:0`.
+
+### Benchmarks
+- Controlled in-cluster 3-way against purpose-built load tools (same JPetStore target, load mode,
+  c=50, 2m, identical routes): **k6 10,856 rps · Locust (8-proc) 9,600 · Basquin 6,848 rps**
+  (Basquin has the best p50). All three converge on the target's capacity — Basquin's load engine is
+  competitive with dedicated tooling, and uniquely also captures server-side heap drift + invariant
+  findings the others can't see. Full methodology and the method-unaware-replay finding in
+  [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
+
+Component-level detail: [agent](agent/CHANGELOG.md) · [runner](runner/CHANGELOG.md) ·
+[tomcat-valve](tomcat-valve/CHANGELOG.md) · [operator](operator/CHANGELOG.md) ·
+[Helm chart](deploy/helm/basquin-operator/CHANGELOG.md).
+
 ## [0.2.0] — 2026-07-21
 
 First published release. Everything ships from this tag: the four multi-arch container images on

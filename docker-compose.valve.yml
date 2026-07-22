@@ -18,8 +18,8 @@ services:
       # The WAR under test (unmodified). Override with WAR_PATH to run a third-party app.
       - ${WAR_PATH:-./tomcat-war/build/libs/basquin-demo-0.1.0.war}:/usr/local/tomcat/webapps/ROOT.war:ro
       # Agent classes (bootclasspath) — provides agent.Agent referenced by the valve.
-      - ./build/libs/basquin-0.2.0.jar:/usr/local/tomcat/basquin-agent.jar:ro
+      - ./build/libs/basquin-0.3.0.jar:/usr/local/tomcat/basquin-agent.jar:ro
       # Valve classes on Tomcat's own classpath.
-      - ./tomcat-valve/build/libs/basquin-valve-0.1.0.jar:/usr/local/tomcat/lib/basquin-valve.jar:ro
+      - ./tomcat-valve/build/libs/basquin-valve-0.3.0.jar:/usr/local/tomcat/lib/basquin-valve.jar:ro
       # Global context that registers the valve for every deployed app.
       - ./deploy/valve/context.xml:/usr/local/tomcat/conf/context.xml:ro

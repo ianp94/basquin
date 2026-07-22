@@ -5,12 +5,12 @@
 #
 # Usage:
 #   deploy/agents-image/build.sh [TAG] [KIND_CLUSTER]
-#     TAG           image tag (default: the Gradle project version, e.g. 0.2.0). Also tags :latest.
+#     TAG           image tag (default: the Gradle project version, e.g. 0.3.0). Also tags :latest.
 #     KIND_CLUSTER  if set, `kind load docker-image` into that cluster after building.
 #
 # Examples:
 #   deploy/agents-image/build.sh                     # basquin/agents:<version> + :latest
-#   deploy/agents-image/build.sh 0.2.0 basquin    # ...and load into the `basquin` kind cluster
+#   deploy/agents-image/build.sh 0.3.0 basquin    # ...and load into the `basquin` kind cluster
 set -euo pipefail
 
 die() { echo "ERROR: $*" >&2; exit 1; }

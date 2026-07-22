@@ -5,6 +5,10 @@ with `--version <tag> --app-version <tag>`, overriding `Chart.yaml` — so chart
 `appVersion` always equal the release. (`Chart.yaml`'s own `version` field only applies to local
 installs from a checkout.) Release-level changelog: [`../../../CHANGELOG.md`](../../../CHANGELOG.md).
 
+## [0.3.0] — 2026-07-22
+
+Re-released at `appVersion` 0.3.0 (all four images move together with the tag). No chart template or RBAC changes — the new load/campaign capabilities ship inside the images.
+
 ## [0.2.0] — 2026-07-21
 
 First published chart (`helm repo add basquin https://ianp94.github.io/basquin/charts`).

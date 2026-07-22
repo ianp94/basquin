@@ -15,16 +15,16 @@
 # Env (all optional):
 #   CLUSTER=basquin            kind cluster name (created if missing)
 #   NS=basquin-system          namespace for the operator + target
-#   TAG=0.2.0                     image tag for agents + operator
-#   RAW_APP_IMAGE=basquin/jpetstore-raw:0.2.0   raw app image (built if absent, see below)
+#   TAG=0.3.0                     image tag for agents + operator
+#   RAW_APP_IMAGE=basquin/jpetstore-raw:0.3.0   raw app image (built if absent, see below)
 #   JPETSTORE_WAR=/path/to.war    used to build the raw image if RAW_APP_IMAGE isn't present;
 #                                 falls back to extracting ROOT.war from basquin/jpetstore-demo.
 set -euo pipefail
 
 CLUSTER="${CLUSTER:-basquin}"
 NS="${NS:-basquin-system}"
-TAG="${TAG:-0.2.0}"
-RAW_APP_IMAGE="${RAW_APP_IMAGE:-basquin/jpetstore-raw:0.2.0}"
+TAG="${TAG:-0.3.0}"
+RAW_APP_IMAGE="${RAW_APP_IMAGE:-basquin/jpetstore-raw:0.3.0}"
 AGENTS_IMAGE="basquin/agents:${TAG}"
 OPERATOR_IMAGE="basquin/operator:${TAG}"
 RUNNER_IMAGE="basquin/runner:${TAG}"

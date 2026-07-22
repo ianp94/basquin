@@ -1232,3 +1232,48 @@ export is its own DD — off by default, alongside not replacing the bespoke das
 clustered runners' honest cross-runner percentile merge).
 
 See [`docs/superpowers/specs/2026-07-21-load-first-class-design.md`](docs/superpowers/specs/2026-07-21-load-first-class-design.md).
+
+## DD-034: Running time-series graph on the dashboard — client-side history, mode-aware sparklines (2026-07-21)
+
+**Context.** `resources/dashboard.html` only ever rendered *current-value* cards (`card(k,v,sub)`):
+each 1.5s poll of `/api/campaign/{id}/status` replaced the numbers in place, so there was no way to
+see a trend — is throughput climbing or falling, is coverage still finding new edges, is heap drift
+accelerating — without watching the numbers scroll by and doing the differencing in your head.
+`DashboardServer` stores only the latest snapshot per campaign (no history, no TTL/store per
+DD-033's known limitations); it does not batch or replay past polls.
+
+**Decision.** Keep the server exactly as-is and accumulate history **client-side**, from the polls
+`tick()` already makes — no new endpoint, no server-side storage, no schema change. A single
+in-memory buffer (`history`, keyed by metric name, capped at 120 samples per metric — roughly 3
+minutes at the 1.5s poll interval) is pushed to on every `tick()`, and reset whenever the viewed
+campaign id (`current`) changes (opening a different campaign, or leaving to the fleet view and
+back), so two campaigns' numbers never splice into one chart. A small inline-SVG polyline
+(`sparkline(values,w,h,color)`, ~200×40px) renders each buffer, scaled to the buffer's own min/max;
+`trendCard(label,values,color,fmt)` wraps it with a label and the latest formatted value, styled to
+match the existing `.card` look. Mode-aware, same split `tick()` already makes on `st.mode`: **load**
+charts `throughputRps`, `latencyMs.p99`, `heapDriftKb`; **explore** charts `iterations`, coverage
+`pct`, and `finds` (crashes + every invariant hit, harness- and app-reported). They render in a new
+"Trend" section between the existing cards and the coverage card — the cards themselves are
+unchanged.
+
+**Robustness.** Missing/undefined metric values coerce to `0` before entering the buffer (consistent
+with the existing `||0` convention throughout `tick()`), so a metric absent for one poll doesn't break
+the polyline. `min===max` (a flat series, or the deliberately-tested single-sample buffer) is handled
+by widening the range by ±1 before scaling, avoiding a divide-by-zero that would otherwise produce
+`NaN` coordinates; a genuine single-sample buffer draws a flat horizontal line at that value's height
+rather than a degenerate zero-length point. Labels go through the existing `esc()` before interpolation
+even though they're currently static strings, matching the file's rule that anything reaching
+`innerHTML` is escaped.
+
+**Verified.** Unit: the bundled `<script>` block parses (`new Function(...)` over the extracted JS)
+after the change. Build: `./gradlew jar` still builds (dashboard.html is bundled as a jar resource).
+In-cluster: `deploy/dashboard-image/build.sh 0.2.0 basquin` rebuilt `basquin/dashboard:0.2.0` with the
+updated HTML and `kind load`ed it into the standing `basquin` cluster so the next dashboard pod picks
+it up.
+
+**Rejected.** Server-side history (a ring buffer in `DashboardServer` keyed by campaign+metric) —
+correct long-term home for this once the dashboard needs to survive a page reload or serve multiple
+viewers a consistent trend, but out of scope here per the task's explicit "do not change the server,"
+and the client-side buffer already satisfies "graph what this browser tab has observed this session."
+An external charting library — one more dependency for a ~40-line polyline the existing inline-SVG/
+no-dependency style of this file already handles.

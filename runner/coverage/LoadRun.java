@@ -30,18 +30,19 @@ public final class LoadRun {
     public static void run() throws Exception {
         String baseUrl = System.getProperty("examples.http.baseUrl", "http://localhost:8080");
         String corpusDir = System.getProperty("basquin.corpusDir", "");
-        List<String> corpus = readCorpus(corpusDir);
-        if (corpus.isEmpty()) {
+        List<List<RequestLine>> read = readCorpus(corpusDir);
+        if (read.isEmpty()) {
             System.err.println("[Basquin] load: no corpus routes under " + corpusDir + "; nothing to replay");
-            corpus.add("/");
         }
+        final List<List<RequestLine>> corpus = read.isEmpty()
+                ? List.of(List.of(new RequestLine("GET", "/", null))) : read;
         long durationMs = CoverageGuidedRun.parseDurationMillis(System.getProperty("basquin.run.duration", "60s"));
         long warmupMs = System.getProperty("basquin.warmup", "").isEmpty()
                 ? 0L : CoverageGuidedRun.parseDurationMillis(System.getProperty("basquin.warmup"));
         int concurrency = Integer.getInteger("basquin.concurrency", 10);
         long latencyMaxMs = Long.getLong("basquin.invariant.latency.maxMs", 0L);
 
-        System.out.printf("[Basquin] load: %d route(s), concurrency=%d, warmup=%dms, duration=%dms%n",
+        System.out.printf("[Basquin] load: %d sequence(s), concurrency=%d, warmup=%dms, duration=%dms%n",
                 corpus.size(), concurrency, warmupMs, durationMs);
 
         final long startNanos = System.nanoTime();
@@ -88,22 +89,27 @@ public final class LoadRun {
             workers[w] = new Thread(() -> {
                 Random rnd = new Random(seed);
                 while (System.nanoTime() < deadlineNanos) {
-                    String path = corpus.get(rnd.nextInt(corpus.size()));
-                    long t0 = System.nanoTime();
-                    int code = fire(baseUrl, path);
-                    long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
-                    if (System.nanoTime() < measureFromNanos) {
-                        continue; // warmup: don't record
-                    }
-                    // First post-warmup sample: snapshot the TARGET's drift baseline exactly once (DD-029).
-                    if (baselined.compareAndSet(false, true)) {
-                        baselineDrift.set(pollDrift(baseUrl));
-                    }
-                    hist.incrementAndGet((int) Math.min(elapsedMs, MAX_MS + 1));
-                    requests.incrementAndGet();
-                    if (code >= 500) serverError.incrementAndGet();
-                    if (latencyMaxMs > 0 && elapsedMs > latencyMaxMs) {
-                        latencyViol.incrementAndGet();
+                    // GET-only shim (Task 2): sequences are picked and walked step by step, but each
+                    // step is still fired as a plain GET against `path()` — Task 3 makes replay
+                    // method/session-aware (POST bodies, cookies, etc).
+                    List<RequestLine> seq = corpus.get(rnd.nextInt(corpus.size()));
+                    for (RequestLine step : seq) {
+                        long t0 = System.nanoTime();
+                        int code = fire(baseUrl, step.path());
+                        long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
+                        if (System.nanoTime() < measureFromNanos) {
+                            continue; // warmup: don't record
+                        }
+                        // First post-warmup sample: snapshot the TARGET's drift baseline exactly once (DD-029).
+                        if (baselined.compareAndSet(false, true)) {
+                            baselineDrift.set(pollDrift(baseUrl));
+                        }
+                        hist.incrementAndGet((int) Math.min(elapsedMs, MAX_MS + 1));
+                        requests.incrementAndGet();
+                        if (code >= 500) serverError.incrementAndGet();
+                        if (latencyMaxMs > 0 && elapsedMs > latencyMaxMs) {
+                            latencyViol.incrementAndGet();
+                        }
                     }
                 }
             }, "Basquin-Load-" + w);
@@ -247,23 +253,33 @@ public final class LoadRun {
         }
     }
 
-    /** Route lines (start with '/') from every file under the corpus dir (the mounted replay corpus). */
-    static List<String> readCorpus(String dir) {
-        List<String> routes = new ArrayList<>();
-        if (dir == null || dir.isEmpty()) return routes;
+    /**
+     * Route sequences from every file under the corpus dir (the mounted replay corpus). A line is kept
+     * iff its FIRST STEP's path starts with '/' ({@link RequestLine#firstPath(String)}) — this excludes
+     * grammar value files (e.g. {@code values/keyword.txt}, one bare token like {@code cat} per line)
+     * while still keeping v2 sequences whose first token is an HTTP method (e.g.
+     * {@code "POST /actions/Account.action?signon= u=j2ee"}), which a raw {@code startsWith("/")} check
+     * on the line itself would incorrectly drop.
+     */
+    static List<List<RequestLine>> readCorpus(String dir) {
+        List<List<RequestLine>> sequences = new ArrayList<>();
+        if (dir == null || dir.isEmpty()) return sequences;
         java.nio.file.Path root = Paths.get(dir);
-        if (!Files.isDirectory(root)) return routes;
+        if (!Files.isDirectory(root)) return sequences;
         try (java.util.stream.Stream<java.nio.file.Path> s = Files.walk(root)) {
             for (java.nio.file.Path p : s.filter(Files::isRegularFile).collect(java.util.stream.Collectors.toList())) {
                 for (String line : new String(Files.readAllBytes(p), StandardCharsets.UTF_8).split("\n")) {
                     String t = line.trim();
-                    if (t.startsWith("/")) routes.add(t);
+                    if (t.isEmpty()) continue;
+                    if (RequestLine.firstPath(t).startsWith("/")) {
+                        sequences.add(RequestLine.parseSequence(t));
+                    }
                 }
             }
         } catch (Exception e) {
             System.err.println("[Basquin] load: failed reading corpus " + dir + ": " + e);
         }
-        return routes;
+        return sequences;
     }
 
     /** The p-th percentile latency (ms) from the histogram, or 0 if no samples. Package-private for tests. */

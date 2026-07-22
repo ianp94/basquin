@@ -128,7 +128,7 @@ public final class LoadRun {
                             toFire = new RequestLine(step.method(), step.path(), b, step.capture());
                         }
                         long t0 = System.nanoTime();
-                        int code = fire(baseUrl, toFire, jar, bindings, captureMisses);
+                        int code = fire(baseUrl, toFire, jar, bindings);
                         long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
                         if (System.nanoTime() < measureFromNanos) {
                             continue; // warmup: don't record
@@ -240,18 +240,19 @@ public final class LoadRun {
      * established.
      */
     static int fire(String base, RequestLine step, java.util.Map<String, String> jar) {
-        return fire(base, step, jar, null, null);
+        return fire(base, step, jar, null);
     }
 
     /**
      * Task 4 (DD-036) overload: same as {@link #fire(String, RequestLine, java.util.Map)} but, when
      * {@code step.capture()} is non-null and {@code bindings} is non-null, also retains the response
      * body (capped at {@link #CAPTURE_MAX_BYTES}) — while STILL draining to EOF, so the connection can
-     * still be keep-alive'd — and runs {@link Capture#extract} against it, recording either a new
-     * binding or a capture miss.
+     * still be keep-alive'd — and runs {@link Capture#extract} against it, recording a new binding on
+     * success. Review fix (single-count captureMisses): a failed extraction does NOT increment any
+     * miss counter here — see the capture branch below for why.
      */
     static int fire(String base, RequestLine step, java.util.Map<String, String> jar,
-            java.util.Map<String, String> bindings, AtomicLong captureMisses) {
+            java.util.Map<String, String> bindings) {
         HttpURLConnection c = null;
         try {
             c = (HttpURLConnection) new URL(base + step.path()).openConnection();
@@ -306,10 +307,14 @@ public final class LoadRun {
                 }
                 String body = retained.toString(StandardCharsets.UTF_8);
                 String val = step.capture().extract(c::getHeaderField, body);
+                // Single source of truth for captureMisses (review fix): a failed extraction here is
+                // only meaningful if a LATER step actually references it — and when it does,
+                // substitute() in the worker loop returns null and THAT site counts one warmup-gated
+                // miss and skips the request. A capture that fails but is never referenced downstream
+                // is a no-op and must not inflate the metric, so this branch does nothing on a miss
+                // beyond simply not populating bindings.
                 if (val != null) {
                     bindings.put(step.capture().name(), val);
-                } else if (captureMisses != null) {
-                    captureMisses.incrementAndGet();
                 }
             }
             return code;
@@ -494,6 +499,8 @@ public final class LoadRun {
 
     // DD-036: best-effort, log-once for the whole run — a ${{name}} referenced before any earlier step
     // in the sequence captures it will simply never bind, which is silent and confusing without a hint.
+    // This flag is JVM-lifetime (process-scoped), not per-run: adequate because run() executes exactly
+    // once per driver process, so "once for the whole run" and "once for the JVM" coincide here.
     private static final java.util.concurrent.atomic.AtomicBoolean CORRELATION_LINT_WARNED =
             new java.util.concurrent.atomic.AtomicBoolean(false);
 

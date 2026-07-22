@@ -9,19 +9,23 @@ import org.junit.Test;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
  * Task 4 (DD-036): the LOAD driver actually USES {@link Capture}/{@link RequestLine#needsSubstitution()}
  * — capture a value out of one response and substitute it into a later request's body via
- * {@code ${{name}}}. Covers {@link LoadRun#substitute}, the 5-arg {@link LoadRun#fire} overload, and the
- * (d) uncorrelated-sequence no-alloc path via {@link LoadRun.Seq#correlated()}.
+ * {@code ${{name}}}. Covers {@link LoadRun#substitute}, the 4-arg {@link LoadRun#fire} overload, and
+ * (review fix) {@link LoadRun#readCorpus}'s real correlated/uncorrelated computation via
+ * {@link LoadRun.Seq#correlated()}.
  */
 public class LoadCorrelationTest {
 
@@ -85,9 +89,8 @@ public class LoadCorrelationTest {
 
         Map<String, String> jar = new HashMap<>();
         Map<String, String> bindings = new HashMap<>();
-        AtomicLong captureMisses = new AtomicLong();
 
-        int code1 = LoadRun.fire(base, step1, jar, bindings, captureMisses);
+        int code1 = LoadRun.fire(base, step1, jar, bindings);
         assertEquals(200, code1);
         assertEquals("tok123", bindings.get("csrf"));
 
@@ -95,15 +98,14 @@ public class LoadCorrelationTest {
         assertEquals("X-XSRF-TOKEN=tok123&page=Main", substituted);
 
         RequestLine toFire = new RequestLine(step2.method(), step2.path(), substituted, step2.capture());
-        int code2 = LoadRun.fire(base, toFire, jar, bindings, captureMisses);
+        int code2 = LoadRun.fire(base, toFire, jar, bindings);
 
         assertEquals(200, code2);
         assertEquals("X-XSRF-TOKEN=tok123&page=Main", seenBody[0]);
-        assertEquals(0, captureMisses.get());
     }
 
     @Test
-    public void captureMissLeavesBindingsUnchangedIncrementsCounterAndSkipsFiringStep() throws IOException {
+    public void captureMissLeavesBindingsUnchangedAndSubstituteSignalsTheMiss() throws IOException {
         server.createContext("/login", (HttpExchange ex) -> {
             String resp = "<html>no token here</html>";
             byte[] b = resp.getBytes(StandardCharsets.UTF_8);
@@ -120,28 +122,49 @@ public class LoadCorrelationTest {
 
         Map<String, String> jar = new HashMap<>();
         Map<String, String> bindings = new HashMap<>();
-        AtomicLong captureMisses = new AtomicLong();
 
-        int code1 = LoadRun.fire(base, step1, jar, bindings, captureMisses);
+        int code1 = LoadRun.fire(base, step1, jar, bindings);
         assertEquals(200, code1);
         assertTrue("bindings must stay unchanged on a capture miss", bindings.isEmpty());
-        assertEquals(1, captureMisses.get());
 
-        // The correlated step-2 must not be fired: substitute() signals the miss with null.
+        // fire() no longer counts captureMisses itself (review fix): the ONLY place a miss is counted
+        // is the worker loop, gated on substitute() returning null for a step that actually references
+        // the unbound name. Prove that signal fires here, downstream of the failed capture.
         String substituted = LoadRun.substitute(step2.body(), bindings);
-        assertNull(substituted);
+        assertNull("substitute must return null so the worker loop skips + counts the miss", substituted);
     }
 
     @Test
-    public void uncorrelatedSequenceHasNullBindingsAndNoCaptureAlloc() {
-        RequestLine step1 = RequestLine.parse("GET /a");
-        RequestLine step2 = RequestLine.parse("GET /b");
-        LoadRun.Seq seq = new LoadRun.Seq(java.util.List.of(step1, step2), false);
+    public void readCorpusComputesCorrelatedFlagFromRealSequences() throws Exception {
+        // Production path (review fix): drive LoadRun.readCorpus() itself instead of hand-building a
+        // Seq, so the actual computation under test —
+        // steps.stream().anyMatch(RequestLine::needsSubstitution) — gets real coverage.
+        Path dir = Files.createTempDirectory("load-correlation-corpus");
+        dir.toFile().deleteOnExit();
+        Path corpusFile = dir.resolve("corpus.txt");
 
-        assertEquals(false, seq.correlated());
+        // Line 1: a correlated 2-step sequence in the on-disk v2 format (tab-separated steps; the
+        // capture directive is the LAST space-separated token of its step, per RequestLine.parse).
+        String correlatedLine = "GET /login <<csrf=input:X-XSRF-TOKEN"
+                + "\t" + "POST /submit X-XSRF-TOKEN=${{csrf}}&page=Main";
+        // Line 2: a plain, uncorrelated single-step route.
+        String plainLine = "/catalog";
 
-        // The worker loop only allocates a bindings map when seq.correlated() is true; verify the
-        // uncorrelated wrapper reports false so that path is taken (bindings stays null upstream).
-        assertEquals(2, seq.steps().size());
+        Files.write(corpusFile, String.join("\n", correlatedLine, plainLine, "")
+                .getBytes(StandardCharsets.UTF_8));
+        corpusFile.toFile().deleteOnExit();
+
+        List<LoadRun.Seq> sequences = LoadRun.readCorpus(dir.toString());
+
+        assertEquals("both lines must parse as kept route sequences", 2, sequences.size());
+
+        LoadRun.Seq correlatedSeq = sequences.get(0);
+        assertEquals(2, correlatedSeq.steps().size());
+        assertTrue("step2's ${{csrf}} ref makes this sequence correlated", correlatedSeq.correlated());
+
+        LoadRun.Seq plainSeq = sequences.get(1);
+        assertEquals(1, plainSeq.steps().size());
+        assertFalse("a plain route has no ${{name}} ref, so it must not be correlated",
+                plainSeq.correlated());
     }
 }

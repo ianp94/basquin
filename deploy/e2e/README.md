@@ -24,6 +24,6 @@ It will:
 
 ## Config (env)
 
-`CLUSTER` (default `basquin`), `NS` (`basquin-system`), `TAG` (`0.2.0`), `RAW_APP_IMAGE`
-(`basquin/jpetstore-raw:0.2.0`). If the raw image isn't present it's built from `JPETSTORE_WAR`,
+`CLUSTER` (default `basquin`), `NS` (`basquin-system`), `TAG` (`0.3.0`), `RAW_APP_IMAGE`
+(`basquin/jpetstore-raw:0.3.0`). If the raw image isn't present it's built from `JPETSTORE_WAR`,
 or by extracting `ROOT.war` from `basquin/jpetstore-demo:latest` if that image exists.

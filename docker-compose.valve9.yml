@@ -16,5 +16,5 @@ services:
     volumes:
       - ${WAR_PATH:?set WAR_PATH to a javax.servlet WAR}:/usr/local/tomcat/webapps/ROOT.war:ro
       - ./build/libs/basquin-0.3.0.jar:/usr/local/tomcat/basquin-agent.jar:ro
-      - ./tomcat-valve/build/libs/basquin-valve-0.1.0.jar:/usr/local/tomcat/lib/basquin-valve.jar:ro
+      - ./tomcat-valve/build/libs/basquin-valve-0.3.0.jar:/usr/local/tomcat/lib/basquin-valve.jar:ro
       - ./deploy/valve/context.xml:/usr/local/tomcat/conf/context.xml:ro

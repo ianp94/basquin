@@ -73,13 +73,13 @@ cluster or a private registry).
 `kind load`s the image):
 
 ```bash
-deploy/agents-image/build.sh    0.2.0 <kind-cluster>    # => basquin/agents:0.2.0
-deploy/runner-image/build.sh    0.2.0 <kind-cluster>    # => basquin/runner:0.2.0
-deploy/dashboard-image/build.sh 0.2.0 <kind-cluster>    # => basquin/dashboard:0.2.0
+deploy/agents-image/build.sh    0.3.0 <kind-cluster>    # => basquin/agents:0.3.0
+deploy/runner-image/build.sh    0.3.0 <kind-cluster>    # => basquin/runner:0.3.0
+deploy/dashboard-image/build.sh 0.3.0 <kind-cluster>    # => basquin/dashboard:0.3.0
 
 # operator image (a fixed tag => IfNotPresent, so kind uses the loaded image, not controller:latest)
-docker build -t basquin/operator:0.2.0 operator/
-kind load docker-image basquin/operator:0.2.0 --name <kind-cluster>
+docker build -t basquin/operator:0.3.0 operator/
+kind load docker-image basquin/operator:0.3.0 --name <kind-cluster>
 ```
 
 ### Build + install from a checkout (local / kind)
@@ -92,7 +92,7 @@ the checkout, `--set`ting the locally-built images (chart docs:
 helm install basquin ./deploy/helm/basquin-operator \
   --namespace basquin-system --create-namespace \
   --set fullnameOverride=basquin \
-  --set imageTag=0.2.0 \
+  --set imageTag=0.3.0 \
   --set image.repository=basquin/operator \
   --set images.agents=basquin/agents \
   --set images.runner=basquin/runner \
@@ -116,14 +116,14 @@ kubectl apply -f operator/config/crd/bases/basquin.dev_basquincampaigns.yaml
 kubectl create namespace basquin-system
 
 kubectl kustomize operator/config/default \
-  | sed 's#image: controller:latest#image: basquin/operator:0.2.0#' \
+  | sed 's#image: controller:latest#image: basquin/operator:0.3.0#' \
   | kubectl apply -f -                      # controller Deployment + ServiceAccount/Role/RoleBinding
 
 # then wire the three image flags onto the controller (Helm does this for you):
 for arg in \
-  --agents-image=basquin/agents:0.2.0 \
-  --runner-image=basquin/runner:0.2.0 \
-  --dashboard-image=basquin/dashboard:0.2.0 ; do
+  --agents-image=basquin/agents:0.3.0 \
+  --runner-image=basquin/runner:0.3.0 \
+  --dashboard-image=basquin/dashboard:0.3.0 ; do
   kubectl -n basquin-system patch deploy basquin-controller-manager --type=json \
     -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/args/-\",\"value\":\"$arg\"}]"
 done

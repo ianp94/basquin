@@ -96,7 +96,15 @@ fabricated `0`, so "flat heap" and "couldn't measure" are never confused again.
 
 ## Reproducing
 
-The controlled harness (restart target → set load mode → run → collect) drives k6 (k6-operator
-`TestRun`), a headless Locust pod, and a Basquin `BasquinCampaign` against the same corpus + routes.
-The Basquin path is the canonical [`deploy/e2e/e2e.sh`](../deploy/e2e/e2e.sh) load campaign; the k6
-route mix lives in [`deploy/bench/k6/jpetstore.js`](../deploy/bench/k6/jpetstore.js).
+The controlled harness (restart target → set load mode → run → collect) drives all three against
+the identical 16-route mix at c=50 for 2 min:
+
+- **k6** — [`deploy/bench/k6/jpetstore.js`](../deploy/bench/k6/jpetstore.js) (VUS/DURATION/BASE
+  env-parameterised), run via the k6-operator `TestRun`.
+- **Locust** — [`deploy/bench/locust/locustfile.py`](../deploy/bench/locust/locustfile.py), headless
+  with `--processes -1` (a single Locust process is GIL-bound to ~120 rps — the 8-process row).
+- **Basquin** — the canonical [`deploy/e2e/e2e.sh`](../deploy/e2e/e2e.sh) load campaign, replaying a
+  clean GET-safe catalog corpus.
+
+All three hit the target in **load mode** (lock-free boundary) so the comparison measures the load
+generator, not boundary state.

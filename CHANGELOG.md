@@ -24,6 +24,9 @@ per-campaign dashboard. One tag stamps everything: the four ghcr images, the Hel
 `appVersion`, and the `basquin` CLI.
 
 ### Added
+- **Dashboard read-path auth (DD-028):** dashboard *reads* are now token-gated — a one-time
+  token in the URL is handed off to an `HttpOnly` cookie — closing the open read path that 0.2.0
+  shipped as a known limitation (writes were already token-authenticated).
 - **Lock-free load mode (DD-029):** the driver toggles the target lock-free for the run, polls the
   app's real heap/thread drift, and counts 5xx — replay can finally be driven concurrently.
 - **Server-side request boundary on the operator path (DD-030):** a ByteBuddy `premain` boundary

@@ -7,7 +7,7 @@ The command catalog and flag reference. For what the tool is and why, see the
 
 - Java 17+ (tested on 17 and 21), Gradle wrapper included.
 - Build: `./gradlew build`
-- Fat jar (agent + runner + examples): `./gradlew jar` → `build/libs/basquin-0.2.0.jar`
+- Fat jar (agent + runner + examples): `./gradlew jar` → `build/libs/basquin-0.3.0.jar`
 
 ## Flags
 
@@ -86,7 +86,7 @@ Disabled unless set. Modes: `hard` (fail fast) or `soft` (record + continue).
 ./gradlew runRunnerJavalinLeak      # Javalin leak demo (downloads Javalin for this run)
 
 # Generic runner against any IterationTarget
-java -cp build/libs/basquin-0.2.0.jar runner.GenericRunner 100 your.pkg.YourTarget
+java -cp build/libs/basquin-0.3.0.jar runner.GenericRunner 100 your.pkg.YourTarget
 
 # Soak / stability
 ./gradlew runSoakProper             # 10,000 iterations, prints metrics
@@ -111,7 +111,7 @@ public class YourTarget implements IterationTarget {
 }
 ```
 
-Run: `java -cp build/libs/basquin-0.2.0.jar:<your-cp> runner.GenericRunner 100 your.pkg.YourTarget`
+Run: `java -cp build/libs/basquin-0.3.0.jar:<your-cp> runner.GenericRunner 100 your.pkg.YourTarget`
 
 ## Native agent (JVMTI)
 
@@ -211,22 +211,22 @@ operator, applies a target against a raw app, and asserts the result. To do it b
 
 ```bash
 # 1. Build the agents image the operator injects, and load it into your cluster.
-deploy/agents-image/build.sh 0.2.0 <kind-cluster>            # => basquin/agents:0.2.0
+deploy/agents-image/build.sh 0.3.0 <kind-cluster>            # => basquin/agents:0.3.0
 
 # 2. Build + load the operator image (a fixed tag => IfNotPresent, so kind uses the loaded image
 #    instead of trying to pull the manifest's default controller:latest).
-docker build -t basquin/operator:0.2.0 operator/
-kind load docker-image basquin/operator:0.2.0 --name <kind-cluster>
+docker build -t basquin/operator:0.3.0 operator/
+kind load docker-image basquin/operator:0.3.0 --name <kind-cluster>
 
 # 3. Install the CRD and deploy the operator (namespaced RBAC), pinning that image.
 kubectl apply -f operator/config/crd/bases/basquin.dev_basquintargets.yaml
 kubectl kustomize operator/config/default \
-  | sed 's#image: controller:latest#image: basquin/operator:0.2.0#' \
+  | sed 's#image: controller:latest#image: basquin/operator:0.3.0#' \
   | kubectl apply -f -                                       # operator + Role/RoleBinding/SA
 
 # 4. Tell the operator which agents image to inject.
 kubectl -n basquin-system patch deploy basquin-controller-manager --type=json \
-  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--agents-image=basquin/agents:0.2.0"}]'
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--agents-image=basquin/agents:0.3.0"}]'
 ```
 
 **Instrument an app** — apply a `BasquinTarget` naming its Deployment:

@@ -28,7 +28,7 @@ deploy/agents-image/build.sh [TAG] [KIND_CLUSTER]
 - Pass a kind cluster name to `kind load docker-image` it for local e2e, e.g.:
 
 ```bash
-deploy/agents-image/build.sh 0.2.0 basquin
+deploy/agents-image/build.sh 0.3.0 basquin
 ```
 
 - `STAGE_ONLY=1` stages the build context and stops (no `docker build`), so a caller can drive

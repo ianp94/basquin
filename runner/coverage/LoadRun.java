@@ -80,9 +80,9 @@ public final class LoadRun {
                 LoadSnapshot s = computeLoadSnapshot(hist, total, serverError.get(), windowSec,
                         d.heapDriftKb, d.threadDrift);
                 // DD-035: current-state drift honesty, same rule as the terminal check below — a
-                // baseline that never landed (not yet baselined, or the poll itself came back null)
-                // OR a target that never confirmed load mode.
-                boolean driftUnavailableNow = !baselined.get() || baselineDrift.get() == null || !modeConfirmed;
+                // baseline that never landed (not yet baselined, or the poll itself came back null),
+                // OR this poll (cur) coming back null, OR a target that never confirmed load mode.
+                boolean driftUnavailableNow = driftUnavailable(baselined.get(), baselineDrift.get(), cur, modeConfirmed);
                 runner.util.StatusReporter.recordLoad(s.throughputRps, s.p50, s.p90, s.p99, s.max,
                         s.heapDriftKb, s.threadDrift, s.serverErrors, s.requests, driftUnavailableNow);
             }
@@ -151,11 +151,13 @@ public final class LoadRun {
         // drift poll never succeeded" covers two cases: (a) !baselined.get() — no worker ever reached
         // the first post-warmup sample (e.g. duration shorter than warmup), so the CAS in the worker
         // loop never fired at all; (b) baselined is true but pollDrift returned null (target
-        // unreachable when the baseline WAS attempted), leaving baselineDrift.get() == null.
-        // driftDelta() silently degrades either case to a zero delta — indistinguishable from a real
-        // flat heap — so it must not be relied on here; check the raw state instead. The other half of
-        // the OR is the target never confirming load mode at all.
-        boolean driftUnavailable = !baselined.get() || baselineDrift.get() == null || !modeConfirmed;
+        // unreachable when the baseline WAS attempted), leaving baselineDrift.get() == null. A THIRD
+        // case (the review fix): the baseline landed fine but terminalDrift itself is null — the drift
+        // endpoint got starved once load ramped, a failed poll on the OTHER side of the delta.
+        // driftDelta() silently degrades any of these to a zero delta — indistinguishable from a real
+        // flat heap — so it must not be relied on here; check the raw state instead. The final case is
+        // the target never confirming load mode at all.
+        boolean driftUnavailable = driftUnavailable(baselined.get(), baselineDrift.get(), terminalDrift, modeConfirmed);
 
         // DD-033: push the terminal snapshot to the dashboard before reverting the target's mode, so the
         // authoritative numbers land there too.
@@ -317,6 +319,20 @@ public final class LoadRun {
     public static DriftDelta driftDelta(Drift first, Drift last) {
         if (first == null || last == null) return new DriftDelta(0, 0);
         return new DriftDelta(last.heapKb - first.heapKb, last.threads - first.threads);
+    }
+
+    /**
+     * DD-035 review fix: whether the drift value about to be reported (fed to {@link #driftDelta}) is a
+     * FABRICATED zero rather than a real measurement. {@link #driftDelta} silently degrades to
+     * {@code (0, 0)} when EITHER sample is missing — so driftUnavailable must be true whenever either
+     * side of the delta is missing, not just the one-time baseline. The original bug checked only
+     * {@code baselineOk}/{@code baseline}: a baseline that landed fine followed by a LATER poll failure
+     * (the {@code sample} argument here — the current live poll or the terminal poll) still reported
+     * {@code driftUnavailable=false} with a fabricated {@code heapDriftKb:0}/{@code threadDrift:0} — the
+     * exact false-negative DD-035 exists to prevent. Package-private so it's directly unit-testable.
+     */
+    static boolean driftUnavailable(boolean baselineOk, Drift baseline, Drift sample, boolean modeConfirmed) {
+        return !baselineOk || baseline == null || sample == null || !modeConfirmed;
     }
 
     /** Poll the target's absolute drift snapshot; null if unreachable. */

@@ -38,4 +38,42 @@ public class LoadDriftUnavailableTest {
         assertTrue("threadDrift must be present", json.contains("\"threadDrift\":0"));
         assertFalse("no driftUnavailable key when drift IS available", json.contains("\"driftUnavailable\""));
     }
+
+    // --- LoadRun.driftUnavailable(...) — the computation itself, not just its JSON rendering.
+    // DD-035 review: the bug was that this computation only ever looked at the ONE-TIME baseline
+    // sample, so a baseline that landed followed by a LATER poll failure (the current/terminal sample)
+    // still reported driftUnavailable=false, with driftDelta() silently degrading the missing sample to
+    // a fabricated zero. These cases pin the fixed computation directly.
+
+    @Test
+    public void driftAvailableWhenBaselineAndSampleBothOkAndModeConfirmed() {
+        LoadRun.Drift baseline = LoadRun.parseDrift("1000,10,1000");
+        LoadRun.Drift sample = LoadRun.parseDrift("995,10,2000");
+
+        assertFalse(LoadRun.driftUnavailable(true, baseline, sample, true));
+    }
+
+    @Test
+    public void driftUnavailableWhenSampleNullEvenThoughBaselineOk() {
+        // THE bug: baseline poll succeeded but the current/terminal poll failed later (very plausible
+        // once load ramps and the drift endpoint gets starved). Must be unavailable, not a fake zero.
+        LoadRun.Drift baseline = LoadRun.parseDrift("1000,10,1000");
+
+        assertTrue(LoadRun.driftUnavailable(true, baseline, null, true));
+    }
+
+    @Test
+    public void driftUnavailableWhenBaselineNull() {
+        LoadRun.Drift sample = LoadRun.parseDrift("995,10,2000");
+
+        assertTrue(LoadRun.driftUnavailable(true, null, sample, true));
+    }
+
+    @Test
+    public void driftUnavailableWhenModeNotConfirmed() {
+        LoadRun.Drift baseline = LoadRun.parseDrift("1000,10,1000");
+        LoadRun.Drift sample = LoadRun.parseDrift("995,10,2000");
+
+        assertTrue(LoadRun.driftUnavailable(true, baseline, sample, false));
+    }
 }

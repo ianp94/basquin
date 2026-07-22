@@ -1,0 +1,11 @@
+FROM tomcat:9.0-jdk17-temurin
+COPY webapp/ /usr/local/tomcat/webapps/ROOT/
+COPY pages/ /var/jspwiki/pages/
+RUN mkdir -p /var/jspwiki/work && chmod -R 777 /var/jspwiki
+# JSPWiki ships its app classes inside WEB-INF/lib jars, not WEB-INF/classes. The coverage
+# initContainer needs real .class files, so extract the org/apache/wiki classes into a dedicated
+# (non-classpath) dir the campaign points classesPath at. Also gives real coverage of the app's code.
+RUN mkdir -p /basquin-app-classes && cd /basquin-app-classes \
+ && for j in /usr/local/tomcat/webapps/ROOT/WEB-INF/lib/jspwiki-*.jar; do jar xf "$j" 2>/dev/null || true; done \
+ && rm -rf META-INF templates ini *.properties 2>/dev/null || true \
+ && echo "extracted $(find . -name '*.class' | wc -l) .class files"

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Benchmarking &amp; target onboarding — Basquin</title>
+<meta name="description" content="Onboard a new unmodified app as a Basquin benchmark target: package it, instrument it, author a request grammar, and run the A/A′/B fuzz-then-load comparison.">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css">
+<style>
+  /* page-scoped: the gotchas checklist, built on site.css vars. */
+  .checklist { list-style: none; padding: 0; margin: 20px 0; display: grid; gap: 12px; }
+  .checklist li { position: relative; padding-left: 32px; color: var(--text); }
+  .checklist li::before {
+    content: "\2610"; position: absolute; left: 0; top: -1px;
+    color: var(--accent); font-size: 1.1rem; line-height: 1.5;
+  }
+  .muted-inline { color: var(--text-muted); font-weight: 400; font-size: .85em; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html">
+      <svg class="logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="8" fill="#5b3df5"/>
+        <path d="M8.5 7.5V24H25" stroke="#c4b3ff" stroke-width="1.6" stroke-linecap="round" fill="none" opacity="0.75"/>
+        <path d="M10 10.5C14.5 10.5 15 20 24.5 21" stroke="#fff" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+      </svg>
+      Basquin
+    </a>
+    <nav class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="getting-started.html">Get started</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
+      <a href="operator.html">Operator</a>
+      <a href="releases.html">Releases</a>
+      <a href="benchmarks.html">Benchmarks</a>
+      <a class="gh" href="https://github.com/ianp94/basquin">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <div class="breadcrumb">docs / benchmarking</div>
+    <h1>Benchmarking &amp; target onboarding</h1>
+    <p class="lead">The operator's advertised flow is two steps — <strong>instrument</strong> a
+      Deployment (<code>BasquinTarget</code>), then <strong>run a campaign</strong>
+      (<code>BasquinCampaign</code>). Benchmarking a <em>new</em> app against other tools needs more
+      than that: get the unmodified app deployed in the cluster, give it a request grammar so
+      exploration has a reachable surface, and stand up the load-tool baselines. This is the full,
+      reproducible process, grounded in the two working targets (<code>jpetstore/</code>,
+      <code>jspwiki/</code>).</p>
+    <div class="tag-list">
+      <span class="pill">docker · kind · kubectl</span>
+      <span class="pill">explore → load battery</span>
+    </div>
+  </div>
+
+  <div class="note">
+    <span class="tag">why more than "operator-initiated"?</span>
+    <p>The operator instruments an app you already run. A <em>benchmark</em> target is one you must
+      first <strong>package, deploy, and teach</strong> (grammar) — plus the comparison harness
+      (k6/Locust, the A/A′/B corpora). Steps 1–4 are the deploy; 5 is the operator's own flow; 6–9 are
+      the benchmark battery.</p>
+  </div>
+
+  <h2>Prerequisites (one-time)</h2>
+  <ul style="color:var(--text-muted)">
+    <li>A kind cluster with the operator installed and the four images loaded. The canonical setup is
+      <a href="https://github.com/ianp94/basquin/blob/main/deploy/e2e/e2e.sh"><code>deploy/e2e/e2e.sh</code></a>
+      (run it once, or <code>--no-teardown</code> to leave the cluster up).</li>
+    <li><strong>Keep the cluster images current.</strong> They are tagged <code>0.2.0</code> but built
+      from source; if the cluster has been up across code changes, rebuild the driver so it runs
+      current code: <code>deploy/runner-image/build.sh 0.2.0 basquin</code>. A stale runner will crash
+      on new corpus/grammar features (e.g. DD-035 method/sequence entries) — the symptom is a driver
+      <code>IndexOutOfBounds</code> at startup.</li>
+    <li><code>KUBECONFIG=/tmp/kc-basquin</code>, <code>K="kubectl --context kind-basquin"</code>,
+      <code>NS=basquin-system</code>.</li>
+  </ul>
+
+  <ol class="steps">
+    <li>
+      <h3>Prepare the app artifact</h3>
+      <p>Get the unmodified WAR and, if it uses a filesystem/content store, seed it. See each app's
+        <code>setup.sh</code> (e.g.
+        <a href="https://github.com/ianp94/basquin/blob/main/deploy/bench/jspwiki/setup.sh"><code>jspwiki/setup.sh</code></a>
+        explodes the WAR into <code>webapp/</code> and seeds 70 content-rich pages). The app is
+        deployed <strong>unmodified</strong> — Basquin instruments it at deploy time.</p>
+    </li>
+    <li>
+      <h3>Build a <code>raw</code> image</h3>
+      <p>A <code>raw</code> image is the app on Tomcat with <strong>no agents</strong> (the operator
+        adds them). Mirror the jpetstore-raw pattern
+        (<code>deploy/e2e/e2e.sh:130-144</code>):</p>
+      <div class="codewrap"><div class="label">Dockerfile.raw</div></div>
+      <pre><code>FROM tomcat:9.0-jdk17-temurin
+COPY webapp/ /usr/local/tomcat/webapps/ROOT/     <span class="c"># exploded, NOT a war (see below)</span>
+<span class="c"># ...bake any content store the app reads (jspwiki: COPY pages/ /var/jspwiki/pages/)</span></code></pre>
+      <p>Two requirements that bite:</p>
+      <ul style="color:var(--text-muted)">
+        <li><strong>Explode the WAR into <code>ROOT/</code>, don't ship <code>ROOT.war</code>.</strong>
+          Tomcat serving the exploded dir is incidental; the real reason is the campaign's coverage
+          initContainer copies <code>WEB-INF/classes</code> <strong>out of this image</strong> — those
+          <code>.class</code> files must exist as files, which a war-only image doesn't provide until
+          runtime.</li>
+        <li><strong>If the app ships its classes in <code>WEB-INF/lib/*.jar</code> (not
+          <code>WEB-INF/classes</code>)</strong> — JSPWiki does, most Spring/library-heavy apps do —
+          the coverage initContainer finds nothing and the campaign's <code>verify-classes</code>
+          fails with <em>"no .class files extracted."</em> Extract them in the image into a dedicated
+          (non-classpath) dir and point <code>classesPath</code> there:
+          <pre><code>RUN mkdir -p /basquin-app-classes &amp;&amp; cd /basquin-app-classes \
+ &amp;&amp; for j in /usr/local/tomcat/webapps/ROOT/WEB-INF/lib/&lt;app&gt;-*.jar; do jar xf "$j" 2&gt;/dev/null || true; done</code></pre>
+        </li>
+      </ul>
+      <p>Build and load: <code>docker build -t basquin/&lt;app&gt;-raw:0.3.0 . &amp;&amp; kind load
+        docker-image basquin/&lt;app&gt;-raw:0.3.0 --name basquin</code>.</p>
+    </li>
+    <li>
+      <h3>Deploy the app + a Service</h3>
+      <div class="codewrap"><div class="label">app.yaml</div></div>
+      <pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata: { name: &lt;app&gt;, namespace: basquin-system, labels: { app: &lt;app&gt;-raw } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: &lt;app&gt;-raw } }
+  template:
+    metadata: { labels: { app: &lt;app&gt;-raw } }
+    spec:
+      containers:
+        - name: &lt;app&gt;
+          image: basquin/&lt;app&gt;-raw:0.3.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8080 }]
+          env: [{ name: CATALINA_OPTS, value: <span class="s">"-Xmx2g"</span> }]   <span class="c"># right-size! (see gotcha)</span>
+          readinessProbe:                                   <span class="c"># NO query string in path</span>
+            httpGet: { path: /Wiki.jsp, port: 8080 }
+            initialDelaySeconds: 20
+            failureThreshold: 40
+---
+apiVersion: v1
+kind: Service
+metadata: { name: &lt;app&gt;-app, namespace: basquin-system }
+spec:
+  selector: { app: &lt;app&gt;-raw }
+  ports: [{ port: 8080, targetPort: 8080 }]</code></pre>
+      <div class="note">
+        <span class="tag">important</span>
+        <p><strong>Heap sizing is not optional.</strong> At <code>-Xmx512m</code> an instrumented app
+          GC-thrashes under c=50 and the drift poll times out — the run reports a silent
+          <code>heapDriftKb:0</code>. Use <code>-Xmx2g</code>.</p>
+      </div>
+    </li>
+    <li>
+      <h3>Instrument with a <code>BasquinTarget</code></h3>
+      <div class="codewrap"><div class="label">target.yaml</div></div>
+      <pre><code>apiVersion: basquin.dev/v1alpha1
+kind: BasquinTarget
+metadata: { name: &lt;app&gt;, namespace: basquin-system }
+spec:
+  deploymentRef: { name: &lt;app&gt; }
+  container: &lt;app&gt;
+  jvmOptsVar: CATALINA_OPTS
+  coverageService: true
+  agents:
+    threadTracker: true
+    valve: true
+    coverage: { enabled: true, includes: <span class="s">"org.&lt;app&gt;.*"</span>, port: 6300 }
+  invariants: { mode: soft, latencyMaxMs: 25, heapDeltaMaxKb: 512 }   <span class="c"># tune to the app's steady-state</span></code></pre>
+      <p>Wait for <code>status.phase == Injected</code> and the pod to re-roll. Verify the boundary
+        took: <code>kubectl logs &lt;pod&gt; | grep "agent boundary installed"</code> and
+        <code>kubectl exec &lt;pod&gt; -- curl -s localhost:8080/__basquin/drift</code> (returns
+        <code>heapKb,threads,ts</code>).</p>
+    </li>
+    <li>
+      <h3>Author a grammar + seed corpus <span class="muted-inline">(the real per-app cost, ~half-day)</span></h3>
+      <p>The grammar is the reachable surface as data (DD-016/018). Model on
+        <a href="https://github.com/ianp94/basquin/blob/main/examples/grammar/jpetstore.grammar"><code>examples/grammar/jpetstore.grammar</code></a>:
+        <code>$name = @valuesFile | ~pattern | literal | &lt;generator&gt;</code> for value spaces,
+        <code>/path?x=${name}</code> for routes, <code>METHOD /path body</code> for writes,
+        <code>@sequence</code> for multi-step transactions. <strong>Aim the grammar at the app's
+        expensive/stateful paths</strong> — for JSPWiki that's <code>Search.jsp</code> (~173ms),
+        <code>Diff.jsp</code> (~164ms), <code>Edit.jsp</code> render (~157ms) vs a warm page view
+        (~9ms); probe a few routes with <code>curl -w %{time_total}</code> first to find them. Put
+        value files under <code>examples/corpus/&lt;app&gt;/values/</code>.</p>
+      <p>Create the configmaps (exactly as <code>e2e.sh:325-333</code>):</p>
+      <pre><code>$K -n $NS create configmap &lt;app&gt;-grammar --from-file=&lt;app&gt;.grammar=examples/grammar/&lt;app&gt;.grammar
+$K -n $NS create configmap &lt;app&gt;-corpus --from-file=examples/corpus/&lt;app&gt;/ --from-file=examples/corpus/&lt;app&gt;/values/</code></pre>
+    </li>
+    <li>
+      <h3>Explore → the fuzz corpus <span class="muted-inline">(arm B)</span></h3>
+      <div class="codewrap"><div class="label">explore.yaml</div></div>
+      <pre><code>apiVersion: basquin.dev/v1alpha1
+kind: BasquinCampaign
+metadata: { name: &lt;app&gt;-armb-explore, namespace: basquin-system }
+spec:
+  mode: explore
+  targetRef: { name: &lt;app&gt; }
+  baseURL: http://&lt;app&gt;-app.basquin-system.svc.cluster.local:8080
+  driver:
+    grammarConfigMap: &lt;app&gt;-grammar
+    corpusConfigMap: &lt;app&gt;-corpus
+    classesPath: /basquin-app-classes    <span class="c"># or WEB-INF/classes if the app has real ones there</span>
+    duration: 30m                        <span class="c"># duration, NOT iterations (durations compare; counts don't)</span></code></pre>
+      <p>The emitted replay corpus is <code>status.corpusConfigMap</code>
+        (<code>&lt;app&gt;-armb-explore-corpus-out</code>) — cost-ranked, carrying the
+        method/sequence-aware entries the fuzzer found expensive.</p>
+    </li>
+    <li>
+      <h3>Corpus arms A and A′</h3>
+      <ul style="color:var(--text-muted)">
+        <li><strong>A (happy path)</strong> — the routes a k6/Gatling user would script by hand (e.g.
+          the catalog GETs).</li>
+        <li><strong>A′ (steelman)</strong> — A plus a hand-written <em>valid</em> multi-step journey
+          (login → … → checkout) as TAB-separated method-aware sequences. This is the fair
+          comparand.</li>
+      </ul>
+      <p>Create <code>&lt;app&gt;-corpus-a</code> / <code>&lt;app&gt;-corpus-aprime</code> configmaps
+        (<code>--from-file=corpus.txt=&lt;file&gt;</code>). <strong>k8s names must be lowercase</strong>
+        — <code>corpus-A</code> is silently rejected and the run becomes a no-op.</p>
+    </li>
+    <li>
+      <h3>Run the load battery <span class="muted-inline">(A / A′ / B)</span></h3>
+      <p>For each arm: restart the target (fresh state), confirm it's in load mode
+        (<code>curl -X POST '.../__basquin/mode?to=load&amp;ttlMs=900000'</code>), launch a load
+        campaign (<code>mode: load, corpusConfigMap: &lt;arm&gt;, concurrency: 50, warmup: 30s,
+        duration: 10m</code>), and collect.</p>
+      <div class="note">
+        <span class="tag">tip</span>
+        <p><strong>Collect from the driver's termination summary, not the live dashboard</strong> — it's
+          authoritative and survives teardown:</p>
+        <pre><code>$K -n $NS get pod &lt;driver-pod&gt; \
+  -o jsonpath='{.status.containerStatuses[0].state.terminated.message}'   <span class="c"># the load-block JSON</span></code></pre>
+        <p>The live dashboard <code>/api/campaign/&lt;id&gt;/status</code> also works but you must
+          re-resolve the dashboard pod+token each sample. The load block's <code>iters</code> is the
+          explore counter — always 0 in load mode; the real metrics are <code>throughputRps</code>,
+          <code>latencyMs</code>, <code>serverErrors</code>, <code>heapDriftKb</code>,
+          <code>threadDrift</code>.</p>
+      </div>
+    </li>
+    <li>
+      <h3>Load-tool baselines <span class="muted-inline">(the other axis)</span></h3>
+      <p>Run k6
+        (<a href="https://github.com/ianp94/basquin/tree/main/deploy/bench/k6"><code>deploy/bench/k6/&lt;app&gt;.js</code></a>)
+        and Locust
+        (<a href="https://github.com/ianp94/basquin/blob/main/deploy/bench/locust/locustfile.py"><code>deploy/bench/locust/locustfile.py</code></a>)
+        against the same target, same routes, same concurrency, target in load mode — so the
+        comparison measures the load generator, not boundary state. See
+        <a href="https://github.com/ianp94/basquin/blob/main/docs/BENCHMARKS.md">BENCHMARKS.md</a> for
+        the method.</p>
+    </li>
+  </ol>
+
+  <hr class="rule">
+
+  <h2>Gotchas checklist</h2>
+  <ul class="checklist">
+    <li>Runner image current (rebuild if the cluster is stale) — else driver crashes on new features.</li>
+    <li>Classes in jars → extract into <code>/basquin-app-classes</code>, set <code>classesPath</code>.</li>
+    <li>Target heap <code>-Xmx2g</code> — 512m GC-thrashes and starves the drift poll.</li>
+    <li>All k8s object/configmap names <strong>lowercase</strong>.</li>
+    <li>Readiness probe path has <strong>no query string</strong>.</li>
+    <li>Collect from the driver <strong>termination summary</strong>; <code>iters</code> is not the
+      load metric.</li>
+    <li>Fresh target restart between arms; reset any filesystem store the app writes.</li>
+  </ul>
+
+  <div class="note">
+    <span class="tag">next</span>
+    <p>Once a target is onboarded, the results land on the
+      <a href="benchmarks.html">benchmarks page</a> — see the JSPWiki / JPetStore run for what the
+      output looks like end to end.</p>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap-wide footer-inner">
+    <div>Basquin — Kubernetes-native fuzz and load testing for JVM web apps.</div>
+    <div class="links">
+      <a href="index.html">Home</a>
+      <a href="getting-started.html">Get started</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
+      <a href="operator.html">Operator</a>
+      <a href="releases.html">Releases</a>
+      <a href="benchmarks.html">Benchmarks</a>
+      <a href="https://github.com/ianp94/basquin">GitHub</a>
+    </div>
+    <div class="ai-note">Built with AI assistance (Anthropic's Claude / Claude Code), directed and reviewed by the author.</div>
+  </div>
+</footer>
+
+</body>
+</html>

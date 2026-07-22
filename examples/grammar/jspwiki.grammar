@@ -1,0 +1,24 @@
+# JSPWiki request grammar (bench target #2 — Apache JSPWiki 2.12.4, a wiki CMS).
+# Structure = grammar; values = corpus (DD-018). Render/search-heavy paths are the availability
+# interest: on this target a page VIEW warms to ~9ms, but Search/Diff/Edit-form render cost 150-175ms.
+#
+#   $name = alt | alt | ...     alt = literal | @valuesFile | ~structure | <generator>
+#   /path?x=${name}             route template
+
+$page  = @../corpus/jspwiki/values/pages.txt | ~Page[0-9]{1,2} | Main | SandBox | <empty> | <string>
+$query = @../corpus/jspwiki/values/queries.txt | ~[a-z]{3,9} | <empty> | <long>
+
+# ---- View / render (cheap when warm) ----
+/
+/Wiki.jsp?page=${page}
+/Wiki.jsp
+
+# ---- Full-text search: index scan (expensive: ~173ms) ----
+/Search.jsp?query=${query}
+
+# ---- Revision diff render (expensive: ~164ms) ----
+/Diff.jsp?page=${page}
+
+# ---- Page metadata + edit-form display (render-heavy: ~47-157ms) ----
+/PageInfo.jsp?page=${page}
+/Edit.jsp?page=${page}

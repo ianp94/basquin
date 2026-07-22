@@ -5,10 +5,36 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public record RequestLine(String method, String path, String body) {
+public record RequestLine(String method, String path, String body, Capture capture) {
     private static final Set<String> METHODS = Set.of("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD");
 
+    public RequestLine(String method, String path, String body) {
+        this(method, path, body, null);
+    }
+
+    public boolean needsSubstitution() {
+        return body != null && body.contains("${{");
+    }
+
     public static RequestLine parse(String step) {
+        if (step == null || step.isEmpty()) {
+            return parseCore(step);
+        }
+
+        Capture cap = null;
+        int ls = step.lastIndexOf(' ');
+        if (ls >= 0 && step.startsWith("<<", ls + 1)) {
+            cap = Capture.parse(step.substring(ls + 1));
+            if (cap != null) {
+                step = step.substring(0, ls);
+            }
+        }
+
+        RequestLine r = parseCore(step);
+        return new RequestLine(r.method(), r.path(), r.body(), cap);
+    }
+
+    private static RequestLine parseCore(String step) {
         if (step == null || step.isEmpty()) {
             return new RequestLine("GET", "", null);
         }
@@ -61,7 +87,8 @@ public record RequestLine(String method, String path, String body) {
     }
 
     public String format() {
-        return (method.equals("GET") ? "" : method + " ") + path + (body == null ? "" : " " + body);
+        return (method.equals("GET") ? "" : method + " ") + path + (body == null ? "" : " " + body)
+            + (capture == null ? "" : " " + capture.format());
     }
 
     public static List<RequestLine> parseSequence(String line) {

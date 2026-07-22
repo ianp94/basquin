@@ -1436,3 +1436,52 @@ heap drift from store mutation/reindex) that arm A's cached reads structurally c
   but a token is minted per session; caching it across executions would replay a stale or foreign token
   on a later execution — the exact failure mode correlation exists to eliminate. Rejected: correctness
   beats one saved request.
+
+## DD-037: Dynamic-name field correlation — inputpair capture + multi-capture (2026-07-22)
+
+**Context.** DD-036 captures the value of a *statically*-named input, but Apache JSPWiki's
+`SpamFilter.checkHash` (called unconditionally from `Edit.jsp`, before every save — no config can
+bypass it, confirmed by bytecode + a live A/B in `.superpowers/sdd/jspwiki-save-rootcause.md`) requires
+a hidden field whose **name** is itself dynamic: 6 random lowercase letters, session-pinned and rotated
+daily (e.g. `ztbams`), holding a value of `lastModified ^ hash(clientIP)` that changes after every save.
+The name is un-nameable at grammar-authoring time — DD-036's `<<x=input:FIELD` needs a literal field
+name — so the whole `name=value` pair has to be selected by regex and captured together. The edit form
+also needs *two* captures from one GET (the existing CSRF token plus this new spam-hash pair). A missing
+hash redirects `302 → SessionExpired`; a wrong or missing CSRF token redirects `302 → Forbidden`.
+
+**Decision.**
+1. New `Capture.Kind.INPUTPAIR`, wire form `<<name=inputpair:<nameRegex>=<valueRegex>` — the arg splits
+   on its **first** literal `=` (so a value regex may itself contain `=`, but a name regex may not).
+   Both halves match **anchored** (`Matcher.matches()`, the whole attribute value — never `find()`,
+   which would let `[a-z]{6}` match a substring of `_editedtext` or `-?[0-9]+` match digits inside the
+   CSRF UUID and silently pick the wrong field). It binds `urlEncode(name) + "=" + urlEncode(value)` —
+   the joining `=` is a literal, each half independently encoded.
+2. Encoding model A: encoding moves from `substitute` into `Capture.extract`, so `substitute` becomes a
+   verbatim splice. This is what lets the pair's structural `=` survive the substitution (encoding the
+   whole pair as one string would mangle it to `%3D`); existing `input:`/`header:` captures are
+   byte-identical, since the encoding step just moves one layer, not away.
+3. `RequestLine.capture` becomes `List<Capture> captures`; `parse` peels *all* trailing `<<…` tokens in
+   a loop (source order preserved), `format` re-emits every one, and captures stay trailing — this is
+   what lets JSPWiki's `edit_save` carry both the CSRF and spam-hash captures off one GET.
+
+**Verified.** Unit tests: `Capture` parse/format/extract for `inputpair`, including the anchoring cases
+(the `action`/`_editedtext` decoys and the `data-name=` guard); `RequestLine` multi-capture round-trip
+(`format(parse(line))==line` for 0–3 captures) plus v1/v2 back-compat; `substitute` verbatim (adjacent
+references, unbound → `null`). Grammar `expand` of `edit_save` preserves both `${{csrf}}` and `${{spam}}`
+unexpanded. Full suite green. The live root-cause A/B (test E in the root-cause doc) is the proof that
+matters: replaying the captured spam-hash pair turns a `302 SessionExpired` rejection into a persisted
+save.
+
+**Rejected alternatives.**
+- **Typed binding map** (`Map<String,Bound>` carrying the kind, rendered per-kind in `substitute`) —
+  cleaner separation of concerns, but changes the bindings type across both engines and the
+  `fire`/`request` signatures for no functional gain over encoding-at-capture. Rejected: larger
+  footprint, same outcome.
+- **Sentinel-delimiter binding** (`extract` returns a joined string, `substitute` splits and encodes
+  each half) — smallest diff, but hides structure inside a plain `String` — implicit typing a reviewer
+  would rightly flag. Rejected in favor of the explicit encode-at-capture model.
+- **Config-disabling the SpamFilter** — impossible; `SpamFilter.checkHash` is hard-wired into `Edit.jsp`
+  independent of filter registration, so there is no config surface to turn it off.
+- **Two separate captures for name and value** — impossible in principle: the dynamic name and its
+  value must come from the *same* matched `<input>`, and the grammar has no way to name the field to
+  capture a value from it separately.

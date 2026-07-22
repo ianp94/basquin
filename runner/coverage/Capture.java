@@ -10,6 +10,11 @@ import java.util.regex.Pattern;
  *
  * <p>Wire format: {@code "<<name=kind:arg"}, e.g. {@code "<<csrf=input:X-XSRF-TOKEN"} or
  * {@code "<<sess=header:Set-Cookie"}.
+ *
+ * <p>{@code INPUTPAIR} arg is {@code "<nameRegex>=<valueRegex>"}, split on its FIRST literal
+ * {@code '='} (everything after it is the value regex). So a value regex may contain {@code '='}, but
+ * a <em>name</em> regex must not — a {@code '='} in the name half would be read as the separator. Both
+ * halves are matched ANCHORED (whole attribute value) against a form {@code <input>}'s name and value.
  */
 public record Capture(String name, Kind kind, String arg) {
 

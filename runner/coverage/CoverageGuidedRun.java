@@ -489,11 +489,29 @@ public final class CoverageGuidedRun {
      * recorded as a finding but does not abort the sequence — later steps may still reach code,
      * and stopping early would hide it.
      */
-    private static void runSequence(String baseUrl, List<String> steps) {
+    static void runSequence(String baseUrl, List<String> steps) {
+        java.util.Map<String, String> bindings = new java.util.HashMap<>();
         for (String step : steps) {
+            RequestLine r = RequestLine.parse(step);
+            if (r.needsSubstitution()) {
+                String b = LoadRun.substitute(r.body(), bindings);
+                if (b == null) {
+                    // A required ${{name}} never bound (its capture step didn't match / didn't run):
+                    // skip firing rather than send a literal ${{...}} the app can't use.
+                    System.err.println("[Basquin] explore: unresolved correlation ref in " + r.format() + "; step skipped");
+                    continue;
+                }
+                r = new RequestLine(r.method(), r.path(), b, r.capture());
+            }
             Agent.beginIteration();
             try {
-                request(baseUrl, step);
+                // DD-036 invariant: the persisted label must be the raw recipe (`step`, with
+                // ${{name}} un-substituted), never r.format() of the substituted RequestLine —
+                // the substituted form carries the real captured token, which must never reach
+                // disk. Only the recipe is persisted, mirroring formatSequenceForCorpus. The
+                // request itself still fires the substituted `r` — the real token still goes
+                // over the wire, which is correct; only the recorded finding text changes.
+                request(baseUrl, r, bindings, step);
             } catch (Throwable t) {
                 StatusReporter.recordCrash();
                 FuzzIO.saveInteresting(step.getBytes(StandardCharsets.UTF_8), t);
@@ -534,7 +552,30 @@ public final class CoverageGuidedRun {
     }
 
     static CostSample request(String base, String step) throws Exception {
-        RequestLine r = RequestLine.parse(step);
+        // Recorded-finding text must stay the RAW input on this path — byte-for-byte unchanged
+        // from before DD-036 — since RequestLine.format() canonicalizes a no-body GET by dropping
+        // an explicit "GET " prefix, which would silently rewrite what a real finding records.
+        return request(base, RequestLine.parse(step), null, step);
+    }
+
+    /**
+     * Core of the request path, taking an explicit {@code label} for the recorded-finding text
+     * (at the {@code X-Basquin-Invariant-*} save sites and the {@code serverError} throw).
+     *
+     * <p>Task 5 (DD-036): when {@code r.capture()} is non-null and {@code bindings} is non-null,
+     * also retains the response body and runs {@link Capture#extract} against it, recording a new
+     * binding on success — mirroring {@link LoadRun#fire}'s capture branch, including its
+     * {@code bindings != null} guard (required: the 2-arg overload above passes null).
+     *
+     * <p>{@code label} MUST NOT be derived from a substituted {@code r} — a correlated step's
+     * substituted body carries the real captured token (e.g. a live CSRF value), and that must
+     * never reach disk (DD-036 invariant). The 2-arg overload above passes the raw {@code step}
+     * text. {@link #runSequence} — the other caller — passes its own raw, un-substituted
+     * {@code step} too, even though it fires the substituted {@code r} over the wire; only the
+     * safe recipe is ever recorded in a finding.
+     */
+    private static CostSample request(String base, RequestLine r, java.util.Map<String, String> bindings,
+            String label) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(base + r.path()).openConnection();
         c.setConnectTimeout(2000);
         c.setReadTimeout(10000);
@@ -573,8 +614,8 @@ public final class CoverageGuidedRun {
         if (inv != null) {
             try { invCount = Integer.parseInt(inv.trim()); } catch (NumberFormatException ignored) {}
             String detail = c.getHeaderField("X-Basquin-Invariant-Detail");
-            FuzzIO.saveWithMeta(step.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
-                    "route=" + step + "\ncount=" + inv + (detail != null ? "\ndetail=" + detail : ""));
+            FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
+                    "route=" + label + "\ncount=" + inv + (detail != null ? "\ndetail=" + detail : ""));
         }
         long heapKb = 0; int threadDelta = 0;
         String costHdr = c.getHeaderField("X-Basquin-Cost");  // "latencyMs,heapDeltaKb,threadDelta"
@@ -591,13 +632,29 @@ public final class CoverageGuidedRun {
             try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = br.readLine()) != null) {
-                    // Keep the body only for server errors — that's where the app's own stack is.
-                    if (code >= 500 && body.length() < 16384) body.append(line).append('\n');
+                    // Keep the body for server errors (the app's own stack) OR — DD-036 — for a
+                    // capture step, so Capture.extract has something to search; still capped, and
+                    // draining continues to EOF regardless so keep-alive is preserved either way.
+                    if ((code >= 500 && body.length() < 16384)
+                            || (r.capture() != null && bindings != null && code < 500 && body.length() < 262144)) {
+                        body.append(line).append('\n');
+                    }
                 }
             }
         }
+        // Capture from any code < 500, INCLUDING a 4xx — intentional, not an oversight: a form GET
+        // that returns 4xx can still carry the token in its (error-stream) body, and explore reads
+        // getErrorStream() above for code >= 400, so the value is there to extract. This is the
+        // deliberate load-vs-explore asymmetry noted in the DD-036 PR: LoadRun.fire uses
+        // getInputStream() (throws on 4xx) and so cannot capture from a 4xx; explore can.
+        if (r.capture() != null && bindings != null && code < 500) {
+            String val = r.capture().extract(c::getHeaderField, body.toString());
+            if (val != null) {
+                bindings.put(r.capture().name(), val);
+            }
+        }
         if (code >= 500) {
-            throw serverError(code, step, body.toString());
+            throw serverError(code, label, body.toString());
         }
         return new CostSample(heapKb, threadDelta, invCount);
     }
@@ -676,7 +733,7 @@ public final class CoverageGuidedRun {
         return new StackTraceElement(cls, method, file, lineNo);
     }
 
-    private static String unescapeHtml(String s) {
+    static String unescapeHtml(String s) {
         String out = s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
                 .replace("&#39;", "'").replace("&nbsp;", " ");
         // Tomcat escapes '/' in class paths as &#47;, so resolve numeric entities too.

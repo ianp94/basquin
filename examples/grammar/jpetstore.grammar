@@ -94,3 +94,17 @@ POST /actions/Order.action?newOrder=
   /actions/Order.action?listOrders=
   POST /actions/Account.action?signon= username=j2ee&password=j2ee
   /actions/Order.action?listOrders=
+
+# ---- CSRF-protected write via response correlation (DD-036) -------------------------
+# Stripes renders a hidden <input name="_sourcePage" ...> in the new-order form and validates
+# it on submit, so a static replay of POST newOrder can't place an order — the token is minted
+# per form render. Correlation fixes it: reach the order form (login → populated cart → checkOut
+# → newOrderForm), capture _sourcePage from the rendered form, and inject it into the newOrder
+# POST. newOrderForm is the form-DISPLAY request (GET, as elsewhere in this grammar); the hidden
+# _sourcePage lives in its <stripes:form> (verified: WEB-INF/jsp/order/NewOrderForm.jsp).
+@sequence order_with_sourcepage
+  POST /actions/Account.action?signon= username=j2ee&password=j2ee
+  /actions/Cart.action?addItemToCart=&workingItemId=${itemId}
+  /actions/Cart.action?checkOut=
+  /actions/Order.action?newOrderForm= <<src=input:_sourcePage
+  POST /actions/Order.action?newOrder= _sourcePage=${{src}}

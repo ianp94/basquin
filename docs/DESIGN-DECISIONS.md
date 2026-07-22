@@ -1361,3 +1361,78 @@ sampled-ness, deliberately not `drift > 0` (a GC pause can legitimately shrink h
   second listener/thread pool to every instrumented target for a problem the replay fix (1) already
   resolves at the source; `driftUnavailable` (2) remains the honest fallback for whatever narrower
   starvation case survives on a target that's merely under-provisioned, not broken.
+
+## DD-036: Response correlation — capture-and-substitute for CSRF-protected replay (2026-07-22)
+
+**Context.** DD-035's honest load replay captures and replays the *session cookie*, but every other
+value in a corpus line is still fixed at emit time — it can capture nothing from a response body and
+inject it into a later request. That makes any write path guarded by a per-session token unreachable:
+JSPWiki's page-save POST carries a hidden **`X-XSRF-TOKEN`** minted fresh on the edit form's GET, and
+JPetStore's Stripes form handlers want a `_sourcePage` hidden field emitted the same way. A replayed
+static POST carries a dead token and is rejected (4xx) — so a fuzz/load corpus against either app can
+only ever exercise cached reads, never the write paths that would actually differentiate the tool from
+a read-only mix (every route on a cache-friendly app like JSPWiki warms to roughly the same latency).
+This is what Gatling calls `.check(...).saveAs(...)` + `${...}` and JMeter calls extractors + variables:
+capture a value from response N, substitute it into request N+k. The DD-035 ordered-sequence model
+already guarantees the happens-before between the capturing step and the referencing step; this
+decision adds the capture and the substitution on top of it.
+
+**Decision.** Corpus format **v3**, backward-compatible with v1/v2 — a line with no `<<` capture suffix
+and no `${{}}` reference parses and fires byte-for-byte as today.
+
+1. A step gains an optional trailing `<<name=kind:arg` **capture suffix** (`RequestLine` now carries a
+   `Capture`), where `kind` is `header:<HeaderName>` (an `HttpURLConnection` header lookup) or
+   `input:<inputName>` (the `value` of the `<input>` tag whose `name` matches) — the `input` extractor
+   is a targeted regex over `<input>` tags, deliberately **not** a full HTML/CSS parser, since the
+   runner's hot path is dependency-free by design and a hidden token field is machine-generated markup,
+   not adversarial HTML.
+2. A request body may contain one or more `${{name}}` **references**, substituted (URL-encoded) from
+   values captured **earlier** in the same sequence execution. The two `${…}` forms coexist and differ
+   by binding time: `${param}` binds once per sequence *expansion* (grammar time), `${{name}}` binds
+   once per sequence *execution* (fire time, from a live response).
+3. The corpus stores only the capture **recipe**, never a token — tokens live only in a per-sequence-
+   execution `bindings` map (fresh per execution, per worker) and never persist to disk or across
+   executions. A capture-once/cache-across-executions optimization was considered and rejected: a token
+   is minted per session, so caching it would replay a stale or foreign token — the exact bug
+   correlation exists to fix.
+4. Two honesty counters land in the terminal summary — `captureMisses` (a referenced value that was
+   never bound; warmup-gated, single-counted per occurrence) and `clientErrors` (4xx responses) —
+   because an unresolved reference or a rejected CSRF token would otherwise silently no-op the step
+   instead of surfacing a broken correlation.
+5. The grammar's `expand` step preserves `${{}}` verbatim (it previously mistook `${{csrf}}` for the
+   placeholder `{csrf`, found no rule, and silently expanded it to `""`, destroying the reference), and
+   correlated write sequences ship in the example grammars: `edit_save` (JSPWiki) and
+   `order_with_sourcepage` (JPetStore).
+
+**Verified.** Unit tests: `Capture` parse/format/extract (both `header`/`input` kinds, both quote
+styles, attribute order, wrong-tag/name-substring safety); `RequestLine` v3 round-trip
+(`format(parse(line))==line`, the recipe-preservation guard, v1/v2 backward compatibility); grammar
+`expand` preserves `${{}}` (adjacency, unterminated, out-of-bounds cases); `LoadRun`/`CoverageGuidedRun`
+capture-then-substitute end-to-end over a JDK `HttpServer` (the server observes the substituted body);
+single-counted, warmup-gated `captureMisses`; `readCorpus`'s correlated-flag computation; no-NPE on the
+uncorrelated/null-bindings fast path. Full suite green (188 tests). Post-merge proof plan: re-onboard
+JSPWiki with the `edit_save` sequence, arm B (reads + correlated writes) against arm A (reads only) —
+success is arm B's save POSTs returning 2xx/3xx with `captureMisses`≈0, plus a write-path cost (p99,
+heap drift from store mutation/reindex) that arm A's cached reads structurally cannot show.
+
+**Rejected alternatives.**
+- **A full HTML/CSS-selector parser** (jsoup or similar) — would correctly handle adversarial or
+  deeply nested markup, but the runner's hot path is deliberately dependency-free, and a hidden CSRF
+  field is machine-generated markup, not adversarial HTML. Rejected: a regex extractor on a known
+  input name is exactly the JMeter/Gatling CSRF recipe, at zero added dependency weight.
+- **JSON-lines corpus** — self-describing and easy to extend with a capture/reference field, but
+  doubles the per-route byte cost against a corpus already budget-constrained by the ~4 KiB termination
+  transport (DD-026 §3), and forces every existing corpus and hand-authored file to change format.
+  Rejected for the same reason DD-035 rejected it for v2.
+- **Recording live token values into the corpus** — the simplest thing that could work, but a captured
+  token is bound to one session; replaying it later just fails the same way a static token does, and it
+  additionally leaks a session secret onto disk (a ConfigMap). Rejected: it solves nothing and adds a
+  credential-handling liability.
+- **Automatic CSRF-token forwarding / transparent framework detection** — appealing because it needs no
+  corpus syntax at all, but it's magic (silently guesses which header/field is the token), app-specific
+  (every framework names its token differently), and silently wrong when it guesses incorrectly.
+  Rejected: an explicit recipe the operator writes is diagnosable; an autodetector that misfires is not.
+- **Capture-once value caching across executions** — would save a redundant GET per sequence execution,
+  but a token is minted per session; caching it across executions would replay a stale or foreign token
+  on a later execution — the exact failure mode correlation exists to eliminate. Rejected: correctness
+  beats one saved request.

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Running Basquin outside Kubernetes — Basquin</title>
+<meta name="description" content="Build the jars, run an unmodified target app on Tomcat via docker compose with the valve/agent mounted in, then drive explore and load with the standalone runner against localhost — no operator, no cluster.">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html">
+      <svg class="logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="8" fill="#5b3df5"/>
+        <path d="M8.5 7.5V24H25" stroke="#c4b3ff" stroke-width="1.6" stroke-linecap="round" fill="none" opacity="0.75"/>
+        <path d="M10 10.5C14.5 10.5 15 20 24.5 21" stroke="#fff" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+      </svg>
+      Basquin
+    </a>
+    <nav class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="getting-started.html">Get started</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
+      <a href="operator.html">Operator</a>
+      <a href="releases.html">Releases</a>
+      <a href="benchmarks.html">Benchmarks</a>
+      <a href="benchmarking.html">Benchmarking</a>
+      <a class="gh" href="https://github.com/ianp94/basquin">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <div class="breadcrumb">docs / developing</div>
+    <h1>Running Basquin outside Kubernetes</h1>
+    <p class="lead">The <a href="operator.html">operator</a> is the product, but underneath it is a
+      standalone harness that runs anywhere a JVM does. Build the jars yourself, stand up an
+      unmodified target app on Tomcat via <code>docker compose</code> with the Basquin valve/agent
+      mounted in, then drive <strong>explore</strong> and <strong>load</strong> with the standalone
+      runner against <code>localhost</code> — no operator, no cluster, no image registry.</p>
+    <div class="tag-list">
+      <span class="pill">contributor / local-dev guide</span>
+      <span class="pill">Java 17+ · docker compose</span>
+    </div>
+  </div>
+
+  <h2>Who this is for</h2>
+  <ul>
+    <li><strong>Contributors iterating on Basquin's own code</strong> — the fast loop is edit →
+      <code>./gradlew jar</code> → re-run, not edit → build an image → <code>kind load</code> it →
+      wait for a rollout.</li>
+    <li><strong>Anyone trying Basquin without a cluster</strong> — a quick eval, a CI job on a plain
+      runner, or driving an app you haven't containerized at all (see
+      <a href="https://github.com/ianp94/basquin/blob/main/docs/USAGE.md#use-with-your-app">USAGE.md
+      § Use with your app</a>).</li>
+  </ul>
+  <p>For the full flag/command reference, see
+    <a href="https://github.com/ianp94/basquin/blob/main/docs/USAGE.md">USAGE.md</a> — this page is
+    the workflow narrative that ties those commands together, not a replacement for it. For the
+    in-cluster path, see the <a href="operator.html">Operator guide</a> and
+    <a href="https://github.com/ianp94/basquin/blob/main/docs/OPERATOR-USAGE.md">OPERATOR-USAGE.md</a>.</p>
+
+  <hr class="rule">
+
+  <h2>1 &nbsp;Build from source</h2>
+  <p>Java 17+ (CI verifies both 17 and 21), Gradle wrapper included — nothing else to install for
+    the JVM side.</p>
+  <pre><code><span class="c"># clone</span>
+git clone https://github.com/ianp94/basquin.git
+cd basquin
+
+<span class="c"># compile + run the test suite</span>
+./gradlew build</code></pre>
+
+  <p>The jar tasks that matter for standalone use, and the compose files that expect their output at
+    these exact paths:</p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Task</th><th>Output</th><th>Used by</th></tr></thead>
+      <tbody>
+        <tr><td><code>./gradlew jar</code></td><td><code>build/libs/basquin-0.3.0.jar</code> — fat jar: agent + runner + examples</td><td>all four <code>docker-compose*.yml</code> variants, <code>java -cp</code> runs</td></tr>
+        <tr><td><code>./gradlew :tomcat-valve:jar</code></td><td><code>tomcat-valve/build/libs/basquin-valve-0.3.0.jar</code> — the Tomcat valve</td><td><code>docker-compose.valve.yml</code>, <code>.valve9.yml</code>, <code>.coverage.yml</code></td></tr>
+        <tr><td><code>./gradlew stageAgents</code></td><td><code>build/stage/basquin-agent.jar</code>, <code>build/stage/basquin-valve.jar</code> (+ <code>build/jacoco/jacocoagent.jar</code> via its <code>copyJacocoAgent</code> dependency)</td><td><code>docker-compose.coverage.yml</code> — version-independent paths, so a version bump never silently mounts an empty directory</td></tr>
+        <tr><td><code>./gradlew runnerJar</code></td><td><code>build/libs/basquin-0.3.0-runner.jar</code> — self-contained fat jar (coverage + main + JaCoCo), <code>Main-Class: runner.coverage.CoverageGuidedRun</code></td><td>the operator's driver Job image; also directly runnable with <code>java -jar</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>A one-liner that builds everything the Tomcat-valve path needs:</p>
+  <pre><code>./gradlew jar :tomcat-valve:jar copyJacocoAgent</code></pre>
+
+  <h2>2 &nbsp;Run a target app locally</h2>
+  <p>Four <code>docker-compose*.yml</code> files at the repo root stand up <strong>an unmodified
+    target app</strong> on Tomcat with the Basquin jars bind-mounted in — no rebuild, no packaging.
+    Which one to use depends on the target's servlet namespace and whether you want coverage:</p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Compose file</th><th>Tomcat</th><th>Namespace</th><th>What it's for</th></tr></thead>
+      <tbody>
+        <tr><td><code>docker-compose.yml</code></td><td>10.1 / jdk17</td><td>jakarta</td><td>Basquin's own demo WAR (in-WAR <code>IterationFilter</code> — no valve needed)</td></tr>
+        <tr><td><code>docker-compose.valve.yml</code></td><td>10.1 / jdk17</td><td>jakarta</td><td>any third-party jakarta WAR, boundary via the <strong>valve</strong></td></tr>
+        <tr><td><code>docker-compose.valve9.yml</code></td><td>9.0 / temurin</td><td>javax</td><td>any third-party javax WAR, boundary via the <strong>valve</strong> (<code>WAR_PATH</code> required)</td></tr>
+        <tr><td><code>docker-compose.coverage.yml</code></td><td>9.0 / temurin</td><td>javax</td><td>valve <strong>+</strong> a JaCoCo <code>tcpserver</code> agent, for coverage-guided exploration</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>To tell which your app needs, check <code>WEB-INF/web.xml</code>'s root namespace
+    (<code>http://java.sun.com/...</code> / <code>javax.servlet.jsp.jstl</code> → javax;
+    <code>jakarta.*</code> → jakarta) — the same table is in
+    <a href="https://github.com/ianp94/basquin/blob/main/docs/THIRD-PARTY-APPS.md">THIRD-PARTY-APPS.md</a>.</p>
+
+  <div class="note">
+    <span class="tag">agent boundary vs. valve boundary</span>
+    <p>These are mutually exclusive on one app: the demo WAR carries <code>IterationFilter</code> in
+      its own <code>web.xml</code> (in-WAR, requires editing the app), while a third-party
+      unmodified WAR gets its iteration boundary from the Tomcat <strong>valve</strong> instead
+      (server-level, no WAR changes — <code>com.basquin.valve.BasquinValve</code>, registered
+      globally by <code>deploy/valve/context.xml</code>). Running both on the same app double-wraps
+      every request. The Basquin <strong>agent</strong> (<code>-javaagent</code> + bootclasspath) is
+      orthogonal to this and always runs in the target JVM either way — it measures latency/heap/
+      thread deltas and evaluates invariants; the filter/valve only mark where one iteration begins
+      and ends.</p>
+  </div>
+
+  <p><strong>Own demo WAR</strong> (jakarta, in-WAR filter):</p>
+  <pre><code>./gradlew :tomcat-war:build jar
+docker compose up tomcat
+<span class="c"># http://localhost:8080/crash?type=NPE  /latency?ms=250  /heap?kb=512</span></code></pre>
+
+  <p><strong>Third-party jakarta WAR</strong>, via the valve:</p>
+  <pre><code>./gradlew jar :tomcat-valve:jar
+<span class="f">WAR_PATH</span>=<span class="s">/abs/path/to/app.war</span> docker compose -f docker-compose.valve.yml up tomcat-valve</code></pre>
+
+  <p><strong>Third-party javax WAR</strong> (e.g. a locally built JPetStore), via the valve:</p>
+  <pre><code>./gradlew jar :tomcat-valve:jar
+<span class="f">WAR_PATH</span>=<span class="s">/abs/jpetstore-6/target/jpetstore.war</span> docker compose -f docker-compose.valve9.yml up tomcat9-valve</code></pre>
+
+  <p><strong>With coverage</strong> (valve + JaCoCo tcpserver, needed for the exploration driver below):</p>
+  <pre><code>./gradlew stageAgents
+<span class="f">WAR_PATH</span>=<span class="s">/abs/app.war</span> docker compose -f docker-compose.coverage.yml up tomcat9-coverage</code></pre>
+
+  <p>All four accept <code>INVARIANT_MODE</code>, <code>INVARIANT_LATENCY_MS</code>,
+    <code>INVARIANT_HEAP_KB</code>, and <code>TOMCAT_HOST_PORT</code> as environment overrides — the
+    compose files themselves are short and worth reading directly.</p>
+
+  <h3>Worked examples: the bench targets</h3>
+  <p><code>deploy/bench/{jpetstore,jspwiki}/</code> are reproducible, already-wired copies of this
+    same valve+agent-on-Tomcat-9 pattern against two real unmodified apps — a concrete example beyond
+    the repo's own demo WAR. See
+    <a href="https://github.com/ianp94/basquin/blob/main/deploy/bench/README.md">deploy/bench/README.md</a>
+    for how each WAR is fetched/built and pinned; once the WAR is in place:</p>
+  <pre><code><span class="c"># JPetStore (MyBatis, in-memory HSQLDB)</span>
+cd deploy/bench/jpetstore &amp;&amp; TOMCAT_HOST_PORT=8092 docker compose up -d
+
+<span class="c"># JSPWiki (filesystem page store) — run setup.sh first to explode the WAR + seed pages</span>
+bash deploy/bench/jspwiki/setup.sh
+cd deploy/bench/jspwiki &amp;&amp; TOMCAT_HOST_PORT=8090 docker compose up -d</code></pre>
+  <p>Both mount the same <code>build/libs/basquin-0.3.0.jar</code> /
+    <code>tomcat-valve/build/libs/basquin-valve-0.3.0.jar</code> you just built (via a
+    <code>../../../</code> relative path), so building once at the repo root is enough for either.</p>
+
+  <h2>3 &nbsp;Drive explore + load with the standalone runner</h2>
+  <p>With a target running on <code>localhost:8080</code> (any of the above), point the driver at
+    it. All of these are Gradle <code>JavaExec</code> tasks that forward <code>-Dexamples.http.*</code>
+    and <code>-Dbasquin.*</code> system properties straight through — the full flag catalog is in
+    <a href="https://github.com/ianp94/basquin/blob/main/docs/USAGE.md#flags">USAGE.md § Flags</a>.</p>
+
+  <p><strong>No coverage</strong> — client-side latency + crash detection, live status screen,
+    harvests server-side <code>X-Basquin-Invariant-*</code> headers if the target has the
+    valve/filter:</p>
+  <pre><code>./gradlew runHttpDrive \
+  <span class="f">-Dexamples.http.baseUrl</span>=<span class="s">http://localhost:8080</span> \
+  <span class="f">-Dbasquin.invariant.latency.maxMs</span>=<span class="s">50</span> <span class="f">-Dbasquin.invariant.mode</span>=<span class="s">soft</span> \
+  <span class="f">-Ddrive.iterations</span>=<span class="s">200</span></code></pre>
+
+  <p><strong>Coverage-guided exploration</strong> — mutates requests, keeps the ones that reach new
+    code in the target's own JaCoCo agent (requires the <code>docker-compose.coverage.yml</code>
+    target above). Start the standalone dashboard once, then run the driver:</p>
+  <pre><code><span class="c"># standalone dashboard, 127.0.0.1:7070, its own process</span>
+./gradlew runDashboard &amp;
+
+./gradlew runCoverageGuided \
+  <span class="f">-Dexamples.http.baseUrl</span>=<span class="s">http://localhost:8080</span> \
+  <span class="f">-Dbasquin.coverage.jacoco</span>=<span class="s">localhost:6300</span> \
+  <span class="f">-Dbasquin.coverage.classes</span>=<span class="s">/path/to/WEB-INF/classes</span> \
+  <span class="f">-Dbasquin.grammar</span>=<span class="s">examples/grammar/jpetstore.grammar</span> \
+  <span class="f">-Dbasquin.invariant.latency.maxMs</span>=<span class="s">25</span> <span class="f">-Dbasquin.invariant.mode</span>=<span class="s">soft</span> \
+  <span class="f">-Dbasquin.dashboard.push</span>=<span class="s">localhost:7070</span></code></pre>
+  <p><code>-Dbasquin.grammar</code> (route templates + value space, see
+    <a href="https://github.com/ianp94/basquin/blob/main/docs/USAGE.md#writing-a-request-grammar">USAGE.md
+    § Writing a request grammar</a>) takes precedence; without one,
+    <code>-Dbasquin.corpusDir=&lt;dir&gt;</code> seeds exploration from a plain directory of route
+    lines (e.g. the repo's own <code>examples/corpus/jpetstore/</code>). Coverage without guided
+    mutation: <code>runHttpDriveCoverage</code> (same flags, no mutation). No coverage at all:
+    <code>runHttpDrive</code> above.</p>
+
+  <p><strong>Load mode</strong> — replay a corpus verbatim at a fixed concurrency for a duration,
+    watching the same invariants. This is the <em>same</em> <code>CoverageGuidedRun</code> entry
+    point with <code>-Dbasquin.mode=load</code>, which dispatches internally to
+    <code>runner.coverage.LoadRun</code>:</p>
+  <pre><code>./gradlew runCoverageGuided \
+  <span class="f">-Dbasquin.mode</span>=<span class="s">load</span> \
+  <span class="f">-Dexamples.http.baseUrl</span>=<span class="s">http://localhost:8080</span> \
+  <span class="f">-Dbasquin.corpusDir</span>=<span class="s">examples/corpus/jpetstore</span> \
+  <span class="f">-Dbasquin.concurrency</span>=<span class="s">50</span> \
+  <span class="f">-Dbasquin.run.duration</span>=<span class="s">5m</span> \
+  <span class="f">-Dbasquin.invariant.latency.maxMs</span>=<span class="s">25</span> \
+  <span class="f">-Dbasquin.dashboard.push</span>=<span class="s">localhost:7070</span></code></pre>
+
+  <div class="note">
+    <span class="tag">one flag, two meanings</span>
+    <p><code>-Dbasquin.corpusDir</code> is doing double duty here, worth calling out explicitly (see
+      <a href="https://github.com/ianp94/basquin/blob/main/docs/LOAD-MODE-DESIGN.md">LOAD-MODE-DESIGN.md</a>):
+      in <code>explore</code> its files are <strong>mutation seeds/values</strong>; in
+      <code>load</code> its files are <strong>verbatim, fully-formed requests replayed as-is</strong>,
+      one per line. The repo's <code>examples/corpus/*/</code> files are already in that ready-to-fire
+      shape (full route strings, one per file), so they work directly for a <code>load</code>-mode
+      demo even without having run an <code>explore</code> pass first.</p>
+    <p><code>-Dbasquin.warmup=&lt;duration&gt;</code> excludes an initial window from the reported
+      metrics; <code>-Dbasquin.concurrency</code> is load-only (ignored by <code>explore</code>).</p>
+  </div>
+
+  <p>Read the live status screen either way (<code>-Dbasquin.status=true</code>, on by default for
+    these tasks; interval via <code>-Dbasquin.status.intervalMs</code>) — see
+    <a href="getting-started.html#reading-the-status-panel">reading the status panel</a> for what
+    each row means, or drive it with <code>runner.GenericRunner</code>/your own
+    <code>IterationTarget</code> per
+    <a href="https://github.com/ianp94/basquin/blob/main/docs/USAGE.md#use-with-your-app">USAGE.md §
+    Use with your app</a> if you're not driving over HTTP at all.</p>
+
+  <p>Prefer plain <code>java</code> over Gradle (e.g. scripting a CI job)?
+    <code>./gradlew runnerJar</code> builds a self-contained fat jar with the same
+    <code>CoverageGuidedRun</code> entry point:</p>
+  <pre><code>java <span class="f">-Dexamples.http.baseUrl</span>=<span class="s">http://localhost:8080</span> <span class="f">-Dbasquin.mode</span>=<span class="s">load</span> \
+  <span class="f">-Dbasquin.corpusDir</span>=<span class="s">examples/corpus/jpetstore</span> <span class="f">-Dbasquin.concurrency</span>=<span class="s">50</span> \
+  -jar build/libs/basquin-0.3.0-runner.jar</code></pre>
+
+  <h2>4 &nbsp;The dev loop</h2>
+  <p>Because the target's Tomcat container bind-mounts your locally built jars read-only, iterating
+    on Basquin's own code looks like:</p>
+  <pre><code><span class="c"># 1. edit agent/, tomcat-valve/, runner/, or examples/
+# 2. rebuild the jar(s) that changed — same output path, so the mount doesn't need re-declaring</span>
+./gradlew jar :tomcat-valve:jar
+
+<span class="c"># 3. restart the container so its JVM re-reads the (now-updated) mounted jar — a -javaagent
+#    is loaded once at JVM boot, so a file edit alone does not hot-reload it</span>
+docker compose -f docker-compose.valve.yml restart tomcat-valve
+
+<span class="c"># 4. re-run the driver against the same running target</span>
+./gradlew runHttpDrive -Dexamples.http.baseUrl=http://localhost:8080 -Dbasquin.invariant.mode=soft</code></pre>
+  <p>That's the whole loop — no image build, no registry, no cluster. It's also faster to iterate on
+    the driver/runner side alone: since <code>runHttpDrive</code>/<code>runCoverageGuided</code> read
+    straight from <code>sourceSets.main</code>/<code>sourceSets.coverage</code> output, a plain
+    <code>./gradlew runHttpDrive ...</code> picks up source changes on its own next invocation, no
+    <code>jar</code> rebuild needed at all — only the code that runs <em>inside the target's JVM</em>
+    (the agent, the valve) needs the container restarted.</p>
+
+  <div class="note">
+    <span class="tag">contrast with the operator path</span>
+    <p>There, a code change means rebuilding the agents/operator <em>images</em>
+      (<code>deploy/agents-image/build.sh</code>, <code>docker build -t basquin/operator:&lt;tag&gt;
+      operator/</code>), <code>kind load docker-image</code>-ing them into the cluster, and letting
+      the operator or a pod restart pick up the new image — a whole extra packaging + distribution
+      step this standalone loop skips entirely. See
+      <a href="https://github.com/ianp94/basquin/blob/main/docs/USAGE.md#kubernetes-instrument-any-app-with-the-operator">USAGE.md
+      § Kubernetes: instrument any app with the operator</a> and the
+      <a href="operator.html">Operator guide</a> for that path.</p>
+  </div>
+
+  <hr class="rule">
+
+  <h2>Where to go next</h2>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Doc</th><th>What's there</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://github.com/ianp94/basquin/blob/main/docs/USAGE.md">USAGE.md</a></td><td>every flag, every runnable Gradle task, grammar syntax, exploration &amp; coverage in full</td></tr>
+        <tr><td><a href="https://github.com/ianp94/basquin/blob/main/docs/THIRD-PARTY-APPS.md">THIRD-PARTY-APPS.md</a></td><td>the valve path against a real third-party WAR (JPetStore), with verified findings</td></tr>
+        <tr><td><a href="https://github.com/ianp94/basquin/blob/main/deploy/bench/README.md">deploy/bench/README.md</a></td><td>how the JPetStore and JSPWiki bench targets are built/fetched and pinned</td></tr>
+        <tr><td><a href="https://github.com/ianp94/basquin/blob/main/docs/LOAD-MODE-DESIGN.md">LOAD-MODE-DESIGN.md</a></td><td>the design rationale behind load mode, including the <code>corpusDir</code> overload above</td></tr>
+        <tr><td><a href="benchmarking.html">Benchmarking &amp; onboarding</a> · <a href="operator.html">Operator</a></td><td>the in-cluster operator path (and how to onboard a bench target there) once off <code>localhost</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap-wide footer-inner">
+    <div>Basquin — Kubernetes-native fuzz and load testing for JVM web apps.</div>
+    <div class="links">
+      <a href="index.html">Home</a>
+      <a href="getting-started.html">Get started</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="kubernetes-tomcat.html">K8s / Tomcat</a>
+      <a href="operator.html">Operator</a>
+      <a href="releases.html">Releases</a>
+      <a href="benchmarks.html">Benchmarks</a>
+      <a href="https://github.com/ianp94/basquin">GitHub</a>
+    </div>
+    <div class="ai-note">Built with AI assistance (Anthropic's Claude / Claude Code), directed and reviewed by the author.</div>
+  </div>
+</footer>
+
+</body>
+</html>

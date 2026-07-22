@@ -83,15 +83,17 @@ basquin instrument -n basquin-system --deployment jpetstore \
   --jvm-opts-var CATALINA_OPTS --coverage-includes 'org.mybatis.jpetstore.*' --coverage-service --wait
 
 # 2. Fuzz it: coverage-guided exploration, emitting a corpus of interesting inputs.
+#    (The campaign name defaults to <target>-campaign, i.e. jpetstore-campaign.)
 basquin run -n basquin-system --target jpetstore \
   --base-url http://jpetstore-app.basquin-system.svc.cluster.local:8080 \
   --iterations 500 --grammar examples/grammar/jpetstore.grammar \
   --corpus examples/corpus/jpetstore --watch
 
-# 3. Replay what it found, under load.
+# 3. Replay what it found, under load. The explore run emitted its cost-ranked replay corpus
+#    as the jpetstore-campaign-corpus-out ConfigMap; --corpus-from reuses it directly.
 basquin run -n basquin-system --name jpetstore-load --mode load --target jpetstore \
   --base-url http://jpetstore-app.basquin-system.svc.cluster.local:8080 \
-  --duration 30m --concurrency 50 --corpus ./saved-corpus --watch
+  --duration 30m --concurrency 50 --corpus-from jpetstore-campaign --watch
 
 # 4. Read results / open the per-campaign dashboard.
 basquin status -n basquin-system

@@ -41,6 +41,7 @@ type runOpts struct {
 	concurrency                      int
 	warmup                           string
 	grammarFile, corpusDir           string
+	corpusFrom                       string
 	classesPath                      string
 	dashboard                        bool
 	externalPush                     string
@@ -90,9 +91,12 @@ func validateRun(o runOpts) error {
 	if o.mode != "" && o.mode != "explore" && o.mode != "load" {
 		return fmt.Errorf("--mode must be explore or load, got %q", o.mode)
 	}
+	if o.corpusFrom != "" && o.mode != "load" {
+		return fmt.Errorf("--corpus-from reuses an emitted replay corpus and is only valid with --mode load")
+	}
 	if o.mode == "load" {
-		if o.corpusDir == "" {
-			return fmt.Errorf("--mode load replays a corpus; pass --corpus <dir> (e.g. a saved replay corpus)")
+		if (o.corpusDir == "") == (o.corpusFrom == "") {
+			return fmt.Errorf("--mode load replays a corpus; pass exactly one of --corpus <dir> or --corpus-from <explore-campaign>")
 		}
 		if o.grammarFile != "" {
 			return fmt.Errorf("--mode load replays a fixed corpus and ignores a grammar; drop --grammar")
@@ -126,6 +130,7 @@ func runRun(args []string) error {
 	fs.StringVar(&o.duration, "duration", "", "Bound the run by a Go duration, e.g. 10m (set this OR --iterations).")
 	fs.StringVar(&o.grammarFile, "grammar", "", "Path to a grammar file (creates a ConfigMap from it).")
 	fs.StringVar(&o.corpusDir, "corpus", "", "Path to a corpus dir (creates a flat ConfigMap from its files).")
+	fs.StringVar(&o.corpusFrom, "corpus-from", "", "Reuse the replay corpus a prior explore campaign emitted (its <campaign>-corpus-out ConfigMap), instead of --corpus <dir>. Load mode only.")
 	fs.StringVar(&o.classesPath, "classes-path", "", "Where .class files live in the target image (default: the CRD default).")
 	fs.BoolVar(&noDashbard, "no-dashboard", false, "Don't create a per-campaign dashboard.")
 	fs.StringVar(&o.externalPush, "external-push", "", "Push to an existing dashboard at host:port instead of creating one.")
@@ -153,6 +158,16 @@ func runRun(args []string) error {
 	}
 	ctx := context.Background()
 
+	// Resolve --corpus-from BEFORE creating the campaign: a missing emitted corpus should fail
+	// cleanly, not leave a half-configured campaign behind.
+	var corpusFromData map[string]string
+	if o.corpusFrom != "" {
+		corpusFromData, err = readEmittedCorpus(ctx, c, o.corpusFrom, o.namespace)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Create the campaign FIRST so the grammar/corpus ConfigMaps can be owner-referenced to it (GC on
 	// `kubectl delete campaign`; the owner UID only exists once the campaign is created). If the
 	// reconciler launches the driver Job in the brief window before the ConfigMaps land, that's safe by
@@ -166,7 +181,7 @@ func runRun(args []string) error {
 		grammarCM = o.name + "-grammar"
 		grammarKey = filepath.Base(o.grammarFile)
 	}
-	if o.corpusDir != "" {
+	if o.corpusDir != "" || o.corpusFrom != "" {
 		corpusCM = o.name + "-corpus"
 	}
 	campaign := buildCampaign(o, grammarCM, grammarKey, corpusCM)
@@ -191,6 +206,19 @@ func runRun(args []string) error {
 			return fmt.Errorf("creating corpus ConfigMap: %w", err)
 		}
 		fmt.Printf("  corpus ConfigMap %s (%d file(s))\n", corpusCM, n)
+	}
+	if o.corpusFrom != "" {
+		// Copy the emitted corpus into a ConfigMap owned by THIS campaign. Pointing the driver at the
+		// source <campaign>-corpus-out directly would couple this run to the ORIGINAL campaign's
+		// lifecycle — that ConfigMap is owner-referenced to it and GC'd when it's deleted.
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: corpusCM, Namespace: o.namespace, OwnerReferences: []metav1.OwnerReference{owner}},
+			Data:       corpusFromData,
+		}
+		if err := createOrReplaceConfigMap(ctx, c, cm); err != nil {
+			return fmt.Errorf("creating corpus ConfigMap: %w", err)
+		}
+		fmt.Printf("  corpus ConfigMap %s (copied from %s-corpus-out)\n", corpusCM, o.corpusFrom)
 	}
 
 	if !watch {
@@ -274,6 +302,23 @@ func readCorpusDir(dir string) (map[string]string, error) {
 		return nil, fmt.Errorf("no files found under %s", dir)
 	}
 	return data, nil
+}
+
+// readEmittedCorpus reads the replay corpus a prior explore campaign emitted (its
+// <campaign>-corpus-out ConfigMap, written by the operator on completion) and returns its data.
+func readEmittedCorpus(ctx context.Context, c client.Client, campaign, ns string) (map[string]string, error) {
+	name := campaign + "-corpus-out"
+	var cm corev1.ConfigMap
+	if err := c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &cm); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("no emitted corpus found for campaign %q; did its explore run complete? looked for ConfigMap %s in %s", campaign, name, ns)
+		}
+		return nil, fmt.Errorf("reading emitted corpus ConfigMap %s: %w", name, err)
+	}
+	if len(cm.Data) == 0 {
+		return nil, fmt.Errorf("emitted corpus ConfigMap %s in %s is empty; nothing to replay", name, ns)
+	}
+	return cm.Data, nil
 }
 
 // createOrReplaceConfigMap creates the ConfigMap, or replaces an existing one's data (idempotent).

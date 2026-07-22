@@ -313,9 +313,11 @@ spec:
 <span class="c"># {"requests":1284003,"throughputRps":"713.4","latencyMs":{"p50":8,"p90":22,"p99":61,"max":240},</span>
 <span class="c">#  "heapDriftKb":1840,"threadDrift":0,"violations":{"latency":12,"heap":0,"thread":0}}</span>
 
-<span class="c"># ...or via the CLI:</span>
+<span class="c"># ...or via the CLI: --corpus-from reuses the corpus the explore campaign emitted (its</span>
+<span class="c"># &lt;campaign&gt;-corpus-out ConfigMap), copied into a fresh load-campaign-owned ConfigMap.</span>
+<span class="c"># (--corpus &lt;dir&gt; replays local files instead.)</span>
 basquin run --name jpetstore-load --mode load --target jpetstore --base-url http://jpetstore-app...:8080 \
-  --duration 30m --concurrency 50 --corpus ./saved-corpus --watch</code></pre>
+  --duration 30m --concurrency 50 --corpus-from jpetstore-campaign --watch</code></pre>
   <p>First cut: only <code>violations.latency</code> is threshold-gated (against
     <code>invariants.latencyMaxMs</code>); heap/thread are reported as end-to-end drift, measured on the
     driver.</p>

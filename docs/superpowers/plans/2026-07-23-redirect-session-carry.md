@@ -1,13 +1,15 @@
 # DD-039 Session Carry Across Redirects — Implementation Plan
 
-> **DO NOT EXECUTE AS WRITTEN.** A plan review found six Critical defects; three of them mean the
-> plan cannot compile, and one would ship a live-token disk leak that violates DD-036. The required
-> corrections are listed in "Review corrections" at the bottom of this file and must be folded into
-> the tasks first.
+> **Revised 2026-07-23** after a plan review that found six Critical defects — three that meant the
+> plan could not compile, and one that would have shipped a live-token disk leak violating DD-036.
+> All are folded into the tasks below; the original findings are retained at the bottom of this file
+> as the record of what was wrong and why.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Explore mode follows redirects itself — carrying the session cookie across every hop, recording each hop's invariant breaches, and turning a redirect loop into a finding — so authenticated write paths become reachable.
+**Goal:** Explore mode follows redirects itself — carrying the session cookie across every hop, stamping and recording each hop, and turning a redirect loop into a finding — so authenticated write paths become reachable **and every hop's measurement is actually reported**.
+
+**Acceptance criterion (inherited from DD-040, which failed on exactly this):** a Roller explore campaign's reported violation count must come within a small tolerance of the `[Basquin][Invariant]` line count in the target pod's log for the same window. DD-040's acceptance run measured **1,413 reported against 1,602 logged — a gap of 189 (11.8%)** — because a method-rewritten redirect (POST → 302 → GET) loses the `X-Basquin-Req` header: the JDK does not carry a `setRequestProperty` value onto such a hop, so hop 2 evaluates, logs, and publishes nothing. The poll then still *succeeds* from hop 1 and the driver records `measured=true, count=0` — a clean zero for a request whose real work violated, invisible to `reportMisses`. **This plan's hop loop sets headers on every hop, which stamps each one by construction. Closing that gap is how this plan is judged.**
 
 **Architecture:** `CoverageGuidedRun.request(...)` stops setting `setInstanceFollowRedirects(true)` and instead loops over hops. The per-hop work (issue, capture cookie, record invariants, accumulate cost, drain) is extracted into a small private helper so the loop body stays readable and the redirect decision logic (`shouldFollow`, `resolveLocation`, `sameOrigin`, `followMethod`) becomes pure and unit-testable without a server.
 
@@ -27,6 +29,21 @@ Copied verbatim from the spec; every task's requirements implicitly include thes
 - **One `Invariant-Remote` record per breaching hop**, each carrying `hop=<n>` and that hop's resolved URL and detail. Heap and thread deltas are **summed**; latency is **not** touched.
 - Explore is **single-threaded**; `sessionCookie` stays a single `static volatile` field. Do not introduce per-worker state.
 - Load mode (`LoadRun`) is **not** modified by this plan.
+- **Every hop must be stamped with `X-Basquin-Req`** (DD-040's per-request id) and its result polled,
+  because the JDK drops `setRequestProperty` values on a method-rewritten hop. This is the defect
+  DD-040's acceptance run failed on. A hop that fires unstamped is a hop whose violation is
+  evaluated, logged, and silently uncounted.
+- **`CoverageGuidedRun.request(String base, RequestLine r)` DOES NOT EXIST.** Tests must call the
+  package-private `request(String base, String step)` (house precedent:
+  `ExploreCorrelationTest.java:88`). **Do not add a `RequestLine` overload** deriving `label` from
+  `r.format()` — that violates DD-036 twice, and `format()` canonicalizes a no-body GET, silently
+  rewriting recorded finding text.
+- **Meta files are `.meta.txt`, not `.meta`** (`FuzzIO.java:38`). A test filtering `.meta` matches
+  zero files and fails *after a correct implementation* — the worst failure mode there is.
+- **Never record a hop URL with its query string.** Hop 0's URL is built from the **substituted**
+  RequestLine (DD-038 substitutes the path deliberately), so `GET /edit?csrf=${{tok}}` would write a
+  live CSRF token to disk. Strip to `scheme://host:port/path`. The existing guard test puts its
+  token in the *body* and will not catch this.
 
 ---
 
@@ -183,7 +200,7 @@ git commit -m "feat(explore): pure redirect-policy helpers — resolve, same-ori
 
 ---
 
-### Task 2: Manual follow with session carry
+### Task 2a: Mechanical restructure — hop loop, cookie carry, stamping
 
 **Files:**
 - Modify: `runner/coverage/CoverageGuidedRun.java` (the `request(...)` method, ~`:590-680`)
@@ -191,7 +208,13 @@ git commit -m "feat(explore): pure redirect-policy helpers — resolve, same-ori
 
 **Interfaces:**
 - Consumes: `isRedirect`, `resolveLocation`, `sameOrigin`, `followMethod` from Task 1.
-- Produces: `static volatile long crossOriginRedirects` on `CoverageGuidedRun`, readable by tests and by the summary in Task 3.
+- **Produces, and must DEFINE here rather than depend on a later task:** `MAX_HOPS`, a `drain(conn)`
+  helper, and `captureSessionCookieFrom(conn)` extracted verbatim from the existing scrape at
+  `CoverageGuidedRun.java:619-627`. Task 2a must compile, pass, and commit on its own; the original
+  plan called four symbols that Task 3 defined or that appeared nowhere.
+- Keep the legacy invariant-save block at `:628-635` as final-hop handling for now. **Task 3 deletes
+  it** and replaces it with per-hop records — leaving it produces a duplicate record for the final
+  hop and fails Task 3's own count assertion.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -361,6 +384,26 @@ Expected: FAIL — `rotatedSessionCookieOnTheThreeOhTwoReachesTheNextHop` sees `
 
 - [ ] **Step 3: Implement the hop loop**
 
+**Spell out the restructure — every item below is a compile error or a silent wrong behaviour if the
+existing code is pasted into a loop unchanged:**
+
+- `HttpURLConnection c` and `int code` must be **hoisted above the loop** (declared `= null` / `= 0`,
+  assigned inside). They are loop-scoped locals today; leave them there and the post-loop final-hop
+  code at `:636-675` does not compile.
+- `new URL(base + r.path())` → `new URL(url)`.
+- `c.setRequestMethod(r.method())` → `c.setRequestMethod(method)`.
+- `if (r.body() != null)` → `if (reqBody != null)`. Leave it reading `r.body()` and the POST body
+  **and** its `Content-Type` are re-sent on the rewritten GET hop — precisely the failure §3 exists
+  to prevent.
+- **Name collision:** the request body local cannot be called `body` — `:646` already declares a
+  `StringBuilder body`. Use `reqBody`.
+- The `Cookie` header must be set from `sessionCookie` on **every** hop; the JDK will not carry it.
+- **`X-Basquin-Req` must likewise be set on every hop** (see Global Constraints) — this is the
+  DD-040 gap, and it is the reason this plan exists in its current form.
+- Each hop is drained to EOF before the next is issued, or the connection leaks and measured latency
+  inflates — which is a cost-model input. Every terminal condition `break`s *before* the `drain`
+  call, so the final hop's body is never consumed.
+
 In `CoverageGuidedRun`, add the counter beside `sessionCookie` (~`:480`):
 
 ```java
@@ -412,6 +455,25 @@ git commit -m "feat(explore): follow redirects manually, carrying the session co
 ```
 
 ---
+
+### Task 2b: Redirect policy — cross-origin, unparseable Location, loop detection
+
+**Files:** `runner/coverage/CoverageGuidedRun.java`; extend `test/runner/coverage/ExploreRedirectTest.java`
+
+Split out of Task 2 because it is separately reviewable and 2a must stay independently green.
+
+- [ ] Cross-origin refusal + a `crossOriginRedirects` counter + a once-only warn naming the refused
+      origin. Surface the counter beside the end-of-run summary (`CoverageGuidedRun.java:326-327`) —
+      Tasks 4 and 5 tell an operator to check it, so it must actually be printed.
+- [ ] An unparseable `Location` ends the chain and logs once. It must never throw: the caller catches
+      `Throwable` into `StatusReporter.recordCrash()`, so an escaping `URISyntaxException` files a
+      **false crash finding against the app** with a stack pointing into driver code.
+- [ ] Revisited-URL and hop-cap detection, breaking out of the loop (the *finding* is Task 3).
+      Normalize both producers through `URI` before comparing — hop 0's key is `base + r.path()`
+      while later keys are `URI.resolve(...).toString()`, so an unnormalized compare misses real
+      loops.
+- [ ] Decide and state whether "max 5 hops" means 5 total or 1 + 5 follows; `hop` is 0-based, so
+      `hop >= 5` issues **six** requests.
 
 ### Task 3: Per-hop invariant records, summed cost, and the redirect-loop finding
 
@@ -516,6 +578,26 @@ Expected: FAIL — one record instead of two; no `Redirect-Loop` record.
 
 - [ ] **Step 3: Implement**
 
+**Four corrections from the plan review, each of which an implementer gets wrong by instinct:**
+
+1. **Delete the legacy invariant-save block at `:628-635`.** `recordHopInvariants` replaces it;
+   leaving it yields three records in the two-hop test.
+2. **Split the terminal condition.** `if (!isRedirect(code) || hop >= MAX_HOPS) break;` with
+   `saveRedirectLoop` wired into it makes **every ordinary non-redirect response** file a
+   `Redirect-Loop` finding:
+   ```java
+   if (!isRedirect(code)) break;                                    // normal terminal response
+   if (hop >= MAX_HOPS) { saveRedirectLoop(label, visited); break; }
+   ```
+3. **Strip query and fragment from any recorded hop URL** — `scheme://host:port/path` only. Hop 0's
+   URL comes from the substituted RequestLine, so a token in the path would be written to disk.
+4. **`IOException` is not imported** in `CoverageGuidedRun.java`; the `drain` helper needs it.
+
+**Decide and state** whether the summed invariant count feeds `CostModel.score` (it changes corpus
+ranking, so it must be a written decision, not an implementer's guess), and note that per-hop
+`X-Basquin-Cost` accumulation needs a home inside the loop — today's parse sits at `:636-644`,
+after it.
+
 ```java
     private static final int MAX_HOPS = 5;
 
@@ -597,16 +679,42 @@ git commit -m "docs: DD-039 session carry across redirects + changelog"
 
 ---
 
-### Task 5: Prove it against the real app
+### Task 5: Prove it against the real app — and close DD-040's gap
 
-**Files:** none committed unless a defect is found.
+- [ ] **Step 1** Rebuild and load the agent + runner images; point the controller at them.
+- [ ] **Step 2** Run a Roller explore campaign (5 min). Note the start time.
+- [ ] **Step 3** **THE acceptance test.** Count `[Basquin][Invariant]` lines in the target pod's log
+      within the campaign window and compare against the campaign's reported violation count.
+      DD-040's run measured **1,413 reported vs 1,602 logged, a gap of 189 (11.8%)**. That gap must
+      substantially close. Account for kubelet readiness-probe noise explicitly (~12/min heapDelta at
+      idle) rather than ignoring it.
+- [ ] **Step 4** Assert on **database rows**, not coverage: query `roller_entry` for rows written by
+      `login_publish`, which has never written one because the login 302's `Set-Cookie` was eaten.
+      Coverage can rise for unrelated reasons and is not acceptance evidence.
+- [ ] **Step 5** Confirm `crossOriginRedirects` is 0 for this target (`site.absoluteurl` is seeded
+      empty so Roller derives it from the request) and that `reportMisses` stays low.
+- [ ] **Step 6** Record the measured numbers in the DD-039 record. **If the counts still disagree
+      materially, or no authenticated write lands, STOP and report** — the feature has not been
+      demonstrated, whatever the unit tests say. DD-040's Task 7 did exactly this and was right to.
 
-- [ ] **Step 1** Rebuild and load the runner image: `deploy/runner-image/build.sh <tag> basquin`, then point the controller's `--runner-image` at that tag.
-- [ ] **Step 2** Run a Roller explore campaign against the seeded target.
-- [ ] **Step 3** **Assert on database rows, not coverage.** Query `roller_entry`/`roller_comment` for rows written by the campaign. Coverage can rise for unrelated reasons and is not acceptance evidence.
-- [ ] **Step 4** Check the summary's `crossOriginRedirects` is 0 for this target (`site.absoluteurl` is seeded empty, so Roller derives it from the request).
-- [ ] **Step 5** Record the result in the DD-039 record's **Verified.** paragraph. If no authenticated write lands, STOP and report — the feature has not been demonstrated, whatever the tests say.
+---
 
+### Task 6: Wire the drift guards into CI (folded in from PR #93)
+
+**Files:** `.github/workflows/ci.yml`, `deploy/bench/check_claims.py`, `deploy/bench/test_redact.py`
+
+Carried from #93's approval follow-ups. Both guards exist because four consecutive review rounds
+blocked on a hand-written number, and one misquote survived all four — reviewers doing a script's
+job. A guard that fires only when someone remembers to run it will drift, and then the reason for
+adding it is gone.
+
+- [ ] **Step 1** Add a CI step running `python3 deploy/bench/check_claims.py` and
+      `python3 deploy/bench/test_redact.py`. Both exit non-zero on failure already.
+- [ ] **Step 2** Add the `X-Basquin-Token` case to `test_redact.py`'s `MUST_REDACT` set — the shape
+      was restored after a narrowing dropped it and is currently unpinned, so the next narrowing can
+      drop it again silently.
+- [ ] **Step 3** Verify by deliberately introducing a misquote and confirming CI fails, then revert.
+- [ ] **Step 4** Commit.
 
 ---
 

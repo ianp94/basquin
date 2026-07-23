@@ -171,14 +171,39 @@ precisely the direction this project is heading (see DD-041).
 
 This is a correctness requirement, not an optimisation, and it is cheap if designed in now:
 
-- The boundary adds a **pod identity header** (`X-Basquin-Pod`, from `HOSTNAME` — already the pod
-  name in Kubernetes, DD-013) on every explore exit, next to `X-Basquin-Cost`. It is set at the same
-  point and inherits the same commit caveat, so it cannot be the only mechanism.
-- The driver therefore addresses the target's **pod IP directly** for the poll, resolved from the
-  headless Service the coverage endpoint already uses (`JacocoCoverageProvider` already aggregates
-  `sourcesResponded`/`sourcesTotal` across N sources, so multi-pod resolution exists in the codebase).
-- Where the driver cannot resolve a pod address, the poll degrades to a `miss` and increments
-  `reportMisses` — honest, and visible, rather than silently wrong.
+**Correction (implementation, Task 3b): the pod-identity-header mechanism this section originally
+specified cannot work, and never could.** `X-Basquin-Pod` would ride the same response headers as
+`X-Basquin-Cost`, and the driver polls *iff* no cost header arrived — so the pod header is present
+exactly when there is no poll, and absent exactly when there is one. The two are mutually exclusive
+by construction. Any design that routes the poll using information carried on the response it is
+compensating for has this defect.
+
+What ships instead is **DNS fan-out over the target's pod addresses**:
+
+- The driver resolves pod addresses with `InetAddress.getAllByName`, reusing DD-023's exact
+  mechanism and loopback-collapse from `JacocoCoverageProvider`, from `-Dbasquin.report.podHost`,
+  else the host of `-Dbasquin.coverage.jacoco` (the **headless coverage Service**, which
+  `campaign_resources.go:81` already passes on every explore campaign — so no operator change was
+  required), else the baseURL host.
+- The poll tries each address until one returns the entry.
+- **The fan-out is safe only because of §A.4 and §A.7**: ids are salted and entries are removed on
+  read, so at most one pod can ever hold a given id. A fan-out can therefore be wrong only by
+  finding nothing, which is a counted miss — never by returning another pod's measurement.
+- A source that will not resolve polls nobody, including the VIP, and counts a miss.
+- Single-replica behaviour is byte-identical: a source resolving to fewer than two addresses returns
+  the base URL untouched.
+
+Rejected during implementation: having the boundary report its pod IP for the driver to build a
+directory (strictly weaker — the driver only learns pods that *returned headers*, knows none at run
+start, and would still have to fan out over an incomplete set); and pod-name→address via headless
+DNS (`<pod>.<svc>` only resolves with `spec.hostname`/`subdomain`, a StatefulSet convention, and
+Basquin targets are Deployments).
+
+Known limits, to be watched in the acceptance run: the pod port is assumed equal to the baseURL
+port, so a Service with `port: 80` → `targetPort: 8080` makes every fan-out poll miss — visibly in
+`reportMisses`, but nothing auto-detects it (`-Dbasquin.report.podPort` is the escape hatch). And
+with `coverageService: false` plus a ClusterIP baseURL there is no pod source at all, so the poll
+stays VIP-bound unless `-Dbasquin.report.podHost` is set.
 
 Explicit **verification item**: with two target replicas behind a Service, the reported violation
 count still matches the sum across both pods' logs. A single-replica-only test would pass against a

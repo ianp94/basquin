@@ -1512,7 +1512,8 @@ JSPWiki-specific. (2) `fire` auto-followed redirects, so a *rejected* write (`30
    generators are usually used in URL queries (`?rev=<nonce>`), and body-only substitution would bake
    the literal marker into a fired URL. The path is never null and is substituted unconditionally; the
    body can be null and is guarded, so `GET /Wiki.jsp?rev=${{@nonce}}` with no body does not NPE.
-3. Load mode stops following redirects (`setInstanceFollowRedirects(false)`); a distinct method
+3. Load mode stops following redirects (`setInstanceFollowRedirects(false)`) — explore mode keeps
+   following them, since it optimizes for coverage, not redirect metrics; a distinct method
    `fireR` returns `record FireResult(int code, String location)` (the existing `int`-returning `fire`
    delegates, so `LoadFireTest` and every other caller are untouched — Java can't overload on return
    type alone). A pure-static `normalizeLocation` classifies the `Location` into `redirects`/
@@ -1524,13 +1525,24 @@ JSPWiki-specific. (2) `fire` auto-followed redirects, so a *rejected* write (`30
    termination-message summary on invalid or oversized JSON, so one fuzzed/reflected `Location` must
    never be able to void it.
 
+**Load-baseline discontinuity (read before comparing runs).** Because load mode no longer pays the
+follow hop, any corpus whose steps redirect (JSPWiki `edit_save`, the jpetstore Stripes POSTs) reports
+`p50`/`p90`/`p99` and `throughputRps` that are **not comparable to pre-DD-038 numbers** — the
+post-DD-038 figures measure the server's direct response only, so re-baseline any benchmark campaign
+that spans this change rather than reading the shift as a performance regression or win.
+
 **Verified.** Unit tests: nonce uniqueness across calls and never masking an unbound `${{ref}}`; a
 path-only marker substitutes without NPE on a null body; `lintCorrelationOrdering` exempts `@nonce` and
-scans both path and body; `normalizeLocation` self-fold (from a body-leading `page=`), `frompage=`
-rejection, absolute-URL handling, and 64-char truncation; `fireR` returns the `Location` on a `302`,
-`null` on a `200`, and a `302` carrying `Set-Cookie` still populates the jar; `summaryJson` stays valid
-JSON with a populated `redirectTargets`. Grammar validation confirms the marker survives expansion
-verbatim and fills uniquely per fire. Full suite green.
+scans both path and body; `paramValue`'s `(^|[?&])page=` rule on all three shapes (body-leading `^`,
+`?page=`, `&page=`) and its rejection of `frompage=`; `normalizeLocation` self-fold composed from a
+body-leading `page=` (i.e. the `paramValue` → `normalizeLocation` pair the worker actually performs),
+absolute-URL handling, and 64-char truncation; `admitKey`'s cap — a NEW key on a full map becomes
+`"other"`, a key already present is still admitted (never fragmented across two buckets); `fireR`
+returns the `Location` on a `302`, `null` on a `200`, and a `302` carrying `Set-Cookie` still populates
+the jar; `summaryJson` stays valid JSON with a populated `redirectTargets`. Grammar validation confirms
+the marker survives expansion verbatim and fills uniquely per fire. Full suite green (215 tests).
+*Residual gap:* the worker's own recording block (extract-page → classify → admit → increment) is
+covered only by its parts, not end-to-end through a live redirect under load.
 
 **Rejected alternatives.**
 - **A reserved `${{nonce}}` correlation name** — would squat the author-controlled `${{}}` namespace

@@ -163,11 +163,20 @@ public final class LoadRun {
                             // SessionExpired/PageModified) is visible in the summary instead of vanishing
                             // (no longer auto-followed to a final 200 — see fireR).
                             redirects.incrementAndGet();
-                            String reqPage = paramValue(toFire.body() != null ? toFire.body() : toFire.path(), "page");
+                            // BOTH the path/query and the body are consulted for the request's own
+                            // page=: a step can carry it in either (jspwiki's edit_save is
+                            // body-leading `page=…`, but `POST /Edit.jsp?page=X` with an unrelated
+                            // body is just as valid). Checking only one leaves reqPage null for the
+                            // other shape → the self-fold never fires → routine SUCCESS 302s eat the
+                            // 12 slots and push the real rejects into "other" (F1).
+                            String reqPage = paramValue(toFire.path(), "page");
+                            if (reqPage == null && toFire.body() != null) reqPage = paramValue(toFire.body(), "page");
                             String key = normalizeLocation(fr.location(), reqPage);
                             LongAdder a = redirectTargets.get(key);
-                            if (a == null) { if (redirectTargets.size() >= 12) key = "other";
-                                a = redirectTargets.computeIfAbsent(key, k -> new LongAdder()); }
+                            if (a == null) {
+                                key = admitKey(redirectTargets, key);
+                                a = redirectTargets.computeIfAbsent(key, k -> new LongAdder());
+                            }
                             a.increment();
                         }
                         if (latencyMaxMs > 0 && elapsedMs > latencyMaxMs) {
@@ -222,7 +231,7 @@ public final class LoadRun {
         // unbounded-by-count-but-capped-by-distinct-keys at 12 — see the worker's "other" fallback).
         java.util.Map<String, Long> redirectTargetsTop12 = redirectTargets.entrySet().stream()
                 .sorted((e1, e2) -> Long.compare(e2.getValue().sum(), e1.getValue().sum()))
-                .limit(12)
+                .limit(REDIRECT_TARGETS_CAP)
                 .collect(java.util.stream.Collectors.toMap(
                         java.util.Map.Entry::getKey, e -> e.getValue().sum(),
                         (x, y) -> x, java.util.LinkedHashMap::new));
@@ -291,6 +300,10 @@ public final class LoadRun {
      * JSESSIONID} in practice): it's read to build the request's {@code Cookie} header and written from
      * the response's {@code Set-Cookie}, so a sequence's later steps see the session its earlier steps
      * established.
+     *
+     * <p>DD-038: test-facing convenience wrapper — no production caller remains (the worker calls
+     * {@link #fireR}, which also yields the {@code Location}). Kept because Java can't overload on
+     * return type and it leaves {@code LoadFireTest}'s status-only assertions untouched.
      */
     static int fire(String base, RequestLine step, java.util.Map<String, String> jar) {
         return fireR(base, step, jar, null).code();
@@ -303,6 +316,9 @@ public final class LoadRun {
      * still be keep-alive'd — and runs {@link Capture#extract} against it, recording a new binding on
      * success. Review fix (single-count captureMisses): a failed extraction does NOT increment any
      * miss counter here — see the capture branch below for why.
+     *
+     * <p>DD-038: likewise a test-facing convenience wrapper — no production caller remains; the worker
+     * calls {@link #fireR} directly for the {@code Location}.
      */
     static int fire(String base, RequestLine step, java.util.Map<String, String> jar,
             java.util.Map<String, String> bindings) {
@@ -310,9 +326,13 @@ public final class LoadRun {
     }
 
     /**
-     * DD-038 Task 3: a fired request's HTTP status plus (when {@code code} is a 3xx) the raw
-     * {@code Location} header value — {@code null} for any non-redirect status, including the
-     * {@code -1} transport-failure path.
+     * DD-038 Task 3: a fired request's HTTP status plus the raw {@code Location} header value.
+     * {@code location} is {@code null} for any non-redirect status and on the {@code -1}
+     * transport-failure path — and ALSO on the exception path when the status itself was a 3xx: if
+     * the body read throws (e.g. a read timeout on a 302), {@code fireR}'s catch block recovers the
+     * real {@code code} from the connection but returns no {@code Location}. So a 3xx {@code code}
+     * with a {@code null} {@code location} is reachable, and callers must treat it as unclassifiable
+     * ({@link #normalizeLocation} maps it to {@code "?"}) rather than impossible.
      */
     record FireResult(int code, String location) {}
 
@@ -419,6 +439,22 @@ public final class LoadRun {
 
     private static final int LOC_KEY_MAX = 64;
 
+    /** DD-038: hard bound on distinct {@code redirectTargets} keys (see {@link #admitKey}). */
+    static final int REDIRECT_TARGETS_CAP = 12;
+
+    /**
+     * DD-038 admission decision for {@code redirectTargets}: return {@code key} if it may take (or
+     * already holds) a slot, else the reserved overflow key {@code "other"}. A key ALREADY in the map
+     * is always admitted even when the map is full — diverting it to {@code "other"} would fragment
+     * its count across two buckets. Only a NEW key on a full map overflows, which is what keeps a
+     * fuzzed/reflected {@code Location} from growing the map (and the ~4 KB termination-message
+     * summary) without bound. Best-effort under concurrency: a benign overshoot ≤ worker-count is
+     * fine in-memory, since the summary emits only the top-N anyway.
+     */
+    static String admitKey(java.util.Map<String, LongAdder> targets, String key) {
+        return (targets.containsKey(key) || targets.size() < REDIRECT_TARGETS_CAP) ? key : "other";
+    }
+
     /**
      * Classify a redirect's {@code Location} into a short, JSON-safe key for the summary's
      * {@code redirectTargets} counter (DD-038). A {@code page=} param wins (JSPWiki's own idiom); a
@@ -446,10 +482,17 @@ public final class LoadRun {
         return safeKey(key);                                            // charset-restrict for JSON (N3)
     }
 
+    /**
+     * The only name any production caller asks for is {@code page} (the worker's 3xx path calls
+     * {@code paramValue} twice per redirect, in the loop that sets the driver's throughput ceiling),
+     * so it is compiled once instead of per call.
+     */
+    private static final Pattern PAGE_PARAM = Pattern.compile("(^|[?&])page=([^&#]*)");
+
     /** (^|[?&])<name>=<value up to & or #>, exact-boundary so frompage= doesn't false-match. */
     static String paramValue(String s, String name) {
-        java.util.regex.Matcher m =
-            java.util.regex.Pattern.compile("(^|[?&])" + java.util.regex.Pattern.quote(name) + "=([^&#]*)").matcher(s);
+        java.util.regex.Matcher m = ("page".equals(name) ? PAGE_PARAM
+                : Pattern.compile("(^|[?&])" + Pattern.quote(name) + "=([^&#]*)")).matcher(s);
         return m.find() ? m.group(2) : null;
     }
 

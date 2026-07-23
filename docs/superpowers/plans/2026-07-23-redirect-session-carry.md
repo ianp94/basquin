@@ -61,672 +61,174 @@ Copied verbatim from the spec; every task's requirements implicitly include thes
 
 ### Task 1: Pure redirect-decision helpers
 
-**Files:**
-- Modify: `runner/coverage/CoverageGuidedRun.java`
-- Test: `test/runner/coverage/RedirectPolicyTest.java` (create)
-
-**Interfaces:**
-- Consumes: nothing from earlier tasks.
-- Produces, all `static` and package-private on `CoverageGuidedRun`:
-  - `static boolean isRedirect(int code)` — `code >= 300 && code < 400`
-  - `static java.net.URI resolveLocation(String requestUrl, String location)` — resolved absolute URI, or `null` if either will not parse
-  - `static boolean sameOrigin(java.net.URI a, java.net.URI b)`
-  - `static int defaultPort(String scheme)` — 80/443, `-1` otherwise
-  - `static String followMethod(String method, int code)` — the method the follow hop must use
-
-- [ ] **Step 1: Write the failing tests**
-
-Create `test/runner/coverage/RedirectPolicyTest.java`:
-
-```java
-package runner.coverage;
-
-import org.junit.Test;
-import java.net.URI;
-import static org.junit.Assert.*;
-
-public class RedirectPolicyTest {
-
-    @Test public void redirectRangeIsThreeHundredInclusiveToFourHundredExclusive() {
-        assertFalse(CoverageGuidedRun.isRedirect(200));
-        assertTrue(CoverageGuidedRun.isRedirect(301));
-        assertTrue(CoverageGuidedRun.isRedirect(302));
-        assertTrue(CoverageGuidedRun.isRedirect(307));
-        assertFalse(CoverageGuidedRun.isRedirect(400));
-        assertFalse(CoverageGuidedRun.isRedirect(-1));
-    }
-
-    @Test public void relativeLocationResolvesAgainstTheRequestUrl() {
-        URI r = CoverageGuidedRun.resolveLocation("http://svc:8080/a/b?x=1", "/login");
-        assertEquals("http://svc:8080/login", r.toString());
-    }
-
-    // DD-039: a fuzzed Location must NEVER throw out of request() -- the caller catches
-    // Throwable into recordCrash(), which would file a false crash finding AGAINST THE APP
-    // carrying a stack that points into driver code.
-    @Test public void unparseableLocationReturnsNullRatherThanThrowing() {
-        assertNull(CoverageGuidedRun.resolveLocation("http://svc/a", "/x y|z^{}"));
-        assertNull(CoverageGuidedRun.resolveLocation("http://svc/a", "ht tp://nope"));
-        assertNull(CoverageGuidedRun.resolveLocation(":::not a url:::", "/login"));
-    }
-
-    @Test public void sameOriginNormalizesAbsentPortAndIgnoresHostCase() {
-        assertTrue(CoverageGuidedRun.sameOrigin(URI.create("http://svc:80/a"), URI.create("http://svc/b")));
-        assertTrue(CoverageGuidedRun.sameOrigin(URI.create("http://SVC/a"),    URI.create("http://svc/b")));
-        assertTrue(CoverageGuidedRun.sameOrigin(URI.create("https://s:443/a"), URI.create("https://s/b")));
-        assertFalse(CoverageGuidedRun.sameOrigin(URI.create("http://svc/a"),   URI.create("http://other/b")));
-        assertFalse(CoverageGuidedRun.sameOrigin(URI.create("http://svc/a"),   URI.create("https://svc/b")));
-        assertFalse(CoverageGuidedRun.sameOrigin(URI.create("http://svc/a"),   URI.create("http://svc:9/b")));
-    }
-
-    // Preserves what the JDK already did: 30x after a BODY method becomes GET; 307/308 keep
-    // the method; and a bodyless method (notably HEAD) is NOT rewritten -- turning HEAD into
-    // GET would pull a body the caller never asked for and corrupt that input's cost rank.
-    @Test public void followMethodRewritesOnlyBodyCarryingMethodsOnThirtyOneTwoThree() {
-        assertEquals("GET",  CoverageGuidedRun.followMethod("POST", 302));
-        assertEquals("GET",  CoverageGuidedRun.followMethod("PUT", 301));
-        assertEquals("GET",  CoverageGuidedRun.followMethod("PATCH", 303));
-        assertEquals("HEAD", CoverageGuidedRun.followMethod("HEAD", 302));
-        assertEquals("GET",  CoverageGuidedRun.followMethod("GET", 302));
-        assertEquals("POST", CoverageGuidedRun.followMethod("POST", 307));
-        assertEquals("POST", CoverageGuidedRun.followMethod("POST", 308));
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify it fails**
-
-Run: `./gradlew test --tests '*RedirectPolicyTest*'`
-Expected: FAIL — `cannot find symbol: method isRedirect`.
-
-- [ ] **Step 3: Implement the helpers**
-
-Add to `CoverageGuidedRun`, near the existing `request(...)`:
-
-```java
-    /** DD-039: 3xx. Kept a named predicate so the hop loop reads as policy, not arithmetic. */
-    static boolean isRedirect(int code) { return code >= 300 && code < 400; }
-
-    /**
-     * DD-039: resolve a {@code Location} against the request URL. Returns null when EITHER will
-     * not parse. Null must be treated as "end of chain" by the caller — never propagated as an
-     * exception: {@code request(...)} is {@code throws Exception} and its caller catches
-     * {@code Throwable} into {@link runner.util.StatusReporter#recordCrash()}, so an escaping
-     * URISyntaxException would be filed as a CRASH FINDING AGAINST THE APP, with a stack pointing
-     * into driver code. A fuzzer reflects exactly the bytes that trigger it (spaces, {}|^).
-     */
-    static java.net.URI resolveLocation(String requestUrl, String location) {
-        if (location == null || location.isEmpty()) return null;
-        try {
-            return new java.net.URI(requestUrl).resolve(new java.net.URI(location));
-        } catch (java.net.URISyntaxException | IllegalArgumentException e) {
-            return null;
-        }
-    }
-
-    static int defaultPort(String scheme) {
-        if ("http".equalsIgnoreCase(scheme)) return 80;
-        if ("https".equalsIgnoreCase(scheme)) return 443;
-        return -1;
-    }
-
-    /**
-     * DD-039: scheme + host + port, with an absent port normalized to the scheme default —
-     * {@code URI.getPort()} returns -1 when absent, so {@code http://svc/x} must still match a base
-     * of {@code http://svc:80}. Host compares case-insensitively.
-     */
-    static boolean sameOrigin(java.net.URI a, java.net.URI b) {
-        if (a == null || b == null) return false;
-        if (a.getScheme() == null || !a.getScheme().equalsIgnoreCase(b.getScheme())) return false;
-        if (a.getHost() == null || !a.getHost().equalsIgnoreCase(b.getHost())) return false;
-        int pa = a.getPort() == -1 ? defaultPort(a.getScheme()) : a.getPort();
-        int pb = b.getPort() == -1 ? defaultPort(b.getScheme()) : b.getPort();
-        return pa == pb;
-    }
-
-    /**
-     * DD-039: the method a follow hop uses. This PRESERVES what the JDK already did rather than
-     * choosing new behaviour (probed: a 302 after POST already became a bodyless GET; a 307 already
-     * kept method and body). 301/302/303 rewrite only a BODY-carrying method — a HEAD must stay a
-     * HEAD, or the follow pulls a response body the caller never asked for and inflates that input's
-     * measured latency and heap, corrupting its cost rank.
-     */
-    static String followMethod(String method, int code) {
-        if (code == 307 || code == 308) return method;
-        boolean hasBody = "POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method);
-        return hasBody ? "GET" : method;
-    }
-```
-
-- [ ] **Step 4: Run to verify it passes**
-
-Run: `./gradlew test --tests '*RedirectPolicyTest*'`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add runner/coverage/CoverageGuidedRun.java test/runner/coverage/RedirectPolicyTest.java
-git commit -m "feat(explore): pure redirect-policy helpers — resolve, same-origin, follow method (DD-039)"
-```
+Unchanged from the reviewed version and confirmed sound — do not churn it. Adds `isRedirect`,
+`resolveLocation` (returns null rather than throwing), `sameOrigin` (default-port normalized,
+host case-insensitive), `defaultPort`, `followMethod`, on `CoverageGuidedRun`, with
+`test/runner/coverage/RedirectPolicyTest.java`. One addition from review: `resolveLocation` logs
+once on an unparseable Location rather than swallowing silently.
 
 ---
 
-### Task 2a: Mechanical restructure — hop loop, cookie carry, stamping
+### Task 2: `ResultStore` accumulates per-hop entries under one id
 
-**Files:**
-- Modify: `runner/coverage/CoverageGuidedRun.java` (the `request(...)` method, ~`:590-680`)
-- Test: `test/runner/coverage/ExploreRedirectTest.java` (create)
+**Files:** `agent/ResultStore.java`; `test/agent/ResultStoreTest.java`
 
-**Interfaces:**
-- Consumes: `isRedirect`, `resolveLocation`, `sameOrigin`, `followMethod` from Task 1.
-- **Produces, and must DEFINE here rather than depend on a later task:** `MAX_HOPS`, a `drain(conn)`
-  helper, and `captureSessionCookieFrom(conn)` extracted verbatim from the existing scrape at
-  `CoverageGuidedRun.java:619-627`. Task 2a must compile, pass, and commit on its own; the original
-  plan called four symbols that Task 3 defined or that appeared nowhere.
-- Keep the legacy invariant-save block at `:628-635` as final-hop handling for now. **Task 3 deletes
-  it** and replaces it with per-hop records — leaving it produces a duplicate record for the final
-  hop and fails Task 3's own count assertion.
+**This task is new and it is the one that makes the feature work.** DD-040 mints ONE
+`X-Basquin-Req` id per request and `ResultStore.put` **replaces by key** (`ResultStore.java:45`). So
+stamping every hop with that id has each hop overwrite the last, one entry survives, and DD-040's
+189-violation gap stays exactly where it is. See spec §4b.
 
-- [ ] **Step 1: Write the failing tests**
+**Interfaces produced (later tasks depend on these names):**
+- `ResultStore.put(id, Entry)` **appends** to that id's hop list, capped at `MAX_HOPS_PER_ID` (5,
+  matching the follow loop's own cap). Overflow drops the *newest* and records that it did — silently
+  dropping a hop would be a lost violation, which is the defect class.
+- `ResultStore.take(id)` returns `List<Entry>` (empty list, never null, on a miss) and removes the id.
+  **Still exactly one remove-on-read**, which is why no double-count path exists.
+- `ResultStore.format(List<Entry>)` emits one line per hop; the driver parses with a 4-field limit
+  per line as today (`detail` is app-derived).
 
-Create `test/runner/coverage/ExploreRedirectTest.java`. Each test stands up an `HttpServer`, records what the server received, and asserts on that — never on driver-side state alone.
-
-```java
-package runner.coverage;
-
-import com.sun.net.httpserver.HttpServer;
-import org.junit.Test;
-import java.net.InetSocketAddress;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import static org.junit.Assert.*;
-
-public class ExploreRedirectTest {
-
-    /** What the server actually received, which is the only thing worth asserting on. */
-    record Seen(String method, String path, String cookie) {}
-
-    private HttpServer server;
-    private final List<Seen> seen = new CopyOnWriteArrayList<>();
-
-    private String start(java.util.function.BiConsumer<com.sun.net.httpserver.HttpExchange, List<Seen>> handler)
-            throws Exception {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/", ex -> {
-            seen.add(new Seen(ex.getRequestMethod(), ex.getRequestURI().getPath(),
-                              ex.getRequestHeaders().getFirst("Cookie")));
-            handler.accept(ex, seen);
-        });
-        server.start();
-        return "http://127.0.0.1:" + server.getAddress().getPort();
-    }
-
-    // THE motivating case (DD-039 defect 1): Spring Security answers form login with a 302 that
-    // CARRIES the rotated JSESSIONID. Auto-follow makes that header unreachable, so the driver
-    // keeps the anonymous session forever and every later step runs logged out.
-    @Test public void rotatedSessionCookieOnTheThreeOhTwoReachesTheNextHop() throws Exception {
-        String base = start((ex, s) -> {
-            try {
-                if (ex.getRequestURI().getPath().equals("/login")) {
-                    ex.getResponseHeaders().add("Set-Cookie", "JSESSIONID=rotated; Path=/");
-                    ex.getResponseHeaders().add("Location", "/landing");
-                    ex.sendResponseHeaders(302, -1);
-                } else {
-                    byte[] b = "ok".getBytes();
-                    ex.sendResponseHeaders(200, b.length);
-                    ex.getResponseBody().write(b);
-                }
-                ex.close();
-            } catch (Exception ignored) {}
-        });
-
-        CoverageGuidedRun.request(base, RequestLine.parse("POST /login u=a"));
-
-        assertEquals(2, seen.size());
-        assertEquals("/landing", seen.get(1).path());
-        assertEquals("JSESSIONID=rotated", seen.get(1).cookie());
-    }
-
-    // DD-039 defect 2, in isolation: even with NO cookie rotation, the JDK drops the Cookie
-    // REQUEST header on a method-rewritten hop -- so every post-redirect landing page has been
-    // rendering anonymously. This case discriminates where a "value survives" assertion does not.
-    @Test public void preExistingCookieIsCarriedOntoAHopThatSetsNoCookie() throws Exception {
-        String base = start((ex, s) -> {
-            try {
-                if (ex.getRequestURI().getPath().equals("/a")) {
-                    ex.getResponseHeaders().add("Set-Cookie", "JSESSIONID=first; Path=/");
-                    byte[] b = "seed".getBytes();
-                    ex.sendResponseHeaders(200, b.length);
-                    ex.getResponseBody().write(b);
-                } else if (ex.getRequestURI().getPath().equals("/b")) {
-                    ex.getResponseHeaders().add("Location", "/c");   // NO Set-Cookie here
-                    ex.sendResponseHeaders(302, -1);
-                } else {
-                    byte[] b = "done".getBytes();
-                    ex.sendResponseHeaders(200, b.length);
-                    ex.getResponseBody().write(b);
-                }
-                ex.close();
-            } catch (Exception ignored) {}
-        });
-
-        CoverageGuidedRun.request(base, RequestLine.parse("/a"));      // seeds the session
-        seen.clear();
-        CoverageGuidedRun.request(base, RequestLine.parse("POST /b x=1"));
-
-        assertEquals(2, seen.size());
-        assertEquals("JSESSIONID=first", seen.get(0).cookie());
-        assertEquals("the JDK drops Cookie on a rewritten hop; we must set it ourselves",
-                     "JSESSIONID=first", seen.get(1).cookie());
-    }
-
-    @Test public void headStaysHeadAcrossAFollow() throws Exception {
-        String base = start((ex, s) -> {
-            try {
-                if (ex.getRequestURI().getPath().equals("/h")) {
-                    ex.getResponseHeaders().add("Location", "/target");
-                    ex.sendResponseHeaders(302, -1);
-                } else {
-                    ex.sendResponseHeaders(200, -1);
-                }
-                ex.close();
-            } catch (Exception ignored) {}
-        });
-
-        CoverageGuidedRun.request(base, RequestLine.parse("HEAD /h"));
-
-        assertEquals(2, seen.size());
-        assertEquals("HEAD", seen.get(1).method());
-    }
-
-    @Test public void crossOriginLocationIsNotFollowedAndIsCounted() throws Exception {
-        long before = CoverageGuidedRun.crossOriginRedirects;
-        String base = start((ex, s) -> {
-            try {
-                ex.getResponseHeaders().add("Location", "http://example.invalid/elsewhere");
-                ex.sendResponseHeaders(302, -1);
-                ex.close();
-            } catch (Exception ignored) {}
-        });
-
-        CoverageGuidedRun.request(base, RequestLine.parse("/x"));
-
-        assertEquals("must not leave the target", 1, seen.size());
-        assertEquals(before + 1, CoverageGuidedRun.crossOriginRedirects);
-    }
-
-    @Test public void unparseableLocationEndsTheChainWithoutThrowing() throws Exception {
-        String base = start((ex, s) -> {
-            try {
-                ex.getResponseHeaders().add("Location", "/x y|z^{}");
-                ex.sendResponseHeaders(302, -1);
-                ex.close();
-            } catch (Exception ignored) {}
-        });
-
-        CoverageGuidedRun.request(base, RequestLine.parse("/x"));   // must not throw
-
-        assertEquals(1, seen.size());
-    }
-
-    @Test public void nonRedirectResponseIsUnchanged() throws Exception {
-        String base = start((ex, s) -> {
-            try {
-                byte[] b = "plain".getBytes();
-                ex.sendResponseHeaders(200, b.length);
-                ex.getResponseBody().write(b);
-                ex.close();
-            } catch (Exception ignored) {}
-        });
-
-        CoverageGuidedRun.request(base, RequestLine.parse("/plain"));
-
-        assertEquals(1, seen.size());
-    }
-
-    @org.junit.After public void stop() { if (server != null) server.stop(0); }
-}
-```
-
-- [ ] **Step 2: Run to verify it fails**
-
-Run: `./gradlew test --tests '*ExploreRedirectTest*'`
-Expected: FAIL — `rotatedSessionCookieOnTheThreeOhTwoReachesTheNextHop` sees `cookie=null` on hop 2 (the current auto-follow behaviour), and `crossOriginRedirects` does not resolve.
-
-- [ ] **Step 3: Implement the hop loop**
-
-**Spell out the restructure — every item below is a compile error or a silent wrong behaviour if the
-existing code is pasted into a loop unchanged:**
-
-- `HttpURLConnection c` and `int code` must be **hoisted above the loop** (declared `= null` / `= 0`,
-  assigned inside). They are loop-scoped locals today; leave them there and the post-loop final-hop
-  code at `:636-675` does not compile.
-- `new URL(base + r.path())` → `new URL(url)`.
-- `c.setRequestMethod(r.method())` → `c.setRequestMethod(method)`.
-- `if (r.body() != null)` → `if (reqBody != null)`. Leave it reading `r.body()` and the POST body
-  **and** its `Content-Type` are re-sent on the rewritten GET hop — precisely the failure §3 exists
-  to prevent.
-- **Name collision:** the request body local cannot be called `body` — `:646` already declares a
-  `StringBuilder body`. Use `reqBody`.
-- The `Cookie` header must be set from `sessionCookie` on **every** hop; the JDK will not carry it.
-- **`X-Basquin-Req` must likewise be set on every hop** (see Global Constraints) — this is the
-  DD-040 gap, and it is the reason this plan exists in its current form.
-- Each hop is drained to EOF before the next is issued, or the connection leaks and measured latency
-  inflates — which is a cost-model input. Every terminal condition `break`s *before* the `drain`
-  call, so the final hop's body is never consumed.
-
-In `CoverageGuidedRun`, add the counter beside `sessionCookie` (~`:480`):
-
-```java
-    /** DD-039: refused cross-origin follows. Surfaced because a target that renders redirects from a
-     *  configured absolute base URL different from the Service DNS the driver dials makes EVERY
-     *  redirect cross-origin — silently degrading this feature to its pre-DD-039 behaviour, which is
-     *  indistinguishable from it working. A non-zero count beside flat coverage is diagnosable. */
-    static volatile long crossOriginRedirects = 0;
-```
-
-In `request(...)`, replace `c.setInstanceFollowRedirects(true);` with `c.setInstanceFollowRedirects(false);` and wrap the issue-and-read in a loop. The loop keeps the existing header-scrape, invariant-record, cost-parse and body-read code as the **final hop's** handling; each non-final hop captures the cookie, records its invariants (Task 3), drains, and moves on:
-
-```java
-        java.util.LinkedHashSet<String> visited = new java.util.LinkedHashSet<>();
-        String url = baseUrl + r.path();
-        String method = r.method();
-        String body = r.body();
-        for (int hop = 0; ; hop++) {
-            visited.add(url);
-            // ... existing connection setup, but with the Cookie header ALWAYS set from
-            //     sessionCookie (the JDK will not carry it across a rewritten hop) ...
-            int code = c.getResponseCode();
-            captureSessionCookieFrom(c);          // every hop, before the next is issued
-            recordHopInvariants(c, label, hop, url);   // Task 3
-            if (!isRedirect(code) || hop >= MAX_HOPS) { /* fall through to final-hop handling */ break; }
-            java.net.URI next = resolveLocation(url, c.getHeaderField("Location"));
-            if (next == null) break;                                   // unparseable → end of chain
-            if (!sameOrigin(java.net.URI.create(url), next)) { crossOriginRedirects++; break; }
-            if (!visited.add(next.toString())) { /* loop → Task 3 finding */ break; }
-            drain(c);                                                  // keep-alive, not a leak
-            method = followMethod(method, code);
-            if (!method.equals(r.method())) body = null;               // body + Content-Type dropped
-            url = next.toString();
-        }
-```
-
-Keep the final hop's existing body read, `X-Basquin-Cost` parse, and `CostSample` construction exactly as they are today.
-
-- [ ] **Step 4: Run to verify it passes**
-
-Run: `./gradlew test --tests '*ExploreRedirectTest*' --tests '*ExploreCorrelationTest*'`
-Expected: PASS, including the pre-existing correlation tests (no regression on the non-redirect path).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add runner/coverage/CoverageGuidedRun.java test/runner/coverage/ExploreRedirectTest.java
-git commit -m "feat(explore): follow redirects manually, carrying the session cookie across every hop (DD-039)"
-```
+- [ ] **Step 1** Tests: two `put`s under one id yield two entries from one `take`; a third `take`
+      misses; the per-id cap holds and overflow is recorded; a single-hop request is byte-identical
+      in behaviour to today (the no-redirect path must not regress); concurrent `put`/`take` on the
+      same id does not corrupt the list (the poll is a different connector thread — the existing
+      `concurrentPutAndTakeDoNotCorruptTheStore` shows how to make this discriminate rather than
+      pass trivially).
+- [ ] **Step 2** Run; expect failure.
+- [ ] **Step 3** Implement. Keep the store dependency-free and namespace-free (it loads into the
+      target JVM). Keep `detail` capped per hop; state the resulting byte bound in the javadoc as
+      today (`CAPACITY` × `MAX_HOPS_PER_ID` × cap).
+- [ ] **Step 4** `./gradlew test` fully green.
+- [ ] **Step 5** Commit.
 
 ---
 
-### Task 2b: Redirect policy — cross-origin, unparseable Location, loop detection
+### Task 3: The hop loop — manual follow, stamped and cookied on every hop
 
-**Files:** `runner/coverage/CoverageGuidedRun.java`; extend `test/runner/coverage/ExploreRedirectTest.java`
+**Files:** `runner/coverage/CoverageGuidedRun.java`; `test/runner/coverage/ExploreRedirectTest.java` (create)
 
-Split out of Task 2 because it is separately reviewable and 2a must stay independently green.
+Replaces `c.setInstanceFollowRedirects(true)` (`CoverageGuidedRun.java:717`) with an explicit loop.
 
-- [ ] Cross-origin refusal + a `crossOriginRedirects` counter + a once-only warn naming the refused
-      origin. Surface the counter beside the end-of-run summary (`CoverageGuidedRun.java:326-327`) —
-      Tasks 4 and 5 tell an operator to check it, so it must actually be printed.
-- [ ] An unparseable `Location` ends the chain and logs once. It must never throw: the caller catches
+**Spell out the restructure — each of these is a compile error or a silent wrong behaviour if the
+existing code is moved into a loop unchanged:**
+
+- `HttpURLConnection c` and `int code` must be **hoisted above the loop**; they are loop-scoped
+  today and the post-loop body-read/capture/serverError block would not compile.
+- `new URL(base + r.path())` → `new URL(url)`; `setRequestMethod(r.method())` → `setRequestMethod(method)`.
+- `if (r.body() != null)` → `if (reqBody != null)`. Leave it on `r.body()` and the POST body **and**
+  its `Content-Type` are re-sent on a rewritten GET hop.
+- **Name collision:** the request-body local cannot be `body` — one is already declared for the
+  response. Use `reqBody`.
+- **Set `Cookie` AND `X-Basquin-Req` explicitly on every hop.** The JDK carries neither onto a
+  method-rewritten hop; that is both DD-039's motivating defect and DD-040's residual.
+- Each hop is drained to EOF before the next is issued. Every terminal condition `break`s *before*
+  the drain, so the final hop's body survives for the capture step.
+- Keep `MAX_HOPS`, `drain`, and `captureSessionCookieFrom` **defined in this task**. It must
+  **compile and commit alone**: the previous version of this plan called four symbols that a later
+  task defined or that appeared nowhere, so the task could not be executed as written. No task may
+  reference a symbol a later task introduces.
+
+**The header/poll rule becomes exact, because the driver now knows its own hop count** (spec §4b):
+
+> `hops == 1` → the cost header, if present, is complete. Use the existing `headerReported` path.
+> `hops > 1` → **always poll**, regardless of any header, because a header can only ever describe
+> the final hop.
+
+Set `headerReported = false` whenever `hops > 1` so the existing `finally` polls. Do **not** add a
+second poll path.
+
+**Calling `request` from a test:** use the package-private `request(String base, String step)`
+(house precedent: `ExploreCorrelationTest.java:88`). `request(String base, RequestLine r)` **does not
+exist**, and **do not add it** — an overload deriving `label` from `r.format()` violates DD-036
+twice, and `format()` canonicalizes a no-body GET, silently rewriting recorded finding text.
+
+- [ ] Steps 1–5 as usual. The tests must include: a rotated `JSESSIONID` on a 302 reaching the next
+      hop; a 302 that sets **no** cookie still carrying the pre-existing one (this discriminates
+      where a "value survives" assertion does not); `HEAD` staying `HEAD`; 307 preserving method and
+      body while 303-after-POST does not; and a non-redirect response behaving exactly as before.
+
+---
+
+### Task 4: Redirect policy — cross-origin, unparseable Location, loop detection
+
+**Files:** `runner/coverage/CoverageGuidedRun.java`; extend `ExploreRedirectTest`
+
+- [ ] Cross-origin refusal, a `crossOriginRedirects` counter, and a once-only warn naming the refused
+      origin. **Surface the counter in the end-of-run summary** — Tasks 6 and 7 tell an operator to
+      check it, so it must actually be printed. A target that renders redirects from a configured
+      absolute base URL makes *every* redirect cross-origin, silently degrading this feature to its
+      pre-DD-039 behaviour; a non-zero counter beside flat coverage is what makes that diagnosable.
+- [ ] An unparseable `Location` ends the chain. **It must never throw** — the caller catches
       `Throwable` into `StatusReporter.recordCrash()`, so an escaping `URISyntaxException` files a
-      **false crash finding against the app** with a stack pointing into driver code.
-- [ ] Revisited-URL and hop-cap detection, breaking out of the loop (the *finding* is Task 3).
-      Normalize both producers through `URI` before comparing — hop 0's key is `base + r.path()`
-      while later keys are `URI.resolve(...).toString()`, so an unnormalized compare misses real
-      loops.
-- [ ] Decide and state whether "max 5 hops" means 5 total or 1 + 5 follows; `hop` is 0-based, so
-      `hop >= 5` issues **six** requests.
-
-### Task 3: Per-hop invariant records, summed cost, and the redirect-loop finding
-
-**Files:**
-- Modify: `runner/coverage/CoverageGuidedRun.java`
-- Test: `test/runner/coverage/ExploreRedirectTest.java` (extend)
-
-**Interfaces:**
-- Consumes: the hop loop from Task 2.
-- Produces: nothing new for later tasks.
-
-- [ ] **Step 1: Write the failing tests**
-
-Append to `ExploreRedirectTest`. Findings are written through `FuzzIO`, so point it at a temp dir with `basquin.fuzz.resultsDir` and assert on the files:
-
-```java
-    // DD-039: summing counts while persisting ONE record reports "3 violations on POST /login"
-    // when 2 of them were the dashboard render. One record per breaching hop, each labelled with
-    // the RAW step (DD-036) and carrying which hop it was.
-    @Test public void eachBreachingHopGetsItsOwnRecordLabelledWithTheRawStep() throws Exception {
-        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("dd039-hops");
-        System.setProperty("basquin.fuzz.resultsDir", dir.toString());
-        try {
-            String base = start((ex, s) -> {
-                try {
-                    ex.getResponseHeaders().add("X-Basquin-Invariant-Count", "1");
-                    ex.getResponseHeaders().add("X-Basquin-Invariant-Detail",
-                            ex.getRequestURI().getPath().equals("/one") ? "latency=30ms" : "latency=900ms");
-                    if (ex.getRequestURI().getPath().equals("/one")) {
-                        ex.getResponseHeaders().add("Location", "/two");
-                        ex.sendResponseHeaders(302, -1);
-                    } else {
-                        ex.sendResponseHeaders(200, -1);
-                    }
-                    ex.close();
-                } catch (Exception ignored) {}
-            });
-
-            CoverageGuidedRun.request(base, RequestLine.parse("/one"));
-            runner.util.TriageSink.drainForTest();      // triage is off the hot path
-
-            List<String> metas = new java.util.ArrayList<>();
-            try (var st = java.nio.file.Files.walk(dir)) {
-                for (java.nio.file.Path p : st.filter(p -> p.toString().endsWith(".meta")).toList()) {
-                    metas.add(java.nio.file.Files.readString(p));
-                }
-            }
-            assertEquals("one record per breaching hop", 2, metas.size());
-            assertTrue(metas.stream().anyMatch(m -> m.contains("hop=0") && m.contains("latency=30ms")));
-            assertTrue(metas.stream().anyMatch(m -> m.contains("hop=1") && m.contains("latency=900ms")));
-            assertTrue("DD-036: labelled with the raw step, never a hop URL",
-                       metas.stream().allMatch(m -> m.contains("route=/one")));
-        } finally {
-            System.clearProperty("basquin.fuzz.resultsDir");
-        }
-    }
-
-    // An app that redirects indefinitely is UNAVAILABLE -- a browser calls it
-    // ERR_TOO_MANY_REDIRECTS. Silently scoring the last response would discard the finding and
-    // feed a meaningless response into the cost model. A revisited URL catches the common
-    // 2-hop auth bounce that a hop cap never reaches.
-    @Test public void aRedirectLoopProducesAFinding() throws Exception {
-        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("dd039-loop");
-        System.setProperty("basquin.fuzz.resultsDir", dir.toString());
-        try {
-            String base = start((ex, s) -> {
-                try {
-                    ex.getResponseHeaders().add("Location",
-                            ex.getRequestURI().getPath().equals("/protected") ? "/login" : "/protected");
-                    ex.sendResponseHeaders(302, -1);
-                    ex.close();
-                } catch (Exception ignored) {}
-            });
-
-            CoverageGuidedRun.request(base, RequestLine.parse("/protected"));
-            runner.util.TriageSink.drainForTest();
-
-            boolean found = false;
-            try (var st = java.nio.file.Files.walk(dir)) {
-                for (java.nio.file.Path p : st.filter(p -> p.toString().endsWith(".meta")).toList()) {
-                    String m = java.nio.file.Files.readString(p);
-                    if (m.contains("Redirect-Loop")) {
-                        found = true;
-                        assertTrue("labelled with the raw step", m.contains("route=/protected"));
-                        assertTrue("carries the ordered hops", m.contains("/login"));
-                    }
-                }
-            }
-            assertTrue("a redirect loop must be a finding, not a silent truncation", found);
-        } finally {
-            System.clearProperty("basquin.fuzz.resultsDir");
-        }
-    }
-```
-
-If `TriageSink` has no test drain, add one in this task (`static void drainForTest()` that awaits the queue) rather than sleeping — a sleep makes this test flaky under CI load.
-
-- [ ] **Step 2: Run to verify it fails**
-
-Run: `./gradlew test --tests '*ExploreRedirectTest*'`
-Expected: FAIL — one record instead of two; no `Redirect-Loop` record.
-
-- [ ] **Step 3: Implement**
-
-**Four corrections from the plan review, each of which an implementer gets wrong by instinct:**
-
-1. **Delete the legacy invariant-save block at `:628-635`.** `recordHopInvariants` replaces it;
-   leaving it yields three records in the two-hop test.
-2. **Split the terminal condition.** `if (!isRedirect(code) || hop >= MAX_HOPS) break;` with
-   `saveRedirectLoop` wired into it makes **every ordinary non-redirect response** file a
-   `Redirect-Loop` finding:
-   ```java
-   if (!isRedirect(code)) break;                                    // normal terminal response
-   if (hop >= MAX_HOPS) { saveRedirectLoop(label, visited); break; }
-   ```
-3. **Strip query and fragment from any recorded hop URL** — `scheme://host:port/path` only. Hop 0's
-   URL comes from the substituted RequestLine, so a token in the path would be written to disk.
-4. **`IOException` is not imported** in `CoverageGuidedRun.java`; the `drain` helper needs it.
-
-**Decide and state** whether the summed invariant count feeds `CostModel.score` (it changes corpus
-ranking, so it must be a written decision, not an implementer's guess), and note that per-hop
-`X-Basquin-Cost` accumulation needs a home inside the loop — today's parse sits at `:636-644`,
-after it.
-
-```java
-    private static final int MAX_HOPS = 5;
-
-    /** DD-039: one record per breaching hop. X-Basquin-Invariant-Detail is per-request, so a summed
-     *  count with a single record reports one arbitrary hop's detail against the whole chain. */
-    private static int recordHopInvariants(java.net.HttpURLConnection c, String label, int hop, String hopUrl) {
-        String inv = c.getHeaderField("X-Basquin-Invariant-Count");
-        if (inv == null) return 0;
-        int count = 0;
-        try { count = Integer.parseInt(inv.trim()); } catch (NumberFormatException ignored) { return 0; }
-        if (count <= 0) return 0;
-        String detail = c.getHeaderField("X-Basquin-Invariant-Detail");
-        FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
-                "route=" + label + "\nhop=" + hop + "\nhopUrl=" + hopUrl
-                        + "\ncount=" + count + (detail != null ? "\ndetail=" + detail : ""));
-        return count;
-    }
-
-    /** DD-039: a redirect loop is a finding — an app that redirects forever is unavailable. */
-    private static void saveRedirectLoop(String label, java.util.Collection<String> hops) {
-        FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Redirect-Loop",
-                "route=" + label + "\nhops=" + String.join(" -> ", hops));
-    }
-
-    /** DD-039: read the hop to EOF so the connection returns to the keep-alive pool. */
-    private static void drain(java.net.HttpURLConnection c) {
-        try (InputStream is = c.getResponseCode() >= 400 ? c.getErrorStream() : c.getInputStream()) {
-            if (is != null) { byte[] buf = new byte[4096]; while (is.read(buf) >= 0) { /* discard */ } }
-        } catch (IOException ignored) { }
-    }
-```
-
-Wire `saveRedirectLoop` into both the revisited-URL branch and the `hop >= MAX_HOPS` branch, and accumulate `heapKb`/`threadDelta` across hops into the `CostSample` the method already returns. Leave `latMs` alone — it is client wall-clock in the caller and already spans the chain.
-
-- [ ] **Step 4: Run the full suite**
-
-Run: `./gradlew test`
-Expected: PASS, no regressions.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add runner/coverage/CoverageGuidedRun.java test/runner/coverage/ExploreRedirectTest.java
-git commit -m "feat(explore): per-hop invariant records, summed hop cost, redirect-loop finding (DD-039)"
-```
+      false crash finding against the app with a stack pointing into driver code.
+- [ ] Revisited-URL detection (a `LinkedHashSet` of resolved URLs) and the hop cap. Normalize both
+      producers through `URI` before comparing — hop 0's key is built by concatenation and later keys
+      by `URI.resolve`, so an unnormalized compare misses real loops.
+- [ ] State whether "max 5 hops" means 5 total or 1 + 5 follows; `hop` is 0-based.
 
 ---
 
-### Task 4: Record and document
+### Task 5: Per-hop records, summed cost, and the redirect-loop finding
 
-**Files:**
-- Modify: `docs/DESIGN-DECISIONS.md` (append DD-039 after DD-038)
-- Modify: `docs/how-it-works.html` (the "Reaching write paths that defend themselves" section)
-- Modify: `runner/CHANGELOG.md` (`[Unreleased]`)
-- Modify: `deploy/bench/ONBOARDING.md` (the cross-origin onboarding trap)
+**Files:** `runner/coverage/CoverageGuidedRun.java`; extend `ExploreRedirectTest`
 
-- [ ] **Step 1: Write the DD-039 record**
-
-Append `## DD-039: Session carry across redirects in explore mode (2026-07-23)` after DD-038, mirroring its `**Context.** / **Decision.** / **Verified.** / **Rejected alternatives.**` shape. It must state that this fixes **three** defects (unreachable `Set-Cookie` on the 3xx; the `Cookie` request header dropped on rewritten hops, so landing pages rendered anonymously; discarded intermediate-hop invariant counts), carry the JDK probe evidence, and include the **Consequences** note about explore/load cost divergence from the spec.
-
-- [ ] **Step 2: Update the docs page**
-
-In `docs/how-it-works.html`, extend the correlation section with a paragraph on session carry: a login that rotates the session on its 302 is now followed manually so the rotated cookie is carried, and a redirect loop is reported as a finding.
-
-- [ ] **Step 3: CHANGELOG + onboarding note**
-
-One `[Unreleased]` bullet. In `ONBOARDING.md`, add a gotcha: if the app renders redirects from a configured absolute base URL that differs from the Service DNS the driver dials, every redirect is cross-origin and session carry silently no-ops — check `crossOriginRedirects` in the summary.
-
-- [ ] **Step 4: Verify**
-
-Run: `./gradlew test -q` (docs-only, confirms nothing broke). Re-read each file; confirm DD-039 is the newest record and the CHANGELOG bullet is under the existing `[Unreleased]`.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add docs/DESIGN-DECISIONS.md docs/how-it-works.html runner/CHANGELOG.md deploy/bench/ONBOARDING.md
-git commit -m "docs: DD-039 session carry across redirects + changelog"
-```
+- [ ] **One `Invariant-Remote` record per breaching hop**, each carrying `hop=<n>` and that hop's
+      detail. A summed count with a single record reports "3 violations on POST /login" when 2 were
+      the dashboard render — the multi-hop case this exists to capture is exactly the one a sum
+      erases.
+- [ ] **Delete the legacy single-record save** it replaces; leaving it double-records the final hop.
+- [ ] **Never record a hop URL with its query string.** Hop 0's URL comes from the **substituted**
+      RequestLine (DD-038 substitutes the path deliberately), so `GET /edit?csrf=${{tok}}` would
+      write a live token to disk. Strip to `scheme://host:port/path`, and **add a test asserting a
+      token substituted into the PATH never reaches disk** — the existing guard test
+      (`ExploreCorrelationTest.correlatedInvariantFindingDoesNotPersistToken`) puts its token in the
+      **body**, so it passes while the path leaks.
+- [ ] Sum heap and thread deltas across hops. **Latency is not summed** — `latMs` is already client
+      wall-clock around the whole call and has always spanned every hop.
+- [ ] A redirect loop (revisited URL **or** the cap) saves a `"Redirect-Loop"` finding carrying the
+      **raw step label** (DD-036) and the ordered hops. An app that redirects forever is unavailable,
+      which is the oracle; silently scoring the last response discards a real finding.
+- [ ] Meta files are **`.meta.txt`**, not `.meta` — a test filtering `.meta` matches zero files and
+      fails *after a correct implementation*.
+- [ ] Decide, in writing, whether the summed invariant count feeds `CostModel.score`. It changes
+      corpus ranking, so it must be a decision, not an implementer's guess.
+- [ ] Use `TriageSink`'s existing test-drain approach or the house helper
+      `ExploreCorrelationTest.waitAndReadAll` — a naive queue-empty check is racy.
 
 ---
 
-### Task 5: Prove it against the real app — and close DD-040's gap
+### Task 6: Record and document
 
-- [ ] **Step 1** Rebuild and load the agent + runner images; point the controller at them.
-- [ ] **Step 2** Run a Roller explore campaign (5 min). Note the start time.
-- [ ] **Step 3** **THE acceptance test.** Count `[Basquin][Invariant]` lines in the target pod's log
-      within the campaign window and compare against the campaign's reported violation count.
-      DD-040's run measured **1,413 reported vs 1,602 logged, a gap of 189 (11.8%)**. That gap must
-      substantially close. Account for kubelet readiness-probe noise explicitly (~12/min heapDelta at
-      idle) rather than ignoring it.
-- [ ] **Step 4** Assert on **database rows**, not coverage: query `roller_entry` for rows written by
-      `login_publish`, which has never written one because the login 302's `Set-Cookie` was eaten.
-      Coverage can rise for unrelated reasons and is not acceptance evidence.
-- [ ] **Step 5** Confirm `crossOriginRedirects` is 0 for this target (`site.absoluteurl` is seeded
-      empty so Roller derives it from the request) and that `reportMisses` stays low.
-- [ ] **Step 6** Record the measured numbers in the DD-039 record. **If the counts still disagree
-      materially, or no authenticated write lands, STOP and report** — the feature has not been
-      demonstrated, whatever the unit tests say. DD-040's Task 7 did exactly this and was right to.
+- [ ] DD-039 record in `docs/DESIGN-DECISIONS.md`: the three defects (unreachable `Set-Cookie` on the
+      3xx; the `Cookie` request header dropped on rewritten hops, so landing pages rendered
+      anonymously; discarded intermediate-hop invariant counts), the JDK probe evidence, the §4b
+      accumulate design and why per-hop ids were rejected, and the explore/load cost divergence.
+- [ ] `docs/how-it-works.html`, `runner/CHANGELOG.md` `[Unreleased]`, and an `ONBOARDING.md` note on
+      the cross-origin trap.
 
 ---
 
-### Task 6: Wire the drift guards into CI (folded in from PR #93)
+### Task 7: Prove it — close DD-040's gap
 
-**Files:** `.github/workflows/ci.yml`, `deploy/bench/check_claims.py`, `deploy/bench/test_redact.py`
+- [ ] Rebuild and load the agent + runner images; point the controller at them.
+- [ ] **THE acceptance test.** A Roller explore campaign's reported violation count against the
+      `[Basquin][Invariant]` count in the target pod's log for the same window. **DD-040 measured
+      1,413 vs 1,602 — a gap of 189 (11.8%).** That gap must substantially close. Account for
+      kubelet probe noise explicitly (~12/min heapDelta at idle) rather than ignoring it.
+- [ ] **Assert on database rows, not coverage:** query `roller_entry` for rows written by
+      `login_publish`, which has never written one. Coverage can rise for unrelated reasons.
+- [ ] Confirm `crossOriginRedirects` is 0 for this target and `reportMisses` stays low.
+- [ ] **Commit the evidence under `bench-results/`** — a figure without an artifact is the thing this
+      project keeps getting wrong. Reuse `deploy/bench/collect.py`'s `_redact`.
+- [ ] **If the counts still disagree materially, or no authenticated write lands, STOP and report.**
+      DD-040's Task 7 did exactly this and was right to.
 
-Carried from #93's approval follow-ups. Both guards exist because four consecutive review rounds
-blocked on a hand-written number, and one misquote survived all four — reviewers doing a script's
-job. A guard that fires only when someone remembers to run it will drift, and then the reason for
-adding it is gone.
+---
 
-- [ ] **Step 1** Add a CI step running `python3 deploy/bench/check_claims.py` and
-      `python3 deploy/bench/test_redact.py`. Both exit non-zero on failure already.
-- [ ] **Step 2** Add the `X-Basquin-Token` case to `test_redact.py`'s `MUST_REDACT` set — the shape
-      was restored after a narrowing dropped it and is currently unpinned, so the next narrowing can
-      drop it again silently.
-- [ ] **Step 3** Verify by deliberately introducing a misquote and confirming CI fails, then revert.
-- [ ] **Step 4** Commit.
+### Task 8: Wire the drift guards into CI (folded in from PR #93)
+
+- [ ] Add a CI step running `python3 deploy/bench/check_claims.py` and `deploy/bench/test_redact.py`.
+- [ ] Add the `X-Basquin-Token` case to `test_redact.py`'s `MUST_REDACT` set.
+- [ ] Verify by introducing a deliberate misquote, confirming CI fails, then reverting.
 
 ---
 

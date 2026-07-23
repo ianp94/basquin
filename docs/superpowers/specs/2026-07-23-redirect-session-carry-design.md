@@ -196,6 +196,19 @@ stays open. "Stamp every hop" is necessary and not sufficient.
   double-count hazard that per-hop ids would create never arises.
 - The driver sums invariant counts across the returned hops, sums heap and thread deltas, and saves
   **one `Invariant-Remote` record per breaching hop** (§4), each carrying its `hop=<n>`.
+- **`hop=<n>` is the driver-assigned position in the sequence `take` returns.** The target cannot
+  supply it: `Entry` has no hop field, and a JVM serving one hop of a chain has no idea which hop it
+  was. Caveat honestly in the record — with multiple replicas the merge order across pods is the
+  order the driver polled them, so `n` is a stable label for correlating a finding to its detail,
+  not a guarantee of on-the-wire sequence.
+- **`format` must sanitise newlines as well as pipes.** `detail` is app-derived, and a `\n` in it
+  would forge an extra hop line in the multi-line wire format — inventing a hop that never ran. That
+  is a *fabricated* measurement rather than a lost one, which is worse.
+- **When `hops > 1` the driver must ask EVERY pod base and merge**, not stop at the first that
+  answers. DD-040's fan-out breaks at the first pod returning an entry, which is correct only while
+  at most one pod can hold an id — but a redirect chain may have been served by different replicas
+  behind the Service, each holding part of the same id's story. Break-at-first is retained for
+  `hops <= 1`, where the original assumption still holds.
 
 This is better than the per-hop-id alternative on three counts, and those are the reasons to prefer
 it rather than an aesthetic preference:
@@ -203,8 +216,13 @@ it rather than an aesthetic preference:
 1. **One poll per input, not N.** A poll is an extra HTTP round trip on the explore hot path, and
    per-hop polling would inflate `latMs` — which is a cost-model input, so it would distort corpus
    ranking (the thing DD-040 was trying to repair).
-2. **No double-count question.** With one id and one `take`, there is no path where a violation is
-   counted from both the header and the store.
+2. **No double-count question — *provided the driver reconciles at ONE point*.** The original
+   wording claimed this followed from having one id and one `take`. **That is false**, and the
+   correction is the important one: `CoverageGuidedRun` saves the header's finding via
+   `saveWithMeta` the instant it reads the header, so clearing `headerReported` afterwards cannot
+   un-save it, and a headered hop would be recorded twice. The property belongs to the **driver's
+   code**, not to the store's arity: there must be exactly one reconciliation point at which a
+   request's hops become findings, and nothing may be saved before it.
 3. **It matches the semantics we actually want.** One input has one cost. A redirect chain is one
    input's work spread over several server-side iterations, not several inputs.
 
@@ -213,8 +231,14 @@ describe the hop that produced the response the client received. Under this desi
 the follow loop itself, so **it knows its own hop count** — and the rule is exact rather than
 heuristic:
 
-> One hop → the cost header is complete, use it. More than one hop → always poll, regardless of
-> whether a header arrived.
+> One hop → the cost header is complete, use it. More than one hop → **poll and MERGE** with
+> whatever the final hop's header reported.
+
+"Poll and *replace*" would be wrong. A forced poll that misses discards a perfectly good final-hop
+header reading and records a miss instead — and on a redirect-heavy target that inflates
+`reportMisses` far enough to trip the majority-miss rule and `System.exit(3)` the run. The header is
+never *wrong*; it is merely incomplete, describing only the last hop. Merge it with the polled hops,
+de-duplicating on hop identity.
 
 That closes DD-040's residual precisely: the case that leaked (POST → 302 → GET) is by definition a
 multi-hop request, so it always polls, and the poll now returns both hops.

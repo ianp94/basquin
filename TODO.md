@@ -797,6 +797,20 @@ touching the tip would have put it outside what was reviewed.
       matched-version driver, but the asymmetry means an omitted `findingsLowerBound` reads as
       `false` ("not a lower bound") rather than as absent — the defect class DD-040 exists to remove.
 
+### Follow-ups from PR #96 review (DD-039, approved with these outstanding)
+
+Two minor, non-blocking notes from the round-2 approval. Neither is a token-to-disk path — the
+blocking DD-036 leak (a captured token in a URL path segment reaching a Redirect-Loop finding) is
+fixed and closed as a class.
+
+- [ ] `redactBoundValues` over-redacts when a bound capture value is a single character (every
+      occurrence of that char in a URL becomes `<redacted>`). Safe direction, no leak — a min-length
+      guard (skip values under ~4 chars) keeps the finding readable.
+- [ ] `warnOnce("bad-location", …)` echoes the app's raw `Location` to stderr. App-reflected, not a
+      captured token, and stderr is not a finding file — noted for completeness.
+- [ ] Durable fix for #96 finding 3: wire `crossOriginRedirects` and `overflowedHops` into
+      `StatusReporter.snapshotJson` so a future acceptance run COMMITS them rather than inferring them.
+
 ### Future: DD-042 — a load-mode oracle (deferred, not scoped)
 
 The intended division of labour is sound: **explore** finds serialized, per-request defects

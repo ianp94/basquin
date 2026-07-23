@@ -203,8 +203,8 @@ def coverage_figure() -> str:
                body,
                f'JaCoCo-measured coverage of the app\'s own classes, reached without a single line of '
                f'test code — just a request grammar. Invariant breaches the driver actually RECEIVED '
-               f'in the same runs: {detail} — read against the reporting loss above, not as the '
-               f'number evaluated.',
+               f'in the same runs: {detail}. These come from the fixed reporting channel, so they '
+               f'are the violations actually evaluated, not a lower bound.',
                fid=fid)
 
 
@@ -322,6 +322,28 @@ def build() -> str:
     app_sentence = (" and ".join([", ".join(_names[:-1]), _names[-1]]) if len(_names) > 1
                     else (_names[0] if _names else "No apps collected")) + "."
     n_load = len(load_runs)
+
+    # Derived, never typed: the callout's per-app explore counts and JSPWiki's c1-vs-c8 load
+    # observation come straight from the collected summaries so no prose can drift from the data.
+    def _inv(app):
+        r = pick(app, "explore")
+        v = (r.get("exploration") or {}).get("findInvariant") if r else None
+        return fmt(v) if v is not None else "no count reported"
+    rl_inv, jw_inv, jp_inv = _inv("roller"), _inv("jspwiki"), _inv("jpetstore")
+
+    def _ld(app, c):
+        r = pick(app, "load", c)
+        return (r.get("load") or {}) if r else {}
+    jw1, jw8 = _ld("jspwiki", 1), _ld("jspwiki", 8)
+    if jw1 and jw8:
+        r1, r8 = jw1.get("throughputRps"), jw8.get("throughputRps")
+        p1 = (jw1.get("latencyMs") or {}).get("p99"); p8 = (jw8.get("latencyMs") or {}).get("p99")
+        jw_load_obs = (f'JSPWiki holds roughly flat throughput ({r1} rps at concurrency 1 vs '
+                       f'{r8} at 8) while its p99 latency blows out from {p1}&nbsp;ms to '
+                       f'{p8}&nbsp;ms — added concurrency buys queueing, not throughput, the '
+                       f'signature of a resource already saturated at c1.')
+    else:
+        jw_load_obs = "JSPWiki's load runs were not collected for this comparison."
     # Derived, not asserted: an earlier draft claimed "roughly 5% 5xx" from a run that was later
     # discarded, and the sentence outlived its data.
     _jps = [r for r in load_runs if r["app"] == "jpetstore"]
@@ -496,21 +518,25 @@ def build() -> str:
   </div>
 
   <div class="callout">
-    <div class="big">The finding counts below are undercounts, and we can say by how much</div>
+    <div class="big">These counts are now complete — and it took a fix to make them so</div>
     <p style="margin:.5rem 0 0">The valve evaluates every invariant inside the app JVM and logs it,
       then attaches the result to the response — but only if the response has not already been
-      committed. The driver learns about violations <em>solely</em> by reading that header, so on a
-      response that committed early the finding is evaluated, logged, and thrown away.</p>
-    <p style="margin:.5rem 0 0">Measured against each app's real corpus: <strong>Roller loses
-      97.3%</strong> of its responses' ability to report (one explore window evaluated
-      <strong>1,906 violations and reported 0</strong>), <strong>JSPWiki 75%</strong> — and its
-      surviving 25% are redirects and 400s, which never violate — while <strong>JPetStore loses
-      nothing</strong>. That last row is why JPetStore looked productive and the other two looked
-      clean: it is the only app on this page whose finding counts were ever real.</p>
-    <p class="muted" style="margin:.5rem 0 0">The bias runs the wrong way — the larger and slower the
-      response, the more likely it committed early, so the most expensive requests are the most
-      likely to have been discarded. Evaluation is intact, so this is a reporting fix; it is tracked
-      in <code>TODO.md</code> and the figures here will be regenerated once it lands.</p>
+      committed, and on a real app most responses have. The driver learned about violations
+      <em>solely</em> by reading that header, so a finding on a committed response was evaluated,
+      logged, and thrown away. DD-040 added a side channel that recovers them and DD-039 carries it
+      across redirects; the numbers on this page are from that fixed channel.</p>
+    <p style="margin:.5rem 0 0">How much was being lost, measured before the fix: <strong>Roller
+      reported 0</strong> of the violations it evaluated (one explore window evaluated 1,906 and
+      reported none), <strong>JSPWiki reported 1</strong>, while <strong>JPetStore lost nothing</strong>
+      because its small pages rarely commit early. That last row is why JPetStore looked productive
+      and the other two looked clean — it was the only app whose counts were ever real. On the fixed
+      channel the same explore runs report <strong>Roller {rl_inv}</strong>, <strong>JSPWiki
+      {jw_inv}</strong>, and <strong>JPetStore {jp_inv}</strong>: Roller, which "looked underwhelming",
+      is the most productive target and has the highest coverage here.</p>
+    <p class="muted" style="margin:.5rem 0 0">The loss was biased the wrong way — the larger and
+      slower the response, the more likely it committed early, so the most expensive requests were
+      the most likely to be discarded. Evaluation was always intact; only the reporting was lost, and
+      that is what the fix restored. The pre-fix counts are the ones DD-040 measured and recorded; the DD-040 decision record documents the loss (one window evaluated 1,906 violations and reported none) and the recovered violations are archived under <code>bench-results/violation-logs-2026-07-23/</code>.</p>
   </div>
 
   <p class="muted">Those two columns are split deliberately, because they are not the same kind of
@@ -655,13 +681,10 @@ def build() -> str:
       budget, and the explore summary's <code>invariants</code> block is the driver measuring itself
       with no thresholds configured. Neither is a check that passed. Combined with the header loss
       above, a zero on this page should be read as "not measured" unless stated otherwise.</li>
-    <li><strong>Two observations on this run that are reported, not explained.</strong> JSPWiki
-      returns the same <strong>80.7 req/s at concurrency 1 and at concurrency 8</strong>, while its
-      p99 rises from 57&nbsp;ms to 743&nbsp;ms — the signature of a resource already saturated at
-      c1, where added concurrency buys queueing rather than throughput. {jps_5xx_clause} The JSPWiki
-      throughput plateau is stated as measured and has <em>not</em> been root-caused;
-      and load mode was confirmed on every run (no <code>driftUnavailable</code>), so neither is an
-      artifact of the target sitting in the wrong mode.</li>
+    <li><strong>Two observations on this run, reported not explained.</strong> {jw_load_obs}
+      {jps_5xx_clause} Neither has been root-caused; load mode was confirmed on every run (no
+      <code>driftUnavailable</code>), so neither is an artifact of the target sitting in the wrong
+      mode.</li>
     <li><strong>No heap-drift number is published, deliberately.</strong> The driver's
       <code>heapDriftKb</code> is a raw <code>totalMemory − freeMemory</code> difference with no
       collection on either side, so it measures GC phase as much as retention: the same metric came

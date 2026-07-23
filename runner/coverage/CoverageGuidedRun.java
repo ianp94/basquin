@@ -724,6 +724,11 @@ public final class CoverageGuidedRun {
     /** Wire miss token from {@code ResultStore.MISS}; any unparseable body is treated as a miss too. */
     private static final String POLL_MISS = "miss";
 
+    /** DD-039: the result body is now up to {@code ResultStore.MAX_HOPS_PER_ID} lines. Bound:
+     *  5 hops × (200-char detail + costCsv + count + separators) ≈ 1.2 KB; 8 KB is generous headroom
+     *  for a version-skewed target without letting a hostile body grow unbounded in the driver. */
+    private static final int POLL_BODY_MAX = 8192;
+
     /**
      * Whether this sample may be scored. Extracted (and package-private) so "a miss must not be
      * scored" is assertable directly rather than inferred from the loop. DD-040: cost measurement
@@ -932,96 +937,123 @@ public final class CoverageGuidedRun {
     }
 
     /**
-     * DD-040: recover one request's measurements from the target's id-keyed result store, for the
-     * responses that could not carry a header because they had already committed.
+     * DD-040/DD-039: recover a request's measurements from the target's id-keyed result store, for
+     * the responses that could not carry a header because they had already committed.
      *
-     * <p>Two things this method must never do, both learned the expensive way:
+     * <p>Two things this method must never do, both learned the expensive way: <b>throw</b> (it is
+     * called from a {@code finally}; an exception escaping there REPLACES the in-flight
+     * {@code serverError} and the 500 finding is lost), and <b>stop at recovering the count</b> (a
+     * recovered violation is only a FINDING once it is saved via {@link FuzzIO#saveWithMeta} →
+     * {@code StatusReporter.recordSaved} → {@code findInvariant}).
      *
-     * <ol>
-     *   <li><b>Throw.</b> It is called from a {@code finally}; an exception escaping there REPLACES
-     *       the in-flight {@code serverError} and the 500 finding is lost. Every failure is swallowed
-     *       and recorded as a miss.</li>
-     *   <li><b>Stop at recovering the count.</b> A recovered violation is only a FINDING once it is
-     *       saved via {@link FuzzIO#saveWithMeta} → {@code StatusReporter.recordSaved} →
-     *       {@code findInvariant}. Feeding the number to the cost model and saving nothing leaves the
-     *       campaign's reported count at ~0 — the original defect under a new name.</li>
-     * </ol>
+     * <p><b>DD-039: the body is one line per hop.</b> Explore stamps every hop of a redirect chain
+     * with one id and {@code ResultStore} accumulates them, so this sums invariant counts, sums heap
+     * and thread deltas, ORs the leak flags, and saves ONE {@code Invariant-Remote} record per
+     * BREACHING hop carrying {@code hop=<n>}. A single summed record reads "6 violations on
+     * POST /login" when 3 of them were the dashboard render — the multi-hop case this exists to
+     * capture is exactly the one a sum erases.
      *
-     * <p>The poll itself is never stamped with {@code X-Basquin-Req}: it is handled at the boundary's
-     * control branch, but a stamped poll would leave a stale id on a pooled connector thread and
-     * later publish some probe's metrics under a driver id — stale data served as fresh.
+     * <p><b>What {@code hop=<n>} means.</b> The position in the sequence returned by {@code take},
+     * which is publish order, which is hop order because the driver issues hops sequentially into
+     * one JVM. When a chain's hops were served by DIFFERENT replicas the sequence is the
+     * concatenation of each pod's list in poll order, so the index is a position in the recovered
+     * sequence rather than a proof of hop order. The count and the cost are unaffected.
      *
-     * <p><b>Which pod it asks</b> (§A.6). The store is per-JVM, so a poll through the Service VIP
-     * reaches the pod that holds the entry with probability 1/N and returns {@code miss} the rest of
-     * the time — a target that scales stops being measurable. {@link PodPollTargets} therefore hands
-     * back the pod addresses to try; each is asked in turn until one returns the entry. For a request
-     * answered without a redirect, a run-salted id plus remove-on-read means at most one pod can hold
-     * it, so asking several cannot return another pod's data — the worst a fan-out can do is find
-     * nothing, which is a recorded miss.
-     *
-     * <p><b>Known residual (multi-replica + followed redirect).</b> A followed same-method hop
-     * re-sends the same id, so on a multi-replica target two pods can hold entries under it at once
-     * and this loop returns whichever answers first in DNS order — which may be the wrong hop's
-     * measurement, marked {@code measured=true}. See {@link PodPollTargets} for the full statement;
-     * DD-039's per-hop ids remove the case.
+     * <p><b>Pod fan-out.</b> {@code hops <= 1}: at most one pod can hold the id, so the first
+     * well-formed answer is the whole answer and asking further pods is pure latency — DD-040's
+     * behaviour exactly. {@code hops > 1}: the Service VIP routes each hop's connection
+     * independently, so hop 0's list can sit on pod A and hop 1's on pod B; stopping at the first
+     * hit would return a plausible-looking, silently TRUNCATED result as {@code measured=true},
+     * which {@code reportMisses} cannot see. So every base is asked and the answers are merged.
      */
     static CostSample pollResult(String base, String reqId, String label) {
+        return pollResult(base, reqId, label, 1);
+    }
+
+    /** As above, for a chain of {@code hops} requests. A miss is COUNTED here. */
+    static CostSample pollResult(String base, String reqId, String label, int hops) {
+        CostSample s = pollResultOrNull(base, reqId, label, hops);
+        return s != null ? s : recordMiss();
+    }
+
+    /**
+     * The poll itself: the recovered sample, or {@code null} when nothing well-formed came back.
+     * Never throws and never counts a miss — the CALLER decides whether "nothing" is a miss or a
+     * fall-back to the header reading, which is what stops a forced multi-hop poll from converting a
+     * measured request into a miss (see {@link #reconcile}).
+     */
+    private static CostSample pollResultOrNull(String base, String reqId, String label, int hops) {
         List<String> pollBases = PodPollTargets.pollBases(base);
         // Pod addressing was demanded and DNS could not say where the pods are. Guessing via the VIP
         // would restore the 1-in-N lottery behind a poll that looks like it worked (§A.6).
-        if (pollBases.isEmpty()) return recordMiss();
-        String body = null;
-        String servedBy = null;
+        if (pollBases.isEmpty()) return null;
+        List<String> bodies = new ArrayList<>();
+        List<String> servedBy = new ArrayList<>();
         for (String pollBase : pollBases) {
             String candidate = fetchResult(pollBase, reqId);
-            // '|' is the entry separator: anything without it is `miss` or garbage, and the next pod
-            // may still hold the real entry. Only a well-formed entry ends the search.
-            if (candidate != null && candidate.indexOf('|') >= 0) {
-                body = candidate;
-                servedBy = pollBases.size() > 1 ? pollBase : null;   // only meaningful when we chose
-                break;
+            // '|' is the field separator: anything without it is `miss` or garbage, and the next pod
+            // may still hold the real entry. Only a well-formed body counts as an answer.
+            if (candidate == null || candidate.isEmpty() || POLL_MISS.equals(candidate)
+                    || candidate.indexOf('|') < 0) {
+                continue;
+            }
+            bodies.add(candidate);
+            servedBy.add(pollBases.size() > 1 ? pollBase : null);   // only meaningful when we chose
+            if (hops <= 1) break;                                   // see the javadoc: one pod, one answer
+        }
+        if (bodies.isEmpty()) return null;
+
+        int totalCount = 0; long heapKb = 0; int threadDelta = 0; boolean anyLeak = false;
+        int hop = 0; int parsedLines = 0;
+        String leakPod = "";
+        List<String[]> breaching = new ArrayList<>();     // {hop, count, detail-or-null, podMeta}
+        for (int b = 0; b < bodies.size(); b++) {
+            String podMeta = servedBy.get(b) == null ? "" : "\npod=" + servedBy.get(b);
+            for (String line : bodies.get(b).split("\n")) {
+                if (line.isEmpty()) continue;
+                // 4-field limit: `detail` is app-derived and a version-skewed target could still emit
+                // a separator. The count and the cost come from fields the app cannot reach.
+                String[] f = line.split("\\|", 4);
+                if (f.length < 2) continue;              // a truncated tail line: discard, never shift
+                int count;
+                try { count = Integer.parseInt(f[1].trim()); }
+                catch (NumberFormatException e) { continue; }
+                parsedLines++;
+                totalCount += count;
+                String[] cost = f[0].split(",");
+                if (cost.length == 3) {
+                    try {
+                        heapKb += Long.parseLong(cost[1].trim());
+                        threadDelta += Integer.parseInt(cost[2].trim());
+                    } catch (NumberFormatException ignored) { }
+                }
+                if (f.length > 3 && "leak".equals(f[3].trim())) { anyLeak = true; leakPod = podMeta; }
+                if (count > 0) {
+                    String detail = f.length > 2 && !f[2].isEmpty() ? f[2] : null;
+                    breaching.add(new String[]{String.valueOf(hop), String.valueOf(count), detail, podMeta});
+                }
+                hop++;
             }
         }
-        // 4-field limit: `detail` is app-derived and may contain the separator.
-        String[] f = (body == null) ? new String[0] : body.split("\\|", 4);
-        if (body == null || body.isEmpty() || POLL_MISS.equals(body) || f.length < 2) {
-            return recordMiss();
-        }
-        int count;
-        try {
-            count = Integer.parseInt(f[1].trim());
-        } catch (NumberFormatException e) {
-            return recordMiss();   // an unparseable body is a miss; it is not a measured zero
-        }
-        long heapKb = 0; int threadDelta = 0;
-        String[] cost = f[0].split(",");
-        if (cost.length == 3) {
-            try { heapKb = Long.parseLong(cost[1].trim()); threadDelta = Integer.parseInt(cost[2].trim()); }
-            catch (NumberFormatException ignored) {}
-        }
-        String detail = f.length > 2 && !f[2].isEmpty() ? f[2] : null;
-        boolean leak = f.length > 3 && "leak".equals(f[3].trim());
-        // Which replica this finding came off, when there was more than one candidate. Task 7 checks
-        // the campaign's reported count against the target pods' own logs; without attribution a
-        // two-replica reconciliation is a guess.
-        String pod = servedBy == null ? "" : "\npod=" + servedBy;
+        if (parsedLines == 0) return null;   // an unparseable body is a miss; it is not a measured zero
+
         try {
             // The step that makes the campaign's number move. `label` is the RAW recipe (DD-036) —
             // never a substituted request line, which would write a live CSRF token to disk.
-            if (count > 0) {
+            for (String[] r : breaching) {
                 FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
-                        "route=" + label + "\ncount=" + count
-                                + (detail != null ? "\ndetail=" + detail : "") + pod);
+                        "route=" + label + "\ncount=" + r[1] + "\nhop=" + r[0]
+                                + (r[2] != null ? "\ndetail=" + r[2] : "") + r[3]);
             }
-            if (leak) {
+            if (anyLeak) {
                 FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Leak-Remote",
-                        "route=" + label + "\nleak=true" + pod);
+                        "route=" + label + "\nleak=true" + leakPod);
             }
         } catch (Throwable ignored) {
-            // Saving is best-effort against the finally contract above; the measurement still stands.
+            // Saving is best-effort against the never-throw contract above; the measurement stands.
         }
         reportMeasured++;
-        return new CostSample(heapKb, threadDelta, count, true);
+        return new CostSample(heapKb, threadDelta, totalCount, true);
     }
 
     /**
@@ -1044,7 +1076,20 @@ public final class CoverageGuidedRun {
             if (is != null) {
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
                     String line;
-                    while ((line = br.readLine()) != null && sb.length() < 4096) sb.append(line);
+                    // DD-039: PRESERVE the '\n'. readLine() strips the terminator and the pre-DD-039
+                    // loop appended none back, so an accumulated N-hop body arrived as ONE
+                    // concatenated string and pollResult's split("\\|", 4) read hop 0's count and
+                    // silently discarded hops 1..N-1. One missing character was the difference
+                    // between closing DD-040's 189-violation gap and closing none of it.
+                    //
+                    // The cap is also checked AFTER the append now: checked before, it truncated the
+                    // body one line early. A tail line cut by the cap fails its own per-line parse
+                    // in pollResult and is discarded, which is the honest outcome.
+                    while ((line = br.readLine()) != null) {
+                        if (sb.length() > 0) sb.append('\n');
+                        sb.append(line);
+                        if (sb.length() >= POLL_BODY_MAX) break;
+                    }
                 }
             }
             return pc.getResponseCode() == 200 ? sb.toString().trim() : null;

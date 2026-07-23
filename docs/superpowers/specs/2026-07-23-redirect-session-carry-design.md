@@ -178,6 +178,52 @@ and countable.
   There is no client-side sum compared against a per-request budget, and so no false-positive
   mechanism.
 
+### 4b. Per-hop measurement: the store ACCUMULATES, it does not overwrite
+
+Added after DD-040's acceptance run failed at **1,413 reported vs 1,602 logged (a gap of 189,
+11.8%)**, and after a plan review showed the obvious fix does not work.
+
+**Why the obvious fix fails.** DD-040 mints one `X-Basquin-Req` id per request, and
+`ResultStore.put` replaces by key. Stamping every hop with that same id therefore has each hop's
+`put` overwrite the previous one — a chain of N hops still yields exactly one entry, and the gap
+stays open. "Stamp every hop" is necessary and not sufficient.
+
+**What ships instead.** `ResultStore` accumulates hops under one id:
+
+- `put(id, entry)` **appends** to that id's hop list rather than replacing, bounded by the same hop
+  cap the follow loop enforces (5), with `detail` capped per hop as today.
+- `take(id)` returns **all** hops and removes the id — still exactly one remove-on-read, so the
+  double-count hazard that per-hop ids would create never arises.
+- The driver sums invariant counts across the returned hops, sums heap and thread deltas, and saves
+  **one `Invariant-Remote` record per breaching hop** (§4), each carrying its `hop=<n>`.
+
+This is better than the per-hop-id alternative on three counts, and those are the reasons to prefer
+it rather than an aesthetic preference:
+
+1. **One poll per input, not N.** A poll is an extra HTTP round trip on the explore hot path, and
+   per-hop polling would inflate `latMs` — which is a cost-model input, so it would distort corpus
+   ranking (the thing DD-040 was trying to repair).
+2. **No double-count question.** With one id and one `take`, there is no path where a violation is
+   counted from both the header and the store.
+3. **It matches the semantics we actually want.** One input has one cost. A redirect chain is one
+   input's work spread over several server-side iterations, not several inputs.
+
+**The header fast path is only valid for a single-hop request.** `exitHeaders` can only ever
+describe the hop that produced the response the client received. Under this design the driver runs
+the follow loop itself, so **it knows its own hop count** — and the rule is exact rather than
+heuristic:
+
+> One hop → the cost header is complete, use it. More than one hop → always poll, regardless of
+> whether a header arrived.
+
+That closes DD-040's residual precisely: the case that leaked (POST → 302 → GET) is by definition a
+multi-hop request, so it always polls, and the poll now returns both hops.
+
+**Acceptance.** Reported violations must come within a small tolerance of the target pod's
+`[Basquin][Invariant]` count for the same window. The 189 must substantially close, and the plan's
+tests must be able to detect it if it does not — a unit test asserting only that a poll returned
+*something* would pass while the gap persisted.
+
 ### 5. Capture semantics across hops
 
 Captures (DD-036/037) run against the **final** hop's body, unchanged. A token rendered on the page

@@ -527,16 +527,17 @@ def build() -> str:
       across redirects; the numbers on this page are from that fixed channel.</p>
     <p style="margin:.5rem 0 0">How much was being lost, measured before the fix: <strong>Roller
       reported 0</strong> of the violations it evaluated (one explore window evaluated 1,906 and
-      reported none), <strong>JSPWiki reported 1</strong>, while <strong>JPetStore lost nothing</strong>
-      because its small pages rarely commit early. That last row is why JPetStore looked productive
-      and the other two looked clean — it was the only app whose counts were ever real. On the fixed
+      reported none). On the pre-fix run those two apps reported almost nothing — <strong>Roller 0</strong>,
+      <strong>JSPWiki 1</strong> (summaries preserved at git <code>5655c46</code>, pruned from the
+      tree by this run) — while <strong>JPetStore lost nothing</strong> because its small pages rarely
+      commit early, which is why it looked productive and the other two looked clean. On the fixed
       channel the same explore runs report <strong>Roller {rl_inv}</strong>, <strong>JSPWiki
       {jw_inv}</strong>, and <strong>JPetStore {jp_inv}</strong>: Roller, which "looked underwhelming",
       is the most productive target and has the highest coverage here.</p>
     <p class="muted" style="margin:.5rem 0 0">The loss was biased the wrong way — the larger and
       slower the response, the more likely it committed early, so the most expensive requests were
       the most likely to be discarded. Evaluation was always intact; only the reporting was lost, and
-      that is what the fix restored. The pre-fix counts are the ones DD-040 measured and recorded; the DD-040 decision record documents the loss (one window evaluated 1,906 violations and reported none) and the recovered violations are archived under <code>bench-results/violation-logs-2026-07-23/</code>.</p>
+      that is what the fix restored. The loss magnitudes are the ones DD-040 measured (see its decision record); the recovered violations are archived under <code>bench-results/violation-logs-2026-07-23/</code>.</p>
   </div>
 
   <p class="muted">Those two columns are split deliberately, because they are not the same kind of
@@ -679,8 +680,9 @@ def build() -> str:
     <li><strong>Several reported zeros do not mean "checked and clean".</strong> A load run's
       <code>violations.latency</code> is structurally 0 because load mode is never given the latency
       budget, and the explore summary's <code>invariants</code> block is the driver measuring itself
-      with no thresholds configured. Neither is a check that passed. Combined with the header loss
-      above, a zero on this page should be read as "not measured" unless stated otherwise.</li>
+      with no thresholds configured. Neither is a check that passed, so those particular zeros are
+      "not evaluated" rather than "evaluated and clean" — a distinction the summary now marks
+      explicitly (<code>notEvaluated</code>).</li>
     <li><strong>Two observations on this run, reported not explained.</strong> {jw_load_obs}
       {jps_5xx_clause} Neither has been root-caused; load mode was confirmed on every run (no
       <code>driftUnavailable</code>), so neither is an artifact of the target sitting in the wrong

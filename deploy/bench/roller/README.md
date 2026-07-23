@@ -173,7 +173,10 @@ Writes:
 
 - **`POST /basquin/entry/<anchor>`** (unauthenticated comment) — works, and uses DD-038 `<nonce>` so
   every replayed comment is a distinct row that invalidates the entry's cached render. Verified: a
-  3-minute explore wrote **16 comments** with distinct nonces into `roller_comment`.
+  3-minute explore wrote **16 comments** with distinct nonces into `roller_comment` — an
+  observation from the onboarding run, corroborated in
+  `bench-results/header-loss-2026-07-23/evidence.txt`, not a figure from a retained campaign
+  artifact (see the provenance note below).
 - **`@sequence login_publish`** (authenticated entry publish, DD-036 `<<salt=input:salt`) — the salt
   capture is correct and the flow works by hand, but the step is **skipped at runtime** for a reason
   that is a Basquin limitation, not a grammar bug. See below.
@@ -203,7 +206,9 @@ iterations 1213 (6.74/s), crashes 0, leaks 0, invariant hits 0
 latency mean 86ms / max 1170ms, heap max 1343KB
 ```
 
-For comparison: JSPWiki explore reached 27.1%, JPetStore 23.0%. The emitted corpus is dominated by
+For comparison, from `bench-results/campaigns.json`: JSPWiki explore reached **27.0%**,
+JPetStore **23.1%**. (An earlier version of this line said 27.1 / 23.0 — numbers from a run that
+was later discarded and replaced. Corrected against the committed artifacts.) The emitted corpus is dominated by
 `/basquin/search?q=…` and the comment POSTs — i.e. the fuzzer independently rediscovered the two
 paths the grammar was aimed at.
 

@@ -79,7 +79,11 @@ _RE_PROP = re.compile(rf"(-D{_CRED_KEY}=)(\S+)", re.IGNORECASE)
 # 2. JSON field:              "token": "abc123"   /   "dashboardToken":"abc123"
 _RE_JSON = re.compile(rf'("{_CRED_KEY}"\s*:\s*")([^"]*)(")', re.IGNORECASE)
 # 3. Credential HTTP headers, which carry the secret in the VALUE with a fixed key.
-_RE_HEADER = re.compile(r"^(\s*(?:Authorization|Proxy-Authorization|Set-Cookie|Cookie)\s*:\s*)(.+)$",
+# X-Basquin-Token is included because the driver could print it; the narrowing that fixed the
+# recipe corruption dropped it, and a shape we know carries a credential should not depend on
+# whether anything currently happens to log it.
+_RE_HEADER = re.compile(r"^(\s*(?:Authorization|Proxy-Authorization|Set-Cookie|Cookie|"
+                        r"X-Basquin-Token|X-[\w-]*(?:Token|Secret|Key))\s*:\s*)(.+)$",
                         re.IGNORECASE | re.MULTILINE)
 
 _PLACEHOLDER = "${{"

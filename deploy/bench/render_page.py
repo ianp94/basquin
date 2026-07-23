@@ -143,6 +143,13 @@ def redirect_figure() -> str:
         return ""
     ld = r["load"]
     tgts: dict[str, int] = ld["redirectTargets"]
+    # captureMisses counts steps SKIPPED because a required prior capture never bound -- those
+    # `continue` before the request counter, so they are not a subset of `requests` and must not be
+    # rendered as "N of M requests". Absent means unreported, never 0.
+    _cm = ld.get("captureMisses")
+    cm_clause = (f'<code>captureMisses: {fmt(int(_cm))}</code> — steps skipped because a prior '
+                 f'capture never bound, counted separately from the requests below'
+                 if _cm is not None else '<code>captureMisses</code> not reported by this run')
     ordered = sorted(tgts.items(), key=lambda kv: -kv[1])
     parts = []
     for k, v in ordered:
@@ -161,8 +168,7 @@ def redirect_figure() -> str:
         f"Where {fmt(total)} redirects went — JSPWiki under load, classified by Location",
         stacked_bar(parts, title_id=fid),
         f'Every one of these was a 3xx: not a 5xx, not a 4xx, and every CSRF and anti-spam token was '
-        f'submitted (<code>captureMisses: {fmt(int(ld.get("captureMisses", 0)))}</code> of '
-        f'{fmt(int(ld.get("requests", 0)))} requests), so a load tool counts all '
+        f'submitted ({cm_clause}), so a load tool counts all '
         f'{fmt(total)} as served. Split by destination they resolve into {verdict_line} — a '
         f'distinction carried entirely by a response header that a redirect-following client '
         f'discards before anyone can read it.',
@@ -652,8 +658,8 @@ def build() -> str:
     <li><strong>Two observations on this run that are reported, not explained.</strong> JSPWiki
       returns the same <strong>80.7 req/s at concurrency 1 and at concurrency 8</strong>, while its
       p99 rises from 57&nbsp;ms to 743&nbsp;ms — the signature of a resource already saturated at
-      c1, where added concurrency buys queueing rather than throughput. {jps_5xx_clause} Both are
-      stated as measured; neither has been root-caused,
+      c1, where added concurrency buys queueing rather than throughput. {jps_5xx_clause} The JSPWiki
+      throughput plateau is stated as measured and has <em>not</em> been root-caused;
       and load mode was confirmed on every run (no <code>driftUnavailable</code>), so neither is an
       artifact of the target sitting in the wrong mode.</li>
     <li><strong>No heap-drift number is published, deliberately.</strong> The driver's
@@ -661,7 +667,8 @@ def build() -> str:
       collection on either side, so it measures GC phase as much as retention: the same metric came
       back at +381&nbsp;MB on one run of this target and <strong>−194&nbsp;MB</strong> on another.
       Bracketing with a forced collection instead showed no unbounded growth on this app, and that
-      150 unique-text saves retained nothing measurable on-heap (JSPWiki writes versions to disk).
+      repeated unique-text saves retained nothing measurable on-heap (JSPWiki writes versions to
+      disk) — an observation from the drift investigation, not a figure with a retained artifact.
       GC-bracketed sampling is a tool follow-up; until then this page reports no drift figure rather
       than a confident one.</li>
     <li><strong>Failed requests are not yet attributed.</strong> That column counts iterations where

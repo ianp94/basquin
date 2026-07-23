@@ -549,24 +549,52 @@ public class ExploreRedirectTest {
         });
     }
 
-    /** DD-036, the half the existing guard test cannot see: it puts its token in the BODY. Hop 0's
-     *  URL is built from the SUBSTITUTED path, so an unstripped hop URL writes a live token to disk. */
+    /**
+     * DD-036 / PR #96 Finding 1: a captured token substituted into a PATH SEGMENT must never reach
+     * disk in a Redirect-Loop finding. This is the case the ORIGINAL guard test could not see — it
+     * put the token in the QUERY ({@code /save?csrf=${{csrf}}}), which {@link
+     * CoverageGuidedRun#strippedUrl} cuts, so it passed green while the real path-segment case leaked.
+     *
+     * <p>Hop 0's URL is {@code base + r.path()} where {@code r.path()} is the SUBSTITUTED path
+     * ({@code /save/SECRET-PATH-TOKEN-42}); strippedUrl only removes query+fragment, so the live
+     * token survives into {@code visited} and would be written into the finding's {@code hops=} line.
+     * The fix redacts by VALUE (see {@link CoverageGuidedRun#redactBoundValues}) at write time, so
+     * the token is replaced by {@code <redacted>} wherever it sits. Remove that redaction and this
+     * test fails with the live {@code SECRET-PATH-TOKEN-42} on disk — a body- or query-token test
+     * cannot exercise it, which is the whole point.
+     */
     @Test
-    public void aTokenSubstitutedIntoThePathNeverReachesDisk() throws Exception {
+    public void aTokenSubstitutedIntoAPathSegmentNeverReachesDisk() throws Exception {
         page("/edit", "<input name=\"X-XSRF-TOKEN\" value=\"SECRET-PATH-TOKEN-42\">");
-        redirect("/save", 302, "/save", null);      // an immediate self-loop: forces the loop finding
+        // A self-loop whose Location echoes the incoming (token-bearing) path, so the revisit fires a
+        // Redirect-Loop finding whose visited-set includes hop 0's token-in-a-path-segment URL. The
+        // context at /save matches /save/<token> by longest-prefix, as a real container would.
+        server.createContext("/save", (HttpExchange ex) -> {
+            try {
+                record(ex);
+                ex.getResponseHeaders().add("Location", ex.getRequestURI().getPath());  // echo the path
+                byte[] out = "<html><body>Moved</body></html>".getBytes(StandardCharsets.UTF_8);
+                ex.sendResponseHeaders(302, out.length);
+                ex.getResponseBody().write(out);
+                ex.getResponseBody().close();
+            } catch (Throwable t) { handlerFailure.compareAndSet(null, t); throw t; }
+        });
         start();
-        Path dir = Files.createTempDirectory("basquin-dd039-pathtoken");
+        Path dir = Files.createTempDirectory("basquin-dd039-pathsegtoken");
 
         AccumulatedPollTest.withResultsDirFor(dir, () -> {
             CoverageGuidedRun.runSequence(base, List.of(
                     "/edit <<csrf=input:X-XSRF-TOKEN",
-                    "/save?csrf=${{csrf}}"));
+                    "/save/${{csrf}}"));                       // token in a PATH SEGMENT, not the query
 
-            String all = String.join("\n", AccumulatedPollTest.readMetasFor(dir, "Redirect-Loop"));
-            assertFalse("a token substituted into the PATH must never reach a hop URL on disk: " + all,
+            List<String> metas = AccumulatedPollTest.waitForMetas(dir, "Redirect-Loop", 1);
+            String all = String.join("\n", metas);
+            assertFalse("a captured token substituted into a PATH SEGMENT must never reach a hop URL "
+                    + "on disk — strippedUrl only cuts the query: " + all,
                     all.contains("SECRET-PATH-TOKEN-42"));
-            assertTrue("the safe recipe is what is recorded", all.contains("${{csrf}}"));
+            assertTrue("the safe recipe is what labels the finding", all.contains("${{csrf}}"));
+            assertTrue("the redacted marker stands in for the live value: " + all,
+                    all.contains("<redacted>"));
         });
     }
 }

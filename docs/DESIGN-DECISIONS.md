@@ -2057,13 +2057,18 @@ is blind to:
   publish. This is the piece most likely to be silently dropped and the one no unit test fails without.
 - **The 189-violation gap substantially closed.** Reported violations (`targetViolations`, the
   `/__basquin/violations` delta) were **1,656** against **1,704** `[Basquin][Invariant]` lines in the
-  target pod's log for the same window — a raw gap of **48 (2.8%)**, of which ~8–10 is measured
-  kubelet-probe noise (idle violation rate ~1.8/min, not the ~12/min of JSPWiki), leaving a ~38-line
-  residual an order of magnitude below DD-040's 189 (11.8%). Re-stamping every hop with `X-Basquin-Req`
-  now *counts* the redirect-hop violations that previously logged-but-were-dropped, so the reported
-  count rose to nearly match the log. `crossOriginRedirects=0` (Roller derives its base from the
-  request), `reportMisses=0`, retained corpus 81 (cost-ranked, non-degenerate), crashes 0, leaks 0,
-  coverage 30.4%.
+  target pod's log for the same window — a raw gap of **48 (2.8%)**, the checkable figure `reconcile.py`
+  re-derives (1704 − 1656), an order of magnitude below DD-040's 189 (11.8%). Re-stamping every hop with
+  `X-Basquin-Req` now *counts* the redirect-hop violations that previously logged-but-were-dropped, so
+  the reported count rose to nearly match the log. Some of the 48 is kubelet-probe noise — the probe
+  hits unstamped `GET /`, so its violations reach the pod log but never `targetViolations`; the
+  acceptance README estimates that at ~8–10 lines from an idle-rate reading, but those post-window log
+  lines are **not committed to the evidence directory**, so only the raw **48 (2.8%)** is asserted here.
+  Backed by the committed `driver-summary.txt`/`driver-terminal.json`: `reportMisses=0`,
+  `findingsLowerBound=false`, retained corpus 81 (cost-ranked, non-degenerate), crashes 0, leaks 0,
+  coverage 30.4%. (The run-time summary does not separately expose `crossOriginRedirects`; that Roller's
+  redirects were followed rather than all refused — the degradation the counter exists to flag — is
+  evidenced indirectly by the 0 misses and 30.4% coverage, not committed as a counter value.)
 
 **One thing remains unproven, stated as deferred rather than as success: the multi-replica
 same-method-hop merge (A4b-3) is unexercised.** The spike ran single-address (`localhost` resolves to

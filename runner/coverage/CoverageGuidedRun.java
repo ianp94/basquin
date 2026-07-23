@@ -584,8 +584,15 @@ public final class CoverageGuidedRun {
      * and feed a meaningless response into the cost model and the corpus.
      *
      * <p>{@code label} is the RAW step recipe (DD-036), never a resolved hop URL. {@code visited}
-     * already holds query-stripped URLs — they are stripped where they are CONSTRUCTED, because
-     * hop 0's URL comes from the substituted RequestLine and would otherwise carry a live token.
+     * holds query-stripped URLs (stripped where they are CONSTRUCTED), but that is NOT enough: a
+     * captured token substituted into a PATH SEGMENT (DD-038 substitutes the path — e.g. a step
+     * {@code /edit/${{csrf}}/save}) survives {@link #strippedUrl}, which only cuts the query and
+     * fragment, and would land a live token in the {@code hops=} line on disk (PR #96 Finding 1 —
+     * the earlier guard test put its token in the QUERY, which strippedUrl DOES cut, so the
+     * path-segment leak passed review). The fix is VALUE-based, not position-based: every non-empty
+     * bound value is redacted from each URL here, at WRITE time, matching the token wherever it sits.
+     * The {@code visited} set used for loop DETECTION keeps the real resolved URLs, so a revisit is
+     * still spotted; only the finding's written form is redacted.
      *
      * <p><b>CostModel.score decision (explicit, per DD-039 review).</b> This finding does NOT touch
      * {@code CostSample.invariantCount} and so does NOT feed {@link CostModel#score}. The summed
@@ -597,9 +604,32 @@ public final class CoverageGuidedRun {
      * measured latency/heap/thread cost still scores normally; only the loop classification is kept
      * out of the number.
      */
-    private static void saveRedirectLoop(String label, java.util.Collection<String> visited) {
+    private static void saveRedirectLoop(String label, java.util.Collection<String> visited,
+            java.util.Map<String, String> bindings) {
+        List<String> safe = new ArrayList<>(visited.size());
+        for (String u : visited) safe.add(redactBoundValues(u, bindings));
         FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Redirect-Loop",
-                "route=" + label + "\nhops=" + String.join(" -> ", visited));
+                "route=" + label + "\nhops=" + String.join(" -> ", safe));
+    }
+
+    /**
+     * PR #96 Finding 1 (DD-036 invariant: no captured token may reach disk). VALUE-based redaction —
+     * the same lesson as the benchmark {@code _redact}: match the token, not where it sits. Replaces
+     * every non-empty bound VALUE in {@code url} with {@code <redacted>}, so a captured token lands
+     * safely regardless of whether DD-038 substituted it into a path segment, the query, or a matrix
+     * param. {@link #strippedUrl} is position-based (query/fragment only) and cannot see a token in a
+     * path segment; this is the real fix, with strippedUrl kept as defence in depth. {@code bindings}
+     * is null on the 2-arg {@code request} overload (no captures possible) — treated as nothing to
+     * redact. Package-private for direct testing.
+     */
+    static String redactBoundValues(String url, java.util.Map<String, String> bindings) {
+        if (url == null) return "";
+        if (bindings == null || bindings.isEmpty()) return url;
+        String out = url;
+        for (String v : bindings.values()) {
+            if (v != null && !v.isEmpty()) out = out.replace(v, "<redacted>");
+        }
+        return out;
     }
 
     /**
@@ -1072,7 +1102,7 @@ public final class CoverageGuidedRun {
                 // The two terminal conditions stay SPLIT: fusing !isRedirect with the cap into one
                 // branch that hangs saveRedirectLoop off it would file a Redirect-Loop finding for
                 // EVERY ordinary non-redirect response.
-                if (hops >= MAX_HOPS) { saveRedirectLoop(label, visited); break; }   // the cap IS a loop
+                if (hops >= MAX_HOPS) { saveRedirectLoop(label, visited, bindings); break; }   // the cap IS a loop
                 java.net.URI next = resolveLocation(url, c.getHeaderField("Location"));
                 if (next == null) break;                            // absent/unparseable: the 3xx is final
                 java.net.URI here = safeUri(url);                    // NEVER URI.create: substituted path
@@ -1087,7 +1117,7 @@ public final class CoverageGuidedRun {
                     break;
                 }
                 String nextUrl = strippedUrl(next.toString());
-                if (visited.contains(nextUrl)) { saveRedirectLoop(label, visited); break; }  // revisit
+                if (visited.contains(nextUrl)) { saveRedirectLoop(label, visited, bindings); break; }  // revisit
 
                 drain(c);                                            // only now is this hop discardable
                 String nextMethod = followMethod(code, method);
@@ -1258,6 +1288,20 @@ public final class CoverageGuidedRun {
             // Saving is best-effort against the never-throw contract above; the measurement stands.
         }
         reportMeasured++;
+        // PR #96 Finding 2: a chain that FIRED `hops` requests but recovered FEWER hop lines is only
+        // PARTIALLY observed. On a multi-replica target a pod can time out during the fan-out and
+        // contribute nothing, so the summed count/cost is a LOWER BOUND — not a complete measurement,
+        // and left unmarked it is indistinguishable from "those hops were clean" and invisible to
+        // reportMisses. (A healthy chain publishes one line per hop, clean hops included, so
+        // parsedLines == hops there; single-replica cannot produce a partial body.) Mirror how a miss
+        // makes a run honest: raise the same findingsLowerBound signal via reportMisses, WITHOUT
+        // discarding the real partial measurement we did recover and save. Counting it toward BOTH
+        // measured and misses is deliberate — it keeps the recovered violations scored while never
+        // letting partials alone trip missesAreTheMajority into a spurious run failure.
+        if (parsedLines < hops) {
+            reportMisses++;
+            StatusReporter.recordReportMiss();
+        }
         return new CostSample(heapKb, threadDelta, totalCount, true, hops);
     }
 

@@ -670,11 +670,13 @@ theorized. Recorded here so the evidence isn't lost with the session that found 
       where the driver's own HTTP call threw (1307 of 7813 on JPetStore). Not yet split between the
       app, the driver, and the single-node cluster, so it currently can't be reported as a defect
       count. Saving the exception class alongside the input would settle it.
-- [ ] **DD-039 — session carry across redirects in explore mode.** Spring Security rotates the
+- [x] **DD-039 — session carry across redirects in explore mode.** Spring Security rotates the
       `JSESSIONID` **on the 302**, and `HttpURLConnection` only exposes the final hop's headers when
       it follows redirects itself, so the rotated cookie is unreachable and every later step runs
       anonymous. Blocks every form-login app, not just Roller. Spec:
-      `docs/superpowers/specs/2026-07-23-redirect-session-carry-design.md`.
+      `docs/superpowers/specs/2026-07-23-redirect-session-carry-design.md`. **Done** — all tasks
+      landed, Task-7 acceptance **PASSED** (84 `login_publish` DB rows; gap 189→48, 2.8%,
+      `bench-results/dd039-acceptance-2026-07-23/`); PR [#96](https://github.com/ianp94/basquin/pull/96).
 - [ ] **A request-header directive** (`>>Header: value`, the mirror of `<<name=header:`). Roller's
       AtomPub surface (`/roller-services/app/*`) is a complete authenticated write API guarded by
       HTTP Basic — no session, no CSRF, ideal for a corpus — and unreachable today because a route

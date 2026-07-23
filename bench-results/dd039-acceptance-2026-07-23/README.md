@@ -44,8 +44,16 @@ publishes spanning `20:02:17Z → 20:07:10Z`. **84 > 0 ⇒ the cookie carry work
 | measured kubelet-probe violations in-window (idle rate ~1.8/min × 5m) | **~8–10** | idle slices, below |
 | residual after probe subtraction | **~38** | |
 | `reportMisses` | **0** | driver-summary / terminal JSON |
-| `crossOriginRedirects` | **0** (no "cross-origin refused" line printed) | driver log |
+| `crossOriginRedirects` | **not committed as a counter** — inferred 0 (see note) | — |
 | Retained corpus (cost-ranked) | **81** (cap 1000; not degenerate) | `CoverageGuidedRun done: corpus=81` |
+
+> `crossOriginRedirects` is not exposed in the summary JSON and its run-time log line only prints when
+> the counter is **non-zero** (`CoverageGuidedRun` prints nothing at 0), so its absence from the
+> committed `driver-summary.txt` is consistent with — but not proof of — 0. What the committed
+> artifacts DO show rules out the degradation this counter exists to flag (every redirect refused →
+> DD-039 silently reduced to pre-DD-039 behaviour): `reportMisses=0` and 30.4% coverage over a
+> session-carrying run mean redirects were followed, not refused. Treat `crossOriginRedirects=0` as an
+> indirect inference, not a committed figure.
 
 **DD-040's gap was 189 (11.8%); DD-039's is 48 (2.8%)** — a 75% reduction in the raw gap. Re-stamping
 every hop with `X-Basquin-Req` (and `Cookie`) means the target now *counts* the redirect-hop
@@ -69,8 +77,8 @@ $ wc -l roller-explore-dd039/target-invariants-window.log
 ### Probe noise was measured, not assumed
 
 The kubelet probe hits `GET /` (unstamped by design), so its violations appear in the pod log and
-never in `targetViolations`. Its idle **violation** rate (not request rate) was read directly from
-the log tail after the campaign ended:
+never in `targetViolations`. Its idle **violation** rate (not request rate) was read from the live
+log tail after the campaign ended:
 
 ```
 20:07:52.646  heapDelta 4313KB
@@ -79,10 +87,13 @@ the log tail after the campaign ended:
 20:09:37.645  heapDelta 4275KB     -> ~1 every 35s (~1.7/min), fixed phase .645
 ```
 
-So ~8–10 of the 48 is probe noise; the ~38 residual is the same shape DD-040 left, an order of
-magnitude smaller. (The `~12/min` figure quoted at run time is JSPWiki's request rate, not Roller's
-violation rate — measured here rather than assumed.) Even subtracting a generous 12/min the gap does
-not approach 189.
+**These four tail lines are post-window and are NOT committed to this directory** (the committed
+`target-invariants-window.log` is window-only), so this breakdown is an estimate, not a checkable
+figure — `reconcile.py` deliberately does not assert it. The only asserted, re-derivable gap figure is
+the raw **48 (2.8%)**. Taking the estimate at face value, ~8–10 of the 48 would be probe noise, leaving
+a ~38 residual the same shape as DD-040's but an order of magnitude smaller; even the raw 48, with no
+probe subtraction at all, is already far below DD-040's 189. (The `~12/min` figure quoted at run time
+is JSPWiki's request rate, not Roller's violation rate.)
 
 ## Reproduce
 

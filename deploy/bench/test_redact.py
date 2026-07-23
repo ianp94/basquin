@@ -24,6 +24,8 @@ MUST_REDACT = [
     ('"api_key":"xyz789"', "JSON field, no spaces"),
     ("Authorization: Bearer abc123", "credential header"),
     ("Set-Cookie: JSESSIONID=5E9F79ABCD", "session cookie"),
+    ("X-Basquin-Token: e4e86b722d0f4ecd", "the dashboard token as a header — collect.py redacts it, "
+                                          "and nothing pinned that it must"),
 ]
 
 MUST_NOT_TOUCH = [

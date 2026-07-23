@@ -90,7 +90,7 @@ public class AccumulatedPollTest {
                     + "900,4096,2|3|latency: 900ms > 250ms|";
 
         Path dir = Files.createTempDirectory("basquin-accum-3hop");
-        withResultsDir(dir, () -> {
+        withResultsDirFor(dir, () -> {
             CoverageGuidedRun.CostSample s = CoverageGuidedRun.pollResult(base, "salt-3hop", "/login", 3);
 
             assertTrue(s.measured);
@@ -117,7 +117,7 @@ public class AccumulatedPollTest {
         pendingBody = "12,340,0|0||\n5,10,0|2|boom|";
 
         Path dir = Files.createTempDirectory("basquin-accum-clean");
-        withResultsDir(dir, () -> {
+        withResultsDirFor(dir, () -> {
             CoverageGuidedRun.CostSample s = CoverageGuidedRun.pollResult(base, "salt-mixed", "/x", 2);
             assertEquals(2, s.invariantCount);
             assertEquals(350L, s.heapDeltaKb);
@@ -133,7 +133,7 @@ public class AccumulatedPollTest {
     public void aLeakOnAnyHopIsRecovered() throws Exception {
         pendingBody = "12,340,0|0||\n5,10,1|0||leak";
         Path dir = Files.createTempDirectory("basquin-accum-leak");
-        withResultsDir(dir, () -> {
+        withResultsDirFor(dir, () -> {
             CoverageGuidedRun.pollResult(base, "salt-leak", "/leaky", 2);
             assertEquals(1, waitForMetas(dir, "Leak-Remote", 1).size());
         });
@@ -144,7 +144,7 @@ public class AccumulatedPollTest {
     public void aSingleHopBodyBehavesExactlyAsBefore() throws Exception {
         pendingBody = "719,120,0|2|latency: 719ms > 250ms|";
         Path dir = Files.createTempDirectory("basquin-accum-1hop");
-        withResultsDir(dir, () -> {
+        withResultsDirFor(dir, () -> {
             CoverageGuidedRun.CostSample s = CoverageGuidedRun.pollResult(base, "salt-1hop", "/big");
             assertTrue(s.measured);
             assertEquals(2, s.invariantCount);
@@ -168,7 +168,7 @@ public class AccumulatedPollTest {
     public void aTruncatedTailLineIsDiscardedNotMisparsed() throws Exception {
         pendingBody = "12,340,0|2|ok|\n5,10,0";     // second line has 2 '|'-free fields → f.length < 2
         Path dir = Files.createTempDirectory("basquin-accum-trunc");
-        withResultsDir(dir, () -> {
+        withResultsDirFor(dir, () -> {
             CoverageGuidedRun.CostSample s = CoverageGuidedRun.pollResult(base, "salt-trunc", "/x", 2);
             assertTrue(s.measured);
             assertEquals("only the well-formed hop counts", 2, s.invariantCount);
@@ -178,9 +178,11 @@ public class AccumulatedPollTest {
 
     // --- helpers (no production code, no sleeps beyond a bounded poll) ---
 
-    private interface Body { void run() throws Exception; }
+    /** Package-private (was private): ExploreRedirectTest (DD-039 Task 4) and Task 5 drive a server
+     *  body through this same helper, so the results-dir plumbing is written once, not copied. */
+    interface Body { void run() throws Exception; }
 
-    private static void withResultsDir(Path dir, Body b) throws Exception {
+    static void withResultsDirFor(Path dir, Body b) throws Exception {
         String prior = System.getProperty("basquin.fuzz.resultsDir");
         System.setProperty("basquin.fuzz.resultsDir", dir.toString());
         try { b.run(); } finally {

@@ -499,6 +499,119 @@ public final class CoverageGuidedRun {
 
     private static void resetSession() { sessionCookie = null; }
 
+    // ------------------------------------------------------------------ DD-039 redirect decisions
+    // Pure, package-private, and off the network on purpose: an unparseable Location, a default-port
+    // comparison and HEAD-stays-HEAD are decisions, and a decision only reachable through a server
+    // is a decision nobody tests at its edges.
+
+    /** A 3xx that may carry a Location. -1 (an unparseable status line, which getResponseCode()
+     *  returns) is deliberately NOT a redirect. */
+    static boolean isRedirect(int code) {
+        return code >= 300 && code < 400;
+    }
+
+    /**
+     * {@code location} resolved against {@code requestUrl}, or null if either will not parse.
+     *
+     * <p><b>Never throws.</b> {@code request(...)} is {@code throws Exception} and both its callers
+     * catch {@code Throwable} into {@link StatusReporter#recordCrash()} +
+     * {@link FuzzIO#saveInteresting} ({@code :310-312}, {@code :537-539}), so an escaping
+     * {@code URISyntaxException} files a false crash finding AGAINST THE APP carrying a stack that
+     * points into driver code. {@code URI} throws on unencoded space, <code>{}</code>, {@code |} and
+     * {@code ^} — exactly the bytes a fuzzer reflects into a query string.
+     */
+    static java.net.URI resolveLocation(String requestUrl, String location) {
+        if (location == null || location.isEmpty()) return null;
+        try {
+            return new java.net.URI(requestUrl).resolve(new java.net.URI(location));
+        } catch (java.net.URISyntaxException | IllegalArgumentException e) {
+            warnOnce("bad-location", "unparseable Location; the 3xx becomes the final response "
+                    + "(first occurrence: " + location + ")");
+            return null;
+        }
+    }
+
+    /** A parsed URI, or null. The never-throwing parse for a URL built from the SUBSTITUTED request
+     *  path ({@code runSequence} substitutes at {@code :518}) — a more hostile string than a
+     *  {@code Location}, and the one {@code new URL(...)} used to accept leniently. */
+    static java.net.URI safeUri(String url) {
+        if (url == null) return null;
+        try {
+            return new java.net.URI(url);
+        } catch (java.net.URISyntaxException | IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /** Same scheme + host (case-insensitive) + port, with an absent port normalized to the scheme
+     *  default. A fuzzed input inducing an open redirect must not turn the explorer into a client
+     *  for another server, or attribute another host's cost to the app. */
+    static boolean sameOrigin(java.net.URI a, java.net.URI b) {
+        if (a == null || b == null) return false;
+        String sa = a.getScheme(), sb = b.getScheme();
+        if (sa == null || sb == null || !sa.equalsIgnoreCase(sb)) return false;
+        String ha = a.getHost(), hb = b.getHost();
+        if (ha == null || hb == null || !ha.equalsIgnoreCase(hb)) return false;
+        return defaultPort(a) == defaultPort(b);
+    }
+
+    /** The URI's port, or the scheme default when absent — {@code URI.getPort()} returns -1 for
+     *  {@code http://svc/foo}, which must compare equal to a base of {@code http://svc:80}. */
+    static int defaultPort(java.net.URI u) {
+        if (u == null) return -1;
+        if (u.getPort() != -1) return u.getPort();
+        String s = u.getScheme();
+        if ("https".equalsIgnoreCase(s)) return 443;
+        if ("http".equalsIgnoreCase(s)) return 80;
+        return -1;
+    }
+
+    /**
+     * The method the follow hop must use. This PRESERVES today's JDK behaviour rather than choosing
+     * new behaviour (spec §3, Evidence TESTs A and B): deviating would be the change and would need
+     * its own justification.
+     *
+     * <p>301/302/303 rewrite to GET only when the original carried a body — the body and its
+     * {@code Content-Type} are dropped together, because carrying
+     * {@code application/x-www-form-urlencoded} onto a bodyless GET makes some filters attempt form
+     * parsing on an empty stream. Everything else keeps its method, notably HEAD: a grammar can
+     * express HEAD, and silently promoting it to GET pulls a full body the caller never asked for,
+     * inflating the input's measured latency and heap and corrupting its cost rank.
+     */
+    static String followMethod(int code, String method) {
+        if (code == 307 || code == 308) return method;
+        boolean carriesBody = "POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method);
+        if ((code == 301 || code == 302 || code == 303) && carriesBody) return "GET";
+        return method;
+    }
+
+    /**
+     * {@code scheme://host[:port]/path} — query and fragment REMOVED. Every recorded hop URL goes
+     * through this, and hop 0's URL is built at construction time from the SUBSTITUTED
+     * {@link RequestLine} (DD-038 substitutes the path deliberately, {@code :518}), so a step
+     * {@code GET /edit?csrf=${{tok}}} would otherwise write a live CSRF token into a finding meta
+     * file. The existing DD-036 guard test puts its token in the BODY and cannot see this.
+     */
+    static String strippedUrl(String url) {
+        if (url == null) return "";
+        int cut = url.length();
+        int q = url.indexOf('?');
+        if (q >= 0) cut = q;
+        int h = url.indexOf('#');
+        if (h >= 0 && h < cut) cut = h;
+        return url.substring(0, cut);
+    }
+
+    private static final java.util.Set<String> WARNED =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+
+    /** One warn per distinct {@code key} for the whole run. Keyed rather than message-keyed because a
+     *  refusal on every iteration, each naming a different URL, would bury the log line it exists to
+     *  make diagnosable. */
+    static void warnOnce(String key, String msg) {
+        if (WARNED.add(key)) System.err.println("[Basquin] explore: " + msg);
+    }
+
     /** Track the last coverage total so both the single-request and sequence paths can report it. */
     private static volatile long lastCoverageTotal = 0;
 

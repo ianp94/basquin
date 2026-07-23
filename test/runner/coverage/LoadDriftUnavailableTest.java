@@ -17,7 +17,7 @@ public class LoadDriftUnavailableTest {
     public void driftUnavailableOmitsHeapAndThreadDrift() {
         // The drift delta's actual values are irrelevant when unavailable — they must never surface.
         LoadRun.DriftDelta drift = LoadRun.driftDelta(null, null);
-        String json = LoadRun.summaryJson(100, 50.0, 10, 20, 30, 40, drift, 0, 0, 0, 0, true);
+        String json = LoadRun.summaryJson(100, 50.0, 10, 20, 30, 40, drift, 0, 0, 0, 0, true, 0, java.util.Map.of());
 
         assertTrue("driftUnavailable flag must be present", json.contains("\"driftUnavailable\":true"));
         assertFalse("heapDriftKb must be omitted, not faked as 0", json.contains("\"heapDriftKb\""));
@@ -32,7 +32,7 @@ public class LoadDriftUnavailableTest {
         LoadRun.Drift last = LoadRun.parseDrift("995,10,2000");
         LoadRun.DriftDelta drift = LoadRun.driftDelta(first, last);
 
-        String json = LoadRun.summaryJson(100, 50.0, 10, 20, 30, 40, drift, 0, 0, 0, 0, false);
+        String json = LoadRun.summaryJson(100, 50.0, 10, 20, 30, 40, drift, 0, 0, 0, 0, false, 0, java.util.Map.of());
 
         assertTrue("heapDriftKb must be present even when <= 0", json.contains("\"heapDriftKb\":-5"));
         assertTrue("threadDrift must be present", json.contains("\"threadDrift\":0"));

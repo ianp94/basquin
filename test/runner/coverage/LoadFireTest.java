@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 
 /**
  * Task 3: {@link LoadRun#fire} must replay a {@link RequestLine} faithfully — method, body (with the
@@ -114,5 +115,67 @@ public class LoadFireTest {
 
         assertEquals(-1, code);
         assertFalse("Handler should not have been invoked for unsupported PATCH method", handlerWasInvoked.get());
+    }
+
+    // --- Task 3 (DD-038): fireR does not auto-follow redirects and reports the raw Location so the
+    // worker loop can classify a rejected write (e.g. JSPWiki's SessionExpired/PageModified) instead of
+    // it vanishing into a followed 200. ---
+
+    @Test
+    public void fireRDoesNotFollowAndReportsLocation() throws IOException {
+        server.createContext("/Edit.jsp", (HttpExchange ex) -> {
+            ex.getResponseHeaders().add("Location", "/Wiki.jsp?page=SessionExpired");
+            ex.sendResponseHeaders(302, 0);
+            ex.getResponseBody().close();
+        });
+        server.start();
+        base = "http://127.0.0.1:" + server.getAddress().getPort();
+
+        LoadRun.FireResult r = LoadRun.fireR(base, new RequestLine("POST", "/Edit.jsp", "page=X&action=save"),
+                new HashMap<>(), null);
+
+        assertEquals(302, r.code());
+        assertEquals("/Wiki.jsp?page=SessionExpired", r.location());
+    }
+
+    @Test
+    public void fireRHasNullLocationForA200() throws IOException {
+        server.createContext("/ok", (HttpExchange ex) -> {
+            byte[] resp = new byte[0];
+            ex.sendResponseHeaders(200, resp.length);
+            ex.getResponseBody().close();
+        });
+        server.start();
+        base = "http://127.0.0.1:" + server.getAddress().getPort();
+
+        LoadRun.FireResult r = LoadRun.fireR(base, new RequestLine("GET", "/ok", null), new HashMap<>(), null);
+
+        assertEquals(200, r.code());
+        assertNull(r.location());
+    }
+
+    @Test
+    public void a302SetCookieStillPopulatesTheJar() throws IOException {
+        server.createContext("/login", (HttpExchange ex) -> {
+            ex.getResponseHeaders().add("Location", "/Wiki.jsp?page=Main");
+            ex.getResponseHeaders().add("Set-Cookie", "JSESSIONID=abc; Path=/; HttpOnly");
+            ex.sendResponseHeaders(302, 0);
+            ex.getResponseBody().close();
+        });
+        server.start();
+        base = "http://127.0.0.1:" + server.getAddress().getPort();
+
+        Map<String, String> jar = new HashMap<>();
+        LoadRun.fireR(base, new RequestLine("GET", "/login", null), jar, null);
+
+        assertEquals("abc", jar.get("JSESSIONID"));
+    }
+
+    @Test
+    public void normalizeLocationClassifies() {
+        assertEquals("self", LoadRun.normalizeLocation("/Wiki.jsp?page=Main", "Main"));
+        assertEquals("SessionExpired", LoadRun.normalizeLocation("/Wiki.jsp?page=SessionExpired", "Main"));
+        assertEquals("Wiki.jsp", LoadRun.normalizeLocation("/Wiki.jsp?tab=view", null));
+        assertEquals("X", LoadRun.normalizeLocation("http://h/Wiki.jsp?page=X", null));
     }
 }

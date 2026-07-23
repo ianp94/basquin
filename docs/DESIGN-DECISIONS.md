@@ -1607,3 +1607,259 @@ verified against the running JSPWiki 2.12.4 (probes, not code reading):
    Consequence for reading summaries: pre-fix runs cannot distinguish accepted saves from
    `PageModified` conflicts inside `"self"` — treat pre-fix `"self"` as "save attempts", not
    "accepted saves".
+---
+
+## DD-040: Trustworthy measurement — a reported `0` means "checked and clean" (2026-07-23)
+
+**Context.** Four defects shared one shape: the tool printed `0` for something it had never
+measured. That is the exact failure this project exists to eliminate, and it was sitting in the
+project's own output.
+
+*The measured loss, and which way it is biased.* The boundary evaluates every invariant server-side
+and logs each violation, then attaches `X-Basquin-Invariant-Count` to the response — but only
+`if (!r.headers.isEmpty() && !response.isCommitted())`, and the driver learned of violations
+**solely** from that header. A synchronized in-pod replay of each app's own corpus measured what
+survives:
+
+| app | responses that could not report | violations evaluated → reported |
+|---|---|---|
+| roller | 36/37 (**97.3%**) | 52 → 0 |
+| jspwiki | 24/32 (**75%**) | 23 → 0 |
+| jpetstore | 0/43 (**0%**) | 5 → 5 |
+
+One Roller explore window evaluated **1,906 violations and reported 0** (`invariants {0,0,0}`,
+`findInvariant 0`, over 1,786 iterations). JSPWiki's surviving 25% are redirects and small 400s,
+which never violate, so its effective loss is total too. **JPetStore is the outlier that made the
+tool look functional** — its pages are 1–6 KB, so nothing commits before the boundary exits. The
+bias runs the wrong way: loss correlates with response size and with flushing, i.e. with **the
+expensive requests the tool exists to find**. Second-order, and worse: `CostSample`'s
+heap/thread/invariant inputs came from the same headers, so where they were lost the cost model
+received zeros and exploration degenerated to latency-only ranking — which is why Roller's retained
+corpus collapsed to 2 entries.
+
+*The three commit triggers, and that they depend on which boundary is installed.* Kubernetes injects
+`-Dbasquin.boundary=agent`, so the cluster runs `TomcatBoundaryAdvice` woven into
+`StandardHostValve.invoke`, whose exit runs **after** Tomcat's error-page dispatch. The header is
+lost iff the response is committed at boundary exit:
+
+1. **More than 8192 bytes** through the `OutputBuffer` (Roller's 8,799 B search loses it; JPetStore's
+   6,116 B keeps it).
+2. **Any explicit flush, at any size** — Struts/Tiles JSPs, and Roller's opensearch servlet at
+   **552 bytes**. A buffer-size story alone cannot explain the data.
+3. **An error status with a *custom* `web.xml` error-page**: the `RequestDispatcher.forward` commits
+   and closes inside `StandardHostValve`. Roller declares error pages, so its 1,215 B 404 loses the
+   header; JSPWiki and JPetStore declare none, so their 404s render in `ErrorReportValve` *above* the
+   boundary and survive.
+
+It survives on redirects, on sub-8 KB non-flushing responses, and — the detail that proves the rule
+— on static files **above** the 48 KB sendfile threshold: a 35,891 B `mootools.js` **loses** the
+header while a 51,058 B `jspwiki-common.js` **keeps** it, because sendfile bypasses the
+`OutputBuffer` entirely. Only this rule set explains that non-monotonicity.
+
+*Three more structural zeros.* Load mode is passthrough (DD-029) and evaluates nothing, and the load
+driver JVM was never given `-Dbasquin.invariant.latency.maxMs` — Roller reported
+`violations.latency: 0` at a p50 of 503 ms against an intended 250 ms budget; `summaryJson`
+additionally hardcoded `"heap":0,"thread":0`. The explore summary's `invariants` block measured the
+**driver's** JVM (no thresholds configured), presented as target data. And `Agent`'s leak detector
+threw unconditionally: a Roller publish wrote its row and the client received an empty `500` — the
+harness destroying the app's correct response, and one step from recording its own exception as an
+app crash.
+
+**Decision.** A per-request-id result store inside the target JVM, written by the boundary and read
+by the driver over the `/__basquin/*` control surface it already talks to. No new listener, port, or
+operator wiring; nothing added to the load path.
+
+1. **The channel.** The driver stamps each explore request `X-Basquin-Req: <RUN_SALT>-<n>`; the glue
+   calls `RequestBoundary.stampRequestId` **only** on the `EXPLORE_BEGAN` branch (so a load request
+   never even reads the header); `onExit` writes `id → Entry(costCsv, invariantCount, detail, leak)`
+   into a 256-entry LRU; the driver `GET`s `/__basquin/result?id=…`, which is `CONTROL_HANDLED` and
+   never reaches the app. Entries are removed on read; retention is bounded to ≈ 256 × ~0.5 KB
+   ≤ **~150 KB**, stated as a byte bound because it is a baseline shift inside the very JVM whose
+   heap deltas this tool reports. The response header stays as an opportunistic fast path,
+   discriminated on `X-Basquin-Cost` (emitted on *every* explore exit) rather than
+   `X-Basquin-Invariant-Count` (absent on every clean request, which would make the driver poll
+   almost always). The two channels are alternatives, never a sum: remove-on-read plus counting the
+   header would file the same violation twice.
+
+2. **The poll waits on `ITERATION_LOCK`, and that is the critical detail.** `Agent.end()` sleeps
+   25 ms **before** measuring, and the store write happens after that. On a committed response — a
+   `Content-Length` body, or the error-page class that commits and closes inside `StandardHostValve`
+   — the client reaches EOF roughly 25 ms *before the entry exists*. A poll issued ~1 ms later finds
+   nothing and records a miss, **for the motivating class, every time**, while passing every mocked
+   unit test. So `/__basquin/result` acquires the fair `ITERATION_LOCK` (bounded wait, 2 s) before
+   reading the store: the poll simply queues behind the in-flight iteration, which costs nothing the
+   run was not already going to spend, since the driver's *next* explore request would queue on the
+   same lock anyway. The wait is a **timeout**, not an indefinite block — a target wedged inside the
+   app must produce a miss, not hang the driver. The driver's own read timeout (4 s) deliberately
+   exceeds the handler's 2 s bound, or a poll queued behind the very iteration about to write its
+   entry would score as a miss every time.
+
+3. **The store is internally synchronized, separately from the lock.** `ITERATION_LOCK` makes the
+   *write* provably belong to that request; it does not make the *reader* safe, because the poll is
+   handled at `onEnter` on a different connector thread that never touches it. Both are required.
+
+4. **The entry is built from `IterationContext`, before `endIteration()`, and published in a
+   `finally`.** `Agent.endIteration()` **throws** on a hard-mode invariant violation (global mode
+   defaults to **hard**) and on a leak, and its own `finally` does `CURRENT.remove()`. Building the
+   entry from its return value — or capturing the context after the call — therefore skips the store
+   write for **exactly the violating iterations**, making the new "reliable" channel weaker than the
+   header it replaces, and failing *green*. Building from the per-iteration context rather than
+   `Agent`'s process-global `last*` volatiles also makes the channel concurrency-*proof* instead of
+   concurrency-*conditioned*: those statics belong to the right request only because explore is
+   serialized today, and misattributing another request's numbers to this id is the worst failure
+   class this work exists to prevent.
+
+5. **Ids are salted** with DD-038's per-pod `RUN_SALT` (`<RUN_SALT>-<n>`). A bare monotonic counter
+   collides in two real cases — two drivers against one target (parallel campaigns, or a human `curl`
+   mid-run) both count from 1, and a long-lived target across sequential campaigns still holds
+   campaign 1's unread entries when campaign 2 asks for id 173. Remove-on-read then hands back
+   **stale data as fresh**, which is strictly worse than a miss. A foreign or stale id now misses
+   honestly.
+
+6. **A miss is *unmeasured*, never zero.** `CostSample.EMPTY` is gone — deliberately renamed
+   `UNMEASURED`, so a zero-filled sample cannot be reintroduced by autocomplete. A miss skips
+   `CostModel.score` entirely, increments `reportMisses`, and marks the run's finding count as a
+   **lower bound** as first-class data (`findingsLowerBound`), not prose. A run where misses are the
+   *majority* prints a FATAL line and exits 3 (`-Dbasquin.report.failOnMissMajority=false`
+   downgrades it) — against an uninstrumented target `reportMisses` ≈ iteration count, a situation
+   that used to read as a clean zero. The poll lives in a `finally`, because a `serverError` would
+   otherwise leave a 500's measurements rotting in the map until eviction, and 500s are precisely the
+   interesting requests; nothing thrown by the poll may replace the in-flight error.
+
+7. **Omitting a field at the driver would have been theater, so all four layers changed.**
+   `LoadViolations.{Latency,Heap,Thread}` were non-pointer `int32` with `omitempty`, so an omitted
+   field unmarshals straight back to `0`; the Ready condition — the message operators actually read
+   via `kubectl get basquincampaign` — printed `"%d latency violations"` unconditionally; and the
+   dashboard rendered `(ld.heapDriftKb||0)+' KiB'`. Note that DD-035's `driftUnavailable` marker had
+   been **emitted since DD-035 and parsed nowhere**; it is now actually wired. So: pointer fields
+   (`nil` = not checked, non-nil `0` = checked and clean) plus explicit `notEvaluated` /
+   `driftUnavailable` markers; a condition message that does not print a count it does not have; no
+   `||0` defaults for measured values, and a *skipped* sparkline point rather than a fabricated `0`
+   (a fake zero does not merely misplot — it drags the line to the floor and reads as "the heap
+   recovered"); an empty CSV cell, which every plotting tool renders as a gap; and `summaryJson` no
+   longer emitting `heap`/`thread` counts load mode never evaluates. The Helm chart's CRD copy was
+   synced in the same change — a stale copy makes Kubernetes **prune** the new honesty markers out of
+   stored status.
+
+8. **The `latencyMaxMs` trap.** `buildDriverJob` already propagated
+   `-Dbasquin.invariant.latency.maxMs` from `campaign.spec.driver.invariants`; the bench runs had
+   none because the threshold lives on the **BasquinTarget**, which only reaches the *target* JVM.
+   An implementer could have satisfied "propagate latencyMaxMs" by pointing at the existing field and
+   closing the ticket with the trap intact. The rule: **the load driver inherits the target's
+   `invariants.latencyMaxMs`**, and `spec.driver.invariants` overrides it. **Explore deliberately
+   does not inherit** — the target's agent evaluates and reports over this new channel, so a
+   driver-side copy of the same budget would count a second, differently-scoped violation (client
+   round trip, network, driver GC) for the same request. `driverSpecHash` excludes the target's
+   `latencyMaxMs`, consistently with the app image: editing the target mid-campaign does not restart
+   an in-flight driver.
+
+9. **Soft mode never alters the response, and the leak is actually recorded.** The leak throw is
+   gated on `Invariants.isHard("basquin.invariant.leak.mode")` — a per-invariant override falling
+   back to global mode, which defaults to **hard**, so unconfigured runs and CI are unchanged.
+   `basquin.forceExitOnLeak` stays deliberately *outside* the gate: a flag whose entire meaning is
+   "exit on leak" must not silently do nothing. The recording half mattered as much as the safety
+   half: "in soft mode a leak is recorded" was **false** before this change — leak evidence was not
+   in `lastInvariantViolations`, therefore not in any header, and `StatusReporter.recordIteration` is
+   a no-op in a target JVM without `-Dbasquin.status`. It was stderr only. The leak flag now rides
+   the per-id entry and surfaces as a `Leak-Remote` finding, so soft mode trades a false 500 for a
+   *kept* defect rather than a lost one.
+
+10. **§A.6 correction — the pod-identity header cannot route the poll.** The spec originally proposed
+    that the boundary stamp its pod identity and the driver follow it. That can never work: the pod
+    header rides **the same response headers the poll exists to compensate for**, and the driver
+    polls *iff* no cost header arrived. The header is therefore present exactly when there is no
+    poll, and absent exactly when there is one — mutually exclusive by construction. On Roller, 97.3%
+    of responses had committed, so on 97.3% of requests it cannot exist. Any design that routes a
+    poll using information carried on the response it is compensating for has this defect. What
+    ships instead is **DNS fan-out**: the driver resolves the target's pod addresses with
+    `InetAddress.getAllByName` (DD-023's exact mechanism and loopback collapse, reused) from
+    `-Dbasquin.report.podHost`, else the host of `-Dbasquin.coverage.jacoco` — the headless coverage
+    Service the operator already passes on every explore campaign, so **no operator change was
+    required** — else the baseURL host, and tries each until one returns the entry. The fan-out is
+    safe **only because of §A.4 and §A.7**: ids are salted and entries are removed on read, so at
+    most one pod can ever hold a given id. A fan-out can therefore be wrong only by finding nothing,
+    which is a counted miss — never by returning another pod's measurement. Single-replica behaviour
+    is byte-identical (a derived source resolving to fewer than two addresses returns the base URL
+    untouched). `X-Basquin-Pod` is still emitted, demoted to what it can actually do: attribution
+    (`pod=` on a finding), which is what a two-replica reconciliation against pod logs needs.
+
+**Verified.** 216 → **274 tests**, full suite green. Each mechanism has a test that genuinely fails
+without it, checked by mutation rather than asserted: removing the store's synchronization wrapper
+fails the concurrency test 20/20 (corrupted sizes, e.g. `size=-12638`) and passes 20/20 restored;
+stubbing `awaitQuiescence` to a no-op fails `resultWaitsForAnInFlightIterationToPublish`; capturing
+the context *after* `endIteration()` fails 3 of 6 boundary tests, and publishing only on the
+non-throwing path fails **exactly** `aThrowingIterationStillPublishesItsResult` and nothing else —
+which is precisely what an implementer who read half the note would write; deleting only the
+`FuzzIO.saveWithMeta` call while leaving the poll, parse and `CostSample` intact fails 3 tests
+(recovering a count and *not* filing a finding is the defect surviving under a new name); reducing
+`pollBases` to the Service VIP fails 3 multi-replica tests. `MultiReplicaPollTest` runs two
+independent `HttpServer`s each with its own remove-on-read store — the independence a Service VIP
+violates — and pins that a poll aimed at the wrong pod misses *and is counted*, while the fan-out
+finds the entry behind a pod that missed. The operator round trip is pinned by an **envtest through
+a real API server**, not an in-memory unmarshal: a summary carrying
+`"violations":{"notEvaluated":[…]}` comes back with `nil` pointers and a Ready message reading "not
+evaluated", not "0 latency violations". DD-011 namespace-freedom was re-checked in the **compiled
+bytecode** (`javap -c`: no `javax`/`jakarta` in the glue, no `org.apache.catalina` in
+`RequestBoundary`). Soft-mode leak tests start a *real* non-daemon thread rather than a mock, and
+`theRecordedLeakIsOnTheWireInTheFormTheDriverParses` pins the seam where the agent's own
+`ResultStore.format` output meets the driver's 4-field split.
+
+**Honest limits — read these before trusting a number.**
+
+- **Pre-existing `status.load` values are not migrated.** A `BasquinCampaign` whose status was
+  written before this change stores `violations: {latency: 0, …}` as concrete integers, which now
+  unmarshal into *non-nil* pointers — i.e. they claim "checked and clean" with the new vocabulary's
+  authority. The fix cannot retroactively distinguish "checked" from "never checked" in old data.
+- **A hard invariant violation rethrows before the leak checks run**, so that iteration's leak is
+  never evaluated and its entry says `leak=false` — a "not checked" reported as clean. That is this
+  exact defect class, pre-existing, still present, and found *inside* DD-040's own work.
+- **`/__basquin/violations` counts invariants only.** A soft-mode, leak-only run reports
+  `violations=0` while the findings hold `Leak-Remote` entries. Do not read that zero as clean.
+- **A campaign with no threshold anywhere reports "not evaluated" but nothing fails.** It is loud in
+  the driver log and the Ready condition, and it is honest — but whether a campaign should be able to
+  complete "successfully" with no invariant configured at all is an open policy question.
+- **The pod port is assumed equal to the baseURL port.** A Service publishing `port: 80` →
+  `targetPort: 8080` makes every fan-out poll miss. It is visible in `reportMisses`, but nothing
+  detects it automatically; `-Dbasquin.report.podPort` (or a per-entry `host:port`) is the escape
+  hatch. Likewise, `coverageService: false` plus a ClusterIP `baseURL` leaves the poll VIP-bound
+  unless `-Dbasquin.report.podHost` is set.
+- **The recovered leak flag is not a `CostModel` input.** It saves a finding; a leaked thread usually
+  shows up in `threadDelta` anyway, so the signal is not lost, but the coupling is indirect.
+- **Cost.** One extra request per un-headered explore request — against an uninstrumented target that
+  is a doubling of request count, and now a non-zero exit. Intended, and worth knowing before someone
+  points explore at a bare app and reports a "regression".
+
+**Disposition of the already-published numbers.** Roller's and JSPWiki's explore **finding counts are
+invalid** and must be re-run against this change. JPetStore's stand — it lost 0%. The 9,023 violations
+recovered from the pods' own logs (`bench-results/violation-logs-2026-07-23/`: roller 6,143, jspwiki
+2,880) are **corroboration for the acceptance test, not remediation**: per-input attribution is
+unrecoverable (target-side iteration numbers include probe traffic and the mapping back to driver
+inputs is approximate), a re-score cannot retroactively feed the cost model that ranked the corpus
+*during* the run, and the logs do not always survive — JPetStore's had already rotated past its
+window. Recovering the numbers restores finding counts, not the exploration they should have guided.
+
+**Rejected alternatives.**
+- **Set the headers before the app runs.** The values do not exist yet.
+- **Piggyback request *N−1*'s result on request *N*'s response** (headers set at `onEnter` survive
+  commit, and the "values do not exist yet" objection does not apply to the *previous* request's
+  values). Genuinely elegant — it removes the extra request, the perturbation and the grace-sleep
+  race in one move. Rejected as the primary mechanism because it makes every finding lag one request,
+  complicating the skip, abort and end-of-run paths (the last request still needs a flush) and
+  coupling iterations that are otherwise independent. Worth revisiting as an optimization once the
+  poll is correct, at which point the poll becomes a tail-flush only.
+- **A response wrapper that defers commit.** Buffers unbounded bodies inside the JVM whose heap this
+  tool reports, defeats sendfile, breaks streaming, and is deeply invasive under agent advice. A
+  larger `setBufferSize` would still lose the flush and error-page classes.
+- **The target pushes to the dashboard.** The target never talks to the dashboard — the *driver* does
+  (DD-013 deliberately keeps the measured JVM free of that plumbing).
+- **Cumulative counters only.** `/__basquin/violations` loses per-input attribution — which is what
+  the cost model needs — and requires probe-noise filtering (the kubelet readiness probe alone
+  violates heapDelta ~12/min on JSPWiki at idle). Adopted as a supplement, rejected as the mechanism;
+  the id-keyed path sidesteps probe noise entirely, since the driver reads only ids it issued.
+- **Re-score from pod logs instead of fixing the channel.** Cannot feed the cost model during a run,
+  cannot attribute per input, and the logs rotate. Adopted once as corroboration; see "Disposition".
+- **The boundary reports its pod IP for the driver to build a directory.** Strictly weaker than DNS:
+  the driver learns only pods that *returned headers*, knows none at run start, never learns a pod
+  that always commits — and would still have to fan out over that incomplete set.
+- **Pod-name → address via headless DNS.** `<pod>.<svc>` only resolves with `spec.hostname`/
+  `subdomain`, a StatefulSet convention; Basquin instruments Deployments.

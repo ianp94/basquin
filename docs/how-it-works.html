@@ -132,12 +132,44 @@ java -agentpath:$LIB -Dbasquin.native.lib=$LIB -cp ... runner.GenericRunner ...<
     <code>web.xml</code>. The valve jar is <strong>namespace-free</strong>: a single artifact runs on
     both Tomcat 9 (<code>javax.servlet</code>) and Tomcat 10+ (<code>jakarta.servlet</code>). Invariant
     results are exposed per response as <code>X-Basquin-Invariant-*</code> headers, which the HTTP
-    driver harvests.</p>
+    driver harvests — with a second, reliable channel behind them (below), because a response that has
+    already committed can no longer carry a header.</p>
   <div class="note">
     <span class="tag">note</span>
     <p>The valve and the in-WAR <code>IterationFilter</code> are mutually exclusive — use the filter
       for the demo WAR, the valve for third-party WARs. Running both wraps every request twice and
       produces meaningless nested boundaries.</p>
+  </div>
+
+  <h2>Getting the measurement back to the driver</h2>
+  <p>The measurement happens inside the app's JVM; the finding has to end up in the driver. Response
+    headers are the fast path, but they only work while the response is still open — and on a real app
+    most responses aren't. A body over the 8 KB output buffer, <em>any</em> explicit flush at any size,
+    or an error status with a custom <code>web.xml</code> error page all commit the response before the
+    boundary exits, and the header is silently dropped. Measured on the benchmark apps: <strong>97.3%
+    of Apache Roller's responses couldn't carry one</strong>, 75% of JSPWiki's, and 0% of JPetStore's —
+    whose 1–6 KB pages are why the header-only design looked like it worked. The bias runs the wrong
+    way, too: loss tracks response size and flushing, i.e. exactly the expensive requests worth
+    finding.</p>
+  <p>So the boundary also writes each explore iteration's measurements into a small, bounded,
+    <strong>per-request-id result store</strong> inside the target JVM, keyed by the
+    <code>X-Basquin-Req</code> id the driver stamped on the request. When no cost header comes back,
+    the driver polls <code>/__basquin/result?id=…</code> over the same control surface it already uses
+    — no extra port, no extra wiring — and <strong>violations reach the driver even when the response
+    committed.</strong> Ids are salted per run and entries are removed on read, so a stale or foreign
+    id misses instead of returning someone else's measurement, and the driver can safely fan the poll
+    out across the target's pods to reach the one that actually served the request. The poll waits on
+    the iteration lock, because latency is measured before the end-of-iteration grace sleep and the
+    client can reach end-of-body before the entry has been written.</p>
+  <div class="note">
+    <span class="tag">design</span>
+    <p><strong>A lost measurement is reported as <em>unmeasured</em>, not as zero</strong> (DD-040).
+      If the poll misses, the driver does not fabricate an empty sample: the request is excluded from
+      cost ranking, counted in <code>reportMisses</code>, and the run's finding count is flagged as a
+      lower bound — and a run where misses are the majority fails instead of finishing "clean". The
+      same rule runs through every consumer: an invariant nobody evaluated is reported as <em>not
+      evaluated</em> in the campaign status, the Kubernetes Ready condition and the dashboard, rather
+      than as a reassuring <code>0</code>.</p>
   </div>
 
   <h2>Coverage-guided exploration</h2>

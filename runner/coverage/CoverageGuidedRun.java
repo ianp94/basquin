@@ -299,7 +299,11 @@ public final class CoverageGuidedRun {
             long t0 = System.nanoTime();
             try {
                 sample = request(baseUrl, input);
-                latMs = (System.nanoTime() - t0) / 1_000_000L;
+                // DD-039: subtract the forced multi-hop poll from wall-clock. request() resets
+                // lastPollMs at its top and pollResultOrNull accumulates into it, so on a redirecting
+                // input this removes up to POLL_READ_TIMEOUT_MS of poll time that would otherwise be
+                // scored as the app's own latency and out-rank every non-redirecting input.
+                latMs = wireLatency((System.nanoTime() - t0) / 1_000_000L, lastPollMs);
                 // DD-040: cost measurement being ENABLED is not the same as this request having BEEN
                 // measured. Scoring an unmeasured sample means scoring zeros — which is how a run
                 // that saw 1,906 violations reported none and collapsed its corpus to 2 entries.
@@ -328,7 +332,7 @@ public final class CoverageGuidedRun {
             if (pheromoneOn && parent != null && measured) corpus.reinforce(parent, cost);
             if (coverageFind || measured) {
                 corpus.consider(input, cost, latMs, sample.heapDeltaKb, sample.threadDelta,
-                        sample.invariantCount, coverageFind);
+                        sample.invariantCount, coverageFind, sample.hops);
             }
         }
         // DD-040: close the window BEFORE the summary is rendered/written (the summary rides a
@@ -340,6 +344,12 @@ public final class CoverageGuidedRun {
         StatusReporter.renderFinal();
         System.out.printf("CoverageGuidedRun done: corpus=%d coverage=%d/%d pheromone=%s seed=%d%n",
                 corpus.size(), best, total, pheromoneOn ? "on" : "off", seed);
+        if (crossOriginRedirects > 0) {
+            System.out.println("[Basquin] explore: " + crossOriginRedirects + " cross-origin redirect(s)"
+                    + " refused. If this is close to the iteration count, the target renders redirects"
+                    + " from a configured absolute base URL and DD-039 is not actually following"
+                    + " anything — check the app's site-URL setting before trusting the coverage.");
+        }
         reportReportingHealth(reportMeasured, reportMisses,
                 targetViolationsAtStart >= 0 && targetViolationsAtEnd >= targetViolationsAtStart
                         ? targetViolationsAtEnd - targetViolationsAtStart : -1L);
@@ -349,6 +359,9 @@ public final class CoverageGuidedRun {
             for (CorpusEntry e : corpus.snapshotByCost()) {
                 if (n++ >= 5) break;
                 top.append(n == 1 ? "" : ", ").append(e.input).append('=').append(String.format("%.0f", e.cost));
+                // DD-039: flag a multi-hop input's cost as an explore-side (summed) measurement — load
+                // replays it with follow OFF and fires one hop, so the number is not comparable there.
+                if (e.hops > 1) top.append("(h=").append(e.hops).append(')');
             }
             System.out.println("[Basquin] replay cost-ranked (top " + Math.min(5, corpus.size()) + "): " + top);
         }
@@ -497,7 +510,287 @@ public final class CoverageGuidedRun {
      */
     private static volatile String sessionCookie = null;
 
-    private static void resetSession() { sessionCookie = null; }
+    /** Package-private (was private): the suite shares one JVM and {@code sessionCookie} is a static
+     *  field, so a redirect test that seeds a session would otherwise leak it into every later test
+     *  in the JVM, including ExploreCorrelationTest. Nothing in production calls this from outside. */
+    static void resetSession() { sessionCookie = null; }
+
+    // ------------------------------------------------------------------ DD-039 hop loop + reconcile
+
+    /**
+     * Spec §2: at most FIVE REQUESTS in a chain — hop 0 plus at most four follows. {@code hops}
+     * counts requests ISSUED, so the guard is {@code hops >= MAX_HOPS} AFTER the increment: five
+     * requests, not six. The same number is {@code ResultStore.MAX_HOPS_PER_ID}; two caps that
+     * disagree would silently drop a hop, and a silently dropped hop is a lost violation.
+     */
+    static final int MAX_HOPS = 5;
+
+    /**
+     * Read this hop's response to EOF and discard it, so the connection returns to the keep-alive
+     * pool. Tomcat's {@code sendRedirect} emits a boilerplate HTML body; abandoning it unread leaks
+     * sockets at explore's iteration rate and silently inflates measured latency, which is a
+     * cost-model input. {@code LoadRun} drains for exactly this reason.
+     *
+     * <p>{@code java.io.IOException} is fully qualified: CoverageGuidedRun does not import it
+     * ({@code :9-18} imports BufferedReader, InputStream, InputStreamReader and nothing else from
+     * java.io).
+     */
+    private static void drain(HttpURLConnection c) {
+        try {
+            InputStream is = c.getResponseCode() >= 400 ? c.getErrorStream() : c.getInputStream();
+            if (is == null) return;
+            byte[] buf = new byte[4096];
+            try (InputStream in = is) {
+                while (in.read(buf) >= 0) { /* discard */ }
+            }
+        } catch (java.io.IOException ignored) {
+            // A hop we are abandoning anyway; failing to drain it must never fail the request.
+        }
+    }
+
+    /**
+     * Capture/refresh JSESSIONID from THIS hop — the indexed walk lifted verbatim from the
+     * pre-DD-039 header scan. Runs on EVERY hop, deliberately: the session cookie is a transport
+     * concern, not a document concern (spec §5), and Spring Security issues the rotated JSESSIONID
+     * ON the 302, whose headers the JDK's auto-follow discarded before re-issuing.
+     */
+    private static void captureSessionCookieFrom(HttpURLConnection c) {
+        for (int i = 0; ; i++) {
+            String key = c.getHeaderFieldKey(i);
+            String val = c.getHeaderField(i);
+            if (key == null && val == null) break;
+            if (key != null && key.equalsIgnoreCase("Set-Cookie") && val != null
+                    && val.startsWith("JSESSIONID=")) {
+                sessionCookie = val.split(";", 2)[0];
+            }
+        }
+    }
+
+    /** The header-derived {@code Invariant-Remote} records, one per breaching hop. Called from
+     *  {@link #reconcile} and NOWHERE else — see that method's javadoc for why the distinction is
+     *  the bug fix rather than a tidy-up. Each element is {@code {hop, rawCount, detail, podMeta}}. */
+    private static void saveHeaderInvariants(String label, java.util.List<String[]> breaches) {
+        for (String[] b : breaches) {
+            FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
+                    "route=" + label + "\ncount=" + b[1] + "\nhop=" + b[0]
+                            + (b[2] != null ? "\ndetail=" + b[2] : "") + b[3]);
+        }
+    }
+
+    /**
+     * A redirect loop is a FINDING, not a nuisance: an app that redirects indefinitely is
+     * unavailable — a browser surfaces it as ERR_TOO_MANY_REDIRECTS — and this tool's oracle is
+     * availability. Scoring the 5th response as a normal iteration would discard a genuine finding
+     * and feed a meaningless response into the cost model and the corpus.
+     *
+     * <p>{@code label} is the RAW step recipe (DD-036), never a resolved hop URL. {@code visited}
+     * holds query-stripped URLs (stripped where they are CONSTRUCTED), but that is NOT enough: a
+     * captured token substituted into a PATH SEGMENT (DD-038 substitutes the path — e.g. a step
+     * {@code /edit/${{csrf}}/save}) survives {@link #strippedUrl}, which only cuts the query and
+     * fragment, and would land a live token in the {@code hops=} line on disk (PR #96 Finding 1 —
+     * the earlier guard test put its token in the QUERY, which strippedUrl DOES cut, so the
+     * path-segment leak passed review). The fix is VALUE-based, not position-based: every non-empty
+     * bound value is redacted from each URL here, at WRITE time, matching the token wherever it sits.
+     * The {@code visited} set used for loop DETECTION keeps the real resolved URLs, so a revisit is
+     * still spotted; only the finding's written form is redacted.
+     *
+     * <p><b>CostModel.score decision (explicit, per DD-039 review).</b> This finding does NOT touch
+     * {@code CostSample.invariantCount} and so does NOT feed {@link CostModel#score}. The summed
+     * invariant count that DOES feed the score is only the per-hop {@code X-Basquin-Invariant-Count}
+     * / poll total (summed across hops in Task 4, scored at the loop's {@code CostModel.score} call)
+     * — a real resource/violation cost. A redirect loop is an availability signal reported for
+     * triage; folding a synthetic count into the score would let a loop out-rank a genuinely
+     * expensive input purely because it looped, corrupting corpus ranking. The chain's actual
+     * measured latency/heap/thread cost still scores normally; only the loop classification is kept
+     * out of the number.
+     */
+    private static void saveRedirectLoop(String label, java.util.Collection<String> visited,
+            java.util.Map<String, String> bindings) {
+        List<String> safe = new ArrayList<>(visited.size());
+        for (String u : visited) safe.add(redactBoundValues(u, bindings));
+        FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Redirect-Loop",
+                "route=" + label + "\nhops=" + String.join(" -> ", safe));
+    }
+
+    /**
+     * PR #96 Finding 1 (DD-036 invariant: no captured token may reach disk). VALUE-based redaction —
+     * the same lesson as the benchmark {@code _redact}: match the token, not where it sits. Replaces
+     * every non-empty bound VALUE in {@code url} with {@code <redacted>}, so a captured token lands
+     * safely regardless of whether DD-038 substituted it into a path segment, the query, or a matrix
+     * param. {@link #strippedUrl} is position-based (query/fragment only) and cannot see a token in a
+     * path segment; this is the real fix, with strippedUrl kept as defence in depth. {@code bindings}
+     * is null on the 2-arg {@code request} overload (no captures possible) — treated as nothing to
+     * redact. Package-private for direct testing.
+     */
+    static String redactBoundValues(String url, java.util.Map<String, String> bindings) {
+        if (url == null) return "";
+        if (bindings == null || bindings.isEmpty()) return url;
+        String out = url;
+        for (String v : bindings.values()) {
+            if (v != null && !v.isEmpty()) out = out.replace(v, "<redacted>");
+        }
+        return out;
+    }
+
+    /**
+     * DD-039: the ONE place that decides what a request reports, and the only place that saves.
+     *
+     * <p><b>Why the extraction IS the fix (round 3's C4).</b> DD-040 saved the header-derived
+     * {@code Invariant-Remote} record the instant it read {@code X-Basquin-Invariant-Count}. A later
+     * decision to poll instead therefore could not un-save it — the record was already on disk, and
+     * the same violation was filed twice AND counted twice into {@code CostSample.invariantCount},
+     * which feeds {@link CostModel#score}. Clearing a {@code headerReported} flag does not unlink a
+     * file. That call site is DELETED by this task; the record is held in {@code hdrBreaches} and
+     * emitted, or not, here. C4 (suppress the header save) and I11 (poll-and-merge, not
+     * poll-and-replace) are ONE decision: landing the loop without this ships a double-save.
+     *
+     * <p>The rule:
+     * <ul>
+     *   <li>{@code hops == 1} with a reporting header — the header describes the one hop that
+     *       happened, so it is complete. Save from it and do NOT poll: remove-on-read would take the
+     *       store's copy of the same violation.</li>
+     *   <li>{@code hops > 1} — a header can only ever describe the FINAL hop, so poll for all of
+     *       them. <b>The poll wins when it is well-formed; the header record is emitted only when the
+     *       poll returned nothing at all.</b> That keeps "never both, for the same hop" true without
+     *       needing to know which hops the poll happened to recover — and it is why a forced poll
+     *       that misses falls back to the header reading instead of recording a miss.</li>
+     *   <li>Poll returned nothing and there was no header either — a miss, exactly as DD-040.</li>
+     * </ul>
+     */
+    static CostSample reconcile(String base, String reqId, String label, int hops,
+            boolean headerReported, CostSample headerSample, java.util.List<String[]> hdrBreaches) {
+        // Never sent (an unsupported method): nothing to poll, nothing to count. The pre-DD-039 early
+        // return sat before the try/finally and counted nothing, and that is preserved exactly.
+        if (hops == 0) return CostSample.UNMEASURED;
+        if (headerReported && hops == 1) {
+            saveHeaderInvariants(label, hdrBreaches);
+            reportMeasured++;
+            return headerSample;
+        }
+        CostSample polled = pollResultOrNull(base, reqId, label, hops);
+        if (polled != null) return polled;                 // reportMeasured++ happened inside
+        if (headerReported) {
+            // The poll found nothing, so it took nothing and saved nothing: emitting the header
+            // record here cannot double-count.
+            saveHeaderInvariants(label, hdrBreaches);
+            reportMeasured++;
+            return headerSample;
+        }
+        return recordMiss();
+    }
+
+    // ------------------------------------------------------------------ DD-039 redirect decisions
+    // Pure, package-private, and off the network on purpose: an unparseable Location, a default-port
+    // comparison and HEAD-stays-HEAD are decisions, and a decision only reachable through a server
+    // is a decision nobody tests at its edges.
+
+    /** A 3xx that may carry a Location. -1 (an unparseable status line, which getResponseCode()
+     *  returns) is deliberately NOT a redirect. */
+    static boolean isRedirect(int code) {
+        return code >= 300 && code < 400;
+    }
+
+    /**
+     * {@code location} resolved against {@code requestUrl}, or null if either will not parse.
+     *
+     * <p><b>Never throws.</b> {@code request(...)} is {@code throws Exception} and both its callers
+     * catch {@code Throwable} into {@link StatusReporter#recordCrash()} +
+     * {@link FuzzIO#saveInteresting} ({@code :310-312}, {@code :537-539}), so an escaping
+     * {@code URISyntaxException} files a false crash finding AGAINST THE APP carrying a stack that
+     * points into driver code. {@code URI} throws on unencoded space, <code>{}</code>, {@code |} and
+     * {@code ^} — exactly the bytes a fuzzer reflects into a query string.
+     */
+    static java.net.URI resolveLocation(String requestUrl, String location) {
+        if (location == null || location.isEmpty()) return null;
+        try {
+            return new java.net.URI(requestUrl).resolve(new java.net.URI(location));
+        } catch (java.net.URISyntaxException | IllegalArgumentException e) {
+            warnOnce("bad-location", "unparseable Location; the 3xx becomes the final response "
+                    + "(first occurrence: " + location + ")");
+            return null;
+        }
+    }
+
+    /** A parsed URI, or null. The never-throwing parse for a URL built from the SUBSTITUTED request
+     *  path ({@code runSequence} substitutes at {@code :518}) — a more hostile string than a
+     *  {@code Location}, and the one {@code new URL(...)} used to accept leniently. */
+    static java.net.URI safeUri(String url) {
+        if (url == null) return null;
+        try {
+            return new java.net.URI(url);
+        } catch (java.net.URISyntaxException | IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /** Same scheme + host (case-insensitive) + port, with an absent port normalized to the scheme
+     *  default. A fuzzed input inducing an open redirect must not turn the explorer into a client
+     *  for another server, or attribute another host's cost to the app. */
+    static boolean sameOrigin(java.net.URI a, java.net.URI b) {
+        if (a == null || b == null) return false;
+        String sa = a.getScheme(), sb = b.getScheme();
+        if (sa == null || sb == null || !sa.equalsIgnoreCase(sb)) return false;
+        String ha = a.getHost(), hb = b.getHost();
+        if (ha == null || hb == null || !ha.equalsIgnoreCase(hb)) return false;
+        return defaultPort(a) == defaultPort(b);
+    }
+
+    /** The URI's port, or the scheme default when absent — {@code URI.getPort()} returns -1 for
+     *  {@code http://svc/foo}, which must compare equal to a base of {@code http://svc:80}. */
+    static int defaultPort(java.net.URI u) {
+        if (u == null) return -1;
+        if (u.getPort() != -1) return u.getPort();
+        String s = u.getScheme();
+        if ("https".equalsIgnoreCase(s)) return 443;
+        if ("http".equalsIgnoreCase(s)) return 80;
+        return -1;
+    }
+
+    /**
+     * The method the follow hop must use. This PRESERVES today's JDK behaviour rather than choosing
+     * new behaviour (spec §3, Evidence TESTs A and B): deviating would be the change and would need
+     * its own justification.
+     *
+     * <p>301/302/303 rewrite to GET only when the original carried a body — the body and its
+     * {@code Content-Type} are dropped together, because carrying
+     * {@code application/x-www-form-urlencoded} onto a bodyless GET makes some filters attempt form
+     * parsing on an empty stream. Everything else keeps its method, notably HEAD: a grammar can
+     * express HEAD, and silently promoting it to GET pulls a full body the caller never asked for,
+     * inflating the input's measured latency and heap and corrupting its cost rank.
+     */
+    static String followMethod(int code, String method) {
+        if (code == 307 || code == 308) return method;
+        boolean carriesBody = "POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method);
+        if ((code == 301 || code == 302 || code == 303) && carriesBody) return "GET";
+        return method;
+    }
+
+    /**
+     * {@code scheme://host[:port]/path} — query and fragment REMOVED. Every recorded hop URL goes
+     * through this, and hop 0's URL is built at construction time from the SUBSTITUTED
+     * {@link RequestLine} (DD-038 substitutes the path deliberately, {@code :518}), so a step
+     * {@code GET /edit?csrf=${{tok}}} would otherwise write a live CSRF token into a finding meta
+     * file. The existing DD-036 guard test puts its token in the BODY and cannot see this.
+     */
+    static String strippedUrl(String url) {
+        if (url == null) return "";
+        int cut = url.length();
+        int q = url.indexOf('?');
+        if (q >= 0) cut = q;
+        int h = url.indexOf('#');
+        if (h >= 0 && h < cut) cut = h;
+        return url.substring(0, cut);
+    }
+
+    private static final java.util.Set<String> WARNED =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+
+    /** One warn per distinct {@code key} for the whole run. Keyed rather than message-keyed because a
+     *  refusal on every iteration, each naming a different URL, would bury the log line it exists to
+     *  make diagnosable. */
+    static void warnOnce(String key, String msg) {
+        if (WARNED.add(key)) System.err.println("[Basquin] explore: " + msg);
+    }
 
     /** Track the last coverage total so both the single-request and sequence paths can report it. */
     private static volatile long lastCoverageTotal = 0;
@@ -578,8 +871,12 @@ public final class CoverageGuidedRun {
      */
     static final class CostSample {
         final long heapDeltaKb; final int threadDelta; final int invariantCount; final boolean measured;
-        CostSample(long h, int t, int inv, boolean measured) {
-            heapDeltaKb = h; threadDelta = t; invariantCount = inv; this.measured = measured;
+        /** DD-039: how many HTTP requests the chain fired (1 for a non-redirecting input). Rides onto
+         *  the CorpusEntry so a cost-ranked corpus records that a multi-hop cost is explore-side. */
+        final int hops;
+        CostSample(long h, int t, int inv, boolean measured) { this(h, t, inv, measured, 1); }
+        CostSample(long h, int t, int inv, boolean measured, int hops) {
+            heapDeltaKb = h; threadDelta = t; invariantCount = inv; this.measured = measured; this.hops = hops;
         }
         /** No measurement — deliberately NOT named EMPTY: it is not "a measured zero". */
         static final CostSample UNMEASURED = new CostSample(0, 0, 0, false);
@@ -594,6 +891,26 @@ public final class CoverageGuidedRun {
 
     /** DD-040: requests whose measurements the driver DID obtain, by either channel. */
     static volatile long reportMeasured;
+
+    /** DD-039: milliseconds the last {@code request()} call spent inside its result poll. Subtracted
+     *  from the caller's wall-clock, because a forced multi-hop poll would otherwise inflate latMs —
+     *  which feeds CostModel.score, so redirecting inputs would out-rank everything else purely for
+     *  being polled. Single-threaded explore loop, like the other run counters. */
+    static volatile long lastPollMs;
+
+    /** Wire time only. Pure, so the subtraction is assertable without a run. */
+    static long wireLatency(long elapsedMs, long pollMs) {
+        return Math.max(0L, elapsedMs - pollMs);
+    }
+
+    /**
+     * DD-039: {@code Location}s refused because they left the target's origin. Surfaced in the
+     * end-of-run summary because a target that renders redirects from a CONFIGURED absolute base URL
+     * makes every redirect cross-origin, silently degrading this feature to its pre-DD-039 behaviour
+     * — indistinguishable from the feature working. A non-zero counter beside flat coverage is
+     * immediately diagnosable; nothing else in the run says so.
+     */
+    static volatile long crossOriginRedirects;
 
     /** DD-040: per-request id sequence; salted with {@link LoadRun#RUN_SALT} so a foreign or stale id
      *  misses honestly instead of returning another run's entry as fresh (spec §A.4). */
@@ -610,6 +927,11 @@ public final class CoverageGuidedRun {
 
     /** Wire miss token from {@code ResultStore.MISS}; any unparseable body is treated as a miss too. */
     private static final String POLL_MISS = "miss";
+
+    /** DD-039: the result body is now up to {@code ResultStore.MAX_HOPS_PER_ID} lines. Bound:
+     *  5 hops × (200-char detail + costCsv + count + separators) ≈ 1.2 KB; 8 KB is generous headroom
+     *  for a version-skewed target without letting a hostile body grow unbounded in the driver. */
+    private static final int POLL_BODY_MAX = 8192;
 
     /**
      * Whether this sample may be scored. Extracted (and package-private) so "a miss must not be
@@ -696,219 +1018,291 @@ public final class CoverageGuidedRun {
      */
     private static CostSample request(String base, RequestLine r, java.util.Map<String, String> bindings,
             String label) throws Exception {
-        HttpURLConnection c = (HttpURLConnection) new URL(base + r.path()).openConnection();
-        c.setConnectTimeout(2000);
-        c.setReadTimeout(10000);
-        try {
-            c.setRequestMethod(r.method());
-        } catch (java.net.ProtocolException pe) {
-            System.err.println("[Basquin] explore: unsupported HTTP method " + r.method()
-                    + " for " + r.path() + "; not sent");
-            return CostSample.UNMEASURED;   // fail loud: do NOT fall through to a silent GET
-        }
-        // DD-040: stamp this request so the boundary can publish its measurements under an id we can
-        // poll for. The response header channel only works while the response is uncommitted, which
-        // on a real app it usually is not — on Roller 97.3% of responses could not carry one.
+        // DD-039: explore follows redirects ITSELF. setInstanceFollowRedirects(true) made the JDK
+        // discard the intermediate hop's response headers before re-issuing (so a Set-Cookie on the
+        // 3xx was unreachable and the hop's X-Basquin-* were thrown away) and issue the follow hop
+        // with NO Cookie and NO X-Basquin-Req at all on a method rewrite. See the spec's JDK probe.
+        lastPollMs = 0;                     // DD-039: this request's poll time, subtracted from latMs
+        String method = r.method();
+        String reqBody = r.body();          // NOT `body`: StringBuilder body is declared below
+        String url = base + r.path();
+        // DD-040: stamp every hop with this id so the boundary can publish its per-hop measurements
+        // under it; ResultStore accumulates them and reconcile() polls once for the whole chain.
         String reqId = LoadRun.RUN_SALT + "-" + REQ_SEQ.getAndIncrement();
-        c.setRequestProperty("X-Basquin-Req", reqId);
-        // Explore follows redirects, so a followed hop re-sends this same id and the target's second
-        // put overwrites the first: FINAL-HOP-WINS, which is exactly what the header channel already
-        // did (the driver only ever saw the last hop's headers). DD-039 owns per-hop semantics.
-        c.setInstanceFollowRedirects(true);
-        if (sessionCookie != null) {
-            c.setRequestProperty("Cookie", sessionCookie);
-        }
-        if (r.body() != null) {
-            byte[] bodyBytes = r.body().getBytes(StandardCharsets.UTF_8);
-            c.setDoOutput(true);
-            c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-            try (java.io.OutputStream out = c.getOutputStream()) {
-                out.write(bodyBytes);
-            }
-        }
-        // DD-040: the sample this call will report. Assigned inside the try on the header fast path
-        // and inside the finally on the poll path, then returned AFTER the try — a `return` from the
-        // finally would swallow the app's 500, which is the finding we most want.
-        CostSample sample = CostSample.UNMEASURED;
-        // True once ANY reporting header arrived. That proves the response had not committed, so the
-        // boundary's store entry for this id is already accounted for here; polling as well would
-        // TAKE that entry (ResultStore removes on read) and count the same violation twice. The fast
-        // path and the reliable path are alternatives, never a sum.
+        java.util.LinkedHashSet<String> visited = new java.util.LinkedHashSet<>();
+        HttpURLConnection c = null;         // hoisted: the post-loop body read / capture / serverError
+        int code = -1;                      // block below needs both
+        int hops = 0;
         boolean headerReported = false;
+        long heapKb = 0; int threadDelta = 0; int invCount = 0;
+        java.util.List<String[]> hdrBreaches = new ArrayList<>();
+        CostSample sample = CostSample.UNMEASURED;
         try {
-            int code = c.getResponseCode();
-            // Capture/refresh JSESSIONID so subsequent requests stay in the same session.
-            for (int i = 0; ; i++) {
-                String key = c.getHeaderFieldKey(i);
-                String val = c.getHeaderField(i);
-                if (key == null && val == null) break;
-                if (key != null && key.equalsIgnoreCase("Set-Cookie") && val != null
-                        && val.startsWith("JSESSIONID=")) {
-                    sessionCookie = val.split(";", 2)[0];
+            while (true) {
+                c = (HttpURLConnection) new URL(url).openConnection();
+                c.setConnectTimeout(2000);
+                c.setReadTimeout(10000);
+                try {
+                    c.setRequestMethod(method);
+                } catch (java.net.ProtocolException pe) {
+                    System.err.println("[Basquin] explore: unsupported HTTP method " + method
+                            + " for " + r.path() + "; not sent");
+                    break;                  // hops is still 0; reconcile treats that as "never sent"
                 }
-            }
-            int invCount = 0;
-            // DD-040 §A.6: the serving pod's name, when the response could carry headers at all.
-            // Attribution only — the poll path can never see it (a committed response has no headers,
-            // which is exactly when the poll runs), so it is recorded, not routed on.
-            String podHdr = c.getHeaderField("X-Basquin-Pod");
-            String podMeta = podHdr == null ? "" : "\npod=" + podHdr;
-            String inv = c.getHeaderField("X-Basquin-Invariant-Count");
-            if (inv != null) {
-                headerReported = true;
-                try { invCount = Integer.parseInt(inv.trim()); } catch (NumberFormatException ignored) {}
-                String detail = c.getHeaderField("X-Basquin-Invariant-Detail");
-                FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
-                        "route=" + label + "\ncount=" + inv
-                                + (detail != null ? "\ndetail=" + detail : "") + podMeta);
-            }
-            long heapKb = 0; int threadDelta = 0;
-            // The fast-path discriminator is the COST header, which the boundary emits on EVERY
-            // explore exit — not the invariant header, which is absent on every clean request and
-            // would therefore make the driver poll almost always (spec §A.5).
-            String costHdr = c.getHeaderField("X-Basquin-Cost");  // "latencyMs,heapDeltaKb,threadDelta"
-            if (costHdr != null) {
-                headerReported = true;
-                String[] p = costHdr.split(",");
-                if (p.length == 3) {
-                    try { heapKb = Long.parseLong(p[1].trim()); threadDelta = Integer.parseInt(p[2].trim()); }
-                    catch (NumberFormatException ignored) {}
+                c.setInstanceFollowRedirects(false);
+                // BOTH headers on EVERY hop: the JDK carries NEITHER onto a method-rewritten hop
+                // (spec Evidence TEST A — hop 2 arrived with cookie=null). That single fact is
+                // DD-039's motivating defect and DD-040's 189-violation residual.
+                c.setRequestProperty("X-Basquin-Req", reqId);
+                if (sessionCookie != null) c.setRequestProperty("Cookie", sessionCookie);
+                if (reqBody != null) {
+                    byte[] bodyBytes = reqBody.getBytes(StandardCharsets.UTF_8);
+                    c.setDoOutput(true);
+                    c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                    try (java.io.OutputStream out = c.getOutputStream()) { out.write(bodyBytes); }
                 }
+                code = c.getResponseCode();
+                hops++;
+                // Stripped AT CONSTRUCTION (DD-036): hop 0's URL comes from the SUBSTITUTED
+                // RequestLine (runSequence substitutes the path), so an unstripped key would put a
+                // live captured token into `visited` — which a Redirect-Loop finding writes out.
+                visited.add(strippedUrl(url));
+                captureSessionCookieFrom(c);            // every hop: transport, not document (spec §5)
+
+                // Read this hop's reporting headers. NOTHING IS SAVED HERE — reconcile() owns every
+                // save, because a save that has already fired cannot be undone by clearing a flag.
+                String podHdr = c.getHeaderField("X-Basquin-Pod");
+                String podMeta = podHdr == null ? "" : "\npod=" + podHdr;
+                String inv = c.getHeaderField("X-Basquin-Invariant-Count");
+                if (inv != null) {
+                    headerReported = true;
+                    try { invCount += Integer.parseInt(inv.trim()); }
+                    catch (NumberFormatException ignored) { }
+                    hdrBreaches.add(new String[]{String.valueOf(hops - 1), inv,
+                            c.getHeaderField("X-Basquin-Invariant-Detail"), podMeta});
+                }
+                // The fast-path discriminator is the COST header, which the boundary emits on EVERY
+                // explore exit — not the invariant header, which is absent on every clean request and
+                // would make the driver poll almost always (DD-040 §A.5).
+                String costHdr = c.getHeaderField("X-Basquin-Cost");   // "latencyMs,heapDeltaKb,threadDelta"
+                if (costHdr != null) {
+                    headerReported = true;
+                    String[] p = costHdr.split(",");
+                    if (p.length == 3) {
+                        try {
+                            heapKb += Long.parseLong(p[1].trim());     // summed across hops (spec §4)
+                            threadDelta += Integer.parseInt(p[2].trim());
+                        } catch (NumberFormatException ignored) { }
+                    }
+                }
+
+                // ---- terminal conditions. EVERY ONE breaks BEFORE the drain, so the final hop's
+                // ---- body survives for the capture step and the post-loop read.
+                if (!isRedirect(code)) break;                       // the ordinary terminal response
+                // The two terminal conditions stay SPLIT: fusing !isRedirect with the cap into one
+                // branch that hangs saveRedirectLoop off it would file a Redirect-Loop finding for
+                // EVERY ordinary non-redirect response.
+                if (hops >= MAX_HOPS) { saveRedirectLoop(label, visited, bindings); break; }   // the cap IS a loop
+                java.net.URI next = resolveLocation(url, c.getHeaderField("Location"));
+                if (next == null) break;                            // absent/unparseable: the 3xx is final
+                java.net.URI here = safeUri(url);                    // NEVER URI.create: substituted path
+                if (here == null || !sameOrigin(here, next)) {
+                    crossOriginRedirects++;
+                    warnOnce("cross-origin", "refusing a cross-origin redirect to "
+                            + next.getScheme() + "://" + next.getHost()
+                            + (next.getPort() > 0 ? ":" + next.getPort() : "")
+                            + " — if EVERY redirect is refused, the target is rendering redirects "
+                            + "from a configured absolute base URL and DD-039 is degraded to its "
+                            + "pre-DD-039 behaviour");
+                    break;
+                }
+                String nextUrl = strippedUrl(next.toString());
+                if (visited.contains(nextUrl)) { saveRedirectLoop(label, visited, bindings); break; }  // revisit
+
+                drain(c);                                            // only now is this hop discardable
+                String nextMethod = followMethod(code, method);
+                if (!nextMethod.equals(method)) reqBody = null;      // body AND Content-Type together
+                method = nextMethod;
+                url = next.toString();                               // the FULL url is dialled; only
+                                                                     // the recorded key is stripped
             }
-            if (headerReported) sample = new CostSample(heapKb, threadDelta, invCount, true);
-            InputStream is = code >= 400 ? c.getErrorStream() : c.getInputStream();
-            StringBuilder body = new StringBuilder();
-            if (is != null) {
-                try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = br.readLine()) != null) {
-                        // Keep the body for server errors (the app's own stack) OR — DD-036 — for a
-                        // capture step, so Capture.extract has something to search; still capped, and
-                        // draining continues to EOF regardless so keep-alive is preserved either way.
-                        if ((code >= 500 && body.length() < 16384)
-                                || (!r.captures().isEmpty() && bindings != null && code < 500 && body.length() < 262144)) {
-                            body.append(line).append('\n');
+            if (headerReported) sample = new CostSample(heapKb, threadDelta, invCount, true, hops);
+            if (hops > 0) {
+                InputStream is = code >= 400 ? c.getErrorStream() : c.getInputStream();
+                StringBuilder body = new StringBuilder();
+                if (is != null) {
+                    try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+                        String line;
+                        while ((line = br.readLine()) != null) {
+                            // Keep the body for server errors (the app's own stack) OR — DD-036 — for a
+                            // capture step, so Capture.extract has something to search; still capped, and
+                            // draining continues to EOF regardless so keep-alive is preserved either way.
+                            if ((code >= 500 && body.length() < 16384)
+                                    || (!r.captures().isEmpty() && bindings != null && code < 500 && body.length() < 262144)) {
+                                body.append(line).append('\n');
+                            }
                         }
                     }
                 }
-            }
-            // Capture from any code < 500, INCLUDING a 4xx — intentional, not an oversight: a form GET
-            // that returns 4xx can still carry the token in its (error-stream) body, and explore reads
-            // getErrorStream() above for code >= 400, so the value is there to extract. This is the
-            // deliberate load-vs-explore asymmetry noted in the DD-036 PR: LoadRun.fire uses
-            // getInputStream() (throws on 4xx) and so cannot capture from a 4xx; explore can.
-            if (!r.captures().isEmpty() && bindings != null && code < 500) {
-                for (Capture cap : r.captures()) {
-                    String val = cap.extract(c::getHeaderField, body.toString());
-                    if (val != null) bindings.put(cap.name(), val);
+                // Capture from any code < 500, INCLUDING a 4xx — intentional, not an oversight: a form GET
+                // that returns 4xx can still carry the token in its (error-stream) body, and explore reads
+                // getErrorStream() above for code >= 400, so the value is there to extract. This is the
+                // deliberate load-vs-explore asymmetry noted in the DD-036 PR: LoadRun.fire uses
+                // getInputStream() (throws on 4xx) and so cannot capture from a 4xx; explore can.
+                if (!r.captures().isEmpty() && bindings != null && code < 500) {
+                    for (Capture cap : r.captures()) {
+                        String val = cap.extract(c::getHeaderField, body.toString());
+                        if (val != null) bindings.put(cap.name(), val);
+                    }
+                }
+                if (code >= 500) {
+                    throw serverError(code, label, body.toString());
                 }
             }
-            if (code >= 500) {
-                throw serverError(code, label, body.toString());
-            }
         } finally {
-            // In a finally because a 500 — the most interesting request there is — throws above, and
-            // its measurements would otherwise rot in the target's store until eviction (spec §A.8).
-            if (headerReported) {
-                reportMeasured++;
-            } else {
-                sample = pollResult(base, reqId, label);
-            }
+            // The SOLE save/measure/miss decision for this request. In a finally because a 500 — the
+            // most interesting request there is — throws above, and its measurements would otherwise
+            // rot in the target's store until eviction (spec §A.8). A `return` from here would swallow
+            // that 500, so we only reassign; the throw still propagates.
+            sample = reconcile(base, reqId, label, hops, headerReported, sample, hdrBreaches);
         }
         return sample;
     }
 
     /**
-     * DD-040: recover one request's measurements from the target's id-keyed result store, for the
-     * responses that could not carry a header because they had already committed.
+     * DD-040/DD-039: recover a request's measurements from the target's id-keyed result store, for
+     * the responses that could not carry a header because they had already committed.
      *
-     * <p>Two things this method must never do, both learned the expensive way:
+     * <p>Two things this method must never do, both learned the expensive way: <b>throw</b> (it is
+     * called from a {@code finally}; an exception escaping there REPLACES the in-flight
+     * {@code serverError} and the 500 finding is lost), and <b>stop at recovering the count</b> (a
+     * recovered violation is only a FINDING once it is saved via {@link FuzzIO#saveWithMeta} →
+     * {@code StatusReporter.recordSaved} → {@code findInvariant}).
      *
-     * <ol>
-     *   <li><b>Throw.</b> It is called from a {@code finally}; an exception escaping there REPLACES
-     *       the in-flight {@code serverError} and the 500 finding is lost. Every failure is swallowed
-     *       and recorded as a miss.</li>
-     *   <li><b>Stop at recovering the count.</b> A recovered violation is only a FINDING once it is
-     *       saved via {@link FuzzIO#saveWithMeta} → {@code StatusReporter.recordSaved} →
-     *       {@code findInvariant}. Feeding the number to the cost model and saving nothing leaves the
-     *       campaign's reported count at ~0 — the original defect under a new name.</li>
-     * </ol>
+     * <p><b>DD-039: the body is one line per hop.</b> Explore stamps every hop of a redirect chain
+     * with one id and {@code ResultStore} accumulates them, so this sums invariant counts, sums heap
+     * and thread deltas, ORs the leak flags, and saves ONE {@code Invariant-Remote} record per
+     * BREACHING hop carrying {@code hop=<n>}. A single summed record reads "6 violations on
+     * POST /login" when 3 of them were the dashboard render — the multi-hop case this exists to
+     * capture is exactly the one a sum erases.
      *
-     * <p>The poll itself is never stamped with {@code X-Basquin-Req}: it is handled at the boundary's
-     * control branch, but a stamped poll would leave a stale id on a pooled connector thread and
-     * later publish some probe's metrics under a driver id — stale data served as fresh.
+     * <p><b>What {@code hop=<n>} means.</b> The position in the sequence returned by {@code take},
+     * which is publish order, which is hop order because the driver issues hops sequentially into
+     * one JVM. When a chain's hops were served by DIFFERENT replicas the sequence is the
+     * concatenation of each pod's list in poll order, so the index is a position in the recovered
+     * sequence rather than a proof of hop order. The count and the cost are unaffected.
      *
-     * <p><b>Which pod it asks</b> (§A.6). The store is per-JVM, so a poll through the Service VIP
-     * reaches the pod that holds the entry with probability 1/N and returns {@code miss} the rest of
-     * the time — a target that scales stops being measurable. {@link PodPollTargets} therefore hands
-     * back the pod addresses to try; each is asked in turn until one returns the entry. For a request
-     * answered without a redirect, a run-salted id plus remove-on-read means at most one pod can hold
-     * it, so asking several cannot return another pod's data — the worst a fan-out can do is find
-     * nothing, which is a recorded miss.
-     *
-     * <p><b>Known residual (multi-replica + followed redirect).</b> A followed same-method hop
-     * re-sends the same id, so on a multi-replica target two pods can hold entries under it at once
-     * and this loop returns whichever answers first in DNS order — which may be the wrong hop's
-     * measurement, marked {@code measured=true}. See {@link PodPollTargets} for the full statement;
-     * DD-039's per-hop ids remove the case.
+     * <p><b>Pod fan-out.</b> {@code hops <= 1}: at most one pod can hold the id, so the first
+     * well-formed answer is the whole answer and asking further pods is pure latency — DD-040's
+     * behaviour exactly. {@code hops > 1}: the Service VIP routes each hop's connection
+     * independently, so hop 0's list can sit on pod A and hop 1's on pod B; stopping at the first
+     * hit would return a plausible-looking, silently TRUNCATED result as {@code measured=true},
+     * which {@code reportMisses} cannot see. So every base is asked and the answers are merged.
      */
     static CostSample pollResult(String base, String reqId, String label) {
+        return pollResult(base, reqId, label, 1);
+    }
+
+    /** As above, for a chain of {@code hops} requests. A miss is COUNTED here. */
+    static CostSample pollResult(String base, String reqId, String label, int hops) {
+        CostSample s = pollResultOrNull(base, reqId, label, hops);
+        return s != null ? s : recordMiss();
+    }
+
+    /**
+     * The poll itself: the recovered sample, or {@code null} when nothing well-formed came back.
+     * Never throws and never counts a miss — the CALLER decides whether "nothing" is a miss or a
+     * fall-back to the header reading, which is what stops a forced multi-hop poll from converting a
+     * measured request into a miss (see {@link #reconcile}).
+     */
+    private static CostSample pollResultOrNull(String base, String reqId, String label, int hops) {
         List<String> pollBases = PodPollTargets.pollBases(base);
         // Pod addressing was demanded and DNS could not say where the pods are. Guessing via the VIP
         // would restore the 1-in-N lottery behind a poll that looks like it worked (§A.6).
-        if (pollBases.isEmpty()) return recordMiss();
-        String body = null;
-        String servedBy = null;
-        for (String pollBase : pollBases) {
+        if (pollBases.isEmpty()) return null;
+        List<String> bodies = new ArrayList<>();
+        List<String> servedBy = new ArrayList<>();
+        long p0 = System.nanoTime();       // DD-039: only the network fetch is subtracted from latMs,
+        for (String pollBase : pollBases) {                        // not the parse/save below
             String candidate = fetchResult(pollBase, reqId);
-            // '|' is the entry separator: anything without it is `miss` or garbage, and the next pod
-            // may still hold the real entry. Only a well-formed entry ends the search.
-            if (candidate != null && candidate.indexOf('|') >= 0) {
-                body = candidate;
-                servedBy = pollBases.size() > 1 ? pollBase : null;   // only meaningful when we chose
-                break;
+            // '|' is the field separator: anything without it is `miss` or garbage, and the next pod
+            // may still hold the real entry. Only a well-formed body counts as an answer.
+            if (candidate == null || candidate.isEmpty() || POLL_MISS.equals(candidate)
+                    || candidate.indexOf('|') < 0) {
+                continue;
+            }
+            bodies.add(candidate);
+            servedBy.add(pollBases.size() > 1 ? pollBase : null);   // only meaningful when we chose
+            if (hops <= 1) break;                                   // see the javadoc: one pod, one answer
+        }
+        lastPollMs += (System.nanoTime() - p0) / 1_000_000L;
+        if (bodies.isEmpty()) return null;
+
+        int totalCount = 0; long heapKb = 0; int threadDelta = 0; boolean anyLeak = false;
+        int hop = 0; int parsedLines = 0;
+        String leakPod = "";
+        List<String[]> breaching = new ArrayList<>();     // {hop, count, detail-or-null, podMeta}
+        for (int b = 0; b < bodies.size(); b++) {
+            String podMeta = servedBy.get(b) == null ? "" : "\npod=" + servedBy.get(b);
+            for (String line : bodies.get(b).split("\n")) {
+                if (line.isEmpty()) continue;
+                // 4-field limit: `detail` is app-derived and a version-skewed target could still emit
+                // a separator. The count and the cost come from fields the app cannot reach.
+                String[] f = line.split("\\|", 4);
+                if (f.length < 2) continue;              // a truncated tail line: discard, never shift
+                int count;
+                try { count = Integer.parseInt(f[1].trim()); }
+                catch (NumberFormatException e) { continue; }
+                parsedLines++;
+                totalCount += count;
+                String[] cost = f[0].split(",");
+                if (cost.length == 3) {
+                    try {
+                        heapKb += Long.parseLong(cost[1].trim());
+                        threadDelta += Integer.parseInt(cost[2].trim());
+                    } catch (NumberFormatException ignored) { }
+                }
+                if (f.length > 3 && "leak".equals(f[3].trim())) { anyLeak = true; leakPod = podMeta; }
+                if (count > 0) {
+                    String detail = f.length > 2 && !f[2].isEmpty() ? f[2] : null;
+                    breaching.add(new String[]{String.valueOf(hop), String.valueOf(count), detail, podMeta});
+                }
+                hop++;
             }
         }
-        // 4-field limit: `detail` is app-derived and may contain the separator.
-        String[] f = (body == null) ? new String[0] : body.split("\\|", 4);
-        if (body == null || body.isEmpty() || POLL_MISS.equals(body) || f.length < 2) {
-            return recordMiss();
-        }
-        int count;
-        try {
-            count = Integer.parseInt(f[1].trim());
-        } catch (NumberFormatException e) {
-            return recordMiss();   // an unparseable body is a miss; it is not a measured zero
-        }
-        long heapKb = 0; int threadDelta = 0;
-        String[] cost = f[0].split(",");
-        if (cost.length == 3) {
-            try { heapKb = Long.parseLong(cost[1].trim()); threadDelta = Integer.parseInt(cost[2].trim()); }
-            catch (NumberFormatException ignored) {}
-        }
-        String detail = f.length > 2 && !f[2].isEmpty() ? f[2] : null;
-        boolean leak = f.length > 3 && "leak".equals(f[3].trim());
-        // Which replica this finding came off, when there was more than one candidate. Task 7 checks
-        // the campaign's reported count against the target pods' own logs; without attribution a
-        // two-replica reconciliation is a guess.
-        String pod = servedBy == null ? "" : "\npod=" + servedBy;
+        if (parsedLines == 0) return null;   // an unparseable body is a miss; it is not a measured zero
+
         try {
             // The step that makes the campaign's number move. `label` is the RAW recipe (DD-036) —
             // never a substituted request line, which would write a live CSRF token to disk.
-            if (count > 0) {
+            for (String[] r : breaching) {
                 FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
-                        "route=" + label + "\ncount=" + count
-                                + (detail != null ? "\ndetail=" + detail : "") + pod);
+                        "route=" + label + "\ncount=" + r[1] + "\nhop=" + r[0]
+                                + (r[2] != null ? "\ndetail=" + r[2] : "") + r[3]);
             }
-            if (leak) {
+            if (anyLeak) {
                 FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Leak-Remote",
-                        "route=" + label + "\nleak=true" + pod);
+                        "route=" + label + "\nleak=true" + leakPod);
             }
         } catch (Throwable ignored) {
-            // Saving is best-effort against the finally contract above; the measurement still stands.
+            // Saving is best-effort against the never-throw contract above; the measurement stands.
         }
         reportMeasured++;
-        return new CostSample(heapKb, threadDelta, count, true);
+        // PR #96 Finding 2: a chain that FIRED `hops` requests but recovered FEWER hop lines is only
+        // PARTIALLY observed. On a multi-replica target a pod can time out during the fan-out and
+        // contribute nothing, so the summed count/cost is a LOWER BOUND — not a complete measurement,
+        // and left unmarked it is indistinguishable from "those hops were clean" and invisible to
+        // reportMisses. (A healthy chain publishes one line per hop, clean hops included, so
+        // parsedLines == hops there; single-replica cannot produce a partial body.) Mirror how a miss
+        // makes a run honest: raise the same findingsLowerBound signal via reportMisses, WITHOUT
+        // discarding the real partial measurement we did recover and save. Counting it toward BOTH
+        // measured and misses is deliberate — it keeps the recovered violations scored while never
+        // letting partials alone trip missesAreTheMajority into a spurious run failure.
+        if (parsedLines < hops) {
+            reportMisses++;
+            StatusReporter.recordReportMiss();
+        }
+        return new CostSample(heapKb, threadDelta, totalCount, true, hops);
     }
 
     /**
@@ -931,7 +1325,20 @@ public final class CoverageGuidedRun {
             if (is != null) {
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
                     String line;
-                    while ((line = br.readLine()) != null && sb.length() < 4096) sb.append(line);
+                    // DD-039: PRESERVE the '\n'. readLine() strips the terminator and the pre-DD-039
+                    // loop appended none back, so an accumulated N-hop body arrived as ONE
+                    // concatenated string and pollResult's split("\\|", 4) read hop 0's count and
+                    // silently discarded hops 1..N-1. One missing character was the difference
+                    // between closing DD-040's 189-violation gap and closing none of it.
+                    //
+                    // The cap is also checked AFTER the append now: checked before, it truncated the
+                    // body one line early. A tail line cut by the cap fails its own per-line parse
+                    // in pollResult and is discarded, which is the honest outcome.
+                    while ((line = br.readLine()) != null) {
+                        if (sb.length() > 0) sb.append('\n');
+                        sb.append(line);
+                        if (sb.length() >= POLL_BODY_MAX) break;
+                    }
                 }
             }
             return pc.getResponseCode() == 200 ? sb.toString().trim() : null;

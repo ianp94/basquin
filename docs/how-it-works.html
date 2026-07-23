@@ -225,6 +225,19 @@ POST /Edit.jsp page=${page}&amp;_editedtext=${wikitext} ${rev}&amp;ok=Save</code
     app confirming the write; a redirect to the login form is the app throwing it away. The counts
     land in the run summary as <code>redirects</code> and <code>redirectTargets</code>. See the
     <a href="benchmarks.html#redirects">benchmark page</a> for what that turned up on a real app.</p>
+  <p>Explore mode does the opposite — it <strong>follows redirects, because the interesting code is
+    usually behind the login the redirect leads to</strong> — but it stopped trusting the JDK to do
+    the following. A form login answers <code>POST /login</code> with a <code>302</code> and rotates
+    the session cookie <em>on that 302</em> (a session-fixation defence), and when the JDK follows a
+    redirect itself it drops the intermediate response's <code>Set-Cookie</code> <strong>and</strong>
+    the <code>Cookie</code> request header on the <code>POST</code>&rarr;<code>GET</code> rewrite — so
+    the page you land on renders logged out, and every write path behind that login is unreachable
+    while the run still looks fine. So explore now walks the chain a hop at a time, capturing a
+    rotated session off each hop and re-attaching the cookie (and the request's measurement id) to the
+    next one, so an authenticated write path is actually reached. A chain that never terminates — or
+    bounces <code>/protected&nbsp;&rarr;&nbsp;/login&nbsp;&rarr;&nbsp;/protected</code> — is itself a
+    <code>Redirect-Loop</code> finding rather than a 5th hop scored as a normal page, because an app
+    that redirects forever is unavailable, and availability is the oracle.</p>
 
   <h2>The decoupled dashboard</h2>
   <p>The web dashboard is a <strong>standalone process</strong> — never embedded in a driver, never

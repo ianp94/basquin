@@ -15,6 +15,7 @@ on:
       - 'gradle/**'
       - 'gradlew'
       - 'gradlew.bat'
+      - 'deploy/bench/**'
   pull_request:
     paths:
       - 'agent/**'
@@ -29,6 +30,7 @@ on:
       - 'gradle/**'
       - 'gradlew'
       - 'gradlew.bat'
+      - 'deploy/bench/**'
 
 jobs:
   build-and-test:
@@ -48,6 +50,15 @@ jobs:
         with:
           distribution: temurin
           java-version: ${{ matrix.java }}
+      # Pure-Python, no JDK needed, so these run before the Gradle steps. Four consecutive review
+      # rounds on a prior PR blocked on a hand-written benchmark number, and one misquote survived
+      # all four; check_claims.py fails if a coverage figure in prose disagrees with
+      # bench-results/campaigns.json. test_redact.py pins that credential redaction never touches a
+      # ${{ }} corpus recipe. A guard that only runs when someone remembers it will drift.
+      - name: Bench artifact drift guards
+        run: |
+          python3 deploy/bench/check_claims.py
+          python3 deploy/bench/test_redact.py
       - name: Gradle build
         uses: gradle/gradle-build-action@v3
       - name: Build

@@ -21,9 +21,9 @@ public class RequestBoundaryIdTest {
         RequestBoundary.stampRequestId("salt-7");           // glue stamps only after EXPLORE_BEGAN
         RequestBoundary.onExit(null);
 
-        ResultStore.Entry e = ResultStore.take("salt-7");
-        assertNotNull("the boundary must publish a result for a stamped explore request", e);
-        assertNotNull("cost is always available on an explore exit", e.costCsv());
+        java.util.List<ResultStore.Entry> hops = ResultStore.take("salt-7");
+        assertEquals("the boundary must publish a result for a stamped explore request", 1, hops.size());
+        assertNotNull("cost is always available on an explore exit", hops.get(0).costCsv());
     }
 
     @Test public void anUnstampedRequestPublishesNothingAndStillWorks() {
@@ -45,8 +45,9 @@ public class RequestBoundaryIdTest {
             try { Thread.sleep(5); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
             RequestBoundary.ExitResult r = RequestBoundary.onExit(null);
             assertNotNull("onExit must surface the violation", r.toThrow);
-            ResultStore.Entry e = ResultStore.take("salt-throw");
-            assertNotNull("...and STILL publish the entry", e);
+            java.util.List<ResultStore.Entry> hops = ResultStore.take("salt-throw");
+            assertEquals("...and STILL publish the entry", 1, hops.size());
+            ResultStore.Entry e = hops.get(0);
             assertTrue("the published entry must carry the violation, not an empty shell",
                     e.invariantCount() > 0);
             assertNotNull("and its detail", e.detail());
@@ -85,7 +86,9 @@ public class RequestBoundaryIdTest {
         RequestBoundary.onEnter("/app/page", null);
         RequestBoundary.stampRequestId("salt-first");
         RequestBoundary.onExit(null);
-        assertNotNull(ResultStore.take("salt-first"));
+        assertFalse("the explore path must publish at all — this is the property the whole DD-040 "
+                + "channel rests on, and assertNotNull on a never-null List asserts nothing",
+                ResultStore.take("salt-first").isEmpty());
 
         RequestBoundary.onEnter("/app/other", null);          // same thread, never stamped
         RequestBoundary.onExit(null);

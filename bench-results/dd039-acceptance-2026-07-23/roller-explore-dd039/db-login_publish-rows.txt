@@ -1,0 +1,19 @@
+# weblogentry rows written by login_publish DURING the campaign window
+# window: 2026-07-23T20:02:13Z -> 20:07:18Z; creator=basquin (authenticated); before DD-039 this was 0
+
+## count + distinctness (in-window by updatetime >= 20:02:13Z)
+ total | distinct_ids | distinct_anchors | creators |            min             |            max             
+-------+--------------+------------------+----------+----------------------------+----------------------------
+    84 |           84 |               84 |        1 | 2026-07-23 20:02:17.871+00 | 2026-07-23 20:07:10.056+00
+(1 row)
+
+## sample (title | anchor | status | creator)
+                           title                           |                     anchor                      |  status   | creator |         updatetime         
+-----------------------------------------------------------+-------------------------------------------------+-----------+---------+----------------------------
+ Fuzz 1784836936291xroller-explore-dd039-driver-n68l6x1-0  | fuzz-1784836936291xroller-explore-dd039-driver  | PUBLISHED | basquin | 2026-07-23 20:02:17.871+00
+ Fuzz 1784836936291xroller-explore-dd039-driver-n68l6x1-2  | fuzz-1784836936291xroller-explore-dd039-driver1 | PUBLISHED | basquin | 2026-07-23 20:02:20.649+00
+ Fuzz 1784836936291xroller-explore-dd039-driver-n68l6x1-6  | fuzz-1784836936291xroller-explore-dd039-driver2 | PUBLISHED | basquin | 2026-07-23 20:02:25.707+00
+ Fuzz 1784836936291xroller-explore-dd039-driver-n68l6x1-14 | fuzz-1784836936291xroller-explore-dd039-driver3 | PUBLISHED | basquin | 2026-07-23 20:02:36.641+00
+ Fuzz 1784836936291xroller-explore-dd039-driver-n68l6x1-16 | fuzz-1784836936291xroller-explore-dd039-driver4 | PUBLISHED | basquin | 2026-07-23 20:02:37.161+00
+(5 rows)
+

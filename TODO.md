@@ -670,11 +670,13 @@ theorized. Recorded here so the evidence isn't lost with the session that found 
       where the driver's own HTTP call threw (1307 of 7813 on JPetStore). Not yet split between the
       app, the driver, and the single-node cluster, so it currently can't be reported as a defect
       count. Saving the exception class alongside the input would settle it.
-- [ ] **DD-039 — session carry across redirects in explore mode.** Spring Security rotates the
+- [x] **DD-039 — session carry across redirects in explore mode.** Spring Security rotates the
       `JSESSIONID` **on the 302**, and `HttpURLConnection` only exposes the final hop's headers when
       it follows redirects itself, so the rotated cookie is unreachable and every later step runs
       anonymous. Blocks every form-login app, not just Roller. Spec:
-      `docs/superpowers/specs/2026-07-23-redirect-session-carry-design.md`.
+      `docs/superpowers/specs/2026-07-23-redirect-session-carry-design.md`. **Done** — all tasks
+      landed, Task-7 acceptance **PASSED** (84 `login_publish` DB rows; gap 189→48, 2.8%,
+      `bench-results/dd039-acceptance-2026-07-23/`); PR [#96](https://github.com/ianp94/basquin/pull/96).
 - [ ] **A request-header directive** (`>>Header: value`, the mirror of `<<name=header:`). Roller's
       AtomPub surface (`/roller-services/app/*`) is a complete authenticated write API guarded by
       HTTP Basic — no session, no CSRF, ideal for a corpus — and unreachable today because a route
@@ -794,6 +796,20 @@ touching the tip would have put it outside what was reviewed.
 - [ ] `FindingsLowerBound` is a plain `bool` while `ReportMisses` is a `*int32`. Latent with a
       matched-version driver, but the asymmetry means an omitted `findingsLowerBound` reads as
       `false` ("not a lower bound") rather than as absent — the defect class DD-040 exists to remove.
+
+### Follow-ups from PR #96 review (DD-039, approved with these outstanding)
+
+Two minor, non-blocking notes from the round-2 approval. Neither is a token-to-disk path — the
+blocking DD-036 leak (a captured token in a URL path segment reaching a Redirect-Loop finding) is
+fixed and closed as a class.
+
+- [ ] `redactBoundValues` over-redacts when a bound capture value is a single character (every
+      occurrence of that char in a URL becomes `<redacted>`). Safe direction, no leak — a min-length
+      guard (skip values under ~4 chars) keeps the finding readable.
+- [ ] `warnOnce("bad-location", …)` echoes the app's raw `Location` to stderr. App-reflected, not a
+      captured token, and stderr is not a finding file — noted for completeness.
+- [ ] Durable fix for #96 finding 3: wire `crossOriginRedirects` and `overflowedHops` into
+      `StatusReporter.snapshotJson` so a future acceptance run COMMITS them rather than inferring them.
 
 ### Future: DD-042 — a load-mode oracle (deferred, not scoped)
 

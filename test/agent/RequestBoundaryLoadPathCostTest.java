@@ -106,7 +106,8 @@ public class RequestBoundaryLoadPathCostTest {
             RequestBoundary.onExit(null);
             assertFalse("the explore exit must remove it — a stale id must not outlive its request",
                     hasRequestIdEntry());
-            assertNotNull("and the explore path must still publish", ResultStore.take("salt-probe"));
+            assertFalse("and the explore path must still publish",
+                    ResultStore.take("salt-probe").isEmpty());
         });
     }
 }

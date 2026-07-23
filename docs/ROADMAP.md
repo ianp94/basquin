@@ -26,8 +26,8 @@ Evidence: `bench-results/header-loss-2026-07-23/`, `bench-results/violation-logs
 
 | | What | State | Blocked by | Detail |
 |---|---|---|---|---|
-| **DD-040** | Trustworthy measurement — a reported zero means "checked and clean" | **in review** as [#94](https://github.com/ianp94/basquin/pull/94); all 7 tasks done, acceptance run recorded as **FAILED** with two documented residuals | — | [spec](superpowers/specs/2026-07-23-trustworthy-measurement-design.md) · [plan](superpowers/plans/2026-07-23-trustworthy-measurement.md) · [evidence](../bench-results/dd040-acceptance-2026-07-23/) |
-| **DD-039** | Multi-step exploration — session carry across redirects | specced; spec amended with **per-hop accumulation**, and it now owns DD-040's residuals | blocked on #94 | [spec](superpowers/specs/2026-07-23-redirect-session-carry-design.md) · [plan](superpowers/plans/2026-07-23-redirect-session-carry.md) |
+| **DD-040** | Trustworthy measurement — a reported zero means "checked and clean" | **merged** as [#94](https://github.com/ianp94/basquin/pull/94) (2026-07-23); all 7 tasks done, acceptance run recorded as **FAILED** with two documented residuals now owned by DD-039 | — | [spec](superpowers/specs/2026-07-23-trustworthy-measurement-design.md) · [plan](superpowers/plans/2026-07-23-trustworthy-measurement.md) · [evidence](../bench-results/dd040-acceptance-2026-07-23/) |
+| **DD-039** | Multi-step exploration — session carry across redirects | all tasks done; Task-7 acceptance **PASSED** (84 `login_publish` DB rows, gap 189→48/2.8%); **in review** as [#96](https://github.com/ianp94/basquin/pull/96) | — | [spec](superpowers/specs/2026-07-23-redirect-session-carry-design.md) · [plan](superpowers/plans/2026-07-23-redirect-session-carry.md) · [evidence](../bench-results/dd039-acceptance-2026-07-23/) |
 | **DD-041** | Clustered exploration across replicas | wanted, not specced | DD-040 | `TODO.md` |
 | **DD-042** | A load-mode concurrency oracle | designed, not specced | independent | `TODO.md` |
 
@@ -61,10 +61,11 @@ Evidence: `bench-results/header-loss-2026-07-23/`, `bench-results/violation-logs
 
 | PR | What | Waiting on |
 |---|---|---|
-| [#94](https://github.com/ianp94/basquin/pull/94) | DD-040 trustworthy measurement — per-request-id result store, honesty markers wired through | approver re-review, then human merge |
+| [#96](https://github.com/ianp94/basquin/pull/96) | DD-039 session carry across redirects — per-hop stamp+cookie, per-hop accumulation, redirect policy + loop findings | approver re-review, then human merge |
 
-PR [#93](https://github.com/ianp94/basquin/pull/93) (Roller bench target + generated benchmark page)
-merged on 2026-07-23 as `5655c46`.
+PR [#94](https://github.com/ianp94/basquin/pull/94) (DD-040 trustworthy measurement) merged on
+2026-07-23 as its own commit; PR [#93](https://github.com/ianp94/basquin/pull/93) (Roller bench
+target + generated benchmark page) merged on 2026-07-23 as `5655c46`.
 
 PR flow is in memory (`claude-reviews-every-pr`): bot PR → `@claude` review → address → label
 `ready-for-approver` → notify via `scripts/agent-bus/send`. **Only the human merges.**

@@ -178,6 +178,88 @@ and countable.
   There is no client-side sum compared against a per-request budget, and so no false-positive
   mechanism.
 
+### 4b. Per-hop measurement: the store ACCUMULATES, it does not overwrite
+
+Added after DD-040's acceptance run failed at **1,413 reported vs 1,602 logged (a gap of 189,
+11.8%)**, and after a plan review showed the obvious fix does not work.
+
+**Why the obvious fix fails.** DD-040 mints one `X-Basquin-Req` id per request, and
+`ResultStore.put` replaces by key. Stamping every hop with that same id therefore has each hop's
+`put` overwrite the previous one — a chain of N hops still yields exactly one entry, and the gap
+stays open. "Stamp every hop" is necessary and not sufficient.
+
+**What ships instead.** `ResultStore` accumulates hops under one id:
+
+- `put(id, entry)` **appends** to that id's hop list rather than replacing, bounded by the same hop
+  cap the follow loop enforces (5), with `detail` capped per hop as today.
+- `take(id)` returns **all** hops and removes the id — still exactly one remove-on-read, so the
+  double-count hazard that per-hop ids would create never arises.
+- The driver sums invariant counts across the returned hops, sums heap and thread deltas, and saves
+  **one `Invariant-Remote` record per breaching hop** (§4), each carrying its `hop=<n>`.
+- **`hop=<n>` is the driver-assigned position in the sequence `take` returns.** The target cannot
+  supply it: `Entry` has no hop field, and a JVM serving one hop of a chain has no idea which hop it
+  was. Caveat honestly in the record — with multiple replicas the merge order across pods is the
+  order the driver polled them, so `n` is a stable label for correlating a finding to its detail,
+  not a guarantee of on-the-wire sequence.
+- **`format` must sanitise newlines as well as pipes.** `detail` is app-derived, and a `\n` in it
+  would forge an extra hop line in the multi-line wire format — inventing a hop that never ran. That
+  is a *fabricated* measurement rather than a lost one, which is worse.
+- **When `hops > 1` the driver must ask EVERY pod base and merge**, not stop at the first that
+  answers. DD-040's fan-out breaks at the first pod returning an entry, which is correct only while
+  at most one pod can hold an id — but a redirect chain may have been served by different replicas
+  behind the Service, each holding part of the same id's story. Break-at-first is retained for
+  `hops <= 1`, where the original assumption still holds.
+
+This is better than the per-hop-id alternative on three counts, and those are the reasons to prefer
+it rather than an aesthetic preference:
+
+1. **One poll per input, not N.** A poll is an extra HTTP round trip on the explore hot path, and
+   per-hop polling would inflate `latMs` — which is a cost-model input, so it would distort corpus
+   ranking (the thing DD-040 was trying to repair).
+2. **No double-count question — *provided the driver reconciles at ONE point*.** The original
+   wording claimed this followed from having one id and one `take`. **That is false**, and the
+   correction is the important one: `CoverageGuidedRun` saves the header's finding via
+   `saveWithMeta` the instant it reads the header, so clearing `headerReported` afterwards cannot
+   un-save it, and a headered hop would be recorded twice. The property belongs to the **driver's
+   code**, not to the store's arity: there must be exactly one reconciliation point at which a
+   request's hops become findings, and nothing may be saved before it. **This is a structural change
+   to `request()`, not a flag reorder (spike-confirmed):** the `saveWithMeta` call must be *removed*
+   from the header-read site entirely and moved into the single reconcile step, because clearing a
+   flag cannot un-save what already ran.
+3. **It matches the semantics we actually want.** One input has one cost. A redirect chain is one
+   input's work spread over several server-side iterations, not several inputs.
+
+**The header fast path is only valid for a single-hop request.** `exitHeaders` can only ever
+describe the hop that produced the response the client received. Under this design the driver runs
+the follow loop itself, so **it knows its own hop count** — and the rule is exact rather than
+heuristic:
+
+> One hop → the cost header is complete, use it. More than one hop → **poll and MERGE** with
+> whatever the final hop's header reported.
+
+"Poll and *replace*" would be wrong. A forced poll that misses discards a perfectly good final-hop
+header reading and records a miss instead — and on a redirect-heavy target that inflates
+`reportMisses` far enough to trip the majority-miss rule and `System.exit(3)` the run. The header is
+never *wrong*; it is merely incomplete, describing only the last hop.
+
+**How to merge — verified by spike.** "De-duplicate on hop identity" is not implementable: `Entry`
+has no hop identity, and an uncommitted final hop is described by *both* its cost header **and** its
+own store entry (the boundary publishes to the store unconditionally), so the header is always a
+**subset** of what the store holds. The rule is therefore a preference, not a set union: **take the
+polled hop set; fall back to the final hop's header only when the poll returns no hops at all.** And
+**the measured/miss decision is made inside reconcile, once** — if `pollResult` records a miss and
+reconcile then falls back to the header and records measured, both counters tick for one request
+(spike-found). The spike's `reconcile()` does exactly this and counts both hops of the motivating
+POST→302→GET case: 2, not 1, and not 3.
+
+That closes DD-040's residual precisely: the case that leaked (POST → 302 → GET) is by definition a
+multi-hop request, so it always polls, and the poll now returns both hops.
+
+**Acceptance.** Reported violations must come within a small tolerance of the target pod's
+`[Basquin][Invariant]` count for the same window. The 189 must substantially close, and the plan's
+tests must be able to detect it if it does not — a unit test asserting only that a poll returned
+*something* would pass while the gap persisted.
+
 ### 5. Capture semantics across hops
 
 Captures (DD-036/037) run against the **final** hop's body, unchanged. A token rendered on the page

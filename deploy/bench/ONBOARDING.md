@@ -191,6 +191,21 @@ Read them together:
 - **The driver reported more** — you are double-counting; the header path and the result-store poll
   are alternatives, never a sum.
 
+### The redirect cross-origin trap (DD-039) — check `crossOriginRedirects`
+
+Explore follows redirects itself now and carries the session across them, so a login POST that rotates
+its session reaches the authenticated page behind the `302`. That only holds when the app's redirect
+`Location`s are **same-origin with the Service DNS name the driver dials** — the follow refuses to
+leave the target's scheme/host/port, so a fuzzed open redirect cannot turn the explorer into a client
+for another host. Many frameworks render redirects from a **configured absolute base URL** (Roller's
+`site.absoluteurl`, and similar `baseURL`-style settings elsewhere); if that value differs from the
+in-cluster Service host, **every** redirect is cross-origin, the follow refuses all of them, and DD-039
+degrades silently to its pre-DD-039 behaviour — coverage stays flat behind the login and nothing in the
+run says why. The tell is **`crossOriginRedirects` in the driver summary**: a count anywhere near the
+iteration count means the app's base-URL setting, not the app's code, is the wall. (Checked: the bench
+Roller is safe — `deploy/bench/roller/setup.sh` seeds `site.absoluteurl` empty, so Roller derives it
+from the request. Seed any new target's absolute-URL setting empty, or set it to the Service DNS name.)
+
 ## 7. Corpus arms A and A′
 
 - **A (happy path)** — the routes a k6/Gatling user would script by hand (e.g. the catalog GETs).
@@ -235,4 +250,5 @@ generator, not boundary state. See [`BENCHMARKS.md`](../../docs/BENCHMARKS.md) f
 - [ ] Readiness probe path has **no query string**.
 - [ ] Collect from the driver **termination summary**; `iters` is not the load metric.
 - [ ] After every explore campaign, reconcile the reported violation count against the target pod's `[Basquin][Invariant]` line count — a large gap means the reporting channel is broken, not that the app is clean.
+- [ ] Explore target's absolute-URL setting empty (or set to the Service DNS name) — a *configured* absolute base URL makes every redirect cross-origin and silently degrades DD-039's session carry; watch `crossOriginRedirects` in the summary.
 - [ ] Fresh target restart between arms; reset any filesystem store the app writes.

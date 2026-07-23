@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -63,6 +64,12 @@ public final class LoadRun {
         final AtomicLong serverError = new AtomicLong(); // 5xx responses (DD-029)
         final AtomicLong captureMisses = new AtomicLong(); // DD-036: a ${{name}} ref whose capture never bound
         final AtomicLong clientErrors = new AtomicLong(); // 4xx responses (DD-036)
+        final AtomicLong redirects = new AtomicLong(); // 3xx responses (DD-038: no longer auto-followed)
+        // DD-038: Location classification -> count, bounded to a top-12-by-count report so a fuzzed
+        // Location can't grow this map unboundedly; self-redirects fold to "self" (normalizeLocation)
+        // so a SUCCESS 302 (e.g. JSPWiki's own save-then-redirect) can't evict the real rejects.
+        final java.util.concurrent.ConcurrentHashMap<String, LongAdder> redirectTargets =
+                new java.util.concurrent.ConcurrentHashMap<>();
         final java.util.concurrent.atomic.AtomicReference<Drift> baselineDrift = new java.util.concurrent.atomic.AtomicReference<>();
         final java.util.concurrent.atomic.AtomicBoolean baselined = new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -123,15 +130,22 @@ public final class LoadRun {
                         if (System.nanoTime() >= deadlineNanos) break;
                         RequestLine toFire = step;
                         if (correlated && step.needsSubstitution()) {
-                            String b = substitute(step.body(), bindings);
-                            if (b == null) {
+                            // DD-038: a generator marker (e.g. @nonce) is usually authored in the
+                            // query, not the body — substitute the FULL request line. path is never
+                            // null (RequestLine.parseCore always sets "" or a substring); body IS
+                            // null when the step has none, so it's guarded and left null rather than
+                            // passed through substitute() (which would NPE on a null CharSequence).
+                            String p = substitute(step.path(), bindings);
+                            String b = (step.body() == null) ? null : substitute(step.body(), bindings);
+                            if (p == null || (step.body() != null && b == null)) {
                                 if (System.nanoTime() >= measureFromNanos) captureMisses.incrementAndGet();
                                 continue; // skip this step: a required prior capture never bound
                             }
-                            toFire = new RequestLine(step.method(), step.path(), b, step.captures());
+                            toFire = new RequestLine(step.method(), p, b, step.captures());
                         }
                         long t0 = System.nanoTime();
-                        int code = fire(baseUrl, toFire, jar, bindings);
+                        FireResult fr = fireR(baseUrl, toFire, jar, bindings);
+                        int code = fr.code();
                         long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
                         if (System.nanoTime() < measureFromNanos) {
                             continue; // warmup: don't record
@@ -144,6 +158,27 @@ public final class LoadRun {
                         requests.incrementAndGet();
                         if (code >= 500) serverError.incrementAndGet();
                         else if (code >= 400 && code < 500) clientErrors.incrementAndGet();
+                        else if (code >= 300 && code < 400) {
+                            // DD-038: classify the redirect target so a REJECTED write (e.g. JSPWiki's
+                            // SessionExpired/PageModified) is visible in the summary instead of vanishing
+                            // (no longer auto-followed to a final 200 — see fireR).
+                            redirects.incrementAndGet();
+                            // BOTH the path/query and the body are consulted for the request's own
+                            // page=: a step can carry it in either (jspwiki's edit_save is
+                            // body-leading `page=…`, but `POST /Edit.jsp?page=X` with an unrelated
+                            // body is just as valid). Checking only one leaves reqPage null for the
+                            // other shape → the self-fold never fires → routine SUCCESS 302s eat the
+                            // 12 slots and push the real rejects into "other" (F1).
+                            String reqPage = paramValue(toFire.path(), "page");
+                            if (reqPage == null && toFire.body() != null) reqPage = paramValue(toFire.body(), "page");
+                            String key = normalizeLocation(fr.location(), reqPage);
+                            LongAdder a = redirectTargets.get(key);
+                            if (a == null) {
+                                key = admitKey(redirectTargets, key);
+                                a = redirectTargets.computeIfAbsent(key, k -> new LongAdder());
+                            }
+                            a.increment();
+                        }
                         if (latencyMaxMs > 0 && elapsedMs > latencyMaxMs) {
                             latencyViol.incrementAndGet();
                         }
@@ -192,11 +227,21 @@ public final class LoadRun {
                 fin.heapDriftKb, fin.threadDrift, fin.serverErrors, fin.requests, driftUnavailable);
         setTargetMode(baseUrl, "explore", 0);
 
+        // DD-038: top-12-by-count view of redirectTargets for the summary (the live map itself stays
+        // unbounded-by-count-but-capped-by-distinct-keys at 12 — see the worker's "other" fallback).
+        java.util.Map<String, Long> redirectTargetsTop12 = redirectTargets.entrySet().stream()
+                .sorted((e1, e2) -> Long.compare(e2.getValue().sum(), e1.getValue().sum()))
+                .limit(REDIRECT_TARGETS_CAP)
+                .collect(java.util.stream.Collectors.toMap(
+                        java.util.Map.Entry::getKey, e -> e.getValue().sum(),
+                        (x, y) -> x, java.util.LinkedHashMap::new));
+
         String json = summaryJson(total, total / measuredSec,
                 percentile(hist, total, 0.50), percentile(hist, total, 0.90),
                 percentile(hist, total, 0.99), maxBucket(hist),
                 drift, serverError.get(), latencyViol.get(),
-                captureMisses.get(), clientErrors.get(), driftUnavailable);
+                captureMisses.get(), clientErrors.get(), driftUnavailable,
+                redirects.get(), redirectTargetsTop12);
 
         System.out.println("[Basquin] load done: " + json);
         String summaryOut = System.getProperty("basquin.summary.out");
@@ -215,20 +260,34 @@ public final class LoadRun {
      * (even a real flat heap prints {@code heapDriftKb:0}, so silently defaulting to it here would be
      * indistinguishable from that). When false, heap/thread print as-is (a value may legitimately be
      * ≤ 0, e.g. a heap that shrank) and no {@code driftUnavailable} key appears.
+     *
+     * <p>DD-038: {@code redirects} is the 3xx count (no longer auto-followed, see {@link #fireR}) and
+     * {@code redirectTargets} is a top-12-by-count {@code Location} classification (see
+     * {@link #normalizeLocation}) so a rejected write (e.g. a session-expired save) is visible instead
+     * of vanishing into a followed 200. Keys are already {@link #safeKey}-restricted to
+     * {@code [A-Za-z0-9._-]} by the caller, so they're emitted verbatim with no further JSON escaping.
      */
     static String summaryJson(long total, double rps, int p50, int p90, int p99, int max, DriftDelta drift,
-            long serverErr, long latViol, long captureMisses, long clientErrors, boolean driftUnavailable) {
+            long serverErr, long latViol, long captureMisses, long clientErrors, boolean driftUnavailable,
+            long redirects, java.util.Map<String, Long> redirectTargets) {
         String driftJson = driftUnavailable
                 ? "\"driftUnavailable\":true"
                 : "\"heapDriftKb\":" + drift.heapDriftKb + ",\"threadDrift\":" + drift.threadDrift;
+        StringBuilder rt = new StringBuilder();
+        for (java.util.Map.Entry<String, Long> e : redirectTargets.entrySet()) {
+            if (rt.length() > 0) rt.append(',');
+            rt.append('"').append(e.getKey()).append("\":").append(e.getValue());
+        }
         return String.format(java.util.Locale.ROOT,
                 "{\"load\":{\"requests\":%d,\"throughputRps\":\"%.1f\","
               + "\"latencyMs\":{\"p50\":%d,\"p90\":%d,\"p99\":%d,\"max\":%d},"
               + "%s,\"serverErrors\":%d,\"captureMisses\":%d,\"clientErrors\":%d,"
+              + "\"redirects\":%d,\"redirectTargets\":{%s},"
               // Only latency is threshold-gated in this first cut; heap/thread are reported as drift
               // above, not as violation counts (see LoadViolations godoc / DD-026 deferred items).
               + "\"violations\":{\"latency\":%d,\"heap\":0,\"thread\":0}}}",
-                total, rps, p50, p90, p99, max, driftJson, serverErr, captureMisses, clientErrors, latViol);
+                total, rps, p50, p90, p99, max, driftJson, serverErr, captureMisses, clientErrors,
+                redirects, rt, latViol);
     }
 
     /**
@@ -241,9 +300,13 @@ public final class LoadRun {
      * JSESSIONID} in practice): it's read to build the request's {@code Cookie} header and written from
      * the response's {@code Set-Cookie}, so a sequence's later steps see the session its earlier steps
      * established.
+     *
+     * <p>DD-038: test-facing convenience wrapper — no production caller remains (the worker calls
+     * {@link #fireR}, which also yields the {@code Location}). Kept because Java can't overload on
+     * return type and it leaves {@code LoadFireTest}'s status-only assertions untouched.
      */
     static int fire(String base, RequestLine step, java.util.Map<String, String> jar) {
-        return fire(base, step, jar, null);
+        return fireR(base, step, jar, null).code();
     }
 
     /**
@@ -253,20 +316,59 @@ public final class LoadRun {
      * still be keep-alive'd — and runs {@link Capture#extract} against it, recording a new binding on
      * success. Review fix (single-count captureMisses): a failed extraction does NOT increment any
      * miss counter here — see the capture branch below for why.
+     *
+     * <p>DD-038: likewise a test-facing convenience wrapper — no production caller remains; the worker
+     * calls {@link #fireR} directly for the {@code Location}.
      */
     static int fire(String base, RequestLine step, java.util.Map<String, String> jar,
+            java.util.Map<String, String> bindings) {
+        return fireR(base, step, jar, bindings).code();
+    }
+
+    /**
+     * DD-038 Task 3: a fired request's HTTP status plus the raw {@code Location} header value.
+     * {@code location} is {@code null} for any non-redirect status and on the {@code -1}
+     * transport-failure path — and ALSO on the exception path when the status itself was a 3xx: if
+     * the body read throws (e.g. a read timeout on a 302), {@code fireR}'s catch block recovers the
+     * real {@code code} from the connection but returns no {@code Location}. So a 3xx {@code code}
+     * with a {@code null} {@code location} is reachable, and callers must treat it as unclassifiable
+     * ({@link #normalizeLocation} maps it to {@code "?"}) rather than impossible.
+     */
+    record FireResult(int code, String location) {}
+
+    /**
+     * Fire one request — method, body, and session-aware (Task 3) — drain the response, and return the
+     * HTTP status (or -1 on a transport error) plus its {@code Location} header when 3xx. A status ≥
+     * 500 is a server error — the availability signal load mode DOES want (DD-029; the old "measures
+     * behavior, not crashes" swallow is why 5xx were invisible).
+     *
+     * <p>{@code jar} is a per-worker session cookie store, keyed by cookie name (just {@code
+     * JSESSIONID} in practice): it's read to build the request's {@code Cookie} header and written from
+     * the response's {@code Set-Cookie}, so a sequence's later steps see the session its earlier steps
+     * established.
+     *
+     * <p>DD-038: redirects are NOT auto-followed ({@code setInstanceFollowRedirects(false)}) — a save's
+     * 302 is a REJECTED-write signal (e.g. JSPWiki's {@code SessionExpired}/{@code PageModified}) that
+     * must be classified by the caller (see {@link #normalizeLocation}), not silently followed into a
+     * final 200 where it's indistinguishable from a normal request.
+     *
+     * <p>Same body as the pre-DD-038 4-arg {@code fire} (still holds the DD-037 capture-into-bindings
+     * branch, the retain-≤{@link #CAPTURE_MAX_BYTES} drain-to-EOF, and {@link #captureSessionCookie}) —
+     * only the follow-redirects flag, the added {@code Location} read, and the two return sites changed.
+     */
+    static FireResult fireR(String base, RequestLine step, java.util.Map<String, String> jar,
             java.util.Map<String, String> bindings) {
         HttpURLConnection c = null;
         try {
             c = (HttpURLConnection) new URL(base + step.path()).openConnection();
             c.setConnectTimeout(5000);
             c.setReadTimeout(MAX_MS);
-            c.setInstanceFollowRedirects(true);
+            c.setInstanceFollowRedirects(false);
             try {
                 c.setRequestMethod(step.method());
             } catch (java.net.ProtocolException pe) {
                 System.err.println("[Basquin] load: unsupported HTTP method " + step.method() + " for " + step.path() + "; not sent");
-                return -1;   // fail loud: do NOT fall through to a silent GET
+                return new FireResult(-1, null);   // fail loud: do NOT fall through to a silent GET
             }
             byte[] bodyBytes = null;
             if (step.body() != null) {
@@ -289,6 +391,7 @@ public final class LoadRun {
             }
             int code = c.getResponseCode();
             captureSessionCookie(c, jar);
+            String loc = (code >= 300 && code < 400) ? c.getHeaderField("Location") : null;
             if (step.captures().isEmpty() || bindings == null) {
                 try (java.io.InputStream in = c.getInputStream()) {
                     byte[] buf = new byte[8192];
@@ -320,7 +423,7 @@ public final class LoadRun {
                     if (val != null) bindings.put(cap.name(), val);
                 }
             }
-            return code;
+            return new FireResult(code, loc);
         } catch (Exception ignored) {
             int code = -1;
             if (c != null) {
@@ -330,17 +433,106 @@ public final class LoadRun {
                     if (err != null) { byte[] b = new byte[8192]; while (err.read(b) != -1) {} }
                 } catch (Exception ignored2) { /* drain error stream too, for keep-alive */ }
             }
-            return code;
+            return new FireResult(code, null);
         }
     }
 
+    private static final int LOC_KEY_MAX = 64;
+
+    /** DD-038: hard bound on distinct {@code redirectTargets} keys (see {@link #admitKey}). */
+    static final int REDIRECT_TARGETS_CAP = 12;
+
+    /**
+     * DD-038 admission decision for {@code redirectTargets}: return {@code key} if it may take (or
+     * already holds) a slot, else the reserved overflow key {@code "other"}. A key ALREADY in the map
+     * is always admitted even when the map is full — diverting it to {@code "other"} would fragment
+     * its count across two buckets. Only a NEW key on a full map overflows, which is what keeps a
+     * fuzzed/reflected {@code Location} from growing the map (and the ~4 KB termination-message
+     * summary) without bound. Best-effort under concurrency: a benign overshoot ≤ worker-count is
+     * fine in-memory, since the summary emits only the top-N anyway.
+     */
+    static String admitKey(java.util.Map<String, LongAdder> targets, String key) {
+        return (targets.containsKey(key) || targets.size() < REDIRECT_TARGETS_CAP) ? key : "other";
+    }
+
+    /**
+     * Classify a redirect's {@code Location} into a short, JSON-safe key for the summary's
+     * {@code redirectTargets} counter (DD-038). A {@code page=} param wins (JSPWiki's own idiom); a
+     * {@code Location} whose {@code page} equals the firing request's own page (F1: e.g. a normal
+     * save's own success redirect back to the page it just saved) folds to {@code "self"} so a routine
+     * SUCCESS 302 can't evict the real rejects (a different page, e.g. {@code SessionExpired}) from the
+     * bounded top-12 map. Otherwise falls back to the last path segment (query/fragment stripped).
+     * {@code null}/empty location (the {@code -1} transport-failure path never reaches here anyway,
+     * since the worker only classifies {@code code} in {@code [300,400)}) returns {@code "?"}.
+     */
+    static String normalizeLocation(String location, String requestPage) {
+        if (location == null || location.isEmpty()) return "?";
+        String page = paramValue(location, "page");                    // (^|[?&])page= match
+        String key;
+        if (page != null) {
+            key = (requestPage != null && requestPage.equals(page)) ? "self" : page;   // F1 self-fold
+        } else {
+            int q = location.indexOf('?'); int h = location.indexOf('#');
+            String noQuery = location.substring(0, minPos(location.length(), q, h));
+            int slash = noQuery.lastIndexOf('/');
+            key = slash >= 0 ? noQuery.substring(slash + 1) : noQuery;
+            if (key.isEmpty()) key = "?";
+        }
+        if (key.length() > LOC_KEY_MAX) key = key.substring(0, LOC_KEY_MAX);
+        return safeKey(key);                                            // charset-restrict for JSON (N3)
+    }
+
+    /**
+     * The only name any production caller asks for is {@code page} (the worker's 3xx path calls
+     * {@code paramValue} twice per redirect, in the loop that sets the driver's throughput ceiling),
+     * so it is compiled once instead of per call.
+     */
+    private static final Pattern PAGE_PARAM = Pattern.compile("(^|[?&])page=([^&#]*)");
+
+    /** (^|[?&])<name>=<value up to & or #>, exact-boundary so frompage= doesn't false-match. */
+    static String paramValue(String s, String name) {
+        java.util.regex.Matcher m = ("page".equals(name) ? PAGE_PARAM
+                : Pattern.compile("(^|[?&])" + Pattern.quote(name) + "=([^&#]*)")).matcher(s);
+        return m.find() ? m.group(2) : null;
+    }
+
+    private static int minPos(int len, int... ps) { int r = len; for (int p : ps) if (p >= 0 && p < r) r = p; return r; }
+
+    /** Restrict to a JSON-safe, budget-safe charset so a fuzzed Location can't void the summary (N3). */
+    static String safeKey(String k) {
+        StringBuilder b = new StringBuilder(k.length());
+        for (int i = 0; i < k.length(); i++) { char c = k.charAt(i);
+            b.append((c=='.'||c=='_'||c=='-'|| (c>='A'&&c<='Z')||(c>='a'&&c<='z')||(c>='0'&&c<='9')) ? c : '_'); }
+        return b.length() == 0 ? "?" : b.toString();
+    }
+
     private static final Pattern CORRELATION_REF_PATTERN = Pattern.compile("\\$\\{\\{([^}]+)\\}\\}");
+
+    // DD-038: a per-fire unique payload token. RUN_SALT is per-process; NONCE is the within-run counter.
+    // millis+pid alone is NOT enough here: the driver runs as a Kubernetes Job, and under a container's
+    // own PID namespace every driver's main process is renumbered from a small integer (commonly 1), so
+    // two pods started in the same millisecond — a parallel Job, or two campaigns off one controller
+    // tick — would share a salt and re-emit the same token stream, reviving the very saveText() no-op
+    // this feature exists to kill. HOSTNAME is the pod name in Kubernetes (DD-013), which makes the
+    // salt unique per POD, not merely per host-process; it falls back to pid when unset (local runs).
+    static final String RUN_SALT = buildRunSalt(System.getenv("HOSTNAME"), System.currentTimeMillis(),
+            ProcessHandle.current().pid());
+
+    /** Package-private + pure so the salt's collision-resistance is testable without spawning pods. */
+    static String buildRunSalt(String hostname, long millis, long pid) {
+        String node = (hostname == null || hostname.isBlank()) ? Long.toString(pid) : safeKey(hostname);
+        return Long.toString(millis) + "x" + node + "x" + Long.toString(pid);
+    }
+
+    static final java.util.concurrent.atomic.AtomicLong NONCE = new java.util.concurrent.atomic.AtomicLong();
 
     /**
      * Replaces each {@code ${{name}}} reference in {@code body} with the (already URL-encoded) value
      * bound to {@code name} in {@code bindings}. Returns null if ANY referenced name is missing a
      * binding — the worker loop treats a null return as "skip firing this step" (a required prior
-     * capture never bound).
+     * capture never bound). The special ref {@code ${{@nonce}}} (DD-038) is never looked up in
+     * {@code bindings} — it's generated fresh every call from {@link #RUN_SALT}/{@link #NONCE}, so it
+     * NEVER causes a null return, unlike every other (real, captured) ref.
      */
     static String substitute(String body, java.util.Map<String, String> bindings) {
         Matcher m = CORRELATION_REF_PATTERN.matcher(body);
@@ -348,10 +540,14 @@ public final class LoadRun {
         int last = 0;
         while (m.find()) {
             String name = m.group(1);
-            String value = bindings == null ? null : bindings.get(name);
-            if (value == null) return null;
             out.append(body, last, m.start());
-            out.append(value);   // bindings already hold the URL-encoded, body-ready text (DD-037 model A)
+            if (name.equals("@nonce")) {
+                out.append(RUN_SALT).append('-').append(NONCE.getAndIncrement());
+            } else {
+                String value = bindings == null ? null : bindings.get(name);
+                if (value == null) return null;
+                out.append(value);   // bindings already hold the URL-encoded, body-ready text (DD-037 model A)
+            }
             last = m.end();
         }
         out.append(body, last, body.length());
@@ -507,23 +703,30 @@ public final class LoadRun {
     private static final java.util.concurrent.atomic.AtomicBoolean CORRELATION_LINT_WARNED =
             new java.util.concurrent.atomic.AtomicBoolean(false);
 
-    /** Walks {@code steps} in order, accumulating names captured so far; for each step's body, flags any
-     *  {@code ${{name}}} reference whose name was not captured by a STRICTLY EARLIER step. Logs at most
-     *  one warning line for the whole run (not per sequence). Never throws — lint only. */
+    /** Walks {@code steps} in order, accumulating names captured so far; for each step's path AND body,
+     *  flags any {@code ${{name}}} reference whose name was not captured by a STRICTLY EARLIER step.
+     *  Logs at most one warning line for the whole run (not per sequence). Never throws — lint only.
+     *  DD-038: {@code ${{@nonce}}} is exempt — it's self-filling every fire (Task 1), never a
+     *  captured-value reference, so it has no preceding capture to require and must not trip this. */
     private static void lintCorrelationOrdering(List<RequestLine> steps) {
         java.util.Set<String> capturedSoFar = new java.util.HashSet<>();
         for (RequestLine step : steps) {
-            if (step.body() != null) {
-                Matcher m = CORRELATION_REF_PATTERN.matcher(step.body());
-                while (m.find()) {
-                    String name = m.group(1);
-                    if (!capturedSoFar.contains(name) && CORRELATION_LINT_WARNED.compareAndSet(false, true)) {
-                        System.err.println("[Basquin] load: correlation ref ${{" + name + "}} has no preceding <<"
-                                + name + "= capture in a sequence; it will never bind");
-                    }
-                }
-            }
+            lintRefs(step.path(), capturedSoFar);
+            lintRefs(step.body(), capturedSoFar);
             for (Capture cap : step.captures()) capturedSoFar.add(cap.name());
+        }
+    }
+
+    private static void lintRefs(String text, java.util.Set<String> capturedSoFar) {
+        if (text == null) return;
+        Matcher m = CORRELATION_REF_PATTERN.matcher(text);
+        while (m.find()) {
+            String name = m.group(1);
+            if (name.equals("@nonce")) continue;   // self-filling; never a captured-value reference
+            if (!capturedSoFar.contains(name) && CORRELATION_LINT_WARNED.compareAndSet(false, true)) {
+                System.err.println("[Basquin] load: correlation ref ${{" + name + "}} has no preceding <<"
+                        + name + "= capture in a sequence; it will never bind");
+            }
         }
     }
 

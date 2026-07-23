@@ -10,6 +10,10 @@
 $page     = @../corpus/jspwiki/values/pages.txt | ~Page[0-9]{1,2} | Main | SandBox | <empty> | <string>
 $query    = @../corpus/jspwiki/values/queries.txt | ~[a-z]{3,9} | <empty> | <long>
 $wikitext = ~[a-z ]{20,120} | <string>
+# DD-038: a per-FIRE unique token. Appended to the saved text so every replayed save is a
+# REAL change — JSPWiki's saveText() no-ops (and silently costs nothing) when the submitted
+# text equals the page's current text, which makes a fixed-corpus write replay idempotent.
+$rev      = <nonce>
 
 # ---- View / render (cheap when warm) ----
 /
@@ -40,5 +44,5 @@ $wikitext = ~[a-z ]{20,120} | <string>
 # (Field names verified live + against templates/210/editors/plain.jsp; root cause in the DD-037 spec.)
 @sequence edit_save
   /Edit.jsp?page=${page} <<csrf=input:X-XSRF-TOKEN <<spam=inputpair:[a-z]{6}=-?[0-9]+
-  POST /Edit.jsp page=${page}&action=save&X-XSRF-TOKEN=${{csrf}}&${{spam}}&_editedtext=${wikitext}&ok=Save
+  POST /Edit.jsp page=${page}&action=save&X-XSRF-TOKEN=${{csrf}}&${{spam}}&_editedtext=${wikitext} ${rev}&ok=Save
   /Wiki.jsp?page=${page}

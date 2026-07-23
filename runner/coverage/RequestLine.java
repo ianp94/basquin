@@ -18,7 +18,7 @@ public record RequestLine(String method, String path, String body, List<Capture>
     }
 
     public boolean needsSubstitution() {
-        return body != null && body.contains("${{");
+        return (body != null && body.contains("${{")) || (path != null && path.contains("${{"));
     }
 
     public static RequestLine parse(String step) {

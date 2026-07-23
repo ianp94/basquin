@@ -286,3 +286,21 @@ form-input pair, for randomized-name anti-CSRF/spam fields like JSPWiki's SpamFi
 step carry more than one capture, so a single response can bind several downstream references. Both are
 backward-compatible with v1/v2/v3. See DD-037 in [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) for the full
 record.
+
+## 12. Non-idempotent write replay + redirect classification (DD-038)
+
+Correlated writes (DD-036/037) exposed a further honesty gap: a load corpus replays a **fixed** request
+body, so a change-detecting app (JSPWiki's `saveText` short-circuits an identical write) no-ops every
+save after the first, and the write-path cost the benchmark exists to measure disappears. A new
+`<nonce>` grammar generator closes this — the author writes `$rev = <nonce>` and references `${rev}`; at
+fire time the runner splices a per-fire unique token, so every replayed write is a genuine change.
+Substitution (previously body-only) now covers the **full request line — path and body**, null-safe, so
+a nonce also works in a URL query.
+
+Load mode also stops auto-following redirects, so it measures the server's direct response instead of a
+followed `200`. Each `3xx` response is classified by its `Location` header — self-redirects (a
+successful write redirecting back to the same resource) fold into a single `"self"` counter, while
+distinct targets (a rejected write's `SessionExpired`/`PageModified` redirect) get their own slot — and
+both land in the terminal summary as `redirects`/`redirectTargets`, so a rejection that used to be
+invisible now shows up as a number. See DD-038 in [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) for the full
+record.

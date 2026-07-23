@@ -32,6 +32,7 @@ import java.util.Random;
  *   <li>{@code <string>}  — a random short string, sometimes with metacharacters</li>
  *   <li>{@code <empty>}   — the empty string</li>
  *   <li>{@code <long>}    — a long string (length/overflow probing)</li>
+ *   <li>{@code <nonce>}   — a per-fire-unique token (for non-idempotent write payloads)</li>
  * </ul>
  *
  * A route is expanded by substituting each {@code ${name}} with a random choice from that rule;
@@ -342,6 +343,11 @@ public final class RequestGrammar {
             }
             case "<empty>":
                 return "";
+            case "<nonce>":
+                // A per-FIRE unique value, evaluated at replay time — NOT frozen here. Emit the fire-time
+                // marker LoadRun.substitute fills. `@` can't be a Capture name, so it can't collide with a
+                // ${{name}} capture ref. (DD-038)
+                return "${{@nonce}}";
             case "<long>": {
                 int n = 256 + rnd.nextInt(1024);
                 StringBuilder b = new StringBuilder(n);

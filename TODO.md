@@ -762,6 +762,39 @@ theorized. Recorded here so the evidence isn't lost with the session that found 
       already captured under `bench-results/` can be re-scored from logs offline. Worth a small
       script — it turns discarded campaigns back into real data.
 
+### Follow-ups from PR #93 and #94 (both approved with these outstanding)
+
+Recorded rather than fixed in-branch: each was raised on a PR that was already approved, and
+touching the tip would have put it outside what was reviewed.
+
+**The one that matters — do this first.**
+
+- [ ] **Wire `deploy/bench/check_claims.py` and `deploy/bench/test_redact.py` into CI.** Both exist
+      because reviewers were doing a script's job: four consecutive review rounds on #93 blocked on a
+      hand-written number, and one misquote survived all four. A guard that fires only when someone
+      remembers to run it will drift, and then the reason for adding it is gone.
+
+**From #93 (round-5 approval)**
+
+- [ ] Add the `X-Basquin-Token` case to `test_redact.py`'s `MUST_REDACT` set — the shape was restored
+      after a narrowing dropped it and is currently unpinned, so the next narrowing drops it silently.
+- [ ] `deploy/bench/roller/README.md:177` — "corroborated in `evidence.txt`" overreaches; that file
+      backs the write path, not the count of 16 or the nonce distinctness.
+- [ ] The benchmark page's "Two observations … reported, not explained" lead half-overstates now that
+      the JPetStore 5xx observation carries an explanation.
+
+**From #94 (round-2 approval)**
+
+- [ ] **`TestHonestyMarkersAreInTheServedCRDSchema` cannot fail for the reason it exists.** It uses
+      `strings.Contains` over the whole CRD YAML, so it passes even with the `reportMisses` property
+      pruned — precisely the failure it was written to catch, since Kubernetes prunes fields absent
+      from the served schema. Assert on the parsed schema's property set instead. Same shape as the
+      DD-040 Task 1 concurrency test that passed 85–95% of the time with synchronization removed
+      entirely: green, and proving nothing.
+- [ ] `FindingsLowerBound` is a plain `bool` while `ReportMisses` is a `*int32`. Latent with a
+      matched-version driver, but the asymmetry means an omitted `findingsLowerBound` reads as
+      `false` ("not a lower bound") rather than as absent — the defect class DD-040 exists to remove.
+
 ### Future: DD-042 — a load-mode oracle (deferred, not scoped)
 
 The intended division of labour is sound: **explore** finds serialized, per-request defects

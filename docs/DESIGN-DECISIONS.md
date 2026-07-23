@@ -1574,3 +1574,25 @@ authenticated write was re-issued as a *cookieless* GET whose *anonymous* `Set-C
 jar's valid `JSESSIONID` on the way to the redirect target, silently dropping the session mid-sequence.
 `captureSessionCookie` runs on the direct `3xx` response *before* the (now-absent) follow, so the real
 session cookie is kept and the anonymous overwrite never happens — session carry strictly improves.
+
+**Amended 2026-07-23 — classification rule revised after the first live c8 run.** Two defects, both
+verified against the running JSPWiki 2.12.4 (probes, not code reading):
+1. **First-letter canonicalization broke the fold.** JSPWiki resolves an unknown page name through
+   `MarkupParser.cleanLink` → `TextUtil.cleanString`, which uppercases the *first* kept character and
+   preserves the rest (live: saving `page=ndws` answers `Location: /Wiki.jsp?page=Ndws`; `nDWS` →
+   `NDWS`). The byte-equality fold missed every lowercase-page save (`"Ndws": 1051` in the first run),
+   refilling the bounded map with per-page success keys — the crowd-out the fold existed to prevent.
+   `samePage` now also equates names differing *only* in first-character case (deliberately not full
+   `equalsIgnoreCase`: past the first char, case still distinguishes genuinely different targets, e.g.
+   request `sessionexpired` vs. reject `SessionExpired` must NOT merge).
+2. **The `"self"` fold over-folded a real reject.** A genuine concurrent-edit conflict answers
+   `302 /PageModified.jsp?page=<theVeryPageBeingSaved>` (live-verified: two sessions, interleaved
+   saves) — the `page=` matches the firing request's own page, so "page= wins, same page → `self`"
+   filed a *rejected* write into the success bucket. Over-folding hides rejects — strictly worse than
+   the crowd-out. Revised rule: a **cross-page** redirect keys by the page name (unchanged); a
+   **same-page** redirect keys by the Location's last *path segment* — every success shares the one
+   view route's key (`"Wiki.jsp"`), while a same-page reject route keeps its own (`"PageModified.jsp"`).
+   `"self"` remains reserved only for the degenerate same-page echo with an empty path segment.
+   Consequence for reading summaries: pre-fix runs cannot distinguish accepted saves from
+   `PageModified` conflicts inside `"self"` — treat pre-fix `"self"` as "save attempts", not
+   "accepted saves".

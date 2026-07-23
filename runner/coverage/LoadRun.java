@@ -66,8 +66,10 @@ public final class LoadRun {
         final AtomicLong clientErrors = new AtomicLong(); // 4xx responses (DD-036)
         final AtomicLong redirects = new AtomicLong(); // 3xx responses (DD-038: no longer auto-followed)
         // DD-038: Location classification -> count, bounded to a top-12-by-count report so a fuzzed
-        // Location can't grow this map unboundedly; self-redirects fold to "self" (normalizeLocation)
-        // so a SUCCESS 302 (e.g. JSPWiki's own save-then-redirect) can't evict the real rejects.
+        // Location can't grow this map unboundedly; same-page redirects key by the Location's PATH
+        // segment (normalizeLocation) so every SUCCESS 302 (e.g. JSPWiki's save echo to its one view
+        // route) shares one key and can't evict the real rejects — while a same-page REJECT route
+        // (e.g. /PageModified.jsp?page=<ownPage>) keeps its own key instead of hiding among them.
         final java.util.concurrent.ConcurrentHashMap<String, LongAdder> redirectTargets =
                 new java.util.concurrent.ConcurrentHashMap<>();
         final java.util.concurrent.atomic.AtomicReference<Drift> baselineDrift = new java.util.concurrent.atomic.AtomicReference<>();
@@ -167,8 +169,8 @@ public final class LoadRun {
                             // page=: a step can carry it in either (jspwiki's edit_save is
                             // body-leading `page=…`, but `POST /Edit.jsp?page=X` with an unrelated
                             // body is just as valid). Checking only one leaves reqPage null for the
-                            // other shape → the self-fold never fires → routine SUCCESS 302s eat the
-                            // 12 slots and push the real rejects into "other" (F1).
+                            // other shape → the same-page fold never fires → routine SUCCESS 302s eat
+                            // the 12 slots and push the real rejects into "other" (F1).
                             String reqPage = paramValue(toFire.path(), "page");
                             if (reqPage == null && toFire.body() != null) reqPage = paramValue(toFire.body(), "page");
                             String key = normalizeLocation(fr.location(), reqPage);
@@ -457,11 +459,23 @@ public final class LoadRun {
 
     /**
      * Classify a redirect's {@code Location} into a short, JSON-safe key for the summary's
-     * {@code redirectTargets} counter (DD-038). A {@code page=} param wins (JSPWiki's own idiom); a
-     * {@code Location} whose {@code page} equals the firing request's own page (F1: e.g. a normal
-     * save's own success redirect back to the page it just saved) folds to {@code "self"} so a routine
-     * SUCCESS 302 can't evict the real rejects (a different page, e.g. {@code SessionExpired}) from the
-     * bounded top-12 map. Otherwise falls back to the last path segment (query/fragment stripped).
+     * {@code redirectTargets} counter (DD-038, rule revised after the first live c8 run).
+     *
+     * <p>A {@code Location} carrying a {@code page=} param whose value names a <em>different</em> page
+     * than the firing request's own ({@link #samePage}) keys by that page name (JSPWiki's own idiom:
+     * {@code /Wiki.jsp?page=SessionExpired} → {@code "SessionExpired"}). But when the {@code page}
+     * matches the request's own page, the page name carries no signal — the PATH does: a successful
+     * JSPWiki save echoes {@code /Wiki.jsp?page=<ownPage>} while a rejected concurrent edit answers
+     * {@code /PageModified.jsp?page=<ownPage>} (both verified live on 2.12.4). The original rule keyed
+     * every same-page redirect to one reserved {@code "self"} — which folded that reject into the
+     * success bucket: over-folding that hides rejects, the exact invisibility DD-038 exists to kill.
+     * Same-page redirects therefore key by the Location's last path segment: every success shares the
+     * ONE view route's key (e.g. {@code "Wiki.jsp"} — still can't crowd the bounded map, however many
+     * pages the corpus saves), while a reject route keeps its own key ({@code "PageModified.jsp"}).
+     * {@code "self"} remains reserved only as the degenerate same-page fallback (empty path segment,
+     * e.g. a root-path echo {@code /?page=X}).
+     *
+     * <p>No {@code page=} at all falls back to the last path segment (query/fragment stripped).
      * {@code null}/empty location (the {@code -1} transport-failure path never reaches here anyway,
      * since the worker only classifies {@code code} in {@code [300,400)}) returns {@code "?"}.
      */
@@ -469,17 +483,46 @@ public final class LoadRun {
         if (location == null || location.isEmpty()) return "?";
         String page = paramValue(location, "page");                    // (^|[?&])page= match
         String key;
-        if (page != null) {
-            key = (requestPage != null && requestPage.equals(page)) ? "self" : page;   // F1 self-fold
+        if (page != null && !(requestPage != null && samePage(requestPage, page))) {
+            key = page;                       // cross-page redirect: the page name IS the signal
         } else {
-            int q = location.indexOf('?'); int h = location.indexOf('#');
-            String noQuery = location.substring(0, minPos(location.length(), q, h));
-            int slash = noQuery.lastIndexOf('/');
-            key = slash >= 0 ? noQuery.substring(slash + 1) : noQuery;
-            if (key.isEmpty()) key = "?";
+            key = lastSegment(location);      // same-page or no page=: the path is the signal
+            if (key.isEmpty()) key = (page != null) ? "self" : "?";
         }
         if (key.length() > LOC_KEY_MAX) key = key.substring(0, LOC_KEY_MAX);
         return safeKey(key);                                            // charset-restrict for JSON (N3)
+    }
+
+    /** The Location's last path segment, query/fragment stripped; may be empty (root path). */
+    private static String lastSegment(String location) {
+        int q = location.indexOf('?'); int h = location.indexOf('#');
+        String noQuery = location.substring(0, minPos(location.length(), q, h));
+        int slash = noQuery.lastIndexOf('/');
+        return slash >= 0 ? noQuery.substring(slash + 1) : noQuery;
+    }
+
+    /**
+     * The same-page test behind {@link #normalizeLocation}'s key choice (DD-038 fix): TRUE on exact
+     * match, and ALSO when the two names differ only by the case of their FIRST character. Wiki-style
+     * CMS targets canonicalize a page name by capitalizing its first letter — JSPWiki 2.12's
+     * {@code DefaultCommandResolver} runs an unresolved name through {@code MarkupParser.cleanLink} →
+     * {@code TextUtil.cleanString}, which uppercases the first kept character and preserves the rest
+     * (verified live: saving {@code page=ndws} answers {@code Location: /Wiki.jsp?page=Ndws};
+     * MediaWiki titles behave the same) — so a byte-equality test misses every lowercase-page save
+     * and files the routine SUCCESS 302 under the page's own capitalized key, crowding the bounded
+     * map with successes (the exact eviction the same-page fold exists to prevent). Deliberately NOT
+     * a full {@code equalsIgnoreCase}: beyond the first character the canonicalization preserves
+     * case, so a later case difference distinguishes genuinely different targets — a rejected save of
+     * a page named {@code sessionexpired} (canonical {@code Sessionexpired}) redirecting to
+     * {@code SessionExpired} must keep its own {@code "SessionExpired"} key, not merge into the
+     * success route's bucket. Allocation-free on the hot path: the non-equal comparison runs only
+     * when lengths already match.
+     */
+    static boolean samePage(String requestPage, String locationPage) {
+        if (requestPage.equals(locationPage)) return true;
+        return requestPage.length() == locationPage.length() && !requestPage.isEmpty()
+                && Character.toUpperCase(requestPage.charAt(0)) == Character.toUpperCase(locationPage.charAt(0))
+                && requestPage.regionMatches(1, locationPage, 1, requestPage.length() - 1);
     }
 
     /**

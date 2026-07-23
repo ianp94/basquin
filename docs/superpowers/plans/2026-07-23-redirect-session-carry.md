@@ -1,24 +1,21 @@
 # DD-039 Session Carry Across Redirects — Implementation Plan
 
-> **DO NOT EXECUTE. BLOCKED ON PR #94, AND THE REVISION WAS SUPERFICIAL.**
+> **UNBLOCKED (PR #94 merged 2026-07-23) — but the task bodies still need a real revision.**
 >
-> A second plan review (`.superpowers/sdd/plan-review-dd039-round2.md`) found that only **3 of 21**
-> prior findings were genuinely folded in — the rest were moved into prose Global Constraints while
-> the *copyable task code* still contains them, including two Criticals verbatim. It found 13 new
-> findings, four of them Critical. Two matter most:
+> The premise now builds: DD-040's `ResultStore`, `PodPollTargets`, `X-Basquin-Req` stamping and
+> `pollResult` are on `main`, and this branch is cut from it.
 >
-> 1. **This plan is unbuildable as written.** It integrates with DD-040 (per-request stamping,
->    `pollResult`, `ResultStore`), which is on unmerged PR #94 — not on this branch and not on
->    `main`. The plan must be rebased onto DD-040 before it can be executed or meaningfully
->    reviewed.
-> 2. **"Stamp every hop" does not close DD-040's gap.** DD-040 uses ONE id per request, so stamping
->    every hop with that same id means each hop's `put` overwrites the last and you still recover a
->    single entry. Closing the gap needs **per-hop ids** (`<id>-h0`, `<id>-h1`, …) and a poll per
->    hop, plus a rule for the header/poll duality across hops so violations are not double-counted
->    against `take`'s remove-on-read. That is a spec-level decision and is currently in neither the
->    spec nor the plan.
+> Still outstanding, from `.superpowers/sdd/plan-review-dd039-round2.md`: only **3 of 21** findings
+> from the first review were genuinely folded in — the rest were moved into prose Global Constraints
+> while the *copyable task code* still contains them, including two Criticals verbatim. That
+> revision must be done against the task code itself, and verified, not asserted.
 >
-> Revise after #94 merges, against the code as it will then actually exist.
+> The design question the review exposed is now **settled in the spec** (§4b): stamping every hop
+> with DD-040's single per-request id does not work, because `ResultStore.put` replaces by key and
+> each hop overwrites the last. The store accumulates per-hop entries under one id instead, `take`
+> returns them all, and the driver — which runs the follow loop itself — polls whenever it made more
+> than one hop. The plan must be rewritten to implement *that*, not the version that does not work.
+
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

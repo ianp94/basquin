@@ -68,9 +68,10 @@ public class LeakSoftModeTest {
         System.setProperty("basquin.invariant.mode", "soft");
         leakingRequest("salt-soft-record");
 
-        ResultStore.Entry e = ResultStore.take("salt-soft-record");
-        assertNotNull("a soft-mode leak must still publish an entry — otherwise soft mode loses the "
-                + "finding entirely (stderr is not a channel the driver reads)", e);
+        java.util.List<ResultStore.Entry> hops = ResultStore.take("salt-soft-record");
+        assertEquals("a soft-mode leak must still publish an entry — otherwise soft mode loses the "
+                + "finding entirely (stderr is not a channel the driver reads)", 1, hops.size());
+        ResultStore.Entry e = hops.get(0);
         assertTrue("and that entry must carry the leak flag", e.leakDetected());
     }
 
@@ -103,8 +104,9 @@ public class LeakSoftModeTest {
         assertTrue("...with the leak message the demo and CI assert on: " + r.toThrow,
                 String.valueOf(r.toThrow.getMessage()).contains("Leak(s) detected"));
 
-        ResultStore.Entry e = ResultStore.take("salt-hard");
-        assertNotNull("even the throwing path must publish its entry (Task 2)", e);
+        java.util.List<ResultStore.Entry> hops = ResultStore.take("salt-hard");
+        assertEquals("even the throwing path must publish its entry (Task 2)", 1, hops.size());
+        ResultStore.Entry e = hops.get(0);
         assertTrue(e.leakDetected());
     }
 
@@ -115,8 +117,9 @@ public class LeakSoftModeTest {
         System.setProperty("basquin.invariant.leak.mode", "soft");
         RequestBoundary.ExitResult r = leakingRequest("salt-leak-soft");
         assertNull("basquin.invariant.leak.mode=soft must win over a hard global mode", r.toThrow);
-        ResultStore.Entry e = ResultStore.take("salt-leak-soft");
-        assertNotNull(e);
+        java.util.List<ResultStore.Entry> hops = ResultStore.take("salt-leak-soft");
+        assertEquals(1, hops.size());
+        ResultStore.Entry e = hops.get(0);
         assertTrue(e.leakDetected());
     }
 

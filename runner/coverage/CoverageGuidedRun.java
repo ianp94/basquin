@@ -494,14 +494,18 @@ public final class CoverageGuidedRun {
         for (String step : steps) {
             RequestLine r = RequestLine.parse(step);
             if (r.needsSubstitution()) {
-                String b = LoadRun.substitute(r.body(), bindings);
-                if (b == null) {
+                // DD-038: substitute the FULL request line — a generator marker (e.g. @nonce) is
+                // usually authored in the query, not the body. path is never null; body is null-
+                // guarded so a path-only marker with no body never reaches substitute() with null.
+                String p = LoadRun.substitute(r.path(), bindings);
+                String b = (r.body() == null) ? null : LoadRun.substitute(r.body(), bindings);
+                if (p == null || (r.body() != null && b == null)) {
                     // A required ${{name}} never bound (its capture step didn't match / didn't run):
                     // skip firing rather than send a literal ${{...}} the app can't use.
                     System.err.println("[Basquin] explore: unresolved correlation ref in " + r.format() + "; step skipped");
                     continue;
                 }
-                r = new RequestLine(r.method(), r.path(), b, r.captures());
+                r = new RequestLine(r.method(), p, b, r.captures());
             }
             Agent.beginIteration();
             try {
@@ -552,10 +556,22 @@ public final class CoverageGuidedRun {
     }
 
     static CostSample request(String base, String step) throws Exception {
+        RequestLine r = RequestLine.parse(step);
+        if (r.needsSubstitution()) {
+            // DD-038: a single-step fire (no sequence, no prior captures) can still carry a
+            // self-filling ${{@nonce}} marker — substitute path+body with an empty bindings map
+            // (a nonce needs no binding; any OTHER ref here is genuinely unbound with no sequence
+            // to have captured it, so it skips below exactly like a sequence step would).
+            java.util.Map<String, String> none = java.util.Map.of();
+            String p = LoadRun.substitute(r.path(), none);
+            String b = (r.body() == null) ? null : LoadRun.substitute(r.body(), none);
+            if (p == null || (r.body() != null && b == null)) return CostSample.EMPTY; // unbound ref: don't fire literal
+            r = new RequestLine(r.method(), p, b, r.captures());
+        }
         // Recorded-finding text must stay the RAW input on this path — byte-for-byte unchanged
         // from before DD-036 — since RequestLine.format() canonicalizes a no-body GET by dropping
         // an explicit "GET " prefix, which would silently rewrite what a real finding records.
-        return request(base, RequestLine.parse(step), null, step);
+        return request(base, r, null, step);
     }
 
     /**

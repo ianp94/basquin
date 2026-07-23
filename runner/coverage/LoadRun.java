@@ -123,12 +123,18 @@ public final class LoadRun {
                         if (System.nanoTime() >= deadlineNanos) break;
                         RequestLine toFire = step;
                         if (correlated && step.needsSubstitution()) {
-                            String b = substitute(step.body(), bindings);
-                            if (b == null) {
+                            // DD-038: a generator marker (e.g. @nonce) is usually authored in the
+                            // query, not the body — substitute the FULL request line. path is never
+                            // null (RequestLine.parseCore always sets "" or a substring); body IS
+                            // null when the step has none, so it's guarded and left null rather than
+                            // passed through substitute() (which would NPE on a null CharSequence).
+                            String p = substitute(step.path(), bindings);
+                            String b = (step.body() == null) ? null : substitute(step.body(), bindings);
+                            if (p == null || (step.body() != null && b == null)) {
                                 if (System.nanoTime() >= measureFromNanos) captureMisses.incrementAndGet();
                                 continue; // skip this step: a required prior capture never bound
                             }
-                            toFire = new RequestLine(step.method(), step.path(), b, step.captures());
+                            toFire = new RequestLine(step.method(), p, b, step.captures());
                         }
                         long t0 = System.nanoTime();
                         int code = fire(baseUrl, toFire, jar, bindings);
@@ -519,23 +525,30 @@ public final class LoadRun {
     private static final java.util.concurrent.atomic.AtomicBoolean CORRELATION_LINT_WARNED =
             new java.util.concurrent.atomic.AtomicBoolean(false);
 
-    /** Walks {@code steps} in order, accumulating names captured so far; for each step's body, flags any
-     *  {@code ${{name}}} reference whose name was not captured by a STRICTLY EARLIER step. Logs at most
-     *  one warning line for the whole run (not per sequence). Never throws — lint only. */
+    /** Walks {@code steps} in order, accumulating names captured so far; for each step's path AND body,
+     *  flags any {@code ${{name}}} reference whose name was not captured by a STRICTLY EARLIER step.
+     *  Logs at most one warning line for the whole run (not per sequence). Never throws — lint only.
+     *  DD-038: {@code ${{@nonce}}} is exempt — it's self-filling every fire (Task 1), never a
+     *  captured-value reference, so it has no preceding capture to require and must not trip this. */
     private static void lintCorrelationOrdering(List<RequestLine> steps) {
         java.util.Set<String> capturedSoFar = new java.util.HashSet<>();
         for (RequestLine step : steps) {
-            if (step.body() != null) {
-                Matcher m = CORRELATION_REF_PATTERN.matcher(step.body());
-                while (m.find()) {
-                    String name = m.group(1);
-                    if (!capturedSoFar.contains(name) && CORRELATION_LINT_WARNED.compareAndSet(false, true)) {
-                        System.err.println("[Basquin] load: correlation ref ${{" + name + "}} has no preceding <<"
-                                + name + "= capture in a sequence; it will never bind");
-                    }
-                }
-            }
+            lintRefs(step.path(), capturedSoFar);
+            lintRefs(step.body(), capturedSoFar);
             for (Capture cap : step.captures()) capturedSoFar.add(cap.name());
+        }
+    }
+
+    private static void lintRefs(String text, java.util.Set<String> capturedSoFar) {
+        if (text == null) return;
+        Matcher m = CORRELATION_REF_PATTERN.matcher(text);
+        while (m.find()) {
+            String name = m.group(1);
+            if (name.equals("@nonce")) continue;   // self-filling; never a captured-value reference
+            if (!capturedSoFar.contains(name) && CORRELATION_LINT_WARNED.compareAndSet(false, true)) {
+                System.err.println("[Basquin] load: correlation ref ${{" + name + "}} has no preceding <<"
+                        + name + "= capture in a sequence; it will never bind");
+            }
         }
     }
 

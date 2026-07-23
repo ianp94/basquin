@@ -184,4 +184,85 @@ public class LoadCorrelationTest {
         // @nonce fills, but an unbound ${{csrf}} still makes the step skip (null)
         assertNull(LoadRun.substitute("a=${{@nonce}}&t=${{csrf}}", new java.util.HashMap<>()));
     }
+
+    /**
+     * DD-038 task 2: end-to-end path substitution through the same shape the worker loop uses —
+     * substitute the path unconditionally, substitute the body only when non-null. A path-only
+     * nonce (empty body) must not NPE and must reach the server as a real token, never the literal
+     * marker.
+     */
+    @Test
+    public void pathOnlyNonceSubstitutesEndToEndWithoutNpe() throws IOException {
+        final String[] seenPath = new String[1];
+        server.createContext("/rec", (HttpExchange ex) -> {
+            seenPath[0] = ex.getRequestURI().toString();
+            byte[] resp = new byte[0];
+            ex.sendResponseHeaders(200, resp.length);
+            ex.getResponseBody().close();
+        });
+        server.start();
+        base = "http://127.0.0.1:" + server.getAddress().getPort();
+
+        RequestLine step = RequestLine.parse("GET /rec?rev=${{@nonce}}");
+        assertTrue("a path-only marker must be detected too", step.needsSubstitution());
+        assertNull("this step has no body", step.body());
+
+        Map<String, String> jar = new HashMap<>();
+        Map<String, String> bindings = new HashMap<>();
+
+        // Mirrors the worker's null-safe substitution shape exactly.
+        String p = LoadRun.substitute(step.path(), bindings);
+        String b = (step.body() == null) ? null : LoadRun.substitute(step.body(), bindings);
+        assertNotNull("path substitution must not return null for a self-filling @nonce", p);
+        assertNull("a null body must stay null (no NPE), never get substitute()'d", b);
+
+        RequestLine toFire = new RequestLine(step.method(), p, b, step.captures());
+        int code = LoadRun.fire(base, toFire, jar, bindings);
+
+        assertEquals(200, code);
+        assertNotNull("server never received the request", seenPath[0]);
+        assertFalse("literal marker must never reach the server: " + seenPath[0],
+                seenPath[0].contains("${{"));
+        assertTrue("rev= must carry a real non-empty token: " + seenPath[0],
+                seenPath[0].matches("/rec\\?rev=[^&]+"));
+    }
+
+    /**
+     * DD-038 task 2: the correlation-ordering lint must never false-warn on {@code @nonce} — it's
+     * self-filling (Task 1), never a captured-value reference, so it has no "preceding capture" to
+     * require. Scans BOTH path and body: this corpus line carries a nonce ref in each. Reflectively
+     * resets the lint's log-once flag so the assertion isn't dependent on suite execution order.
+     */
+    @Test
+    public void lintCorrelationOrderingIgnoresNonce() throws Exception {
+        java.lang.reflect.Field warnedField = LoadRun.class.getDeclaredField("CORRELATION_LINT_WARNED");
+        warnedField.setAccessible(true);
+        java.util.concurrent.atomic.AtomicBoolean warned =
+                (java.util.concurrent.atomic.AtomicBoolean) warnedField.get(null);
+        boolean priorWarned = warned.get();
+        warned.set(false);
+
+        Path dir = Files.createTempDirectory("load-correlation-nonce-corpus");
+        dir.toFile().deleteOnExit();
+        Path corpusFile = dir.resolve("corpus.txt");
+        // A nonce ref in the path (query string) AND one in the body, neither preceded by any
+        // <<capture — exactly the shape that would trip the "will never bind" lint for a REAL ref.
+        Files.write(corpusFile,
+                "POST /rec?rev=${{@nonce}} body=${{@nonce}}\n".getBytes(StandardCharsets.UTF_8));
+        corpusFile.toFile().deleteOnExit();
+
+        java.io.PrintStream prevErr = System.err;
+        java.io.ByteArrayOutputStream captured = new java.io.ByteArrayOutputStream();
+        try {
+            System.setErr(new java.io.PrintStream(captured, true, "UTF-8"));
+            LoadRun.readCorpus(dir.toString());
+        } finally {
+            System.setErr(prevErr);
+            warned.set(priorWarned);
+        }
+
+        String out = captured.toString("UTF-8");
+        assertFalse("a nonce-only corpus must not trip the correlation lint's false "
+                + "'will never bind' warning: " + out, out.contains("will never bind"));
+    }
 }

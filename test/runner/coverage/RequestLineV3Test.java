@@ -60,6 +60,13 @@ public class RequestLineV3Test {
         assertFalse(RequestLine.parse("/x").needsSubstitution());
     }
 
+    // DD-038 task 2: a grammar generator marker is usually used in the URL query, not the body — so
+    // needsSubstitution() must also look at the path, else a path-only marker fires literally.
+    @Test public void needsSubstitutionDetectsAMarkerInThePath() {
+        assertTrue(RequestLine.parse("GET /Wiki.jsp?rev=${{@nonce}}").needsSubstitution());   // body is null
+        assertFalse(RequestLine.parse("GET /Wiki.jsp?rev=x").needsSubstitution());
+    }
+
     @Test public void backwardCompatBarePathAndMethodPathUnchanged() {
         RequestLine bare = RequestLine.parse("/x");
         assertEquals("GET", bare.method());

@@ -1783,60 +1783,46 @@ operator wiring; nothing added to the load path.
     untouched). `X-Basquin-Pod` is still emitted, demoted to what it can actually do: attribution
     (`pod=` on a finding), which is what a two-replica reconciliation against pod logs needs.
 
-**Verified.** 216 → **274 tests**, full suite green. Each mechanism has a test that genuinely fails
-without it, checked by mutation rather than asserted: removing the store's synchronization wrapper
-fails the concurrency test 20/20 (corrupted sizes, e.g. `size=-12638`) and passes 20/20 restored;
-stubbing `awaitQuiescence` to a no-op fails `resultWaitsForAnInFlightIterationToPublish`; capturing
-the context *after* `endIteration()` fails 3 of 6 boundary tests, and publishing only on the
-non-throwing path fails **exactly** `aThrowingIterationStillPublishesItsResult` and nothing else —
-which is precisely what an implementer who read half the note would write; deleting only the
-`FuzzIO.saveWithMeta` call while leaving the poll, parse and `CostSample` intact fails 3 tests
-(recovering a count and *not* filing a finding is the defect surviving under a new name); reducing
-`pollBases` to the Service VIP fails 3 multi-replica tests. `MultiReplicaPollTest` runs two
-independent `HttpServer`s each with its own remove-on-read store — the independence a Service VIP
-violates — and pins that a poll aimed at the wrong pod misses *and is counted*, while the fan-out
-finds the entry behind a pod that missed. The operator round trip is pinned by an **envtest through
-a real API server**, not an in-memory unmarshal: a summary carrying
-`"violations":{"notEvaluated":[…]}` comes back with `nil` pointers and a Ready message reading "not
-evaluated", not "0 latency violations". DD-011 namespace-freedom was re-checked in the **compiled
-bytecode** (`javap -c`: no `javax`/`jakarta` in the glue, no `org.apache.catalina` in
-`RequestBoundary`). Soft-mode leak tests start a *real* non-daemon thread rather than a mock, and
-`theRecordedLeakIsOnTheWireInTheFormTheDriverParses` pins the seam where the agent's own
-`ResultStore.format` output meets the driver's 4-field split.
+**Verified.** 274 unit/envtest tests, and an acceptance run against Apache Roller on 2026-07-23
+that **did not pass**, recorded here as measured rather than as success.
 
-**Honest limits — read these before trusting a number.**
+The run recovered a great deal: **1,413 violations reported** where the same campaign shape
+previously reported **0**, with `reportMisses: 0` and the retained corpus back to **99 entries**
+from the degenerate **2** that the zero-fed cost model had produced. Several independent
+reconciliations hold exactly — the per-id findings sum equals `targetViolations`, all 1,235 driver
+`detail=` strings appear verbatim in the pod log, per-iteration violation shapes match one-for-one,
+and 200 `/__basquin/result` polls advanced the target's iteration counter by 0 (the control path
+genuinely never begins an iteration).
 
-- **Pre-existing `status.load` values are not migrated.** A `BasquinCampaign` whose status was
-  written before this change stores `violations: {latency: 0, …}` as concrete integers, which now
-  unmarshal into *non-nil* pointers — i.e. they claim "checked and clean" with the new vocabulary's
-  authority. The fix cannot retroactively distinguish "checked" from "never checked" in old data.
-- **A hard invariant violation rethrows before the leak checks run**, so that iteration's leak is
-  never evaluated and its entry says `leak=false` — a "not checked" reported as clean. That is this
-  exact defect class, pre-existing, still present, and found *inside* DD-040's own work.
-- **`/__basquin/violations` counts invariants only.** A soft-mode, leak-only run reports
-  `violations=0` while the findings hold `Leak-Remote` entries. Do not read that zero as clean.
-- **A campaign with no threshold anywhere reports "not evaluated" but nothing fails.** It is loud in
-  the driver log and the Ready condition, and it is honest — but whether a campaign should be able to
-  complete "successfully" with no invariant configured at all is an open policy question.
-- **The pod port is assumed equal to the baseURL port.** A Service publishing `port: 80` →
-  `targetPort: 8080` makes every fan-out poll miss. It is visible in `reportMisses`, but nothing
-  detects it automatically; `-Dbasquin.report.podPort` (or a per-entry `host:port`) is the escape
-  hatch. Likewise, `coverageService: false` plus a ClusterIP `baseURL` leaves the poll VIP-bound
-  unless `-Dbasquin.report.podHost` is set.
-- **The recovered leak flag is not a `CostModel` input.** It saves a finding; a leaked thread usually
-  shows up in `threadDelta` anyway, so the signal is not lost, but the coupling is indirect.
-- **Cost.** One extra request per un-headered explore request — against an uninstrumented target that
-  is a doubling of request count, and now a non-zero exit. Intended, and worth knowing before someone
-  points explore at a bare app and reports a "regression".
+**But the pod logged 1,602 in the same window: a residual gap of 189, or 11.8%.** The acceptance
+criterion was that these two numbers agree, and they do not.
 
-**Disposition of the already-published numbers.** Roller's and JSPWiki's explore **finding counts are
-invalid** and must be re-run against this change. JPetStore's stand — it lost 0%. The 9,023 violations
-recovered from the pods' own logs (`bench-results/violation-logs-2026-07-23/`: roller 6,143, jspwiki
-2,880) are **corroboration for the acceptance test, not remediation**: per-input attribution is
-unrecoverable (target-side iteration numbers include probe traffic and the mapping back to driver
-inputs is approximate), a re-score cannot retroactively feed the cost model that ranked the corpus
-*during* the run, and the logs do not always survive — JPetStore's had already rotated past its
-window. Recovering the numbers restores finding counts, not the exploration they should have guided.
+**Root cause, reproduced on demand.** A followed redirect that *changes method* (POST → 302 → GET)
+loses the `X-Basquin-Req` header, because the JDK does not carry a `setRequestProperty` value onto a
+method-rewritten hop. Hop 2 therefore runs unstamped: it evaluates, it logs, it publishes nothing,
+and it is never counted. Measured live — `POST /roller-ui/authoring/entryAdd.rol` → `login.rol` moved
+`/__basquin/violations` by **0** while the pod logged `heapDelta: 4900KB > 512KB`. Same-method hops
+*are* stamped and counted, which is why the "final-hop-wins" reasoning looked right and is wrong for
+precisely the shape Roller's grammar generates most.
+
+**This residual is worse than a miss, and it is this record's own defect class in a narrower form.**
+The poll *succeeds* — hop 1 answers it — so the driver records `measured=true, count=0`: a clean
+zero for a request whose real work violated. `reportMisses` cannot see it, because nothing missed.
+
+**It was predicted and we did not connect it.** DD-039's spec documents this exact JDK behaviour for
+the `Cookie` header ("on a 301/302/303 the JDK issues the follow hop with no `Cookie` header at all
+— it is specifically the method-rewriting path that strips it"). The same mechanism drops
+`X-Basquin-Req`. DD-040's Task 3 was explicitly instructed to keep final-hop-wins and leave per-hop
+semantics to DD-039; that instruction produced this gap.
+
+**Closing it is DD-039's acceptance criterion.** DD-039 replaces the JDK's auto-follow with an
+explicit hop loop that sets headers on every hop, which stamps each one by construction. Until then
+this channel is a large improvement with a measured, bounded, documented hole — not a fix that can
+be described as complete.
+
+Probe noise is not the explanation: measured idle rate is 3 lines/120s, and the kubelet probe's
+5-second grid accounts for at most ~22 lines on the most generous attribution, against a gap of 189.
+Multi-replica (spec verification item 14) was not exercised — the run was single-replica.
 
 **Rejected alternatives.**
 - **Set the headers before the app runs.** The values do not exist yet.

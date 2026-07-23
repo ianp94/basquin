@@ -173,10 +173,31 @@ public class LoadFireTest {
 
     @Test
     public void normalizeLocationClassifies() {
-        assertEquals("self", LoadRun.normalizeLocation("/Wiki.jsp?page=Main", "Main"));
+        // same page -> the PATH is the signal: a success echo keys by the one view route
+        assertEquals("Wiki.jsp", LoadRun.normalizeLocation("/Wiki.jsp?page=Main", "Main"));
+        // different page -> the page name is the signal
         assertEquals("SessionExpired", LoadRun.normalizeLocation("/Wiki.jsp?page=SessionExpired", "Main"));
         assertEquals("Wiki.jsp", LoadRun.normalizeLocation("/Wiki.jsp?tab=view", null));
         assertEquals("X", LoadRun.normalizeLocation("http://h/Wiki.jsp?page=X", null));
+        // degenerate same-page echo with an empty path segment -> the reserved "self"
+        assertEquals("self", LoadRun.normalizeLocation("/?page=Main", "Main"));
+    }
+
+    /**
+     * DD-038 fix, live-verified on 2.12.4: a REJECTED concurrent edit answers
+     * {@code 302 /PageModified.jsp?page=<theVeryPageBeingSaved>} — the {@code page=} matches the
+     * firing request's own page, so the original "page= wins, same page folds to self" rule filed a
+     * genuine reject into the success bucket (over-folding, strictly worse than the crowd-out it
+     * prevented). Same-page redirects must key by the path segment so the reject route stays visible
+     * next to the success route.
+     */
+    @Test
+    public void samePageRejectRouteKeepsItsOwnKeyInsteadOfFoldingIntoSuccesses() {
+        String reqPage = LoadRun.paramValue("page=Page2&action=save&_editedtext=x", "page");
+        assertEquals("Wiki.jsp", LoadRun.normalizeLocation("/Wiki.jsp?page=Page2", reqPage));          // success echo
+        assertEquals("PageModified.jsp", LoadRun.normalizeLocation("/PageModified.jsp?page=Page2", reqPage)); // conflict reject
+        assertEquals("SessionExpired", LoadRun.normalizeLocation("/Wiki.jsp?page=SessionExpired", reqPage));  // spam-hash reject
+        assertEquals("Forbidden.html", LoadRun.normalizeLocation("/error/Forbidden.html", reqPage));          // CSRF reject
     }
 
     /**
@@ -197,18 +218,53 @@ public class LoadFireTest {
     }
 
     /**
-     * DD-038: the record claims the self-fold works "from a body-leading {@code page=}" — that is the
+     * DD-038: the same-page fold must work "from a body-leading {@code page=}" — that is the
      * composition the worker actually performs (extract the fired step's own page with
      * {@code paramValue}, then classify the Location against it), so pin the pair, not just the halves.
      */
     @Test
-    public void selfFoldFromABodyLeadingPageParam() {
+    public void samePageFoldFromABodyLeadingPageParam() {
         String reqPage = LoadRun.paramValue("page=Main&action=save&text=hi", "page");
         assertEquals("Main", reqPage);
-        // a SUCCESS save 302s back to the page it just saved -> one reserved "self" slot
-        assertEquals("self", LoadRun.normalizeLocation("/Wiki.jsp?page=Main", reqPage));
-        // a REJECTED save 302s elsewhere -> its own slot, which is the whole point of the fold
+        // a SUCCESS save 302s back to the page it just saved -> the shared view-route slot
+        assertEquals("Wiki.jsp", LoadRun.normalizeLocation("/Wiki.jsp?page=Main", reqPage));
+        // a cross-page redirect (the generic rule; the live PageModified.jsp
+        // signature is pinned separately below) 302s to a different page -> its own slot, which is the whole point
         assertEquals("PageModified", LoadRun.normalizeLocation("/Wiki.jsp?page=PageModified", reqPage));
+    }
+
+    /**
+     * DD-038 fix: JSPWiki canonicalizes a page name by capitalizing its FIRST letter
+     * ({@code DefaultCommandResolver} → {@code MarkupParser.cleanLink} → {@code TextUtil.cleanString};
+     * verified live on 2.12.4 — saving {@code page=ndws} answers {@code Location: /Wiki.jsp?page=Ndws},
+     * {@code nDWS} answers {@code NDWS}, the rest of the name preserved). A byte-equality same-page
+     * test misses that, filing every successful lowercase-page save under its own capitalized key
+     * ({@code "Ndws": 1051} in the first c8 run) — with a 66-page corpus that fills the 12-slot map
+     * with successes and evicts the real rejects, the exact crowd-out the fold exists to prevent.
+     */
+    @Test
+    public void samePageFoldSurvivesFirstLetterCanonicalization() {
+        assertEquals("Wiki.jsp", LoadRun.normalizeLocation("/Wiki.jsp?page=Ndws", "ndws"));  // the c8-run miss
+        assertEquals("Wiki.jsp", LoadRun.normalizeLocation("/Wiki.jsp?page=NDWS", "nDWS")); // rest preserved
+        assertEquals("Wiki.jsp", LoadRun.normalizeLocation("/Wiki.jsp?page=Main", "main")); // front page too
+        // and composed with the worker's own paramValue extraction, as the worker performs it
+        String reqPage = LoadRun.paramValue("page=ndws&action=save&_editedtext=x", "page");
+        assertEquals("Wiki.jsp", LoadRun.normalizeLocation("/Wiki.jsp?page=Ndws", reqPage));
+        // the canonicalized CONFLICT reject stays distinct from the canonicalized success
+        assertEquals("PageModified.jsp", LoadRun.normalizeLocation("/PageModified.jsp?page=Ndws", reqPage));
+    }
+
+    /**
+     * Over-folding guard for {@code samePage}: ONLY the first character compares case-insensitively.
+     * Beyond it, case and length still distinguish genuinely different targets — a rejected save of a
+     * page named {@code sessionexpired} redirects to {@code SessionExpired} (differs at the mid-word
+     * {@code E}) and must keep its own page-name key, not merge into the success route's bucket.
+     */
+    @Test
+    public void samePageDoesNotEquateNamesDifferingBeyondTheFirstLetter() {
+        assertEquals("SessionExpired", LoadRun.normalizeLocation("/Wiki.jsp?page=SessionExpired", "sessionexpired"));
+        assertEquals("PageModified", LoadRun.normalizeLocation("/Wiki.jsp?page=PageModified", "pagemodified"));
+        assertEquals("Ndws2", LoadRun.normalizeLocation("/Wiki.jsp?page=Ndws2", "ndws"));  // length differs
     }
 
     /** DD-038: keys are truncated to 64 chars so one long/reflected Location can't eat the ~4 KB budget. */
@@ -237,5 +293,31 @@ public class LoadFireTest {
         assertEquals("other", LoadRun.admitKey(targets, "overflow")); // full: a NEW key overflows
         assertEquals("fresh", LoadRun.admitKey(targets, "fresh"));    // full: a KNOWN key still admitted
         assertEquals("k0", LoadRun.admitKey(targets, "k0"));
+    }
+
+    /**
+     * DD-038 (@claude review): {@code paramValue} returns {@code ""} — not null — for a {@code page=}
+     * that is present but BLANK, and that is a real shape in this corpus: three jspwiki routes carry
+     * an empty {@code page=} and each bounces to {@code /Login.jsp}. A null-only fallback lets a blank
+     * path {@code page=} shadow a real body {@code page=}, leaving the request with no page identity
+     * at all and disabling the same-page fold for it.
+     */
+    @Test
+    public void blankPageInThePathDoesNotShadowARealPageInTheBody() {
+        assertEquals("a present-but-blank page= is \"\", not null", "", LoadRun.paramValue("/Edit.jsp?page=", "page"));
+        assertEquals("Main", LoadRun.paramValue("page=Main&action=save", "page"));
+
+        // The worker's own extraction order, with a blank path page= and a real body page=.
+        String path = "/Edit.jsp?page=", body = "page=Main&action=save";
+        String reqPage = LoadRun.paramValue(path, "page");
+        if ((reqPage == null || reqPage.isEmpty()) && body != null) {
+            String fromBody = LoadRun.paramValue(body, "page");
+            if (fromBody != null && !fromBody.isEmpty()) reqPage = fromBody;
+        }
+        assertEquals("the body's real page name must win over a blank one in the path", "Main", reqPage);
+
+        // ...and with that identity recovered, the save echo folds to the view route rather than
+        // taking a key of its own.
+        assertEquals("Wiki.jsp", LoadRun.normalizeLocation("/Wiki.jsp?page=Main", reqPage));
     }
 }

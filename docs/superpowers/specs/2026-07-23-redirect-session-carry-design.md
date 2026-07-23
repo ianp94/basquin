@@ -222,7 +222,10 @@ it rather than an aesthetic preference:
    `saveWithMeta` the instant it reads the header, so clearing `headerReported` afterwards cannot
    un-save it, and a headered hop would be recorded twice. The property belongs to the **driver's
    code**, not to the store's arity: there must be exactly one reconciliation point at which a
-   request's hops become findings, and nothing may be saved before it.
+   request's hops become findings, and nothing may be saved before it. **This is a structural change
+   to `request()`, not a flag reorder (spike-confirmed):** the `saveWithMeta` call must be *removed*
+   from the header-read site entirely and moved into the single reconcile step, because clearing a
+   flag cannot un-save what already ran.
 3. **It matches the semantics we actually want.** One input has one cost. A redirect chain is one
    input's work spread over several server-side iterations, not several inputs.
 
@@ -237,8 +240,17 @@ heuristic:
 "Poll and *replace*" would be wrong. A forced poll that misses discards a perfectly good final-hop
 header reading and records a miss instead — and on a redirect-heavy target that inflates
 `reportMisses` far enough to trip the majority-miss rule and `System.exit(3)` the run. The header is
-never *wrong*; it is merely incomplete, describing only the last hop. Merge it with the polled hops,
-de-duplicating on hop identity.
+never *wrong*; it is merely incomplete, describing only the last hop.
+
+**How to merge — verified by spike.** "De-duplicate on hop identity" is not implementable: `Entry`
+has no hop identity, and an uncommitted final hop is described by *both* its cost header **and** its
+own store entry (the boundary publishes to the store unconditionally), so the header is always a
+**subset** of what the store holds. The rule is therefore a preference, not a set union: **take the
+polled hop set; fall back to the final hop's header only when the poll returns no hops at all.** And
+**the measured/miss decision is made inside reconcile, once** — if `pollResult` records a miss and
+reconcile then falls back to the header and records measured, both counters tick for one request
+(spike-found). The spike's `reconcile()` does exactly this and counts both hops of the motivating
+POST→302→GET case: 2, not 1, and not 3.
 
 That closes DD-040's residual precisely: the case that leaked (POST → 302 → GET) is by definition a
 multi-hop request, so it always polls, and the poll now returns both hops.

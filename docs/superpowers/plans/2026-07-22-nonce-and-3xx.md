@@ -27,7 +27,7 @@ Makes `${{@nonce}}` in a **body** fill with a unique per-fire token. Path substi
 **Files:**
 - Modify: `runner/coverage/RequestGrammar.java` (`generator()` switch, ~line 337) + its class Javadoc generator list (~lines 31-34)
 - Modify: `runner/coverage/LoadRun.java` (`substitute`, lines 345-359; add `RUN_SALT`/`NONCE` statics near `CORRELATION_REF_PATTERN`, line 337)
-- Test: `test/runner/coverage/LoadCorrelationTest.java` (substitute nonce), `test/runner/coverage/GrammarMethodTest.java` or `RequestGrammarTest.java` (generator emits marker)
+- Test: `test/runner/coverage/LoadCorrelationTest.java` (substitute nonce), `test/runner/coverage/GrammarCorrelationTest.java` (generator emits marker; it has the temp-grammar helpers)
 
 **Interfaces:**
 - Produces: grammar generator `<nonce>` → the literal string `${{@nonce}}`. `LoadRun.substitute(body, bindings)`: a `${{@nonce}}` ref is replaced with `RUN_SALT + "-" + NONCE.getAndIncrement()` (never returns null for it); other refs unchanged.
@@ -48,19 +48,19 @@ Add to `test/runner/coverage/LoadCorrelationTest.java`:
     assertNull(LoadRun.substitute("a=${{@nonce}}&t=${{csrf}}", new java.util.HashMap<>()));
 }
 ```
-Add to `test/runner/coverage/RequestGrammarTest.java` (or GrammarMethodTest — whichever loads a grammar and calls `expandAll`/`randomRequest`; model on the existing generator tests):
+Add to `test/runner/coverage/GrammarCorrelationTest.java` (package `runner.coverage`) — it already has the private `write(String)` / `load(String)` temp-grammar helpers this needs:
 ```java
-@Test public void nonceGeneratorEmitsTheFireTimeMarker() throws Exception {
-    RequestGrammar g = RequestGrammar.load(writeGrammar("$rev = <nonce>\n/edit?r=${rev}\n"), new java.util.Random(1));
-    String out = g.randomRequest();
-    assertEquals("<nonce> defers to the fire-time marker, not a baked value", "/edit?r=${{@nonce}}", out);
+@Test public void nonceGeneratorEmitsTheFireTimeMarker() throws IOException {
+    RequestGrammar g = load("$rev = <nonce>\n/edit?r=${rev}\n");
+    assertEquals("<nonce> defers to the fire-time marker, not a baked value",
+            "/edit?r=${{@nonce}}", g.randomRequest());
 }
 ```
-(If `RequestGrammarTest` lacks a `writeGrammar` temp-file helper, copy the one from `GrammarCorrelationTest`/`GrammarMethodTest`.)
+**Do NOT put this in `RequestGrammarTest`** — that file is `test/RequestGrammarTest.java` in package `test` (FQN `test.RequestGrammarTest`) with different helpers, so `--tests runner.coverage.RequestGrammarTest` would match nothing and `writeGrammar(...)` wouldn't compile.
 
 - [ ] **Step 2: Run — must FAIL**
 
-Run: `./gradlew test --tests runner.coverage.LoadCorrelationTest --tests runner.coverage.RequestGrammarTest`
+Run: `./gradlew test --tests runner.coverage.LoadCorrelationTest --tests runner.coverage.GrammarCorrelationTest`
 Expected: FAIL — `${{@nonce}}` returns null / stays literal; generator returns `""` (unknown token) or the literal `<nonce>`.
 
 - [ ] **Step 3: Add the `<nonce>` generator**
@@ -104,7 +104,7 @@ Update the `substitute` Javadoc: note `${{@nonce}}` is generated per-fire and ne
 
 - [ ] **Step 5: Run — must PASS**
 
-Run: `./gradlew test --tests runner.coverage.LoadCorrelationTest --tests runner.coverage.RequestGrammarTest`
+Run: `./gradlew test --tests runner.coverage.LoadCorrelationTest --tests runner.coverage.GrammarCorrelationTest`
 Then: `./gradlew test`
 Expected: BUILD SUCCESSFUL.
 
@@ -193,9 +193,10 @@ static CostSample request(String base, String step) throws Exception {
         if (p == null || (r.body() != null && b == null)) return CostSample.EMPTY;  // unbound ref: don't fire literal
         r = new RequestLine(r.method(), p, b, r.captures());
     }
-    return request(base, r, null, r.format());   // existing 4-arg delegation, now with the substituted line
+    return request(base, r, null, step);   // label MUST stay the raw `step` (see below)
 }
 ```
+**CRITICAL — the label stays the raw `step`.** The 4-arg delegation's last arg is the recorded-finding label, and DD-036's token-leak invariant requires it be the **raw `step`, byte-for-byte** (`CoverageGuidedRun.java:554-558` javadoc; `runSequence` at :514 fires the substituted `r` but records raw `step`). Do **NOT** pass `r.format()` — `format()` canonicalizes away a `GET ` prefix, so every explore single-step finding would be silently rewritten (`GET /foo` → `/foo`). Keep `step`.
 (Confirm `CostSample.EMPTY` exists; if the constant is named differently, use the file's existing "no-op sample" value.)
 
 - [ ] **Step 6: Lint — exempt `@nonce` and scan the path**
@@ -229,7 +230,7 @@ git commit -m "feat(correlation): substitute the full request line (path+body), 
 
 - [ ] **Step 1: Write the failing tests**
 
-`test/runner/coverage/LoadFireTest.java` (mirror its `HttpServer` setup):
+`test/runner/coverage/LoadFireTest.java` — it has ONE `server`/`base`; register these as three additional **contexts on that same server** (`/Edit.jsp` → 302 to `/Wiki.jsp?page=SessionExpired`, `/ok` → 200, `/login` → 302 + `Set-Cookie: JSESSIONID=abc`). Do not invent `base200`/`baseRedirectWithCookie` fields:
 ```java
 @Test public void fireRDoesNotFollowAndReportsLocation() throws Exception {
     // handler returns 302 Location: /Wiki.jsp?page=SessionExpired
@@ -239,13 +240,13 @@ git commit -m "feat(correlation): substitute the full request line (path+body), 
     assertEquals("/Wiki.jsp?page=SessionExpired", r.location());
 }
 @Test public void fireRHasNullLocationForA200() throws Exception {
-    LoadRun.FireResult r = LoadRun.fireR(base200, new RequestLine("GET","/ok",null), new java.util.HashMap<>(), null);
+    LoadRun.FireResult r = LoadRun.fireR(base, new RequestLine("GET","/ok",null), new java.util.HashMap<>(), null);
     assertEquals(200, r.code()); assertNull(r.location());
 }
 @Test public void a302SetCookieStillPopulatesTheJar() throws Exception {
     // 302 carrying Set-Cookie: JSESSIONID=abc — jar must capture it (DD-035, no-follow)
     java.util.Map<String,String> jar = new java.util.HashMap<>();
-    LoadRun.fireR(baseRedirectWithCookie, new RequestLine("GET","/login",null), jar, null);
+    LoadRun.fireR(base, new RequestLine("GET","/login",null), jar, null);
     assertEquals("abc", jar.get("JSESSIONID"));
 }
 ```
@@ -268,7 +269,9 @@ Expected: FAIL — `FireResult`/`fireR`/`normalizeLocation` don't exist.
 
 - [ ] **Step 3: `FireResult` + `fireR` + no-follow**
 
-In `runner/coverage/LoadRun.java`: add `record FireResult(int code, String location) {}`. Rename the body of the current 4-arg `fire(base, step, jar, bindings)` (returns int) into `fireR(...)` returning `FireResult`: set `c.setInstanceFollowRedirects(false)` (was line 264 `true`); after `int code = c.getResponseCode()` and the existing `captureSessionCookie(c, jar)`, read `String loc = (code >= 300 && code < 400) ? c.getHeaderField("Location") : null;`; keep the existing drain/`-1` paths (on the `-1` transport path, `location` is null); `return new FireResult(code, loc)`. Make BOTH existing `fire(...)` overloads (the 3-arg 245 and 4-arg 257) delegate: `return fireR(...).code();` (the 3-arg passes `null, null` as it does today).
+In `runner/coverage/LoadRun.java`: add `record FireResult(int code, String location) {}`. Rename the body of the current 4-arg `fire(base, step, jar, bindings)` (returns int) into `fireR(...)` returning `FireResult`: set `c.setInstanceFollowRedirects(false)` (was line 264 `true`); after `int code = c.getResponseCode()` and the existing `captureSessionCookie(c, jar)`, read `String loc = (code >= 300 && code < 400) ? c.getHeaderField("Location") : null;`; keep the existing drain/`-1` paths (on the `-1` transport path, `location` is null); `return new FireResult(code, loc)`. Make BOTH existing `fire(...)` overloads (the 3-arg 245 and 4-arg 257) delegate: `return fireR(...).code();` (the 3-arg `fire` passes a single `null` for bindings, as it does today).
+
+**RENAME, do NOT rewrite.** The 4-arg `fire` body (lines ~258-334) also holds the **DD-037 capture-into-bindings branch** (`step.captures()` loop → `Capture.extract` → `bindings.put`, ~292-322), the retain-≤256KB **drain-to-EOF**, `captureSessionCookie`, and the `catch` → `-1` path. Move that body WHOLESALE into `fireR` and change only: the follow flag, the added `loc` read, and the **two** `return code;` sites — the success return (~line 323) becomes `return new FireResult(code, loc);` and the `catch` return (~line 333) becomes `return new FireResult(code, null);`. Dropping or re-deriving the capture branch is a regression — the whole-branch review checks for it.
 
 - [ ] **Step 4: `normalizeLocation` (pure static)**
 
@@ -309,7 +312,7 @@ The worker's `requestPage` is `paramValue(stepBodyOrPath, "page")` from the fire
 
 - [ ] **Step 5: Counters + worker recording + `summaryJson`**
 
-Add near lines 63-65: `final AtomicLong redirects = new AtomicLong();` and `final java.util.concurrent.ConcurrentHashMap<String,java.util.concurrent.atomic.LongAdder> redirectTargets = new java.util.concurrent.ConcurrentHashMap<>();`. Change the worker fire call to `FireResult fr = fireR(baseUrl, toFire, jar, bindings); int code = fr.code();` and, in the post-warmup recording block (after the `else if (code>=400&&code<500)` at line 146), add:
+Add the import `java.util.concurrent.atomic.LongAdder` at the top of `LoadRun.java` (lines 11-12 currently import only `AtomicLong`/`AtomicLongArray`; the map field below is fully-qualified but the **local** `LongAdder a` is not, so without the import it will NOT compile). Then add near lines 63-65: `final AtomicLong redirects = new AtomicLong();` and `final java.util.concurrent.ConcurrentHashMap<String,java.util.concurrent.atomic.LongAdder> redirectTargets = new java.util.concurrent.ConcurrentHashMap<>();`. Change the worker fire call to `FireResult fr = fireR(baseUrl, toFire, jar, bindings); int code = fr.code();` and, in the post-warmup recording block (after the `else if (code>=400&&code<500)` at line 146), add:
 ```java
 else if (code >= 300 && code < 400) {
     redirects.incrementAndGet();

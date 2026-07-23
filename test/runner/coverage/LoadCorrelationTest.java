@@ -179,6 +179,34 @@ public class LoadCorrelationTest {
         assertNotEquals("each fire's nonce differs", a, b);
     }
 
+    /**
+     * DD-038 (@claude review): the salt must separate two driver PODS, not just two host processes.
+     * The driver runs as a Kubernetes Job, and inside a container's own PID namespace every driver's
+     * main process is renumbered from a small integer — commonly 1 — so two pods that start in the
+     * same millisecond share both components of a millis+pid salt and re-emit an identical token
+     * stream. That silently revives the saveText() no-op this whole feature exists to kill, and it
+     * looks like a clean run. HOSTNAME is the pod name in Kubernetes (DD-013), so it carries the
+     * separation; pid remains the fallback for a local run where HOSTNAME is unset.
+     */
+    @Test
+    public void runSaltSeparatesTwoPodsThatCollideOnMillisAndPid() {
+        String podA = LoadRun.buildRunSalt("basquin-driver-abc12", 1_700_000_000_000L, 1L);
+        String podB = LoadRun.buildRunSalt("basquin-driver-xyz98", 1_700_000_000_000L, 1L);
+        assertNotEquals("same millisecond + same namespaced PID 1 must still yield distinct salts",
+                podA, podB);
+
+        // Unset/blank HOSTNAME (a local run) falls back to the pid rather than emitting an empty slot.
+        assertNotEquals(LoadRun.buildRunSalt(null, 1_700_000_000_000L, 4242L),
+                LoadRun.buildRunSalt(null, 1_700_000_000_000L, 9999L));
+        assertEquals(LoadRun.buildRunSalt("", 1_700_000_000_000L, 7L),
+                LoadRun.buildRunSalt(null, 1_700_000_000_000L, 7L));
+
+        // The salt is spliced verbatim into a URL-encoded body, so it must carry no unsafe char even
+        // when HOSTNAME is something exotic (safeKey collapses the rest to '_').
+        assertTrue("salt must stay URL-safe",
+                LoadRun.buildRunSalt("pod/../x&y=1", 1L, 2L).matches("[A-Za-z0-9._x-]+"));
+    }
+
     @Test
     public void nonceDoesNotMaskAnUnboundRealRef() {
         // @nonce fills, but an unbound ${{csrf}} still makes the step skip (null)

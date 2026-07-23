@@ -1503,7 +1503,13 @@ JSPWiki-specific. (2) `fire` auto-followed redirects, so a *rejected* write (`30
    correlation namespace, which stays purely author-controlled for response captures. It emits the
    fire-time deferral marker `${{@nonce}}` (the `@` is not in `Capture.NAME_PATTERN`, so `@nonce` can
    never be a valid author-named capture → collision-proof), which `LoadRun.substitute` fills per-fire
-   with `RUN_SALT-counter` (`RUN_SALT` = `currentTimeMillis()` folded with the process pid). A bare
+   with `RUN_SALT-counter` (`RUN_SALT` = `currentTimeMillis()` folded with the pod's `HOSTNAME` and the
+   process pid). The pod identity is load-bearing, not belt-and-braces: the driver runs as a Kubernetes
+   Job, and inside a container's own PID namespace every driver's main process is renumbered from a
+   small integer — commonly `1` — so a millis+pid salt collides outright for two pods started in the
+   same millisecond (a parallel Job, or two campaigns off one controller tick), and both then emit an
+   identical token stream. `HOSTNAME` is the pod name in Kubernetes (DD-013) and separates them; pid
+   remains the fallback for a local run where `HOSTNAME` is unset. A bare
    `AtomicLong` *seeded* with millis is not enough: the seed advances in wall-clock ms, but the counter
    advances by number-of-saves (millions per run under load), so a later run's millis seed can land
    inside a prior run's emitted counter range and re-emit values still saved on pages — reintroducing
@@ -1520,7 +1526,10 @@ JSPWiki-specific. (2) `fire` auto-followed redirects, so a *rejected* write (`30
    `redirectTargets` counters. **Self-redirects fold to one reserved `"self"` key**: a *successful*
    JSPWiki save also 302s to `/Wiki.jsp?page=<savedPage>`, so without folding, the 66 real page names
    would fill the bounded map first-come and evict the actual rejects (`SessionExpired`/
-   `PageModified`) — the exact invisibility this feature kills. `redirectTargets` keys are restricted to
+   `PageModified`) — the exact invisibility this feature kills. `"self"` and `"other"` (the overflow
+  bucket) are therefore *reserved* key names: a target app with a route literally named `self`/`other`
+  would merge into the reserved bucket. Accepted — these are operator-facing counters, not an oracle.
+  `redirectTargets` keys are restricted to
    a safe charset and the map is hard-bounded (`CAP=12`), because the operator drops the **whole**
    termination-message summary on invalid or oversized JSON, so one fuzzed/reflected `Location` must
    never be able to void it.
@@ -1552,8 +1561,8 @@ covered only by its parts, not end-to-end through a live redirect under load.
   different units (wall-clock ms vs. number-of-saves), so under load a later run's seed lands inside a
   prior run's emitted range and re-emits still-saved values, reintroducing the no-op (see Decision 1).
 - **Packing salt and counter into one integer's high/low bits** — caps a run's save count (bits spent
-  on the salt) and collides when two runs start in the same millisecond. The `<millis>x<pid>-<counter>`
-  string has neither limit and stays URL-safe.
+  on the salt) and collides when two runs start in the same millisecond. The
+  `<millis>x<host>x<pid>-<counter>` string has neither limit and stays URL-safe.
 - **Random/UUID nonce** — works, but is bigger on the wire for no uniqueness benefit over a per-process
   salt plus a monotonic counter.
 - **Keep auto-follow, infer the redirect target from `getURL()`** — `HttpURLConnection.getURL()`

@@ -508,10 +508,22 @@ public final class LoadRun {
 
     private static final Pattern CORRELATION_REF_PATTERN = Pattern.compile("\\$\\{\\{([^}]+)\\}\\}");
 
-    // DD-038: a per-fire unique payload token. RUN_SALT is per-process (millis + pid, so two driver
-    // JVMs starting in the same millisecond still differ); NONCE is the within-run counter.
-    static final String RUN_SALT =
-            Long.toString(System.currentTimeMillis()) + "x" + Long.toString(ProcessHandle.current().pid());
+    // DD-038: a per-fire unique payload token. RUN_SALT is per-process; NONCE is the within-run counter.
+    // millis+pid alone is NOT enough here: the driver runs as a Kubernetes Job, and under a container's
+    // own PID namespace every driver's main process is renumbered from a small integer (commonly 1), so
+    // two pods started in the same millisecond — a parallel Job, or two campaigns off one controller
+    // tick — would share a salt and re-emit the same token stream, reviving the very saveText() no-op
+    // this feature exists to kill. HOSTNAME is the pod name in Kubernetes (DD-013), which makes the
+    // salt unique per POD, not merely per host-process; it falls back to pid when unset (local runs).
+    static final String RUN_SALT = buildRunSalt(System.getenv("HOSTNAME"), System.currentTimeMillis(),
+            ProcessHandle.current().pid());
+
+    /** Package-private + pure so the salt's collision-resistance is testable without spawning pods. */
+    static String buildRunSalt(String hostname, long millis, long pid) {
+        String node = (hostname == null || hostname.isBlank()) ? Long.toString(pid) : safeKey(hostname);
+        return Long.toString(millis) + "x" + node + "x" + Long.toString(pid);
+    }
+
     static final java.util.concurrent.atomic.AtomicLong NONCE = new java.util.concurrent.atomic.AtomicLong();
 
     /**

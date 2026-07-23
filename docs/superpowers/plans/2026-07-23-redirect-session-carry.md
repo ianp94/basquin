@@ -901,6 +901,8 @@ boundaries before `pollResult` ever sees them.
 
 ```java
 static CostSample pollResult(String base, String reqId, String label)              // unchanged shape, hops = 1
+// (pollResultOrNull's javadoc {@link #reconcile} is a forward reference to a Task-4 symbol; javac
+//  ignores an unresolved @link, so it compiles in Task 3 and resolves once Task 4 lands.)
 static CostSample pollResult(String base, String reqId, String label, int hops)    // counts a miss
 private static CostSample pollResultOrNull(String base, String reqId, String label, int hops)  // null on miss
 ```
@@ -1871,7 +1873,11 @@ public class ExploreRedirectTest {
 ```
 
 > Two helpers from Task 3's test are reused rather than copied: promote `withResultsDir` and
-> `waitForMetas` in `AccumulatedPollTest` to package-private `static`
+> `waitForMetas` in `AccumulatedPollTest` to package-private `static`, and promote its `Body`
+> functional interface likewise, so `ExploreRedirectTest` (this task and Task 5) can drive a server
+> body through the same helper. **Both Task 4 and Task 5 therefore MODIFY
+> `test/runner/coverage/AccumulatedPollTest.java` — add it to their Files blocks.** `ExploreRedirectTest`
+> will not compile until that promotion is made
 > (`static void withResultsDirFor(Path, Body)`, `static List<String> waitForMetas(...)`) as part of
 > this step. Both are test-only; no production code is added for testing.
 
@@ -2245,7 +2251,10 @@ all needed", plus the `Redirect-Loop` finding it was missing a home for.**
         AccumulatedPollTest.withResultsDirFor(dir, () -> {
             CoverageGuidedRun.request(base, "/protected");
 
-            assertEquals("stopped at the revisit, not at the cap", 3, seen.size());
+            // The loop detects a revisited URL BEFORE re-issuing it (look-ahead), so a self-loop
+            // is exactly 2 requests: the original and the one hop that reveals the repeat. "A
+            // revisited URL ends the chain" (spec §2) does not require wastefully re-fetching it.
+            assertEquals("stopped at the revisit (look-ahead), not at the cap", 2, seen.size());
             List<String> metas = AccumulatedPollTest.waitForMetas(dir, "Redirect-Loop", 1);
             assertEquals(1, metas.size());
             assertTrue("labelled with the RAW step, never a resolved hop URL (DD-036)",
@@ -2435,12 +2444,22 @@ fails carrying `SECRET-PATH-TOKEN-42`.
       `CostCorpus.java:47` and all ~20 test call sites compile unchanged. `CostCorpus.consider` gains
       an 8-arg overload taking `hops`; the 7-arg one delegates with 1. `CoverageGuidedRun`'s loop
       passes `sample.hops`, and the cost-ranked line at `:349-353` appends `(h=N)` when `N > 1`.
+      **This is inert unless the driver actually threads its real hop count into the sample it
+      returns** — every existing construction site builds the 4-arg form (`hops = 1`), so without
+      this step `sample.hops` is always 1 and `(h=N)` never prints. Construct BOTH the header sample
+      and the poll sample (`request`'s final-hop `CostSample` and `pollResultOrNull`'s) with the
+      5-arg constructor, passing `request`'s own `hops` local. A test must assert a 3-hop input
+      records `hops=3` on its `CorpusEntry`, or this whole step is a silent no-op — which is exactly
+      the spec Consequence it claims to satisfy going unimplemented.
       **Why it matters, in the record:** the replay corpus is explore's output and load's input
       (DD-035), and load fires exactly one hop (DD-038, deliberately). A login POST ranked expensive
       on the strength of its dashboard hop is, under load, a cheap 302 — so the number must be
       readable as an explore-side measurement.
 
-- [ ] **Step 3 — correct the three in-tree comments that assert the opposite of what shipped.** Each
+- [ ] **Step 3 — correct the in-tree comments that assert the opposite of what shipped.** Tasks 3
+      and 4 rewrite two of the three the earlier draft listed, so by this task only one survives:
+      **verify each target still exists before editing it** rather than assuming the pre-DD-040
+      text. Each
       is load-bearing prose that a future reader would trust:
       - `CoverageGuidedRun.java:714-716` — "a followed hop re-sends this same id and the target's
         second put overwrites the first: FINAL-HOP-WINS". Now false: the store accumulates. Replace

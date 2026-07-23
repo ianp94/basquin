@@ -25,18 +25,26 @@ The one twist: a nonce must vary at **replay (fire) time**, not be frozen at gra
 - `LoadRun.substitute` (shared by both engines): its `${{name}}` scan yields `name = "@nonce"`; handle it **before** the bindings lookup:
 
 ```java
-static final long RUN_SALT = System.currentTimeMillis();     // once per process (class-load)
+// RUN_SALT is per-process and collision-resistant even for two driver JVMs starting in the same
+// millisecond (parallel campaigns): fold in the pid (and nanoTime) so their token streams differ.
+static final String RUN_SALT =
+        Long.toString(System.currentTimeMillis()) + "x" + Long.toString(ProcessHandle.current().pid());
 static final java.util.concurrent.atomic.AtomicLong NONCE =
         new java.util.concurrent.atomic.AtomicLong();        // within-run counter, from 0
 // inside substitute()'s while loop, name = m.group(1):
 if (name.equals("@nonce")) {
-    out.append(RUN_SALT).append('-').append(NONCE.getAndIncrement());  // "<millis>-<n>", URL-safe (hyphen unreserved)
+    out.append(RUN_SALT).append('-').append(NONCE.getAndIncrement());  // "<millis>x<pid>-<n>", URL-safe (unreserved chars)
 } else {
     String value = bindings == null ? null : bindings.get(name);
     if (value == null) return null;
     out.append(value);
 }
 ```
+
+**Substitution scope — the full request line (path + body), at every fire site.** DD-036/037 substituted only the body; generators are usually used in URL queries (`?rev=<nonce>`), so body-only would bake the literal marker into a fired URL and silently no-op. So this feature widens substitution:
+- `RequestLine.needsSubstitution()` → `(body has "${{") || (path has "${{")`.
+- Every fire site substitutes both and rebuilds the `RequestLine`: the **LoadRun worker loop**, `CoverageGuidedRun.runSequence`, AND the single-step `CoverageGuidedRun.request(base, String)` (the plain-explore path — today it never substitutes, so a nonce in a bare explore route would fire literally; it now substitutes with an empty/no-capture bindings map, which a nonce needs). `substitute` is already a pure string→string op, so it's called on `path` then `body`.
+- **Lint exemption (`lintCorrelationOrdering`, LoadRun.java:513-528):** `@nonce` is *generated*, not captured — it must be skipped when checking that a `${{name}}` ref has a preceding `<<name=` capture, or every nonce corpus trips a false "will never bind" warning (and it's log-once, so the false positive masks real ordering bugs).
 
 - **Uniqueness (two fields — this is load-bearing):** a per-process `RUN_SALT` (`currentTimeMillis()` at class-load) **plus** a within-run `AtomicLong` counter, emitted as `<RUN_SALT>-<counter>`. The counter guarantees uniqueness *within* a run (monotonic, thread-safe across workers); the salt guarantees uniqueness *across* runs (a different process gets a different salt, **regardless of counter magnitude**). A single `AtomicLong` *seeded* with millis is NOT enough: the seed advances in wall-clock millis but the counter advances by number-of-saves (millions per run under load), so a later run's millis seed can land deep inside a prior run's emitted counter range and re-emit values still saved on pages — reintroducing the exact `oldText.equals(proposedText)` no-op this feature exists to kill (bounded to ~one transient no-op per page, but the invariant is false and it matters for re-runs against a persistent store). The hyphen is an RFC 3986 §2.3 *unreserved* character, so the token stays URL-safe and is spliced verbatim under model A (no encoding).
 - **`@nonce` never triggers the skip-and-count path:** it is generated, not looked up, so it never returns `null`. A body with both `${{@nonce}}` and an unbound `${{csrf}}` still returns `null` (the real capture miss) — nonce does not mask it.
@@ -45,22 +53,26 @@ if (name.equals("@nonce")) {
 
 ## Component 2 — Location-classified 3xx counters (load mode only)
 
-`LoadRun.fire` stops auto-following redirects; the load driver then observes and classifies the direct response.
+`LoadRun.fire` stops auto-following redirects; the load driver observes the direct response and classifies its `Location`.
 
-- `c.setInstanceFollowRedirects(false)` in `fire`. The capture path is unaffected (the edit-form GET is a plain `200`; `captureSessionCookie` already walks `Set-Cookie` headers regardless of following).
-- New counters alongside `serverError`/`clientErrors`: a `redirects` `AtomicLong` (any `3xx`), and a bounded `redirectTargets` `ConcurrentHashMap<String,LongAdder>` keyed by a normalized `Location` label. Normalization: if `Location` has a `page=<X>` query param, key = `<X>` (JSPWiki's reject pages are `SessionExpired`/`PageModified`); else the last path segment; unknown/absent → `"?"`. **Truncate the key to 64 chars** so a pathological `Location` can't bloat the ~4 KB termination budget.
-- **Cap is best-effort, not a hard bound** (deliberate — real cardinality is a handful of page names, so a rare few-key overshoot ≤ worker count is harmless and cheaper than locking):
+- `c.setInstanceFollowRedirects(false)` in `fire`.
+- **`fire` must return the `Location`, not just the code (F2 contract).** `fire` currently returns a bare `int` and the connection is method-local, so the worker can't read the header. Add `record FireResult(int code, String location)` and a `fire(base, step, jar, bindings)` overload returning `FireResult` (reading `c.getHeaderField("Location")`, null for non-3xx); the existing `int`-returning overloads **delegate** (`return fireR(...).code()`) so `LoadFireTest` and any other caller are untouched. The worker calls the `FireResult` overload.
+- New counters alongside `serverError`/`clientErrors`: a `redirects` `AtomicLong` (any `3xx`), and a `redirectTargets` `ConcurrentHashMap<String,LongAdder>` keyed by a normalized label.
+- **`normalizeLocation(location, requestPage)` — a pure static, so it's unit-testable and its edge cases are pinned:**
+  - **Self-redirect folding (F1 — critical):** a *successful* JSPWiki save also `302`s to `/Wiki.jsp?page=<savedPage>`, so under a naive `page=` rule the 66 real page names would fill the cap first-come and evict the actual rejects (`SessionExpired`/`PageModified`) into `"other"` — the exact invisibility this feature kills. So a **self-redirect** (Location's `page` equals the request's own `page`) folds to the single reserved key `"self"`; only *cross-target* redirects (the rejects) consume distinct slots. The worker extracts the request's `page` from the fired step (`page=` in its body/query) and passes it in.
+  - Parse the `page` param **exactly** (a `[?&]page=` boundary, not a substring — else `frompage=` false-matches); else the last path segment **with any query stripped** (`/Wiki.jsp?tab=view` → `Wiki.jsp`); handle absolute `Location`s (`http://…/Wiki.jsp?page=X`); absent/unparseable → `"?"`. **Truncate the key to 64 chars.**
+- **Hard budget bound (F6):** the ~4 KB cap is the **kubelet termination-message limit** — if `summaryJson` overflows it, the operator's `json.Unmarshal` (`basquincampaign_controller.go:~331`) silently drops the **entire** summary. So `redirectTargets` is serialized **hard-bounded**: at most `CAP=12` keys (with the best-effort admission below; a rare overshoot ≤ worker-count is fine *in-memory*), and the JSON emits only the **top-N by count** (N≤12) so the summary can never blow the budget.
   ```java
-  LongAdder a = redirectTargets.get(key);
+  LongAdder a = redirectTargets.get(key);          // best-effort admission (benign overshoot ≤ workers)
   if (a == null) {
-      if (redirectTargets.size() >= CAP) key = "other";      // CAP = 12
+      if (redirectTargets.size() >= CAP) key = "other";
       a = redirectTargets.computeIfAbsent(key, k -> new LongAdder());
   }
   a.increment();
   ```
-- Worker recording block (post-warmup): `else if (code >= 300 && code < 400) { redirects.incrementAndGet(); redirectTargets bump; }` — mutually exclusive with the existing `code>=500`/`code>=400&&<500` branches. A `2xx` counts as neither.
-- `summaryJson` gains `"redirects":N` and `"redirectTargets":{...}` after `clientErrors`. `StatusReporter` is **untouched** (terminal-summary-only, per DD-036).
-- **Behavior change (documented):** load mode no longer follows redirects — it measures the server's direct response to the exact request (arguably more correct for a load test) and surfaces rejects. Latency for a redirecting request drops the follow hop. `CoverageGuidedRun` (explore) keeps its follow behavior (coverage, not redirect metrics). **DD-035 session interaction:** `captureSessionCookie(c, jar)` runs on the direct response *before* any follow decision, so a `Set-Cookie` on a `3xx` still populates the jar — but a cookie an app (re)sets on the *followed* `200` (the redirect target) is no longer observed. Harmless for JSPWiki (its session cookie is minted on the plain-`200` form GET), but a general corpus against an app that establishes/rotates a session cookie on a post-redirect `200` would lose session continuity across sequence steps. Documented as a known limitation of no-follow load mode.
+- Worker recording block (post-warmup): `else if (code >= 300 && code < 400) { redirects.incrementAndGet(); bump redirectTargets with normalizeLocation(result.location(), requestPage); }` — mutually exclusive with the existing `code>=500`/`code>=400&&<500` branches; a `2xx` and a `-1` transport error count as neither.
+- `summaryJson` gains `"redirects":N` and `"redirectTargets":{...}` (top-N) after `clientErrors`. `StatusReporter` is **untouched** (terminal-summary-only, per DD-036).
+- **Behavior change (documented):** load mode no longer follows redirects — it measures the server's direct response to the exact request (arguably more correct for a load test) and surfaces rejects. Latency drops the follow hop for a redirecting request. `CoverageGuidedRun` (explore) keeps its follow behavior (coverage, not redirect metrics). **DD-035 session interaction — no-follow is a FIX, not a regression (F7):** with follow ON, a `302` from an authenticated action was re-issued as a *cookieless* GET whose *anonymous* `Set-Cookie` **overwrote the jar's valid `JSESSIONID`** on the way to the redirect target (root-cause §5.3) — silently dropping the session mid-sequence. `captureSessionCookie(c, jar)` runs on the direct `3xx` response *before* the (now-absent) follow, so the real session cookie is kept and the anonymous overwrite never happens. Session carry strictly improves (jpetstore's signon→authenticated-GETs sequence included).
 
 ## Data flow (JSPWiki honest write)
 
@@ -76,11 +88,14 @@ Grammar `$rev = <nonce>`; `edit_save` POST body `…&_editedtext=${wikitext} ${r
 
 ## Testing
 
-- `substitute` nonce: `substitute("x=${{@nonce}}", empty-map)` yields `x=<millis>-<n>`; two calls yield **different** values; a body with `${{@nonce}}` + an unbound `${{csrf}}` still returns `null`; `${{@nonce}}` needs no binding and never NPEs on a null bindings map.
+- `substitute` nonce: `substitute("x=${{@nonce}}", empty-map)` yields `x=<salt>-<n>`; two calls yield **different** values; a body with `${{@nonce}}` + an unbound `${{csrf}}` still returns `null`; `${{@nonce}}` needs no binding and never NPEs on a null bindings map. Two `RUN_SALT`s constructed in the same millisecond but different pids differ.
+- **Path substitution (F4):** `needsSubstitution()` is true when the marker is in the **path/query** (`/x?rev=${{@nonce}}`, empty body); the fire sites substitute the path so the fired URL carries `<salt>-<n>`, not the literal marker. Cover it for the load worker, `runSequence`, and the single-step `request(base, String)` explore path.
 - `RequestGrammar`: `$rev = <nonce>` in a route → `expandAll`/`randomRequest` yields the marker `${{@nonce}}` verbatim (the generator output isn't re-scanned), and `RequestLine.parse(...).needsSubstitution()` is true for that line.
-- `fire` 3xx (JDK `HttpServer`): a handler returning `302` with `Location: /Wiki.jsp?page=SessionExpired` → `fire` returns `302` (not followed), and driving it increments `redirects` with `redirectTargets` key `SessionExpired`. A `200` increments neither. **Plus a `302`-carrying-`Set-Cookie` test** asserting the jar still captures it (pins the DD-035 interaction).
-- `summaryJson` includes `redirects`/`redirectTargets`; update its **two** callers — `LoadRun.run` and `LoadDriftUnavailableTest` (the only ones) — for the new params.
-- Full suite green. **`LoadFireTest` is NOT affected by the no-follow flip** (its handlers return `200` directly, never via a redirect — verified), so no existing assertion needs repair; the 3xx coverage is a *new* redirect-handler test, not a fix to an old one.
+- **`lintCorrelationOrdering`:** a nonce-only corpus (`${{@nonce}}`, no capture) triggers **no** "will never bind" warning.
+- **`normalizeLocation` (pure static):** self-redirect (`page=Main` request, `Location=/Wiki.jsp?page=Main`) → `"self"`; reject (`Location=/Wiki.jsp?page=SessionExpired`) → `"SessionExpired"`; `frompage=X` does NOT match the `page=` rule; a `Location` with a trailing query (`/Wiki.jsp?tab=view`) → `"Wiki.jsp"`; an absolute `http://…/Wiki.jsp?page=X` → `"X"`; a 70-char page → truncated to 64.
+- `fire` 3xx: `FireResult` overload returns `(302, "/Wiki.jsp?page=SessionExpired")` for a redirect handler and `(200, null)` for a plain handler; the `int` overload delegates (same code). Driving a redirect through the worker increments `redirects` and the right `redirectTargets` key. **Plus a `302`-carrying-`Set-Cookie` test** asserting the jar still captures it (pins the DD-035 fix).
+- `summaryJson` includes `redirects`/`redirectTargets` (top-N, hard-bounded); update its **two** callers — `LoadRun.run` and `LoadDriftUnavailableTest` (the only ones) — for the new params.
+- Full suite green. **`LoadFireTest` is NOT affected by the no-follow flip** (its handlers return `200` directly, never via a redirect — verified) and calls the `int` overload — no existing assertion needs repair; the 3xx coverage is a *new* redirect-handler test.
 
 ## Rejected alternatives
 
@@ -92,4 +107,12 @@ Grammar `$rev = <nonce>`; `edit_save` POST body `…&_editedtext=${wikitext} ${r
 
 ## Scope
 
-One cohesive feature, one plan. Touch: `runner/coverage/RequestGrammar.java` (`<nonce>` generator → `${{@nonce}}` marker), `runner/coverage/LoadRun.java` (`substitute` `@nonce` branch + `RUN_SALT`/`NONCE`; `fire` no-follow + `redirects`/`redirectTargets`; worker loop; `summaryJson`), `examples/grammar/jspwiki.grammar` (`$rev = <nonce>` + `${rev}` in `edit_save`), tests, and the DD-038 doc/CHANGELOG. `CoverageGuidedRun` is untouched except that it already shares `substitute` (so `${{@nonce}}` works there for free). No new dependencies.
+One cohesive feature, one plan. Touch:
+- `runner/coverage/RequestGrammar.java` — the `<nonce>` generator → `${{@nonce}}` marker.
+- `runner/coverage/RequestLine.java` — `needsSubstitution()` now checks **path + body**.
+- `runner/coverage/LoadRun.java` — `substitute` `@nonce` branch + `RUN_SALT`/`NONCE`; `lintCorrelationOrdering` exempts `@nonce`; `fire` no-follow + `FireResult(code, location)` overload (int overloads delegate) + `redirects`/`redirectTargets` + static `normalizeLocation`; the worker loop substitutes path+body and records the redirect; `summaryJson` (hard-bounded top-N).
+- `runner/coverage/CoverageGuidedRun.java` — `runSequence` **and** the single-step `request(base, String)` substitute path+body (so `<nonce>` works in explore, not just load sequences).
+- `examples/grammar/jspwiki.grammar` — `$rev = <nonce>` + `${rev}` in `edit_save`.
+- tests + the DD-038 doc/CHANGELOG.
+
+No new dependencies.

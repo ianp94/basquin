@@ -237,16 +237,36 @@ public class Agent {
             leakDetected = true;
         }
 
+        // DD-040: the leak is recorded on the context FIRST and unconditionally. The boundary
+        // publishes it from here into the ResultStore (RequestBoundary.publishResult), which is the
+        // only channel a driver can read: leak evidence never enters lastInvariantViolations (that
+        // is Invariants' evidence alone), so it is in no response header, and recordStatus below is
+        // a no-op in a target JVM started without -Dbasquin.status. Softening the throw without
+        // this write would trade a false 500 for a silently lost finding.
         ctx.leakDetected = leakDetected;
         recordStatus(ctx);
         if (leakDetected) {
-            // Optional hard-exit for demos/CI so leaked non-daemon threads don't keep JVM alive
+            // Optional hard-exit for demos/CI so leaked non-daemon threads don't keep JVM alive.
+            // Deliberately outside the mode gate: this is an explicit "kill the process" switch set
+            // only by the demo/CI Gradle tasks, never by the operator in a target JVM.
             if (Boolean.getBoolean("basquin.forceExitOnLeak")) {
                 System.err.println("[Basquin] Forcing process exit due to leak detection (basquin.forceExitOnLeak=true)");
                 System.exit(2);
             }
-            // Fail fast for v0.1 to make leaks obvious
-            throw new IllegalStateException("Leak(s) detected after iteration " + ctx.iterationNumber);
+            // DD-040: fail fast only in HARD mode. This throw used to be unconditional, and in a
+            // servlet target it propagates out of the boundary AFTER the app has already produced
+            // its response — observed live on a Roller publish that wrote its database row and then
+            // returned an empty 500. A harness must never alter the response of the application it
+            // is measuring; worse, the driver would then have recorded its own exception as an app
+            // crash. Mode resolution matches every other invariant (Invariants.isHard): the
+            // per-invariant key basquin.invariant.leak.mode wins if set, else the global
+            // basquin.invariant.mode, which DEFAULTS TO HARD — so an unconfigured run, the leak
+            // demo and CI all keep failing loudly exactly as before.
+            if (Invariants.isHard("basquin.invariant.leak.mode")) {
+                throw new IllegalStateException("Leak(s) detected after iteration " + ctx.iterationNumber);
+            }
+            System.err.println("[Basquin] Leak(s) detected after iteration " + ctx.iterationNumber
+                    + " — soft mode: recorded, not thrown (the app's response is left untouched)");
         }
 
         if (!runner.util.StatusReporter.isEnabled()) {
@@ -267,6 +287,19 @@ public class Agent {
      */
     public static void beginIteration() {
         CURRENT.set(begin());
+    }
+
+    /**
+     * DD-040: the iteration in flight on this thread, WITHOUT removing it.
+     *
+     * <p>The boundary reads this <em>before</em> calling {@link #endIteration()}, never after and
+     * never from that method's outcome. {@code endIteration()} throws on a hard-mode invariant
+     * violation ({@link Invariants}) and on leak detection — i.e. for exactly the iterations that
+     * carry a finding — and its own {@code finally} clears the thread-local either way. So a
+     * context read after the call is {@code null} precisely when there is something to report.
+     */
+    static IterationContext currentContext() {
+        return CURRENT.get();
     }
 
     /**

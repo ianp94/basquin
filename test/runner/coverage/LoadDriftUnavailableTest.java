@@ -28,7 +28,7 @@ public class LoadDriftUnavailableTest {
         targets.put("self", 42L);
         targets.put("SessionExpired", 5L);
         targets.put(LoadRun.normalizeLocation("/Wiki.jsp?page=a\"b<c", null), 1L);  // fuzzed → safeKey'd
-        String json = LoadRun.summaryJson(100, 50.0, 1, 2, 3, 4, drift, 0, 0, 0, 0, false, 47, targets);
+        String json = LoadRun.summaryJson(100, 50.0, 1, 2, 3, 4, drift, 0, 0, true, 0, 0, false, 47, targets);
 
         assertTrue("redirects count present", json.contains("\"redirects\":47"));
         assertTrue("self-fold key present", json.contains("\"self\":42"));
@@ -44,7 +44,7 @@ public class LoadDriftUnavailableTest {
     public void driftUnavailableOmitsHeapAndThreadDrift() {
         // The drift delta's actual values are irrelevant when unavailable — they must never surface.
         LoadRun.DriftDelta drift = LoadRun.driftDelta(null, null);
-        String json = LoadRun.summaryJson(100, 50.0, 10, 20, 30, 40, drift, 0, 0, 0, 0, true, 0, java.util.Map.of());
+        String json = LoadRun.summaryJson(100, 50.0, 10, 20, 30, 40, drift, 0, 0, true, 0, 0, true, 0, java.util.Map.of());
 
         assertTrue("driftUnavailable flag must be present", json.contains("\"driftUnavailable\":true"));
         assertFalse("heapDriftKb must be omitted, not faked as 0", json.contains("\"heapDriftKb\""));
@@ -59,7 +59,7 @@ public class LoadDriftUnavailableTest {
         LoadRun.Drift last = LoadRun.parseDrift("995,10,2000");
         LoadRun.DriftDelta drift = LoadRun.driftDelta(first, last);
 
-        String json = LoadRun.summaryJson(100, 50.0, 10, 20, 30, 40, drift, 0, 0, 0, 0, false, 0, java.util.Map.of());
+        String json = LoadRun.summaryJson(100, 50.0, 10, 20, 30, 40, drift, 0, 0, true, 0, 0, false, 0, java.util.Map.of());
 
         assertTrue("heapDriftKb must be present even when <= 0", json.contains("\"heapDriftKb\":-5"));
         assertTrue("threadDrift must be present", json.contains("\"threadDrift\":0"));
@@ -102,5 +102,55 @@ public class LoadDriftUnavailableTest {
         LoadRun.Drift sample = LoadRun.parseDrift("995,10,2000");
 
         assertTrue(LoadRun.driftUnavailable(true, baseline, sample, false));
+    }
+
+    // --- DD-040: the STRUCTURAL zeros in the violations block. Load mode is lock-free passthrough
+    // (DD-029), so the target evaluates nothing and the DRIVER is the only evaluator — and it only
+    // evaluates latency, only when a threshold was configured. Roller reported
+    // "violations":{"latency":0,"heap":0,"thread":0} at a p50 of 503ms against an intended 250ms
+    // budget, because the load driver JVM was never given -Dbasquin.invariant.latency.maxMs. A count
+    // of 0 for something that was never checked is a fabricated "checked and clean".
+
+    @Test
+    public void noLatencyThresholdOmitsTheCountAndSaysSo() {
+        LoadRun.DriftDelta drift = LoadRun.driftDelta(
+                LoadRun.parseDrift("1000,10,1000"), LoadRun.parseDrift("1000,10,1000"));
+
+        String json = LoadRun.summaryJson(100, 50.0, 10, 20, 30, 40, drift, 0, 0,
+                /* latencyEvaluated */ false, 0, 0, false, 0, java.util.Map.of());
+
+        assertFalse("an unevaluated latency invariant must NOT print a count",
+                json.contains("\"latency\":"));
+        assertTrue("and must say, in data, that it was not evaluated",
+                json.contains("\"notEvaluated\":[\"latency\",\"heap\",\"thread\"]"));
+    }
+
+    @Test
+    public void heapAndThreadViolationsAreNeverCountedInLoadMode() {
+        LoadRun.DriftDelta drift = LoadRun.driftDelta(
+                LoadRun.parseDrift("1000,10,1000"), LoadRun.parseDrift("1000,10,1000"));
+
+        String json = LoadRun.summaryJson(100, 50.0, 10, 20, 30, 40, drift, 0, 7,
+                /* latencyEvaluated */ true, 0, 0, false, 0, java.util.Map.of());
+
+        assertTrue("a configured latency threshold reports its real count", json.contains("\"latency\":7"));
+        assertFalse("load mode never evaluates heap; a 0 there is fabricated", json.contains("\"heap\":"));
+        assertFalse("load mode never evaluates threads either", json.contains("\"thread\":"));
+        assertTrue("the omission must be explicit, not silent",
+                json.contains("\"notEvaluated\":[\"heap\",\"thread\"]"));
+    }
+
+    @Test
+    public void aRealMeasuredZeroIsStillReportedAsZero() {
+        // The whole point of the change: 0 must remain expressible — it just has to MEAN
+        // "checked and clean" rather than "never checked".
+        LoadRun.DriftDelta drift = LoadRun.driftDelta(
+                LoadRun.parseDrift("1000,10,1000"), LoadRun.parseDrift("1000,10,1000"));
+
+        String json = LoadRun.summaryJson(100, 50.0, 10, 20, 30, 40, drift, 0, 0,
+                /* latencyEvaluated */ true, 0, 0, false, 0, java.util.Map.of());
+
+        assertTrue("a measured zero must still print", json.contains("\"latency\":0"));
+        assertFalse("and must not be listed as unevaluated", json.contains("\"latency\",\"heap\""));
     }
 }

@@ -144,6 +144,27 @@ type BasquinCampaignStatus struct {
 	CoveragePct string `json:"coveragePct,omitempty"`
 	// +optional
 	Findings int32 `json:"findings,omitempty"`
+
+	// FindingsLowerBound / ReportMisses qualify Findings for an EXPLORE run (DD-040).
+	//
+	// The driver polls the target for each request's measurements; a poll that misses yields an
+	// unmeasured sample, never a zero, and ticks reportMisses. A run with any miss therefore knows
+	// its own finding count is incomplete — and the driver has emitted exactly that, as
+	// findingsLowerBound, since DD-040. It reached no consumer: `kubectl get basquincampaign` read
+	// "run complete: …, 12 findings" for a partially blind run, which is precisely the
+	// emitted-since-DD-035-and-parsed-nowhere defect DD-040 fixes for driftUnavailable.
+	//
+	// FindingsLowerBound true means Findings is a floor, not a count.
+	// +optional
+	FindingsLowerBound bool `json:"findingsLowerBound,omitempty"`
+
+	// ReportMisses is how many requests the driver could not obtain measurements for. A POINTER, on
+	// the same reasoning as LoadStatus.HeapDriftKb: nil means the driver never reported the figure
+	// (an older driver image), a non-nil 0 means it reported and nothing missed. A plain int64 would
+	// render both as a reassuring "0 misses".
+	// +optional
+	ReportMisses *int64 `json:"reportMisses,omitempty"`
+
 	// CorpusConfigMap names a ConfigMap the operator emits at end-of-run holding the run's interesting
 	// "replay corpus" (the inputs that reached new coverage), for reproducibility, the dashboard corpus
 	// view, and load-mode replay (DD-026 PR 1). Owner-referenced to the campaign, so it GCs with it.
@@ -171,9 +192,26 @@ type LoadStatus struct {
 	ThroughputRps string `json:"throughputRps,omitempty"`
 	// LatencyMs holds percentile latencies over the measured window.
 	LatencyMs LoadLatency `json:"latencyMs,omitempty"`
-	// HeapDriftKb / ThreadDrift are end-minus-start deltas over the soak (slow-leak signal).
-	HeapDriftKb int64 `json:"heapDriftKb,omitempty"`
-	ThreadDrift int32 `json:"threadDrift,omitempty"`
+
+	// HeapDriftKb / ThreadDrift are end-minus-start deltas over the soak (slow-leak signal), polled
+	// from the TARGET over /__basquin/drift.
+	//
+	// Pointers, deliberately (DD-040). The driver already omitted these whenever the drift could not
+	// be trusted, emitting driftUnavailable:true instead (DD-035) — but as non-pointer int64/int32
+	// they unmarshalled straight back to 0, so "we could not measure the target's heap" and "the
+	// target's heap was perfectly flat" arrived here as the same value, and the dashboard printed
+	// `0 KiB` for both. nil means the run did not measure it; see DriftUnavailable for why.
+	// +optional
+	HeapDriftKb *int64 `json:"heapDriftKb,omitempty"`
+	// +optional
+	ThreadDrift *int32 `json:"threadDrift,omitempty"`
+
+	// DriftUnavailable is the driver's own signal (DD-035) that this run's heap/thread drift is not a
+	// trustworthy number: the baseline or terminal poll failed, or the target never confirmed
+	// load mode. Emitted by the driver since DD-035 but, until DD-040, parsed nowhere at all.
+	// +optional
+	DriftUnavailable bool `json:"driftUnavailable,omitempty"`
+
 	// Violations counts invariant breaches under load.
 	Violations LoadViolations `json:"violations,omitempty"`
 }
@@ -186,14 +224,31 @@ type LoadLatency struct {
 	Max int32 `json:"max,omitempty"`
 }
 
-// LoadViolations counts invariant breaches during the load run. First cut: only Latency is evaluated
-// (per-request, against invariants.latencyMaxMs). Heap/Thread are reported as end-to-end drift
-// (HeapDriftKb/ThreadDrift) rather than a threshold-gated count, so they stay 0 here for now — do NOT
-// read them as an active heap/thread gate (DD-026 deferred item).
+// LoadViolations counts invariant breaches during the load run.
+//
+// Every field is a POINTER, and that is the whole point (DD-040). Load mode is lock-free passthrough
+// (DD-029): the target's valve evaluates nothing, so the driver is the only evaluator, it only
+// evaluates latency, and only when a latencyMaxMs threshold actually reached it. Heap and Thread are
+// therefore NEVER evaluated under load (they surface as end-to-end drift instead), and Latency is
+// unevaluated whenever no threshold was configured.
+//
+// As non-pointer int32 with omitempty, a field the driver omitted unmarshalled back to 0 — so the
+// operator re-fabricated, one layer up, exactly the zero the driver had refused to print, and
+// omitempty additionally made a real measured 0 indistinguishable from absent on the way back out.
+// A Roller run reported violations.latency: 0 at a p50 of 503ms against a 250ms budget on that path.
+//
+// nil = this run did not check it. A non-nil 0 = checked, and clean. NotEvaluated names the omitted
+// invariants explicitly, so the distinction survives for a human reading the status too.
 type LoadViolations struct {
-	Latency int32 `json:"latency,omitempty"`
-	Heap    int32 `json:"heap,omitempty"`
-	Thread  int32 `json:"thread,omitempty"`
+	// +optional
+	Latency *int32 `json:"latency,omitempty"`
+	// +optional
+	Heap *int32 `json:"heap,omitempty"`
+	// +optional
+	Thread *int32 `json:"thread,omitempty"`
+	// NotEvaluated lists the invariants this run never checked ("latency", "heap", "thread").
+	// +optional
+	NotEvaluated []string `json:"notEvaluated,omitempty"`
 }
 
 //+kubebuilder:object:root=true

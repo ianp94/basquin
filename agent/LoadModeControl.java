@@ -15,6 +15,20 @@ public final class LoadModeControl {
     public static final String PREFIX = "/__basquin/";
     private static final long DEFAULT_TTL_MS = 60_000L;
 
+    /**
+     * How long a {@code /__basquin/result} poll waits for an in-flight explore iteration to publish.
+     *
+     * <p>Deliberately just under the driver's own read timeout for this request
+     * ({@code basquin.report.pollTimeoutMs}, default 4000ms). Giving up materially earlier throws
+     * away slack the driver is still willing to wait for, turning a slow-but-fine iteration into a
+     * miss — honest, but avoidably lossy on exactly the slow requests this channel exists to
+     * recover. Giving up LATER is worse: the driver's socket read would time out first and the
+     * entry would be consumed by a {@code take} whose answer nobody receives.
+     *
+     * <p>Override with {@code basquin.report.quiescenceMs} if the driver's timeout is retuned.
+     */
+    static final long QUIESCENCE_WAIT_MS = Long.getLong("basquin.report.quiescenceMs", 3_500L);
+
     private LoadModeControl() {}
 
     /**
@@ -36,6 +50,18 @@ public final class LoadModeControl {
             }
             case "drift":
                 return LoadMode.driftSnapshotCsv();
+            case "result": {
+                String id = param(query, "id");
+                // Bounded wait on ITERATION_LOCK: Agent.end() sleeps 25ms BEFORE measuring, so on a
+                // committed response the client reaches EOF while the entry is still ~25ms away.
+                // Waiting here queues the poll behind the in-flight iteration instead of racing it.
+                // A timeout (not an indefinite block) so a target wedged inside the app misses
+                // rather than hanging the driver.
+                RequestBoundary.awaitQuiescence(QUIESCENCE_WAIT_MS);
+                return ResultStore.format(ResultStore.take(id));
+            }
+            case "violations":
+                return Long.toString(ResultStore.totalViolations());
             default:
                 return "err:unknown";
         }

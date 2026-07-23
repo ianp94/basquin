@@ -12,6 +12,9 @@ package agent;
  *   - basquin.invariant.heapDelta.mode = hard|soft
  * - basquin.invariant.threadDelta.max = <int>
  *   - basquin.invariant.threadDelta.mode = hard|soft
+ * - basquin.invariant.leak.mode = hard|soft — leak detection (Agent.end()) is not threshold-driven
+ *   and lives in Agent, but resolves its mode through {@link #isHard(String)} like every other
+ *   invariant, so one global switch covers all of them.
  */
 final class Invariants {
 

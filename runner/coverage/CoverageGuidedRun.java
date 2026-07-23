@@ -228,6 +228,12 @@ public final class CoverageGuidedRun {
         pendingSequences.addAll(seedSplit.sequences);
         int sequencePercent = Integer.getInteger("basquin.sequencePercent", 25);
 
+        // DD-040: the target's own cumulative violation total, sampled around the run window. It is
+        // what gives the campaign a target-side number to check the reported findings against —
+        // "the driver says 0, the pod evaluated 1,906" is the defect this whole change exists to
+        // make impossible to miss. -1 means the target could not be asked (no boundary, old agent).
+        long targetViolationsAtStart = readTargetViolations(baseUrl);
+
         for (int i = 0; i < iterations; i++) {
             if (pheromoneOn && i > 0 && i % evaporateEvery == 0) corpus.evaporate(); // fixed cadence, pre-continue
             if (deadlineNanos != 0L && System.nanoTime() >= deadlineNanos) break;  // clean time-box exit
@@ -289,12 +295,15 @@ public final class CoverageGuidedRun {
 
             Agent.beginIteration();
             double cost = 0.0; boolean measured = false; long latMs = 0;
-            CostSample sample = CostSample.EMPTY;
+            CostSample sample = CostSample.UNMEASURED;
             long t0 = System.nanoTime();
             try {
                 sample = request(baseUrl, input);
                 latMs = (System.nanoTime() - t0) / 1_000_000L;
-                if (costEnabled) {
+                // DD-040: cost measurement being ENABLED is not the same as this request having BEEN
+                // measured. Scoring an unmeasured sample means scoring zeros — which is how a run
+                // that saw 1,906 violations reported none and collapsed its corpus to 2 entries.
+                if (scoreable(costEnabled, sample)) {
                     cost = CostModel.score(latMs, sample.heapDeltaKb, sample.threadDelta, sample.invariantCount);
                     measured = true;
                 }
@@ -322,9 +331,18 @@ public final class CoverageGuidedRun {
                         sample.invariantCount, coverageFind);
             }
         }
+        // DD-040: close the window BEFORE the summary is rendered/written (the summary rides a
+        // shutdown hook off StatusReporter.snapshotJson).
+        long targetViolationsAtEnd = readTargetViolations(baseUrl);
+        if (targetViolationsAtStart >= 0 && targetViolationsAtEnd >= targetViolationsAtStart) {
+            StatusReporter.recordTargetViolations(targetViolationsAtEnd - targetViolationsAtStart);
+        }
         StatusReporter.renderFinal();
         System.out.printf("CoverageGuidedRun done: corpus=%d coverage=%d/%d pheromone=%s seed=%d%n",
                 corpus.size(), best, total, pheromoneOn ? "on" : "off", seed);
+        reportReportingHealth(reportMeasured, reportMisses,
+                targetViolationsAtStart >= 0 && targetViolationsAtEnd >= targetViolationsAtStart
+                        ? targetViolationsAtEnd - targetViolationsAtStart : -1L);
         if (costEnabled) {
             StringBuilder top = new StringBuilder();
             int n = 0;
@@ -548,11 +566,97 @@ public final class CoverageGuidedRun {
         }
     }
 
-    /** Target-side cost components parsed from response headers (0 when a header wasn't sent). */
+    /**
+     * Target-side cost components for one request, obtained either from the response headers (the
+     * opportunistic fast path) or from the {@code /__basquin/result} poll (the reliable one).
+     *
+     * <p>DD-040: {@code measured} is the field that stops a silence being reported as a zero. False
+     * means the driver never learned this request's measurements — no {@code X-Basquin-Cost} header
+     * (the response had already committed) and the poll missed, or the request was never sent at
+     * all. A {@code measured == false} sample must never be scored: feeding a zero-filled sample to
+     * {@link CostModel} is exactly how 1,906 evaluated violations were reported as 0.
+     */
     static final class CostSample {
-        final long heapDeltaKb; final int threadDelta; final int invariantCount;
-        CostSample(long h, int t, int inv) { heapDeltaKb = h; threadDelta = t; invariantCount = inv; }
-        static final CostSample EMPTY = new CostSample(0, 0, 0);
+        final long heapDeltaKb; final int threadDelta; final int invariantCount; final boolean measured;
+        CostSample(long h, int t, int inv, boolean measured) {
+            heapDeltaKb = h; threadDelta = t; invariantCount = inv; this.measured = measured;
+        }
+        /** No measurement — deliberately NOT named EMPTY: it is not "a measured zero". */
+        static final CostSample UNMEASURED = new CostSample(0, 0, 0, false);
+    }
+
+    /**
+     * DD-040: requests whose measurements never reached the driver (no cost header AND a missed or
+     * failed poll). Written only from the single-threaded explore loop's request path, as the other
+     * run counters are. Published in the summary because a run that cannot see is not a clean run.
+     */
+    static volatile long reportMisses;
+
+    /** DD-040: requests whose measurements the driver DID obtain, by either channel. */
+    static volatile long reportMeasured;
+
+    /** DD-040: per-request id sequence; salted with {@link LoadRun#RUN_SALT} so a foreign or stale id
+     *  misses honestly instead of returning another run's entry as fresh (spec §A.4). */
+    private static final java.util.concurrent.atomic.AtomicLong REQ_SEQ =
+            new java.util.concurrent.atomic.AtomicLong();
+
+    /**
+     * DD-040: the result poll's read timeout. It MUST exceed the target handler's quiescence bound
+     * ({@code LoadModeControl.QUIESCENCE_WAIT_MS}, 3.5 s on ITERATION_LOCK) — a poll that gives up first turns
+     * "queued behind the iteration that is about to write my entry" into a systematic miss, on
+     * exactly the committed-response class this channel exists to recover.
+     */
+    static final int POLL_READ_TIMEOUT_MS = Integer.getInteger("basquin.report.pollTimeoutMs", 4000);
+
+    /** Wire miss token from {@code ResultStore.MISS}; any unparseable body is treated as a miss too. */
+    private static final String POLL_MISS = "miss";
+
+    /**
+     * Whether this sample may be scored. Extracted (and package-private) so "a miss must not be
+     * scored" is assertable directly rather than inferred from the loop. DD-040: cost measurement
+     * being enabled is not enough — the sample must actually carry a measurement.
+     */
+    static boolean scoreable(boolean costEnabled, CostSample s) {
+        return costEnabled && s != null && s.measured;
+    }
+
+    /**
+     * DD-040: true when the driver could not see the majority of what it did. Against an
+     * uninstrumented (or wrong-image, or load-mode-stuck) target this is ~every request — the exact
+     * situation that used to read as a clean run with zero findings. Pure, so the threshold is
+     * testable without a run.
+     */
+    static boolean missesAreTheMajority(long measured, long misses) {
+        long total = measured + misses;
+        return total > 0 && misses * 2 > total;
+    }
+
+    /**
+     * Report the run's reporting health and, when most of it was invisible, FAIL rather than exit 0
+     * with a tidy "0 findings". Exiting non-zero is the point: a Kubernetes Job that completes
+     * successfully having measured nothing is indistinguishable from a clean campaign, and that
+     * indistinguishability is what published four invalid campaigns.
+     *
+     * <p>Shutdown hooks (the summary writer) still run on {@link System#exit}, so the operator keeps
+     * the machine-readable numbers that explain the failure.
+     */
+    private static void reportReportingHealth(long measured, long misses, long targetViolationsDelta) {
+        System.out.printf("[Basquin] reporting: measured=%d misses=%d%s%n", measured, misses,
+                targetViolationsDelta >= 0 ? " targetViolations=" + targetViolationsDelta
+                                           : " targetViolations=unavailable");
+        if (misses > 0) {
+            System.out.println("[Basquin] NOTE: " + misses + " request(s) reported no measurement; "
+                    + "this run's finding counts are a LOWER BOUND (findingsLowerBound=true).");
+        }
+        if (missesAreTheMajority(measured, misses)
+                && !"false".equals(System.getProperty("basquin.report.failOnMissMajority", "true"))) {
+            System.err.println("[Basquin] FATAL: " + misses + " of " + (measured + misses)
+                    + " requests reported no measurement at all. This run cannot speak for the target"
+                    + " — a boundary that is not installed, a target stuck in load mode, or an"
+                    + " unreachable /__basquin/result. Failing rather than reporting a clean zero."
+                    + " (-Dbasquin.report.failOnMissMajority=false to downgrade to a warning.)");
+            System.exit(3);
+        }
     }
 
     static CostSample request(String base, String step) throws Exception {
@@ -565,7 +669,7 @@ public final class CoverageGuidedRun {
             java.util.Map<String, String> none = java.util.Map.of();
             String p = LoadRun.substitute(r.path(), none);
             String b = (r.body() == null) ? null : LoadRun.substitute(r.body(), none);
-            if (p == null || (r.body() != null && b == null)) return CostSample.EMPTY; // unbound ref: don't fire literal
+            if (p == null || (r.body() != null && b == null)) return CostSample.UNMEASURED; // unbound ref: don't fire literal
             r = new RequestLine(r.method(), p, b, r.captures());
         }
         // Recorded-finding text must stay the RAW input on this path — byte-for-byte unchanged
@@ -600,8 +704,16 @@ public final class CoverageGuidedRun {
         } catch (java.net.ProtocolException pe) {
             System.err.println("[Basquin] explore: unsupported HTTP method " + r.method()
                     + " for " + r.path() + "; not sent");
-            return CostSample.EMPTY;   // fail loud: do NOT fall through to a silent GET
+            return CostSample.UNMEASURED;   // fail loud: do NOT fall through to a silent GET
         }
+        // DD-040: stamp this request so the boundary can publish its measurements under an id we can
+        // poll for. The response header channel only works while the response is uncommitted, which
+        // on a real app it usually is not — on Roller 97.3% of responses could not carry one.
+        String reqId = LoadRun.RUN_SALT + "-" + REQ_SEQ.getAndIncrement();
+        c.setRequestProperty("X-Basquin-Req", reqId);
+        // Explore follows redirects, so a followed hop re-sends this same id and the target's second
+        // put overwrites the first: FINAL-HOP-WINS, which is exactly what the header channel already
+        // did (the driver only ever saw the last hop's headers). DD-039 owns per-hop semantics.
         c.setInstanceFollowRedirects(true);
         if (sessionCookie != null) {
             c.setRequestProperty("Cookie", sessionCookie);
@@ -614,65 +726,246 @@ public final class CoverageGuidedRun {
                 out.write(bodyBytes);
             }
         }
-        int code = c.getResponseCode();
-        // Capture/refresh JSESSIONID so subsequent requests stay in the same session.
-        for (int i = 0; ; i++) {
-            String key = c.getHeaderFieldKey(i);
-            String val = c.getHeaderField(i);
-            if (key == null && val == null) break;
-            if (key != null && key.equalsIgnoreCase("Set-Cookie") && val != null
-                    && val.startsWith("JSESSIONID=")) {
-                sessionCookie = val.split(";", 2)[0];
+        // DD-040: the sample this call will report. Assigned inside the try on the header fast path
+        // and inside the finally on the poll path, then returned AFTER the try — a `return` from the
+        // finally would swallow the app's 500, which is the finding we most want.
+        CostSample sample = CostSample.UNMEASURED;
+        // True once ANY reporting header arrived. That proves the response had not committed, so the
+        // boundary's store entry for this id is already accounted for here; polling as well would
+        // TAKE that entry (ResultStore removes on read) and count the same violation twice. The fast
+        // path and the reliable path are alternatives, never a sum.
+        boolean headerReported = false;
+        try {
+            int code = c.getResponseCode();
+            // Capture/refresh JSESSIONID so subsequent requests stay in the same session.
+            for (int i = 0; ; i++) {
+                String key = c.getHeaderFieldKey(i);
+                String val = c.getHeaderField(i);
+                if (key == null && val == null) break;
+                if (key != null && key.equalsIgnoreCase("Set-Cookie") && val != null
+                        && val.startsWith("JSESSIONID=")) {
+                    sessionCookie = val.split(";", 2)[0];
+                }
             }
-        }
-        int invCount = 0;
-        String inv = c.getHeaderField("X-Basquin-Invariant-Count");
-        if (inv != null) {
-            try { invCount = Integer.parseInt(inv.trim()); } catch (NumberFormatException ignored) {}
-            String detail = c.getHeaderField("X-Basquin-Invariant-Detail");
-            FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
-                    "route=" + label + "\ncount=" + inv + (detail != null ? "\ndetail=" + detail : ""));
-        }
-        long heapKb = 0; int threadDelta = 0;
-        String costHdr = c.getHeaderField("X-Basquin-Cost");  // "latencyMs,heapDeltaKb,threadDelta"
-        if (costHdr != null) {
-            String[] p = costHdr.split(",");
-            if (p.length == 3) {
-                try { heapKb = Long.parseLong(p[1].trim()); threadDelta = Integer.parseInt(p[2].trim()); }
-                catch (NumberFormatException ignored) {}
+            int invCount = 0;
+            // DD-040 §A.6: the serving pod's name, when the response could carry headers at all.
+            // Attribution only — the poll path can never see it (a committed response has no headers,
+            // which is exactly when the poll runs), so it is recorded, not routed on.
+            String podHdr = c.getHeaderField("X-Basquin-Pod");
+            String podMeta = podHdr == null ? "" : "\npod=" + podHdr;
+            String inv = c.getHeaderField("X-Basquin-Invariant-Count");
+            if (inv != null) {
+                headerReported = true;
+                try { invCount = Integer.parseInt(inv.trim()); } catch (NumberFormatException ignored) {}
+                String detail = c.getHeaderField("X-Basquin-Invariant-Detail");
+                FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
+                        "route=" + label + "\ncount=" + inv
+                                + (detail != null ? "\ndetail=" + detail : "") + podMeta);
             }
-        }
-        InputStream is = code >= 400 ? c.getErrorStream() : c.getInputStream();
-        StringBuilder body = new StringBuilder();
-        if (is != null) {
-            try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = br.readLine()) != null) {
-                    // Keep the body for server errors (the app's own stack) OR — DD-036 — for a
-                    // capture step, so Capture.extract has something to search; still capped, and
-                    // draining continues to EOF regardless so keep-alive is preserved either way.
-                    if ((code >= 500 && body.length() < 16384)
-                            || (!r.captures().isEmpty() && bindings != null && code < 500 && body.length() < 262144)) {
-                        body.append(line).append('\n');
+            long heapKb = 0; int threadDelta = 0;
+            // The fast-path discriminator is the COST header, which the boundary emits on EVERY
+            // explore exit — not the invariant header, which is absent on every clean request and
+            // would therefore make the driver poll almost always (spec §A.5).
+            String costHdr = c.getHeaderField("X-Basquin-Cost");  // "latencyMs,heapDeltaKb,threadDelta"
+            if (costHdr != null) {
+                headerReported = true;
+                String[] p = costHdr.split(",");
+                if (p.length == 3) {
+                    try { heapKb = Long.parseLong(p[1].trim()); threadDelta = Integer.parseInt(p[2].trim()); }
+                    catch (NumberFormatException ignored) {}
+                }
+            }
+            if (headerReported) sample = new CostSample(heapKb, threadDelta, invCount, true);
+            InputStream is = code >= 400 ? c.getErrorStream() : c.getInputStream();
+            StringBuilder body = new StringBuilder();
+            if (is != null) {
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        // Keep the body for server errors (the app's own stack) OR — DD-036 — for a
+                        // capture step, so Capture.extract has something to search; still capped, and
+                        // draining continues to EOF regardless so keep-alive is preserved either way.
+                        if ((code >= 500 && body.length() < 16384)
+                                || (!r.captures().isEmpty() && bindings != null && code < 500 && body.length() < 262144)) {
+                            body.append(line).append('\n');
+                        }
                     }
                 }
             }
-        }
-        // Capture from any code < 500, INCLUDING a 4xx — intentional, not an oversight: a form GET
-        // that returns 4xx can still carry the token in its (error-stream) body, and explore reads
-        // getErrorStream() above for code >= 400, so the value is there to extract. This is the
-        // deliberate load-vs-explore asymmetry noted in the DD-036 PR: LoadRun.fire uses
-        // getInputStream() (throws on 4xx) and so cannot capture from a 4xx; explore can.
-        if (!r.captures().isEmpty() && bindings != null && code < 500) {
-            for (Capture cap : r.captures()) {
-                String val = cap.extract(c::getHeaderField, body.toString());
-                if (val != null) bindings.put(cap.name(), val);
+            // Capture from any code < 500, INCLUDING a 4xx — intentional, not an oversight: a form GET
+            // that returns 4xx can still carry the token in its (error-stream) body, and explore reads
+            // getErrorStream() above for code >= 400, so the value is there to extract. This is the
+            // deliberate load-vs-explore asymmetry noted in the DD-036 PR: LoadRun.fire uses
+            // getInputStream() (throws on 4xx) and so cannot capture from a 4xx; explore can.
+            if (!r.captures().isEmpty() && bindings != null && code < 500) {
+                for (Capture cap : r.captures()) {
+                    String val = cap.extract(c::getHeaderField, body.toString());
+                    if (val != null) bindings.put(cap.name(), val);
+                }
+            }
+            if (code >= 500) {
+                throw serverError(code, label, body.toString());
+            }
+        } finally {
+            // In a finally because a 500 — the most interesting request there is — throws above, and
+            // its measurements would otherwise rot in the target's store until eviction (spec §A.8).
+            if (headerReported) {
+                reportMeasured++;
+            } else {
+                sample = pollResult(base, reqId, label);
             }
         }
-        if (code >= 500) {
-            throw serverError(code, label, body.toString());
+        return sample;
+    }
+
+    /**
+     * DD-040: recover one request's measurements from the target's id-keyed result store, for the
+     * responses that could not carry a header because they had already committed.
+     *
+     * <p>Two things this method must never do, both learned the expensive way:
+     *
+     * <ol>
+     *   <li><b>Throw.</b> It is called from a {@code finally}; an exception escaping there REPLACES
+     *       the in-flight {@code serverError} and the 500 finding is lost. Every failure is swallowed
+     *       and recorded as a miss.</li>
+     *   <li><b>Stop at recovering the count.</b> A recovered violation is only a FINDING once it is
+     *       saved via {@link FuzzIO#saveWithMeta} → {@code StatusReporter.recordSaved} →
+     *       {@code findInvariant}. Feeding the number to the cost model and saving nothing leaves the
+     *       campaign's reported count at ~0 — the original defect under a new name.</li>
+     * </ol>
+     *
+     * <p>The poll itself is never stamped with {@code X-Basquin-Req}: it is handled at the boundary's
+     * control branch, but a stamped poll would leave a stale id on a pooled connector thread and
+     * later publish some probe's metrics under a driver id — stale data served as fresh.
+     *
+     * <p><b>Which pod it asks</b> (§A.6). The store is per-JVM, so a poll through the Service VIP
+     * reaches the pod that holds the entry with probability 1/N and returns {@code miss} the rest of
+     * the time — a target that scales stops being measurable. {@link PodPollTargets} therefore hands
+     * back the pod addresses to try; each is asked in turn until one returns the entry. For a request
+     * answered without a redirect, a run-salted id plus remove-on-read means at most one pod can hold
+     * it, so asking several cannot return another pod's data — the worst a fan-out can do is find
+     * nothing, which is a recorded miss.
+     *
+     * <p><b>Known residual (multi-replica + followed redirect).</b> A followed same-method hop
+     * re-sends the same id, so on a multi-replica target two pods can hold entries under it at once
+     * and this loop returns whichever answers first in DNS order — which may be the wrong hop's
+     * measurement, marked {@code measured=true}. See {@link PodPollTargets} for the full statement;
+     * DD-039's per-hop ids remove the case.
+     */
+    static CostSample pollResult(String base, String reqId, String label) {
+        List<String> pollBases = PodPollTargets.pollBases(base);
+        // Pod addressing was demanded and DNS could not say where the pods are. Guessing via the VIP
+        // would restore the 1-in-N lottery behind a poll that looks like it worked (§A.6).
+        if (pollBases.isEmpty()) return recordMiss();
+        String body = null;
+        String servedBy = null;
+        for (String pollBase : pollBases) {
+            String candidate = fetchResult(pollBase, reqId);
+            // '|' is the entry separator: anything without it is `miss` or garbage, and the next pod
+            // may still hold the real entry. Only a well-formed entry ends the search.
+            if (candidate != null && candidate.indexOf('|') >= 0) {
+                body = candidate;
+                servedBy = pollBases.size() > 1 ? pollBase : null;   // only meaningful when we chose
+                break;
+            }
         }
-        return new CostSample(heapKb, threadDelta, invCount);
+        // 4-field limit: `detail` is app-derived and may contain the separator.
+        String[] f = (body == null) ? new String[0] : body.split("\\|", 4);
+        if (body == null || body.isEmpty() || POLL_MISS.equals(body) || f.length < 2) {
+            return recordMiss();
+        }
+        int count;
+        try {
+            count = Integer.parseInt(f[1].trim());
+        } catch (NumberFormatException e) {
+            return recordMiss();   // an unparseable body is a miss; it is not a measured zero
+        }
+        long heapKb = 0; int threadDelta = 0;
+        String[] cost = f[0].split(",");
+        if (cost.length == 3) {
+            try { heapKb = Long.parseLong(cost[1].trim()); threadDelta = Integer.parseInt(cost[2].trim()); }
+            catch (NumberFormatException ignored) {}
+        }
+        String detail = f.length > 2 && !f[2].isEmpty() ? f[2] : null;
+        boolean leak = f.length > 3 && "leak".equals(f[3].trim());
+        // Which replica this finding came off, when there was more than one candidate. Task 7 checks
+        // the campaign's reported count against the target pods' own logs; without attribution a
+        // two-replica reconciliation is a guess.
+        String pod = servedBy == null ? "" : "\npod=" + servedBy;
+        try {
+            // The step that makes the campaign's number move. `label` is the RAW recipe (DD-036) —
+            // never a substituted request line, which would write a live CSRF token to disk.
+            if (count > 0) {
+                FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
+                        "route=" + label + "\ncount=" + count
+                                + (detail != null ? "\ndetail=" + detail : "") + pod);
+            }
+            if (leak) {
+                FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Leak-Remote",
+                        "route=" + label + "\nleak=true" + pod);
+            }
+        } catch (Throwable ignored) {
+            // Saving is best-effort against the finally contract above; the measurement still stands.
+        }
+        reportMeasured++;
+        return new CostSample(heapKb, threadDelta, count, true);
+    }
+
+    /**
+     * One {@code /__basquin/result} GET against one address. Returns the response body, or null for
+     * anything that is not a 200 — unreachable pod, timeout, no boundary installed. Never throws:
+     * {@link #pollResult} is called from a {@code finally} and an escape there would replace the
+     * in-flight {@code serverError}, losing the 500 that is the whole point of that request.
+     */
+    private static String fetchResult(String base, String reqId) {
+        try {
+            HttpURLConnection pc = (HttpURLConnection) new URL(
+                    base + "/__basquin/result?id=" + java.net.URLEncoder.encode(reqId, "UTF-8")).openConnection();
+            pc.setConnectTimeout(2000);
+            // Must outlast the handler's bounded ITERATION_LOCK wait, or a poll queued behind the
+            // very iteration that is about to write this entry is scored as a miss, every time.
+            pc.setReadTimeout(POLL_READ_TIMEOUT_MS);
+            pc.setRequestMethod("GET");
+            StringBuilder sb = new StringBuilder();
+            InputStream is = pc.getResponseCode() >= 400 ? pc.getErrorStream() : pc.getInputStream();
+            if (is != null) {
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = br.readLine()) != null && sb.length() < 4096) sb.append(line);
+                }
+            }
+            return pc.getResponseCode() == 200 ? sb.toString().trim() : null;
+        } catch (Throwable t) {
+            return null;   // unreachable target, timeout, no boundary installed: a miss, never a zero
+        }
+    }
+
+    /** A miss: counted, published, and explicitly NOT turned into a zero-filled sample. */
+    private static CostSample recordMiss() {
+        reportMisses++;
+        StatusReporter.recordReportMiss();
+        return CostSample.UNMEASURED;
+    }
+
+    /**
+     * DD-040: the target's process-wide invariant-violation total ({@code /__basquin/violations}),
+     * or -1 when it cannot be read. Sampled at run start and end; the delta is the target-side number
+     * a campaign's reported findings are compared against.
+     */
+    static long readTargetViolations(String base) {
+        try {
+            HttpURLConnection c = (HttpURLConnection) new URL(base + "/__basquin/violations").openConnection();
+            c.setConnectTimeout(2000);
+            c.setReadTimeout(POLL_READ_TIMEOUT_MS);
+            if (c.getResponseCode() != 200) return -1L;
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8))) {
+                String line = br.readLine();
+                return line == null ? -1L : Long.parseLong(line.trim());
+            }
+        } catch (Throwable t) {
+            return -1L;   // no boundary, old agent, unreachable: unavailable, not zero
+        }
     }
 
     /**

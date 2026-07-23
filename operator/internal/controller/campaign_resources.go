@@ -53,7 +53,11 @@ func driverJobName(c *basquinv1alpha1.BasquinCampaign) string { return c.Name + 
 // buildDriverJob builds the coverage-guided driver Job. appImage is the target's app-container image
 // (source of the .class files); coverageEndpoint is the target's status.coverageEndpoint;
 // dashboardPush is the resolved dashboard host:port to push status/findings to ("" = don't push).
-func buildDriverJob(c *basquinv1alpha1.BasquinCampaign, appImage, coverageEndpoint, runnerImage, dashboardPush, tokenSecret string) *batchv1.Job {
+//
+// targetInv is the referenced BasquinTarget's spec.invariants — see the latency-threshold block
+// below for why the driver Job has to know about it (DD-040).
+func buildDriverJob(c *basquinv1alpha1.BasquinCampaign, targetInv basquinv1alpha1.InvariantsSpec,
+	appImage, coverageEndpoint, runnerImage, dashboardPush, tokenSecret string) *batchv1.Job {
 	d := &c.Spec.Driver
 	load := c.Spec.Mode == "load"
 
@@ -83,8 +87,26 @@ func buildDriverJob(c *basquinv1alpha1.BasquinCampaign, appImage, coverageEndpoi
 	if d.Invariants.Mode != "" {
 		props = append(props, "-Dbasquin.invariant.mode="+d.Invariants.Mode)
 	}
-	if d.Invariants.LatencyMaxMs > 0 {
-		props = append(props, fmt.Sprintf("-Dbasquin.invariant.latency.maxMs=%d", d.Invariants.LatencyMaxMs))
+	// DD-040 — the latency threshold, and the trap this looked already-solved through.
+	//
+	// This propagation existed, but only from campaign.spec.driver.invariants. Operators set the
+	// budget on the BasquinTarget (that is where InvariantsSpec is documented and where every bench
+	// manifest puts it), and injection.go passes THAT to the target jvm only. Under load the target's
+	// valve is in lock-free passthrough (DD-029) and evaluates nothing, so the budget reached the one
+	// process that never applies it and never reached the one process that would — and the run
+	// reported violations.latency: 0 with a p50 of 503ms against a 250ms budget. So load INHERITS the
+	// target's threshold; the campaign's own driver.invariants still overrides it when set.
+	//
+	// Explore deliberately does not inherit: there the target's agent evaluates its own invariants and
+	// reports them back over the DD-040 result channel as Invariant-Remote findings, so a driver-side
+	// copy of the same budget would add a second, differently-scoped (client round-trip, including
+	// network and driver GC) violation for the same request.
+	latencyMaxMs := d.Invariants.LatencyMaxMs
+	if load && latencyMaxMs == 0 {
+		latencyMaxMs = targetInv.LatencyMaxMs
+	}
+	if latencyMaxMs > 0 {
+		props = append(props, fmt.Sprintf("-Dbasquin.invariant.latency.maxMs=%d", latencyMaxMs))
 	}
 	if d.Invariants.HeapDeltaMaxKb > 0 {
 		props = append(props, fmt.Sprintf("-Dbasquin.invariant.heapDelta.maxKb=%d", d.Invariants.HeapDeltaMaxKb))

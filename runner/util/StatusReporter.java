@@ -25,8 +25,10 @@ public final class StatusReporter {
     private static final String SAMPLE_OUT = System.getProperty("basquin.sample.out", "");
     private static final long SAMPLE_INTERVAL_MS = Long.getLong("basquin.sample.intervalMs", 5000L);
     private static final AtomicBoolean SAMPLER_STARTED = new AtomicBoolean(false);
-    // Counters advance when EITHER the box or the sampler is active.
-    private static final boolean TRACKING = ENABLED || !SAMPLE_OUT.isEmpty();
+    // Counters advance when EITHER the box or the sampler is active. Not final only so a test can
+    // turn tracking on in-process (see enableTrackingForTest); production flips it with
+    // -Dbasquin.status / -Dbasquin.sample.out at class-init, exactly as before.
+    private static volatile boolean tracking = ENABLED || !SAMPLE_OUT.isEmpty();
     // Redraw in place when attached to a terminal; forceTty renders the box even when piped
     // (useful for capturing the rich view to a log).
     private static final boolean TTY =
@@ -66,6 +68,15 @@ public final class StatusReporter {
     // hidden. Zero/zero means a single-source or not-yet-reported run.
     private static int coverageSourcesResponded;
     private static int coverageSourcesExpected;
+    // DD-040: requests whose measurements the driver could not obtain at all — no X-Basquin-Cost
+    // header (the response had already committed) AND the /__basquin/result poll missed. Published
+    // so a run with no data is never read as a run with no findings; any miss makes the reported
+    // finding counts a LOWER BOUND, which the summary states as a field, not as prose.
+    private static long reportMisses;
+    // DD-040: the target's own cumulative invariant-violation count over this run's window
+    // (/__basquin/violations at end minus at start). The number a campaign's reported findings are
+    // compared against. -1 = never read; reported as targetViolationsUnavailable rather than 0.
+    private static long targetViolations = -1L;
 
     // DD-033: mode + load-block state (load campaigns feed these via recordLoad).
     private static volatile String mode = "explore";
@@ -86,7 +97,7 @@ public final class StatusReporter {
      * for the sampler-only case is what makes the counters (and thus the CSV) populate.
      */
     public static boolean isEnabled() {
-        return TRACKING;
+        return tracking;
     }
 
     /** Start the render thread and/or CSV sampler once, before the first iteration baseline. */
@@ -111,7 +122,7 @@ public final class StatusReporter {
     /** Record one completed iteration's metrics and any violations/leak it carried. */
     public static synchronized void recordIteration(long latencyMs, long heapDeltaKb, int threads,
                                                     boolean leak, java.util.List<String> violations) {
-        if (!TRACKING) return;
+        if (!tracking) return;
         iterations++;
         lastLatencyMs = latencyMs;
         if (latencyMs > maxLatencyMs) maxLatencyMs = latencyMs;
@@ -158,17 +169,17 @@ public final class StatusReporter {
             driftJson, loadServerErrors, loadRequests);
     }
 
-    public static synchronized void recordCrash() { if (TRACKING) crashes++; }
-    public static synchronized void recordReset() { if (TRACKING) resets++; }
+    public static synchronized void recordCrash() { if (tracking) crashes++; }
+    public static synchronized void recordReset() { if (tracking) resets++; }
     /** An expected input rejection (a target's declared "bad input" exception), not a crash. */
-    public static synchronized void recordRejected() { if (TRACKING) rejected++; }
+    public static synchronized void recordRejected() { if (tracking) rejected++; }
 
     /**
      * Record a saved exploration finding (from the triage layer). {@code classification} is the
      * triage label, e.g. "Crash", "Invariant", "Invariant-Remote". Drives the exploration panel.
      */
     public static synchronized void recordSaved(String classification) {
-        if (!TRACKING) return;
+        if (!tracking) return;
         corpusSaved++;
         if (classification != null && classification.startsWith("Crash")) {
             findCrash++;
@@ -178,6 +189,32 @@ public final class StatusReporter {
         lastFindNanos = System.nanoTime();
         lastFindIter = iterations;
     }
+
+    /**
+     * DD-040: one request whose measurements never reached the driver. Deliberately NOT a violation
+     * counter — it is the count of requests this run cannot speak for, which is what makes
+     * {@code findingsLowerBound} honest.
+     */
+    public static synchronized void recordReportMiss() {
+        if (!tracking) return;
+        reportMisses++;
+    }
+
+    /** DD-040: the target-side violation total for this run's window (see {@link #targetViolations}). */
+    public static synchronized void recordTargetViolations(long delta) {
+        if (!tracking) return;
+        targetViolations = delta;
+    }
+
+    /**
+     * Test hook (DD-040): turn counter tracking on in-process. Counters are otherwise inert unless
+     * {@code -Dbasquin.status} / {@code -Dbasquin.sample.out} was set at JVM start, which a unit test
+     * cannot retrofit. Nothing in production calls this.
+     */
+    public static void enableTrackingForTest() { tracking = true; }
+
+    /** Test hook (DD-040): the invariant-finding count — the number a campaign actually reports. */
+    public static synchronized long findInvariantForTest() { return findInvariant; }
 
     /**
      * Report coverage of the code under test. {@code total} is the instrumentable denominator
@@ -191,7 +228,7 @@ public final class StatusReporter {
 
     /** As above, plus how many coverage sources answered vs were expected (fleet under-reporting). */
     public static synchronized void recordCoverage(long covered, long total, int sourcesResponded, int sourcesExpected) {
-        if (!TRACKING) return;
+        if (!tracking) return;
         coveredEdges = covered;
         totalEdges = total;
         coverageSourcesResponded = sourcesResponded;
@@ -214,7 +251,10 @@ public final class StatusReporter {
              + "coveredEdges,totalEdges,coveragePct";
     }
 
-    /** One CSV row of the live counters at {@code elapsedMs}. Locale-independent decimals (CSV-safe). */
+    /** One CSV row of the live counters at {@code elapsedMs}. Locale-independent decimals (CSV-safe).
+     *  DD-040: the viol* columns are EMPTY for an invariant this driver has no threshold for — an
+     *  empty cell is the CSV spelling of "not measured", and every plotting tool treats it as a gap.
+     *  A literal 0 there would plot as a clean flat line for a series nobody ever computed. */
     public static synchronized String sampleLine(long elapsedMs) {
         double secs = elapsedMs / 1000.0;
         double ips = secs > 0 ? iterations / secs : 0.0;
@@ -223,8 +263,16 @@ public final class StatusReporter {
         return elapsedMs + "," + iterations + "," + fmt2(ips) + ","
              + lastLatencyMs + "," + mean + "," + maxLatencyMs + ","
              + lastHeapKb + "," + maxHeapKb + "," + lastThreads + ","
-             + crashes + "," + leaks + "," + violLatency + "," + violHeap + "," + violThread + ","
+             + crashes + "," + leaks + ","
+             + sampleInv(INV_LATENCY_PROP, violLatency) + ","
+             + sampleInv(INV_HEAP_PROP, violHeap) + ","
+             + sampleInv(INV_THREAD_PROP, violThread) + ","
              + coveredEdges + "," + totalEdges + "," + fmt2(covPct);
+    }
+
+    /** The count, or an empty CSV cell when this jvm configured no threshold for that invariant. */
+    private static String sampleInv(String prop, long count) {
+        return evaluated(prop) ? Long.toString(count) : "";
     }
 
     // Root-locale so a decimal never renders as "3,14" and corrupts the CSV.
@@ -294,13 +342,17 @@ public final class StatusReporter {
             String cov = totalEdges > 0
                 ? String.format(" cov=%.1f%%", 100.0 * coveredEdges / totalEdges) : "";
             String explore = exploring
-                ? String.format(" explore[corpus=%d crash=%d inv=%d rejected=%d%s lastFind=%s]",
-                        corpusSaved, findCrash, findInvariant, rejected, cov, sinceLastFind())
+                ? String.format(" explore[corpus=%d crash=%d inv=%d%s rejected=%d%s lastFind=%s]",
+                        corpusSaved, findCrash, findInvariant,
+                        reportMisses > 0 ? " (lower-bound; " + reportMisses + " unreported)" : "",
+                        rejected, cov, sinceLastFind())
                 : "";
             System.out.printf(
-                "[Basquin] %s iters=%d (%.1f/s) crashes=%d leaks=%d inv[lat=%d heap=%d thr=%d] "
+                "[Basquin] %s iters=%d (%.1f/s) crashes=%d leaks=%d driverInv[lat=%s heap=%s thr=%s] "
                 + "lat(last/mean/max)=%d/%.0f/%dms heap(last/max)=%d/%dKB threads=%d resets=%d%s%n",
-                fmt(elapsedS), iterations, rate, crashes, leaks, violLatency, violHeap, violThread,
+                fmt(elapsedS), iterations, rate, crashes, leaks,
+                driverInvCount(INV_LATENCY_PROP, violLatency), driverInvCount(INV_HEAP_PROP, violHeap),
+                driverInvCount(INV_THREAD_PROP, violThread),
                 lastLatencyMs, meanLatency, maxLatencyMs, lastHeapKb, maxHeapKb, lastThreads, resets, explore);
             return;
         }
@@ -312,7 +364,9 @@ public final class StatusReporter {
         row(sb, "iterations", String.format("%d  (%.1f/s)", iterations, rate));
         row(sb, "crashes", String.valueOf(crashes));
         row(sb, "leaks", String.valueOf(leaks));
-        row(sb, "invariants", String.format("lat=%d  heap=%d  thread=%d", violLatency, violHeap, violThread));
+        row(sb, "driver inv", String.format("lat=%s  heap=%s  thread=%s",
+                driverInvCount(INV_LATENCY_PROP, violLatency), driverInvCount(INV_HEAP_PROP, violHeap),
+                driverInvCount(INV_THREAD_PROP, violThread)));
         row(sb, "latency ms", String.format("last=%d  mean=%.0f  max=%d", lastLatencyMs, meanLatency, maxLatencyMs));
         row(sb, "heap Δ KB", String.format("last=%d  max=%d", lastHeapKb, maxHeapKb));
         row(sb, "threads", String.valueOf(lastThreads));
@@ -327,12 +381,60 @@ public final class StatusReporter {
                         100.0 * coveredEdges / totalEdges, coveredEdges, totalEdges, src));
             }
             row(sb, "corpus", String.valueOf(corpusSaved));
-            row(sb, "finds", String.format("crash=%d  invariant=%d", findCrash, findInvariant));
+            row(sb, "finds", String.format("crash=%d  invariant=%d%s", findCrash, findInvariant,
+                    // DD-040: never let a finding count read as complete when it cannot be.
+                    reportMisses > 0 ? "  (lower bound; " + reportMisses + " unreported)" : ""));
             row(sb, "rejected", String.valueOf(rejected));
             row(sb, "last find", sinceLastFind());
         }
         sb.append("└───────────────────────────────────────────────┘");
         System.out.println(sb);
+    }
+
+    // --- DD-040: the driver's own invariant counters are only meaningful where a threshold exists ---
+    //
+    // violLatency/violHeap/violThread are fed by Agent.recordStatus in THIS process: the runner wraps
+    // every request in Agent.beginIteration/endIteration, and agent.Invariants evaluates each
+    // invariant only if THIS jvm has the corresponding -Dbasquin.invariant.* property set (its
+    // getLongProp returns null otherwise and the check is skipped entirely). So a driver launched
+    // without a threshold reports a permanent 0 for that invariant — a number nobody ever computed,
+    // rendered identically to "checked, and clean". These are also DRIVER-scoped in a second sense:
+    // they measure the harness's own client-side round trip, not the target's internals (the target's
+    // own violations arrive separately, as Invariant-Remote findings over the DD-040 result channel).
+    private static final String INV_LATENCY_PROP = "basquin.invariant.latency.maxMs";
+    private static final String INV_HEAP_PROP = "basquin.invariant.heapDelta.maxKb";
+    private static final String INV_THREAD_PROP = "basquin.invariant.threadDelta.max";
+
+    private static boolean evaluated(String prop) { return System.getProperty(prop) != null; }
+
+    /** The count, or {@code "n/a"} for a threshold this jvm never configured (so never evaluated). */
+    private static String driverInvCount(String prop, long count) {
+        return evaluated(prop) ? Long.toString(count) : "n/a";
+    }
+
+    /** The {@code invariants} object's body: only evaluated invariants carry a count, and every
+     *  omission is named in {@code notEvaluated} so a consumer never has to infer it from a missing
+     *  key (an inference the operator's non-pointer int32 fields used to get wrong, silently). */
+    private static String driverInvariantsJson() {
+        StringBuilder counts = new StringBuilder();
+        StringBuilder skipped = new StringBuilder();
+        appendInv(counts, skipped, "latency", INV_LATENCY_PROP, violLatency);
+        appendInv(counts, skipped, "heap", INV_HEAP_PROP, violHeap);
+        appendInv(counts, skipped, "thread", INV_THREAD_PROP, violThread);
+        if (skipped.length() == 0) return counts.toString();
+        if (counts.length() > 0) counts.append(',');
+        return counts + "\"notEvaluated\":[" + skipped + "]";
+    }
+
+    private static void appendInv(StringBuilder counts, StringBuilder skipped,
+                                  String name, String prop, long count) {
+        if (evaluated(prop)) {
+            if (counts.length() > 0) counts.append(',');
+            counts.append('"').append(name).append("\":").append(count);
+        } else {
+            if (skipped.length() > 0) skipped.append(',');
+            skipped.append('"').append(name).append('"');
+        }
     }
 
     /** Current metrics as a JSON object, for the dashboard API. */
@@ -345,17 +447,26 @@ public final class StatusReporter {
         double coveragePct = totalEdges > 0 ? 100.0 * coveredEdges / totalEdges : 0.0;
         String explore = String.format(java.util.Locale.ROOT,
             "{\"elapsedSec\":%d,\"iterations\":%d,\"rate\":%.2f,\"crashes\":%d,\"leaks\":%d,\"resets\":%d,"
-            + "\"invariants\":{\"latency\":%d,\"heap\":%d,\"thread\":%d},"
+            + "\"invariants\":{%s},"
             + "\"latencyMs\":{\"last\":%d,\"mean\":%.0f,\"max\":%d},"
             + "\"heapKb\":{\"last\":%d,\"max\":%d},\"threads\":%d,"
             + "\"exploration\":{\"corpus\":%d,\"findCrash\":%d,\"findInvariant\":%d,\"rejected\":%d,"
+            + "\"reportMisses\":%d,\"findingsLowerBound\":%b,%s,"
             + "\"coverage\":{\"covered\":%d,\"total\":%d,\"pct\":%.1f,"
             + "\"sourcesResponded\":%d,\"sourcesExpected\":%d}}}",
             elapsedS, iterations, rate, crashes, leaks, resets,
-            violLatency, violHeap, violThread,
+            driverInvariantsJson(),
             lastLatencyMs, meanLatency, maxLatencyMs,
             lastHeapKb, maxHeapKb, lastThreads,
             corpusSaved, findCrash, findInvariant, rejected,
+            // DD-040: findingsLowerBound is DATA, not prose — an operator/dashboard must be able to
+            // read "this run could not see everything" without parsing a log line. A run that missed
+            // even one report cannot claim its finding counts are complete.
+            reportMisses, reportMisses > 0,
+            // Absent, never a fake 0 (the DD-035 driftUnavailable precedent).
+            targetViolations >= 0
+                    ? "\"targetViolations\":" + targetViolations
+                    : "\"targetViolationsUnavailable\":true",
             coveredEdges, totalEdges, coveragePct,
             coverageSourcesResponded, coverageSourcesExpected);
         String extra = ",\"mode\":\"" + mode + "\"" + loadBlockJson();

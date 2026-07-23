@@ -44,6 +44,9 @@ The command catalog and flag reference. For what the tool is and why, see the
 | `-Dbasquin.coverage.intervalMs=<n>` | Poll interval for the non-guided coverage driver (default 1000) |
 | `-Dbasquin.run.duration=<10m\|30s\|500ms\|45>` | Time-box the coverage-guided run: stop the loop and exit cleanly at the deadline (bare number = seconds). When set without an iteration count, the deadline governs. **Best-effort** — the deadline is checked between iterations, so a slow in-flight request (or a multi-step sequence) can overrun it by up to one iteration's wall time; pick an `activeDeadlineSeconds` backstop accordingly. Used by operator campaigns (DD-025) so a run ends cleanly instead of being SIGKILLed. |
 | `-Dbasquin.summary.out=<path>` | Write an end-of-run metrics summary (the `StatusReporter` snapshot JSON) to this path on shutdown, for a supervisor (the operator) to read. **Requires `-Dbasquin.status=true`** — the metrics are gated behind it, so without it the summary is valid JSON but all zeros (the runner warns loudly). |
+| `-Dbasquin.report.podHost=<host[:port][,...]>` | Where the target's pods are, for the DD-040 result poll. The result store is **per-JVM**, so a poll sent through a Service VIP reaches the pod that served the request only 1 time in N and returns `miss` the rest — a target that scales silently stops being measurable. Each host is DNS-expanded (a headless Service name → all pod IPs), and the poll addresses those pods directly. Defaults to the host of `basquin.coverage.jacoco` (the headless coverage Service), else the `baseUrl` host; a source that resolves to a single address is left alone and the base URL is used unchanged. `off` forces the base URL. If an explicitly configured source cannot be resolved, the poll is a **counted miss**, never a VIP guess. |
+| `-Dbasquin.report.podPort=<n>` | Port to reach a pod on, when the Service's published port differs from the container's. Default: the `baseUrl` port (or a `:port` on the `podHost` entry). |
+| `-Dbasquin.report.podTtlMs=<n>` | How long a pod-address resolution is cached (default 10000). |
 
 ### Dashboard (v0.10)
 
@@ -67,6 +70,17 @@ Disabled unless set. Modes: `hard` (fail fast) or `soft` (record + continue).
 - `-Dbasquin.invariant.heapDelta.maxKb=256`
 - `-Dbasquin.invariant.threadDelta.max=2`
 - `-Dbasquin.invariant.mode=hard|soft` (per-invariant override: `...latency.mode`, etc.)
+- `-Dbasquin.invariant.leak.mode=hard|soft` — leak detection (threads/executors/timers) is always
+  on and follows the same resolution: this key if set, else the global mode, which defaults to
+  `hard`. In `soft` the leak is recorded on the result the driver polls and the application's
+  response is left exactly as the app produced it; in `hard` the iteration still fails fast.
+- `-Dbasquin.pod.id=<name>` — **target-side.** The identity the boundary stamps on every explore
+  exit as `X-Basquin-Pod`, so a recovered finding says which replica produced it. Defaults to
+  `HOSTNAME` (the pod name in Kubernetes, as DD-013's dashboard id does); set it when the pod name
+  reaches the JVM as a flag rather than as the container hostname. Absent identity = absent header,
+  never an invented one. It is an attribution hint only — it rides the same response as
+  `X-Basquin-Cost`, so it is missing on exactly the committed responses that need the result poll,
+  which is why the driver resolves pod addresses itself (`basquin.report.podHost`).
 - Evidence: `-Dbasquin.invariant.stack=current|all|off` (default `current`),
   `-Dbasquin.invariant.stack.maxFrames=15`,
   `-Dbasquin.invariant.latency.sample=true` (sample the execution stack at the latency threshold)

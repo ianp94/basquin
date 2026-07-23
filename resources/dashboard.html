@@ -302,8 +302,24 @@ async function tick(){
     if (st.mode !== 'load') {
       document.getElementById('sub').textContent = 'campaign: '+current+' — '+fmtDur(st.elapsedSec||0)+' · '+((st.rate||0).toFixed(1))+'/s';
     }
-    const inv = st.invariants||{latency:0,heap:0,thread:0};
+    // DD-040: `||0` on a measured value is a lie generator — it renders "we never checked" exactly
+    // like "we checked and it was zero", which is the most reassuring thing a dashboard can say and
+    // the one it has no business saying. Anything the run may not have evaluated is read as
+    // possibly-absent from here on, and absent renders as "n/a", never as 0.
+    const inv = st.invariants||{};
+    const invNames = ['latency','heap','thread'];
+    const invMeasured = invNames.filter(k => typeof inv[k] === 'number');
+    const invTotal = invMeasured.reduce((a,k) => a + inv[k], 0);
     const ex = st.exploration||{};
+    // DD-040: findingsLowerBound is the driver saying "some requests' measurements never reached
+    // me, so this count is a floor". It shipped emitted-and-read-by-nobody, which is precisely the
+    // driftUnavailable defect above. A count the run knows is incomplete must not be drawn as if it
+    // were complete — and reportMisses is read as possibly-absent, so a driver that never reported
+    // it does not render as a reassuring "0 unmeasured".
+    const findingsAreLowerBound = ex.findingsLowerBound === true;
+    const reportMisses = typeof ex.reportMisses === 'number' ? ex.reportMisses : null;
+    const boundNote = !findingsAreLowerBound ? null
+      : 'lower bound' + (reportMisses !== null ? ' — '+reportMisses+' request(s) unmeasured' : '');
 
     const cl = await getJson('/api/campaign/'+encodeURIComponent(current)+'/clusters');
     if(gen !== generation) return;
@@ -311,22 +327,30 @@ async function tick(){
     const ld = st.load;
     if (st.mode === 'load' && ld) {
       const lm = ld.latencyMs || {};
+      // DD-035 emitted driftUnavailable and omitted the numbers; the `||0` here turned that back into
+      // a confident "0 KiB" anyway, which is indistinguishable from a genuinely flat heap.
+      const driftNA = ld.driftUnavailable === true || typeof ld.heapDriftKb !== 'number';
       document.getElementById('cards').innerHTML =
         card('throughput', (ld.throughputRps||0)+'/s', ld.requests+' reqs') +
         card('p50 / p90 / p99', (lm.p50||0)+' / '+(lm.p90||0)+' / '+(lm.p99||0)+' ms', 'max '+(lm.max||0)+'ms') +
-        card('heap drift', (ld.heapDriftKb||0)+' KiB', 'over the soak') +
-        card('thread drift', ld.threadDrift||0) +
+        card('heap drift', driftNA ? 'n/a' : ld.heapDriftKb+' KiB',
+             driftNA ? 'not measured this run' : 'over the soak') +
+        card('thread drift', driftNA ? 'n/a' : ld.threadDrift,
+             driftNA ? 'not measured this run' : '') +
         card('5xx', ld.serverErrors||0, 'server errors');
       document.getElementById('sub').textContent = 'campaign: '+current+' — load · '+(ld.throughputRps||0)+'/s';
       document.getElementById('covCard').style.display = 'none';
 
       pushHist('throughputRps', ld.throughputRps||0);
       pushHist('p99', lm.p99||0);
-      pushHist('heapDriftKb', ld.heapDriftKb||0);
+      // A missing sample must leave a GAP, not a fabricated 0 that drags the sparkline to the floor
+      // and reads as "the heap recovered".
+      if (!driftNA) pushHist('heapDriftKb', ld.heapDriftKb);
       document.getElementById('trends').innerHTML =
         trendCard('throughput', trendHistory.throughputRps, '#3fb950', v => v+' rps') +
         trendCard('p99 latency', trendHistory.p99, '#a371f7', v => v+' ms') +
-        trendCard('heap drift', trendHistory.heapDriftKb, '#e3b341', v => v+' KiB');
+        trendCard('heap drift', trendHistory.heapDriftKb, '#e3b341',
+                  v => (trendHistory.heapDriftKb||[]).length ? v+' KiB' : 'n/a');
     } else {
       // Invariants come from two different places and conflating them is misleading: the harness
       // measures some in ITS OWN jvm (latency/heap/thread of the driver), while the app's agent
@@ -343,9 +367,18 @@ async function tick(){
         card('iterations', st.iterations||0, ((st.rate||0).toFixed(1))+'/s') +
         card('crashes', st.crashes||0) +
         card('leaks', st.leaks||0) +
-        card('app invariants', appInvTotal, appInvSub) +
-        card('harness invariants', (inv.latency+inv.heap+inv.thread),
-             'lat '+inv.latency+' · heap '+inv.heap+' · thr '+inv.thread) +
+        // "≥" rather than a bare number whenever the driver flagged the run as partially blind.
+        card('app invariants', (findingsAreLowerBound ? '≥ ' : '')+appInvTotal,
+             boundNote ? appInvSub+' · '+boundNote : appInvSub) +
+        // DD-040: these are the DRIVER jvm's own evaluations, and it only evaluates an invariant it
+        // was given a threshold for. Unconfigured ones used to render as a flat 0 next to a findings
+        // table full of app-side heapDelta hits — the card looked clean because nobody had looked.
+        card('harness invariants', invMeasured.length ? invTotal : 'n/a',
+             invMeasured.length
+               ? invMeasured.map(k => k+' '+inv[k]).join(' · ') +
+                 (invMeasured.length < invNames.length
+                    ? ' · ' + invNames.filter(k => !invMeasured.includes(k)).join('/') + ' not evaluated' : '')
+               : 'no driver-side thresholds configured') +
         card('latency ms', st.latencyMs?st.latencyMs.last:0, st.latencyMs?('mean '+st.latencyMs.mean+' · max '+st.latencyMs.max):'') +
         card('corpus', ex.corpus||0, (ex.rejected||0)+' rejected');
       const cv = ex.coverage||{total:0};
@@ -354,8 +387,10 @@ async function tick(){
       document.getElementById('covbar').style.width = pct+'%';
       document.getElementById('covCard').style.display = '';
 
-      // "finds" = crashes plus every invariant hit, harness- and app-reported alike.
-      const findsTotal = (st.crashes||0) + appInvTotal + (inv.latency+inv.heap+inv.thread);
+      // "finds" = crashes plus every invariant hit, harness- and app-reported alike. Only invariants
+      // the driver actually evaluated contribute (an unevaluated one would otherwise add NaN, or —
+      // worse, with the old `||0` defaults — silently add nothing while looking like a real 0).
+      const findsTotal = (st.crashes||0) + appInvTotal + invTotal;
       pushHist('iterations', st.iterations||0);
       pushHist('coveragePct', pct||0);
       pushHist('finds', findsTotal);
@@ -366,7 +401,8 @@ async function tick(){
     }
 
     const total = cl.reduce((a,c)=>a+c.count,0);
-    document.getElementById('findsSub').textContent = cl.length+' unique / '+total+' total';
+    document.getElementById('findsSub').textContent =
+      cl.length+' unique / '+total+' total'+(boundNote ? ' · '+boundNote : '');
     document.getElementById('finds').innerHTML = cl.length ? cl.map(c => {
       const open = expanded.has(c.fingerprint);
       let row = '<tr class="clusterRow" data-fp="'+encodeURIComponent(c.fingerprint)+'">'+

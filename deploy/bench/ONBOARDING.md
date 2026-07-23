@@ -91,7 +91,17 @@ spec:
 ```
 
 **Heap sizing is not optional.** At `-Xmx512m` an instrumented app GC-thrashes under c=50 and the
-drift poll times out — the run reports a silent `heapDriftKb:0`. Use `-Xmx2g`.
+drift poll times out. Since DD-040 that surfaces as `driftUnavailable: true` with `heapDriftKb`
+absent (it used to be a silent `heapDriftKb:0`), but the run has still lost the measurement. Use
+`-Xmx2g`.
+
+**Set `invariants.latencyMaxMs` on the `BasquinTarget`, or nothing checks latency.** Under load the
+target's valve is in lock-free passthrough and evaluates nothing, so the *driver* is the only
+evaluator — and it needs the threshold. The campaign now inherits it from the target automatically
+(DD-040), but if neither the target nor `spec.driver.invariants` sets one, the summary reports
+`violations.notEvaluated: [latency, heap, thread]` and the Ready condition says "not evaluated".
+That is the honest answer, not a passing run: `violations.latency: 0` on an unconfigured run used to
+read as a clean result at a p50 of 503 ms against an intended 250 ms budget.
 
 ## 4. Instrument with a `BasquinTarget`
 
@@ -151,6 +161,36 @@ spec:
 The emitted replay corpus is `status.corpusConfigMap` (`<app>-armb-explore-corpus-out`) — cost-ranked,
 carrying the method/sequence-aware entries the fuzzer found expensive.
 
+### Reconcile the reported violation count against the target's own log — every campaign
+
+**Do this before you believe any explore result.** The target evaluates invariants and logs every one
+of them; the driver reports the ones that reached it. Those two numbers should be close. When they
+are not, the reporting channel is broken and the campaign's finding count is fiction — this is the
+check that would have caught DD-040's header loss on day one instead of after three published
+benchmark runs.
+
+```bash
+# what the target evaluated, inside the campaign's window
+$K -n $NS logs <app-pod> --since-time=<campaign start> | grep -c '\[Basquin\]\[Invariant\]'
+
+# what the driver reported
+$K -n $NS get pod <driver-pod> \
+  -o jsonpath='{.status.containerStatuses[0].state.terminated.message}'   # findInvariant / targetViolations
+```
+
+Read them together:
+
+- **Roughly equal** — the channel is healthy. (Expect the pod count to be slightly *higher*: the
+  kubelet readiness probe violates `heapDelta` on some apps every few seconds, ~12/min on JSPWiki
+  even at idle, and probe traffic is not driver traffic.)
+- **A large gap** (the pod logged thousands, the driver reported ~0) — the channel is broken. Since
+  DD-040 the driver also publishes `reportMisses` and `targetViolations` in the summary and marks the
+  run `findingsLowerBound: true`, so check those first; a miss majority now fails the run outright
+  rather than completing "clean". `curl -s localhost:8080/__basquin/violations` in the pod gives the
+  target's own cumulative total for a live cross-check.
+- **The driver reported more** — you are double-counting; the header path and the result-store poll
+  are alternatives, never a sum.
+
 ## 7. Corpus arms A and A′
 
 - **A (happy path)** — the routes a k6/Gatling user would script by hand (e.g. the catalog GETs).
@@ -194,4 +234,5 @@ generator, not boundary state. See [`BENCHMARKS.md`](../../docs/BENCHMARKS.md) f
 - [ ] All k8s object/configmap names **lowercase**.
 - [ ] Readiness probe path has **no query string**.
 - [ ] Collect from the driver **termination summary**; `iters` is not the load metric.
+- [ ] After every explore campaign, reconcile the reported violation count against the target pod's `[Basquin][Invariant]` line count — a large gap means the reporting channel is broken, not that the app is clean.
 - [ ] Fresh target restart between arms; reset any filesystem store the app writes.

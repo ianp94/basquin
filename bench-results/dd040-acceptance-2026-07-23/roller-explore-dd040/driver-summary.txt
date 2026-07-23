@@ -1,0 +1,3 @@
+CoverageGuidedRun done: corpus=99 coverage=24313/96536 pheromone=off seed=1
+[Basquin] reporting: measured=1871 misses=0 targetViolations=1413
+[Basquin] replay cost-ranked (top 5): /basquin/feed/entries/rss=3124, /basquin/search?q=render=3069, /basquin/search?q=velocity=3045, /basquin/search?q=velocity&page=1=3030, /basquin/search?q=paragraph=3021

@@ -3,6 +3,11 @@
 The `basquin.dev/v1alpha1` control plane (Go / kubebuilder) and the `basquin` CLI.
 Release-level changelog: [`../CHANGELOG.md`](../CHANGELOG.md).
 
+## [Unreleased]
+
+### Added
+- **Explore honesty markers in campaign status (DD-040):** `status.findingsLowerBound` and `status.reportMisses` (a pointer — an absent figure stays absent instead of rendering as a reassuring `0`). The driver had emitted both since DD-040 and nothing read them, so a run that could not measure part of its traffic still reported `run complete: …, N findings`; the Ready condition now reads `at least N findings (lower bound: M request(s) reported no measurement)`. Both CRD copies (operator + Helm chart) were regenerated — a field missing from the *served* schema is pruned by Kubernetes, which would silently undo the wiring — and a test pins their presence in both.
+
 ## [0.3.0] — 2026-07-22
 
 ### Added

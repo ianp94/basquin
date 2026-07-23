@@ -228,7 +228,8 @@ public class LoadFireTest {
         assertEquals("Main", reqPage);
         // a SUCCESS save 302s back to the page it just saved -> the shared view-route slot
         assertEquals("Wiki.jsp", LoadRun.normalizeLocation("/Wiki.jsp?page=Main", reqPage));
-        // a REJECTED save 302s to a different page -> its own slot, which is the whole point
+        // a cross-page redirect (the generic rule; the live PageModified.jsp
+        // signature is pinned separately below) 302s to a different page -> its own slot, which is the whole point
         assertEquals("PageModified", LoadRun.normalizeLocation("/Wiki.jsp?page=PageModified", reqPage));
     }
 
@@ -292,5 +293,31 @@ public class LoadFireTest {
         assertEquals("other", LoadRun.admitKey(targets, "overflow")); // full: a NEW key overflows
         assertEquals("fresh", LoadRun.admitKey(targets, "fresh"));    // full: a KNOWN key still admitted
         assertEquals("k0", LoadRun.admitKey(targets, "k0"));
+    }
+
+    /**
+     * DD-038 (@claude review): {@code paramValue} returns {@code ""} — not null — for a {@code page=}
+     * that is present but BLANK, and that is a real shape in this corpus: three jspwiki routes carry
+     * an empty {@code page=} and each bounces to {@code /Login.jsp}. A null-only fallback lets a blank
+     * path {@code page=} shadow a real body {@code page=}, leaving the request with no page identity
+     * at all and disabling the same-page fold for it.
+     */
+    @Test
+    public void blankPageInThePathDoesNotShadowARealPageInTheBody() {
+        assertEquals("a present-but-blank page= is \"\", not null", "", LoadRun.paramValue("/Edit.jsp?page=", "page"));
+        assertEquals("Main", LoadRun.paramValue("page=Main&action=save", "page"));
+
+        // The worker's own extraction order, with a blank path page= and a real body page=.
+        String path = "/Edit.jsp?page=", body = "page=Main&action=save";
+        String reqPage = LoadRun.paramValue(path, "page");
+        if ((reqPage == null || reqPage.isEmpty()) && body != null) {
+            String fromBody = LoadRun.paramValue(body, "page");
+            if (fromBody != null && !fromBody.isEmpty()) reqPage = fromBody;
+        }
+        assertEquals("the body's real page name must win over a blank one in the path", "Main", reqPage);
+
+        // ...and with that identity recovered, the save echo folds to the view route rather than
+        // taking a key of its own.
+        assertEquals("Wiki.jsp", LoadRun.normalizeLocation("/Wiki.jsp?page=Main", reqPage));
     }
 }

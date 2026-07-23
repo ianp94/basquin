@@ -1553,6 +1553,17 @@ the marker survives expansion verbatim and fills uniquely per fire. Full suite g
 *Residual gap:* the worker's own recording block (extract-page → classify → admit → increment) is
 covered only by its parts, not end-to-end through a live redirect under load.
 
+**Boundary of the rule.** The classifier's only signal is the `Location` string, so it cannot
+distinguish a rejection from a success when both echo the *same* route. The three rejection causes
+observed live each answer on a distinct route, which is what makes the path-segment rule work — but
+that is an empirical property of this app, not a guarantee. A future cause that renders its refusal
+as a flash message on the view page (an approval hold, an ACL denial) would land on `Wiki.jsp` and
+fold into the success bucket, reproducing this exact defect for a new cause. The rule assumes "one
+route, one meaning"; when that stops holding, the signal has to come from the response body, not the
+header. Likewise `samePage` encodes JSPWiki/MediaWiki first-letter canonicalization specifically; a
+target that canonicalizes differently (full case-fold, whitespace to underscore) reintroduces the
+under-folding bug for that target, and the fold would need to become pluggable.
+
 **Rejected alternatives.**
 - **A reserved `${{nonce}}` correlation name** — would squat the author-controlled `${{}}` namespace
   DD-036 established for response captures. Rejected in favor of a `<…>` generator, the namespace

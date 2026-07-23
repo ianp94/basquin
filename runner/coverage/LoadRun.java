@@ -171,8 +171,19 @@ public final class LoadRun {
                             // body is just as valid). Checking only one leaves reqPage null for the
                             // other shape → the same-page fold never fires → routine SUCCESS 302s eat
                             // the 12 slots and push the real rejects into "other" (F1).
+                            // isEmpty(), not just null: paramValue returns "" for a `page=` that is
+                            // PRESENT BUT BLANK, and a blank page name is a real corpus shape here
+                            // (three jspwiki routes carry one, and each bounces to /Login.jsp). Testing
+                            // only for null lets a blank path `page=` shadow a real body `page=`, so
+                            // reqPage stays "" -> samePage()'s isEmpty() guard always fails -> the
+                            // same-page fold never fires for that request. That direction is safe
+                            // (extra keys, never a hidden reject) but it is the under-folding class
+                            // this rule exists to close.
                             String reqPage = paramValue(toFire.path(), "page");
-                            if (reqPage == null && toFire.body() != null) reqPage = paramValue(toFire.body(), "page");
+                            if ((reqPage == null || reqPage.isEmpty()) && toFire.body() != null) {
+                                String fromBody = paramValue(toFire.body(), "page");
+                                if (fromBody != null && !fromBody.isEmpty()) reqPage = fromBody;
+                            }
                             String key = normalizeLocation(fr.location(), reqPage);
                             LongAdder a = redirectTargets.get(key);
                             if (a == null) {

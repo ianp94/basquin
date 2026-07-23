@@ -189,7 +189,54 @@ public final class RequestBoundary {
         return false;
     }
 
-    /** Headers to set on the EXPLORE exit: invariant evidence (if any) + the always-present cost header.
+    /**
+     * DD-040 §A.6: this JVM's pod identity, resolved ONCE at class load — {@code HOSTNAME} is the pod
+     * name in Kubernetes, the same source {@code runner/util/DashboardClient} uses for the dashboard
+     * id (DD-013). Null outside Kubernetes, in which case the header is simply absent.
+     *
+     * <p>The environment read happens once, at class load; {@link #podId()} adds only a property
+     * lookup, and only on the explore exit — the load path gains nothing at all.
+     *
+     * <p>It is deliberately <em>not</em> the mechanism that routes the result poll. This header rides
+     * the same response as {@code X-Basquin-Cost}, so it is present precisely when the driver already
+     * has its measurements from the headers, and absent precisely when the response committed and the
+     * poll is needed. It exists for attribution and for the two-replica reconciliation in DD-040's
+     * verification — "which pod produced this violation" — while addressing the right pod is the
+     * driver's job (see {@code runner.coverage.PodPollTargets}).
+     */
+    private static final String POD_ENV = resolvePodEnv();
+
+    private static String resolvePodEnv() {
+        try {
+            String h = System.getenv("HOSTNAME");   // the pod name, when running in Kubernetes
+            return (h == null || h.isEmpty()) ? null : h;
+        } catch (Throwable t) {
+            return null;   // a SecurityManager forbidding env reads must not break the boundary
+        }
+    }
+
+    /**
+     * This JVM's pod identity, or null when it has none (outside Kubernetes) — in which case the
+     * header is simply absent rather than a made-up value.
+     *
+     * <p>{@code -Dbasquin.pod.id} overrides {@code HOSTNAME}, mirroring how DD-013's dashboard id
+     * resolves ({@code basquin.dashboard.id} first, then {@code HOSTNAME}). It is what a deployment
+     * uses when the pod name arrives through the Downward API as a JVM flag rather than as the
+     * container hostname, and it is how a test can assert the header at all — {@code HOSTNAME} is
+     * not something a test can set for the JVM it is running in.
+     */
+    private static String podId() {
+        try {
+            String p = System.getProperty("basquin.pod.id");
+            if (p != null && !p.isEmpty()) return p;
+        } catch (Throwable ignored) {
+            // property access denied: fall back to the environment
+        }
+        return POD_ENV;
+    }
+
+    /** Headers to set on the EXPLORE exit: invariant evidence (if any) + the always-present cost header
+     *  + this pod's identity.
      *  Read here — before onExit releases ITERATION_LOCK — so the numbers belong to THIS request. */
     private static Map<String, String> exitHeaders() {
         Map<String, String> h = new LinkedHashMap<>();
@@ -211,6 +258,8 @@ public final class RequestBoundary {
         } catch (Throwable ignored) {
             // cost reporting is best-effort
         }
+        String pod = podId();
+        if (pod != null) h.put("X-Basquin-Pod", pod);
         return h.isEmpty() ? NO_HEADERS : h;
     }
 }

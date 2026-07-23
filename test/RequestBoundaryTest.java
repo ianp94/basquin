@@ -89,4 +89,61 @@ public class RequestBoundaryTest {
         RequestBoundary.onEnter("/__basquin/drift", null);     // CONTROL_HANDLED
         Assert.assertNull(RequestBoundary.onExit(null).headers.get("X-Basquin-Cost"));
     }
+
+    /**
+     * DD-040 §A.6: an explore exit carries this JVM's pod identity ({@code HOSTNAME}, which is the
+     * pod name in Kubernetes — the same source DD-013's dashboard id uses). It is a hint for
+     * attribution and for the two-replica reconciliation, never the poll's routing mechanism: it
+     * rides the same response headers as the cost header, so it is absent on exactly the committed
+     * responses that need the poll.
+     */
+    @Test public void exploreExitEmitsThePodIdentityHeader() {
+        String prior = System.getProperty("basquin.pod.id");
+        System.setProperty("basquin.pod.id", "roller-7d9c4-abcde");
+        try {
+            LoadMode.setExplore();
+            RequestBoundary.onEnter("/app/page", null);        // EXPLORE_BEGAN
+            Assert.assertEquals("the serving pod's identity, verbatim",
+                    "roller-7d9c4-abcde",
+                    RequestBoundary.onExit(null).headers.get("X-Basquin-Pod"));
+        } finally {
+            restore("basquin.pod.id", prior);
+        }
+    }
+
+    /** No identity to report is reported as no header, never as a made-up or blank one. */
+    @Test public void noPodIdentityMeansNoHeader() {
+        String prior = System.getProperty("basquin.pod.id");
+        System.setProperty("basquin.pod.id", "");              // explicitly empty
+        try {
+            LoadMode.setExplore();
+            RequestBoundary.onEnter("/app/page", null);
+            String pod = RequestBoundary.onExit(null).headers.get("X-Basquin-Pod");
+            String hostname = System.getenv("HOSTNAME");       // the fallback, absent off-cluster
+            Assert.assertEquals(hostname == null || hostname.isEmpty() ? null : hostname, pod);
+        } finally {
+            restore("basquin.pod.id", prior);
+        }
+    }
+
+    /** The load path gains nothing at all — including no pod header. */
+    @Test public void loadAndControlEmitNoPodHeader() {
+        String prior = System.getProperty("basquin.pod.id");
+        System.setProperty("basquin.pod.id", "roller-7d9c4-abcde");
+        try {
+            LoadMode.setLoad(60_000L);
+            RequestBoundary.onEnter("/app", null);             // LOAD_PASSTHROUGH
+            Assert.assertNull(RequestBoundary.onExit(null).headers.get("X-Basquin-Pod"));
+            LoadMode.setExplore();
+            RequestBoundary.onEnter("/__basquin/drift", null); // CONTROL_HANDLED
+            Assert.assertNull(RequestBoundary.onExit(null).headers.get("X-Basquin-Pod"));
+        } finally {
+            restore("basquin.pod.id", prior);
+        }
+    }
+
+    private static void restore(String key, String prior) {
+        if (prior != null) System.setProperty(key, prior);
+        else System.clearProperty(key);
+    }
 }

@@ -748,13 +748,19 @@ public final class CoverageGuidedRun {
                 }
             }
             int invCount = 0;
+            // DD-040 §A.6: the serving pod's name, when the response could carry headers at all.
+            // Attribution only — the poll path can never see it (a committed response has no headers,
+            // which is exactly when the poll runs), so it is recorded, not routed on.
+            String podHdr = c.getHeaderField("X-Basquin-Pod");
+            String podMeta = podHdr == null ? "" : "\npod=" + podHdr;
             String inv = c.getHeaderField("X-Basquin-Invariant-Count");
             if (inv != null) {
                 headerReported = true;
                 try { invCount = Integer.parseInt(inv.trim()); } catch (NumberFormatException ignored) {}
                 String detail = c.getHeaderField("X-Basquin-Invariant-Detail");
                 FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
-                        "route=" + label + "\ncount=" + inv + (detail != null ? "\ndetail=" + detail : ""));
+                        "route=" + label + "\ncount=" + inv
+                                + (detail != null ? "\ndetail=" + detail : "") + podMeta);
             }
             long heapKb = 0; int threadDelta = 0;
             // The fast-path discriminator is the COST header, which the boundary emits on EVERY
@@ -831,28 +837,30 @@ public final class CoverageGuidedRun {
      * <p>The poll itself is never stamped with {@code X-Basquin-Req}: it is handled at the boundary's
      * control branch, but a stamped poll would leave a stale id on a pooled connector thread and
      * later publish some probe's metrics under a driver id — stale data served as fresh.
+     *
+     * <p><b>Which pod it asks</b> (§A.6). The store is per-JVM, so a poll through the Service VIP
+     * reaches the pod that holds the entry with probability 1/N and returns {@code miss} the rest of
+     * the time — a target that scales stops being measurable. {@link PodPollTargets} therefore hands
+     * back the pod addresses to try; each is asked in turn until one returns the entry. A run-salted
+     * id plus remove-on-read means at most one pod can hold it, so asking several cannot return
+     * another pod's data — the worst a fan-out can do is find nothing, which is a recorded miss.
      */
     static CostSample pollResult(String base, String reqId, String label) {
-        String body;
-        try {
-            HttpURLConnection pc = (HttpURLConnection) new URL(
-                    base + "/__basquin/result?id=" + java.net.URLEncoder.encode(reqId, "UTF-8")).openConnection();
-            pc.setConnectTimeout(2000);
-            // Must outlast the handler's bounded ITERATION_LOCK wait, or a poll queued behind the
-            // very iteration that is about to write this entry is scored as a miss, every time.
-            pc.setReadTimeout(POLL_READ_TIMEOUT_MS);
-            pc.setRequestMethod("GET");
-            StringBuilder sb = new StringBuilder();
-            InputStream is = pc.getResponseCode() >= 400 ? pc.getErrorStream() : pc.getInputStream();
-            if (is != null) {
-                try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = br.readLine()) != null && sb.length() < 4096) sb.append(line);
-                }
+        List<String> pollBases = PodPollTargets.pollBases(base);
+        // Pod addressing was demanded and DNS could not say where the pods are. Guessing via the VIP
+        // would restore the 1-in-N lottery behind a poll that looks like it worked (§A.6).
+        if (pollBases.isEmpty()) return recordMiss();
+        String body = null;
+        String servedBy = null;
+        for (String pollBase : pollBases) {
+            String candidate = fetchResult(pollBase, reqId);
+            // '|' is the entry separator: anything without it is `miss` or garbage, and the next pod
+            // may still hold the real entry. Only a well-formed entry ends the search.
+            if (candidate != null && candidate.indexOf('|') >= 0) {
+                body = candidate;
+                servedBy = pollBases.size() > 1 ? pollBase : null;   // only meaningful when we chose
+                break;
             }
-            body = pc.getResponseCode() == 200 ? sb.toString().trim() : null;
-        } catch (Throwable t) {
-            body = null;   // unreachable target, timeout, no boundary installed: a miss, never a zero
         }
         // 4-field limit: `detail` is app-derived and may contain the separator.
         String[] f = (body == null) ? new String[0] : body.split("\\|", 4);
@@ -873,22 +881,56 @@ public final class CoverageGuidedRun {
         }
         String detail = f.length > 2 && !f[2].isEmpty() ? f[2] : null;
         boolean leak = f.length > 3 && "leak".equals(f[3].trim());
+        // Which replica this finding came off, when there was more than one candidate. Task 7 checks
+        // the campaign's reported count against the target pods' own logs; without attribution a
+        // two-replica reconciliation is a guess.
+        String pod = servedBy == null ? "" : "\npod=" + servedBy;
         try {
             // The step that makes the campaign's number move. `label` is the RAW recipe (DD-036) —
             // never a substituted request line, which would write a live CSRF token to disk.
             if (count > 0) {
                 FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Invariant-Remote",
-                        "route=" + label + "\ncount=" + count + (detail != null ? "\ndetail=" + detail : ""));
+                        "route=" + label + "\ncount=" + count
+                                + (detail != null ? "\ndetail=" + detail : "") + pod);
             }
             if (leak) {
                 FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Leak-Remote",
-                        "route=" + label + "\nleak=true");
+                        "route=" + label + "\nleak=true" + pod);
             }
         } catch (Throwable ignored) {
             // Saving is best-effort against the finally contract above; the measurement still stands.
         }
         reportMeasured++;
         return new CostSample(heapKb, threadDelta, count, true);
+    }
+
+    /**
+     * One {@code /__basquin/result} GET against one address. Returns the response body, or null for
+     * anything that is not a 200 — unreachable pod, timeout, no boundary installed. Never throws:
+     * {@link #pollResult} is called from a {@code finally} and an escape there would replace the
+     * in-flight {@code serverError}, losing the 500 that is the whole point of that request.
+     */
+    private static String fetchResult(String base, String reqId) {
+        try {
+            HttpURLConnection pc = (HttpURLConnection) new URL(
+                    base + "/__basquin/result?id=" + java.net.URLEncoder.encode(reqId, "UTF-8")).openConnection();
+            pc.setConnectTimeout(2000);
+            // Must outlast the handler's bounded ITERATION_LOCK wait, or a poll queued behind the
+            // very iteration that is about to write this entry is scored as a miss, every time.
+            pc.setReadTimeout(POLL_READ_TIMEOUT_MS);
+            pc.setRequestMethod("GET");
+            StringBuilder sb = new StringBuilder();
+            InputStream is = pc.getResponseCode() >= 400 ? pc.getErrorStream() : pc.getInputStream();
+            if (is != null) {
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = br.readLine()) != null && sb.length() < 4096) sb.append(line);
+                }
+            }
+            return pc.getResponseCode() == 200 ? sb.toString().trim() : null;
+        } catch (Throwable t) {
+            return null;   // unreachable target, timeout, no boundary installed: a miss, never a zero
+        }
     }
 
     /** A miss: counted, published, and explicitly NOT turned into a zero-filled sample. */

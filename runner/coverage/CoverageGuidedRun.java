@@ -340,6 +340,12 @@ public final class CoverageGuidedRun {
         StatusReporter.renderFinal();
         System.out.printf("CoverageGuidedRun done: corpus=%d coverage=%d/%d pheromone=%s seed=%d%n",
                 corpus.size(), best, total, pheromoneOn ? "on" : "off", seed);
+        if (crossOriginRedirects > 0) {
+            System.out.println("[Basquin] explore: " + crossOriginRedirects + " cross-origin redirect(s)"
+                    + " refused. If this is close to the iteration count, the target renders redirects"
+                    + " from a configured absolute base URL and DD-039 is not actually following"
+                    + " anything — check the app's site-URL setting before trusting the coverage.");
+        }
         reportReportingHealth(reportMeasured, reportMisses,
                 targetViolationsAtStart >= 0 && targetViolationsAtEnd >= targetViolationsAtStart
                         ? targetViolationsAtEnd - targetViolationsAtStart : -1L);
@@ -562,6 +568,31 @@ public final class CoverageGuidedRun {
                     "route=" + label + "\ncount=" + b[1] + "\nhop=" + b[0]
                             + (b[2] != null ? "\ndetail=" + b[2] : "") + b[3]);
         }
+    }
+
+    /**
+     * A redirect loop is a FINDING, not a nuisance: an app that redirects indefinitely is
+     * unavailable — a browser surfaces it as ERR_TOO_MANY_REDIRECTS — and this tool's oracle is
+     * availability. Scoring the 5th response as a normal iteration would discard a genuine finding
+     * and feed a meaningless response into the cost model and the corpus.
+     *
+     * <p>{@code label} is the RAW step recipe (DD-036), never a resolved hop URL. {@code visited}
+     * already holds query-stripped URLs — they are stripped where they are CONSTRUCTED, because
+     * hop 0's URL comes from the substituted RequestLine and would otherwise carry a live token.
+     *
+     * <p><b>CostModel.score decision (explicit, per DD-039 review).</b> This finding does NOT touch
+     * {@code CostSample.invariantCount} and so does NOT feed {@link CostModel#score}. The summed
+     * invariant count that DOES feed the score is only the per-hop {@code X-Basquin-Invariant-Count}
+     * / poll total (summed across hops in Task 4, scored at the loop's {@code CostModel.score} call)
+     * — a real resource/violation cost. A redirect loop is an availability signal reported for
+     * triage; folding a synthetic count into the score would let a loop out-rank a genuinely
+     * expensive input purely because it looped, corrupting corpus ranking. The chain's actual
+     * measured latency/heap/thread cost still scores normally; only the loop classification is kept
+     * out of the number.
+     */
+    private static void saveRedirectLoop(String label, java.util.Collection<String> visited) {
+        FuzzIO.saveWithMeta(label.getBytes(StandardCharsets.UTF_8), "Redirect-Loop",
+                "route=" + label + "\nhops=" + String.join(" -> ", visited));
     }
 
     /**
@@ -820,6 +851,15 @@ public final class CoverageGuidedRun {
     /** DD-040: requests whose measurements the driver DID obtain, by either channel. */
     static volatile long reportMeasured;
 
+    /**
+     * DD-039: {@code Location}s refused because they left the target's origin. Surfaced in the
+     * end-of-run summary because a target that renders redirects from a CONFIGURED absolute base URL
+     * makes every redirect cross-origin, silently degrading this feature to its pre-DD-039 behaviour
+     * — indistinguishable from the feature working. A non-zero counter beside flat coverage is
+     * immediately diagnosable; nothing else in the run says so.
+     */
+    static volatile long crossOriginRedirects;
+
     /** DD-040: per-request id sequence; salted with {@link LoadRun#RUN_SALT} so a foreign or stale id
      *  misses honestly instead of returning another run's entry as fresh (spec §A.4). */
     private static final java.util.concurrent.atomic.AtomicLong REQ_SEQ =
@@ -1006,13 +1046,25 @@ public final class CoverageGuidedRun {
                 // ---- terminal conditions. EVERY ONE breaks BEFORE the drain, so the final hop's
                 // ---- body survives for the capture step and the post-loop read.
                 if (!isRedirect(code)) break;                       // the ordinary terminal response
-                if (hops >= MAX_HOPS) break;                        // Task 5 files the finding here
+                // The two terminal conditions stay SPLIT: fusing !isRedirect with the cap into one
+                // branch that hangs saveRedirectLoop off it would file a Redirect-Loop finding for
+                // EVERY ordinary non-redirect response.
+                if (hops >= MAX_HOPS) { saveRedirectLoop(label, visited); break; }   // the cap IS a loop
                 java.net.URI next = resolveLocation(url, c.getHeaderField("Location"));
                 if (next == null) break;                            // absent/unparseable: the 3xx is final
                 java.net.URI here = safeUri(url);                    // NEVER URI.create: substituted path
-                if (here == null || !sameOrigin(here, next)) break;  // Task 5 counts the refusal here
+                if (here == null || !sameOrigin(here, next)) {
+                    crossOriginRedirects++;
+                    warnOnce("cross-origin", "refusing a cross-origin redirect to "
+                            + next.getScheme() + "://" + next.getHost()
+                            + (next.getPort() > 0 ? ":" + next.getPort() : "")
+                            + " — if EVERY redirect is refused, the target is rendering redirects "
+                            + "from a configured absolute base URL and DD-039 is degraded to its "
+                            + "pre-DD-039 behaviour");
+                    break;
+                }
                 String nextUrl = strippedUrl(next.toString());
-                if (visited.contains(nextUrl)) break;               // Task 5 files the finding here
+                if (visited.contains(nextUrl)) { saveRedirectLoop(label, visited); break; }  // revisit
 
                 drain(c);                                            // only now is this hop discardable
                 String nextMethod = followMethod(code, method);

@@ -445,4 +445,128 @@ public class ExploreRedirectTest {
         assertEquals(0, pollHits.get());
         assertEquals(missesBefore, CoverageGuidedRun.reportMisses);
     }
+
+    // ---------------------------------------------------------------- Task 5: redirect policy + loop
+
+    /** Spec Verification #6. A fuzzed input inducing an open redirect must not turn the explorer
+     *  into a client for another server, or attribute another host's cost to the app. */
+    @Test
+    public void aCrossOriginLocationIsNotFollowedAndIsCounted() throws Exception {
+        redirect("/out", 302, "http://evil.example.invalid/steal", null);
+        start();
+        long before = CoverageGuidedRun.crossOriginRedirects;
+
+        CoverageGuidedRun.request(base, "/out");
+
+        assertEquals("only hop 0 was issued", 1, seen.size());
+        assertEquals("the refusal must be COUNTED — a configured absolute base URL makes every "
+                + "redirect cross-origin and degrades DD-039 to its pre-DD-039 behaviour, and a "
+                + "non-zero counter beside flat coverage is the only thing that makes that visible",
+                before + 1, CoverageGuidedRun.crossOriginRedirects);
+    }
+
+    /** Spec Verification #7. A relative Location resolves, and http://svc/x matches http://svc:80. */
+    @Test
+    public void aRelativeLocationResolvesAndIsFollowed() throws Exception {
+        redirect("/dir/one", 302, "two", null);
+        page("/dir/two", "ok");
+        start();
+
+        CoverageGuidedRun.request(base, "/dir/one");
+
+        assertEquals(2, seen.size());
+        assertEquals("/dir/two", seen.get(1).path());
+    }
+
+    /** Spec Verification #5. URI throws on unencoded space, {}, | and ^ — the bytes a fuzzer
+     *  reflects. request(...) is `throws Exception` and its caller files a CRASH finding against the
+     *  app on any Throwable, so an unguarded parse would blame the app for a driver bug. */
+    @Test
+    public void anUnparseableLocationEndsTheChainWithoutFilingACrash() throws Exception {
+        redirect("/bad", 302, "/next?q=a b|c^{}", null);
+        start();
+        Path dir = Files.createTempDirectory("basquin-dd039-badloc");
+
+        AccumulatedPollTest.withResultsDirFor(dir, () -> {
+            CoverageGuidedRun.request(base, "/bad");     // must not throw
+            assertEquals("the 3xx becomes the final response", 1, seen.size());
+            assertEquals("no crash finding may be filed against the app",
+                    0, AccumulatedPollTest.readMetasFor(dir, "Crash").size());
+        });
+    }
+
+    /** Spec Verification #4, revisit half. /protected -> /login -> /protected is a real loop that
+     *  never reaches five hops, which is why the cap alone is a poor detector. */
+    @Test
+    public void aRevisitedUrlEndsTheChainAndFilesARedirectLoopFinding() throws Exception {
+        redirect("/protected", 302, "/login", null);
+        redirect("/login", 302, "/protected", null);
+        start();
+        Path dir = Files.createTempDirectory("basquin-dd039-loop");
+
+        AccumulatedPollTest.withResultsDirFor(dir, () -> {
+            CoverageGuidedRun.request(base, "/protected");
+
+            // The loop detects a revisited URL BEFORE re-issuing it (look-ahead), so a self-loop
+            // is exactly 2 requests: the original and the one hop that reveals the repeat. "A
+            // revisited URL ends the chain" (spec §2) does not require wastefully re-fetching it.
+            assertEquals("stopped at the revisit (look-ahead), not at the cap", 2, seen.size());
+            List<String> metas = AccumulatedPollTest.waitForMetas(dir, "Redirect-Loop", 1);
+            assertEquals(1, metas.size());
+            assertTrue("labelled with the RAW step, never a resolved hop URL (DD-036)",
+                    metas.get(0).contains("route=/protected"));
+            assertTrue("the ordered hops are the evidence", metas.get(0).contains("/login"));
+        });
+    }
+
+    /** Spec Verification #4, cap half. Five REQUESTS total, not six. */
+    @Test
+    public void theHopCapStopsAtFiveRequestsAndFilesTheFinding() throws Exception {
+        for (int i = 0; i < 9; i++) redirect("/n" + i, 302, "/n" + (i + 1), null);
+        page("/n9", "end");
+        start();
+        Path dir = Files.createTempDirectory("basquin-dd039-cap");
+
+        AccumulatedPollTest.withResultsDirFor(dir, () -> {
+            CoverageGuidedRun.request(base, "/n0");
+            assertEquals("MAX_HOPS counts REQUESTS: five, not 1 + 5", 5, seen.size());
+            assertEquals(1, AccumulatedPollTest.waitForMetas(dir, "Redirect-Loop", 1).size());
+        });
+    }
+
+    /** An ordinary non-redirect response must NOT file a Redirect-Loop finding — the failure mode of
+     *  fusing the two terminal conditions into one branch. */
+    @Test
+    public void anOrdinaryResponseFilesNoRedirectLoopFinding() throws Exception {
+        page("/plainer", "hello");
+        start();
+        Path dir = Files.createTempDirectory("basquin-dd039-noloop");
+        AccumulatedPollTest.withResultsDirFor(dir, () -> {
+            CoverageGuidedRun.request(base, "/plainer");
+            Thread.sleep(200);
+            assertEquals("fusing !isRedirect with the cap check makes EVERY response a loop finding",
+                    0, AccumulatedPollTest.readMetasFor(dir, "Redirect-Loop").size());
+        });
+    }
+
+    /** DD-036, the half the existing guard test cannot see: it puts its token in the BODY. Hop 0's
+     *  URL is built from the SUBSTITUTED path, so an unstripped hop URL writes a live token to disk. */
+    @Test
+    public void aTokenSubstitutedIntoThePathNeverReachesDisk() throws Exception {
+        page("/edit", "<input name=\"X-XSRF-TOKEN\" value=\"SECRET-PATH-TOKEN-42\">");
+        redirect("/save", 302, "/save", null);      // an immediate self-loop: forces the loop finding
+        start();
+        Path dir = Files.createTempDirectory("basquin-dd039-pathtoken");
+
+        AccumulatedPollTest.withResultsDirFor(dir, () -> {
+            CoverageGuidedRun.runSequence(base, List.of(
+                    "/edit <<csrf=input:X-XSRF-TOKEN",
+                    "/save?csrf=${{csrf}}"));
+
+            String all = String.join("\n", AccumulatedPollTest.readMetasFor(dir, "Redirect-Loop"));
+            assertFalse("a token substituted into the PATH must never reach a hop URL on disk: " + all,
+                    all.contains("SECRET-PATH-TOKEN-42"));
+            assertTrue("the safe recipe is what is recorded", all.contains("${{csrf}}"));
+        });
+    }
 }

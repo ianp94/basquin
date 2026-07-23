@@ -206,7 +206,7 @@ public class AccumulatedPollTest {
         long deadline = System.currentTimeMillis() + 5000;
         List<String> found = new ArrayList<>();
         while (System.currentTimeMillis() < deadline) {
-            found = readMetas(dir, classification);
+            found = readMetasFor(dir, classification);
             if (found.size() >= n) break;
             Thread.sleep(25);
         }
@@ -216,10 +216,14 @@ public class AccumulatedPollTest {
                     + "which is the defect DD-040 exists to fix");
         }
         Thread.sleep(150);          // settle, so an EXTRA record (a double-save) is caught too
-        return readMetas(dir, classification);
+        return readMetasFor(dir, classification);
     }
 
-    private static List<String> readMetas(Path dir, String classification) throws Exception {
+    /** Package-private (was private {@code readMetas}): promoted in DD-039 Task 5 alongside the two
+     *  ({@link #withResultsDirFor}, {@link #waitForMetas}) promoted in Task 4, so ExploreRedirectTest
+     *  can assert directly on the metas of a classification (e.g. that NO {@code Crash} was filed, or
+     *  read a {@code Redirect-Loop}'s text) without a bounded-wait when it expects ZERO. */
+    static List<String> readMetasFor(Path dir, String classification) throws Exception {
         List<String> out = new ArrayList<>();
         if (!Files.isDirectory(dir)) return out;
         for (Path p : Files.newDirectoryStream(dir, "*.meta.txt")) {

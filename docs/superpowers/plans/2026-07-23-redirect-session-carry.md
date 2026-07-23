@@ -1,9 +1,24 @@
 # DD-039 Session Carry Across Redirects — Implementation Plan
 
-> **Revised 2026-07-23** after a plan review that found six Critical defects — three that meant the
-> plan could not compile, and one that would have shipped a live-token disk leak violating DD-036.
-> All are folded into the tasks below; the original findings are retained at the bottom of this file
-> as the record of what was wrong and why.
+> **DO NOT EXECUTE. BLOCKED ON PR #94, AND THE REVISION WAS SUPERFICIAL.**
+>
+> A second plan review (`.superpowers/sdd/plan-review-dd039-round2.md`) found that only **3 of 21**
+> prior findings were genuinely folded in — the rest were moved into prose Global Constraints while
+> the *copyable task code* still contains them, including two Criticals verbatim. It found 13 new
+> findings, four of them Critical. Two matter most:
+>
+> 1. **This plan is unbuildable as written.** It integrates with DD-040 (per-request stamping,
+>    `pollResult`, `ResultStore`), which is on unmerged PR #94 — not on this branch and not on
+>    `main`. The plan must be rebased onto DD-040 before it can be executed or meaningfully
+>    reviewed.
+> 2. **"Stamp every hop" does not close DD-040's gap.** DD-040 uses ONE id per request, so stamping
+>    every hop with that same id means each hop's `put` overwrites the last and you still recover a
+>    single entry. Closing the gap needs **per-hop ids** (`<id>-h0`, `<id>-h1`, …) and a poll per
+>    hop, plus a rule for the header/poll duality across hops so violations are not double-counted
+>    against `take`'s remove-on-read. That is a spec-level decision and is currently in neither the
+>    spec nor the plan.
+>
+> Revise after #94 merges, against the code as it will then actually exist.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

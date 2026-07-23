@@ -67,6 +67,10 @@ Disabled unless set. Modes: `hard` (fail fast) or `soft` (record + continue).
 - `-Dbasquin.invariant.heapDelta.maxKb=256`
 - `-Dbasquin.invariant.threadDelta.max=2`
 - `-Dbasquin.invariant.mode=hard|soft` (per-invariant override: `...latency.mode`, etc.)
+- `-Dbasquin.invariant.leak.mode=hard|soft` — leak detection (threads/executors/timers) is always
+  on and follows the same resolution: this key if set, else the global mode, which defaults to
+  `hard`. In `soft` the leak is recorded on the result the driver polls and the application's
+  response is left exactly as the app produced it; in `hard` the iteration still fails fast.
 - Evidence: `-Dbasquin.invariant.stack=current|all|off` (default `current`),
   `-Dbasquin.invariant.stack.maxFrames=15`,
   `-Dbasquin.invariant.latency.sample=true` (sample the execution stack at the latency threshold)

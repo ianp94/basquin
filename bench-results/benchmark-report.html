@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Benchmarks — Basquin against unmodified JVM apps</title>
-<meta name="description" content="Basquin run against real, unmodified JVM web apps: what it finds that a crash-only oracle misses, measured on 1.4M requests with 520 server errors.">
+<meta name="description" content="Basquin run against real, unmodified JVM web apps: what it finds that a crash-only oracle misses, measured on 1.3M requests with 48975 server errors.">
 
 <style>
 /* Basquin site — shared styles. Self-contained: no external fonts/CDNs. */
@@ -322,10 +322,10 @@ hr.rule { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
 <main class="wrap">
   <div class="page-head">
     <div class="breadcrumb">docs / benchmarks</div>
-    <h1>1.4M requests, and the most serious defect had no error code at all.</h1>
+    <h1>1.3M requests, and the most serious defect had no error code at all.</h1>
     <p class="lead">Basquin was pointed at real, <strong>unmodified</strong> JVM web apps — no test
       code, no instrumentation in the app, no config changes. It found errors, which any load tool
-      would have found too. It also found 4,280 responses that were neither an error nor
+      would have found too. It also found 3,887 responses that were neither an error nor
       the thing that was asked for, and — on a target that was still answering
       <code>200</code> in 10&nbsp;ms — two threads that had been spinning at 100% of a core for five
       hours.</p>
@@ -338,16 +338,16 @@ hr.rule { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
   </div>
 
   <div class="tiles">
-    <div class="tile"><div class="n">1.4M</div><div class="l">requests driven across three unmodified apps</div></div>
-    <div class="tile"><div class="n warn">520</div><div class="l">server errors — the part a crash oracle does report</div></div>
-    <div class="tile"><div class="n warn">4,280</div><div class="l">3xx responses classified by destination instead of followed</div></div>
+    <div class="tile"><div class="n">1.3M</div><div class="l">requests driven across three unmodified apps</div></div>
+    <div class="tile"><div class="n warn">49k</div><div class="l">server errors — the part a crash oracle does report</div></div>
+    <div class="tile"><div class="n warn">3,887</div><div class="l">3xx responses classified by destination instead of followed</div></div>
     <div class="tile"><div class="n warn">2</div><div class="l">threads spun at 100% of a core for 5 hours, while the app answered 200 in 10 ms</div></div>
   </div>
 
   <h2>The gap this measures</h2>
   <p>A crash-only oracle — a plain fuzzer, a load test's error count — asks one question:
     <em>did it return an error?</em> That question is not useless: it catches the
-    520 server errors below, and those are real. But it is the only question those
+    49k server errors below, and those are real. But it is the only question those
     tools ask, and the two most serious things on this page do not answer it. A write the app
     silently threw away returns <code>302</code>. A thread spinning forever at 100% of a core
     returns <code>200</code> in 10&nbsp;ms.</p>
@@ -379,32 +379,32 @@ hr.rule { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
       <tbody>
         <tr>
           <th scope="row">Apache JSPWiki 2.12.4<br><span class="muted">wiki CMS · filesystem store</span></th>
-          <td class="num">27.0%</td>
-          <td class="num">1</td>
-          <td class="num">26</td>
-          <td class="num">15k</td>
-          <td class="num">80.7</td>
-          <td class="num">2 / 743</td>
-          <td class="num warn">249</td>
+          <td class="num">27.1%</td>
+          <td class="num">2918</td>
+          <td class="num">17</td>
+          <td class="num">17k</td>
+          <td class="num">55.2</td>
+          <td class="num">2 / 6780</td>
+          <td class="num warn">398</td>
         </tr>
         <tr>
           <th scope="row">MyBatis JPetStore-6<br><span class="muted">e-commerce · MyBatis + HSQLDB</span></th>
           <td class="num">23.1%</td>
-          <td class="num">342</td>
-          <td class="num">603</td>
-          <td class="num">1.2M</td>
-          <td class="num">6411.2</td>
-          <td class="num">0 / 5</td>
-          <td class="num ok">0</td>
+          <td class="num">421</td>
+          <td class="num">470</td>
+          <td class="num">1.1M</td>
+          <td class="num">3511.8</td>
+          <td class="num">1 / 9</td>
+          <td class="num warn">39047</td>
         </tr>
         <tr>
           <th scope="row">Apache Roller 6.1.5<br><span class="muted">blog CMS · JPA + Postgres</span></th>
-          <td class="num">25.2%</td>
+          <td class="num">30.5%</td>
+          <td class="num">1402</td>
           <td class="num">0</td>
-          <td class="num">0</td>
-          <td class="num">5,184</td>
-          <td class="num">28.7</td>
-          <td class="num">503 / 514</td>
+          <td class="num">4,670</td>
+          <td class="num">15.5</td>
+          <td class="num">515 / 532</td>
           <td class="num ok">0</td>
         </tr>
       </tbody>
@@ -453,25 +453,22 @@ hr.rule { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
 
   <div class="chart-card">
     <figure>
-      <figcaption id="redirects" class="fig-title">Where 4,280 redirects went — JSPWiki under load, classified by Location</figcaption>
-      <svg viewBox="0 0 814 171" width="100%" role="img" aria-labelledby="redirects">
-<rect x="0.0" y="0" width="330.3" height="46" rx="4" fill="var(--s3)"/>
-<rect x="332.3" y="0" width="280.4" height="46" rx="4" fill="var(--s4)"/>
-<rect x="614.7" y="0" width="148.8" height="46" rx="4" fill="var(--s2)"/>
-<rect x="765.5" y="0" width="45.7" height="46" rx="4" fill="var(--s4)"/>
-<rect x="813.2" y="0" width="1.0" height="46" rx="4" fill="var(--s2)"/>
+      <figcaption id="redirects" class="fig-title">Where 3,887 redirects went — JSPWiki under load, classified by Location</figcaption>
+      <svg viewBox="0 0 801 150" width="100%" role="img" aria-labelledby="redirects">
+<rect x="0.0" y="0" width="579.1" height="46" rx="4" fill="var(--s3)"/>
+<rect x="581.1" y="0" width="138.1" height="46" rx="4" fill="var(--s4)"/>
+<rect x="721.3" y="0" width="77.5" height="46" rx="4" fill="var(--s2)"/>
+<rect x="800.8" y="0" width="1.0" height="46" rx="4" fill="var(--s2)"/>
 <rect x="0" y="57" width="10" height="10" rx="2" fill="var(--s3)"/>
-<text class="ax lgd" x="16" y="66">Wiki.jsp<tspan class="val" dx="8">1,747</tspan><tspan class="note" dx="6">41%</tspan><tspan class="note" dx="8">· the save echo — a write that landed</tspan></text>
+<text class="ax lgd" x="16" y="66">Wiki.jsp<tspan class="val" dx="8">2,820</tspan><tspan class="note" dx="6">73%</tspan><tspan class="note" dx="8">· the save echo — a write that landed</tspan></text>
 <rect x="0" y="78" width="10" height="10" rx="2" fill="var(--s4)"/>
-<text class="ax lgd" x="16" y="87">Login.jsp<tspan class="val" dx="8">1,485</tspan><tspan class="note" dx="6">35%</tspan><tspan class="note" dx="8">· a view request with an EMPTY page name, which JSPWiki bounces to the login screen with or without a session</tspan></text>
+<text class="ax lgd" x="16" y="87">Login.jsp<tspan class="val" dx="8">680</tspan><tspan class="note" dx="6">17%</tspan><tspan class="note" dx="8">· a view request with an EMPTY page name, which JSPWiki bounces to the login screen with or without a session</tspan></text>
 <rect x="0" y="99" width="10" height="10" rx="2" fill="var(--s2)"/>
-<text class="ax lgd" x="16" y="108">Forbidden.html<tspan class="val" dx="8">793</tspan><tspan class="note" dx="6">19%</tspan><tspan class="note" dx="8">· CSRF token missing or wrong</tspan></text>
-<rect x="0" y="120" width="10" height="10" rx="2" fill="var(--s4)"/>
-<text class="ax lgd" x="16" y="129">Main<tspan class="val" dx="8">251</tspan><tspan class="note" dx="6">6%</tspan><tspan class="note" dx="8">· an invalid page name on Diff.jsp, folded to the front page</tspan></text>
-<rect x="0" y="141" width="10" height="10" rx="2" fill="var(--s2)"/>
-<text class="ax lgd" x="16" y="150">PageModified.jsp<tspan class="val" dx="8">4</tspan><tspan class="note" dx="6">0%</tspan><tspan class="note" dx="8">· concurrent-edit conflict — the save was refused</tspan></text>
+<text class="ax lgd" x="16" y="108">Forbidden.html<tspan class="val" dx="8">386</tspan><tspan class="note" dx="6">10%</tspan><tspan class="note" dx="8">· CSRF token missing or wrong</tspan></text>
+<rect x="0" y="120" width="10" height="10" rx="2" fill="var(--s2)"/>
+<text class="ax lgd" x="16" y="129">PageModified.jsp<tspan class="val" dx="8">1</tspan><tspan class="note" dx="6">0%</tspan><tspan class="note" dx="8">· concurrent-edit conflict — the save was refused</tspan></text>
 </svg>
-      <figcaption>Every one of these was a 3xx: not a 5xx, not a 4xx, and every CSRF and anti-spam token was submitted (<code>captureMisses: 260</code> — steps skipped because a prior capture never bound, counted separately from the requests below), so a load tool counts all 4,280 as served. Split by destination they resolve into <strong>797 refused writes</strong> and 1,747 accepted ones — a distinction carried entirely by a response header that a redirect-following client discards before anyone can read it.</figcaption>
+      <figcaption>Every one of these was a 3xx: not a 5xx, not a 4xx, and every CSRF and anti-spam token was submitted (<code>captureMisses: 340</code> — steps skipped because a prior capture never bound, counted separately from the requests below), so a load tool counts all 3,887 as served. Split by destination they resolve into <strong>387 refused writes</strong> and 2,820 accepted ones — a distinction carried entirely by a response header that a redirect-following client discards before anyone can read it.</figcaption>
     </figure>
   </div>
 
@@ -501,7 +498,7 @@ hr.rule { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
 
   <div class="chart-card">
     <figure>
-      <figcaption id="lat-jspwiki" class="fig-title">Apache JSPWiki 2.12.4 — 15k requests at 80.7 rps (concurrency 8)</figcaption>
+      <figcaption id="lat-jspwiki" class="fig-title">Apache JSPWiki 2.12.4 — 17k requests at 55.2 rps (concurrency 8)</figcaption>
       <svg viewBox="0 0 640 166" width="100%" role="img" aria-labelledby="lat-jspwiki">
 <line class="gl" x1="116.0" y1="18" x2="116.0" y2="142"/>
 <text class="ax" x="116.0" y="158" text-anchor="middle">1</text>
@@ -517,22 +514,22 @@ hr.rule { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
 <rect x="116" y="22" width="35.1" height="20" rx="4" fill="var(--s1)"/>
 <text class="val" x="158.1" y="39">2ms</text>
 <text class="ax lbl" x="106" y="69" text-anchor="end">p90</text>
-<rect x="116" y="52" width="276.9" height="20" rx="4" fill="var(--s1)"/>
-<text class="val" x="399.9" y="69">238ms</text>
+<rect x="116" y="52" width="291.1" height="20" rx="4" fill="var(--s1)"/>
+<text class="val" x="414.1" y="69">315ms</text>
 <text class="ax lbl" x="106" y="99" text-anchor="end">p99</text>
-<rect x="116" y="82" width="334.5" height="20" rx="4" fill="var(--s1)"/>
-<text class="val" x="457.5" y="99">743ms</text>
+<rect x="116" y="82" width="446.3" height="20" rx="4" fill="var(--s1)"/>
+<text class="val" x="569.3" y="99">6,780ms</text>
 <text class="ax lbl" x="106" y="129" text-anchor="end">max</text>
-<rect x="116" y="112" width="459.8" height="20" rx="4" fill="var(--s1)"/>
-<text class="val" x="582.8" y="129">8,854ms</text>
+<rect x="116" y="112" width="463.8" height="20" rx="4" fill="var(--s1)"/>
+<text class="val" x="586.8" y="129">9,568ms</text>
 <text class="ax" x="640" y="12" text-anchor="end">log scale · ms</text>
 </svg>
-      <figcaption>Median 2 ms, but a worst single request of 8,854 ms — a 4427× spread that a median-only dashboard hides entirely.</figcaption>
+      <figcaption>Median 2 ms, but a worst single request of 9,568 ms — a 4784× spread that a median-only dashboard hides entirely.</figcaption>
     </figure>
   </div>
   <div class="chart-card">
     <figure>
-      <figcaption id="lat-jpetstore" class="fig-title">MyBatis JPetStore-6 — 1.2M requests at 6411.2 rps (concurrency 8)</figcaption>
+      <figcaption id="lat-jpetstore" class="fig-title">MyBatis JPetStore-6 — 1.1M requests at 3511.8 rps (concurrency 8)</figcaption>
       <svg viewBox="0 0 640 166" width="100%" role="img" aria-labelledby="lat-jpetstore">
 <line class="gl" x1="116.0" y1="18" x2="116.0" y2="142"/>
 <text class="ax" x="116.0" y="158" text-anchor="middle">1</text>
@@ -542,24 +539,24 @@ hr.rule { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
 <text class="ax" x="582.0" y="158" text-anchor="middle">100</text>
 <text class="ax lbl" x="106" y="39" text-anchor="end">p50</text>
 <rect x="116" y="22" width="2.0" height="20" rx="4" fill="var(--s2)"/>
-<text class="val" x="125.0" y="39">0ms</text>
+<text class="val" x="125.0" y="39">1ms</text>
 <text class="ax lbl" x="106" y="69" text-anchor="end">p90</text>
-<rect x="116" y="52" width="70.1" height="20" rx="4" fill="var(--s2)"/>
-<text class="val" x="193.1" y="69">2ms</text>
+<rect x="116" y="52" width="162.9" height="20" rx="4" fill="var(--s2)"/>
+<text class="val" x="285.9" y="69">5ms</text>
 <text class="ax lbl" x="106" y="99" text-anchor="end">p99</text>
-<rect x="116" y="82" width="162.9" height="20" rx="4" fill="var(--s2)"/>
-<text class="val" x="285.9" y="99">5ms</text>
+<rect x="116" y="82" width="222.3" height="20" rx="4" fill="var(--s2)"/>
+<text class="val" x="345.3" y="99">9ms</text>
 <text class="ax lbl" x="106" y="129" text-anchor="end">max</text>
-<rect x="116" y="112" width="312.8" height="20" rx="4" fill="var(--s2)"/>
-<text class="val" x="435.8" y="129">22ms</text>
+<rect x="116" y="112" width="359.8" height="20" rx="4" fill="var(--s2)"/>
+<text class="val" x="482.8" y="129">35ms</text>
 <text class="ax" x="640" y="12" text-anchor="end">log scale · ms</text>
 </svg>
-      <figcaption>Median 0 ms, but a worst single request of 22 ms — a 22× spread that a median-only dashboard hides entirely.</figcaption>
+      <figcaption>Median 1 ms, but a worst single request of 35 ms — a 35× spread that a median-only dashboard hides entirely.</figcaption>
     </figure>
   </div>
   <div class="chart-card">
     <figure>
-      <figcaption id="lat-roller" class="fig-title">Apache Roller 6.1.5 — 5,184 requests at 28.7 rps (concurrency 8)</figcaption>
+      <figcaption id="lat-roller" class="fig-title">Apache Roller 6.1.5 — 4,670 requests at 15.5 rps (concurrency 8)</figcaption>
       <svg viewBox="0 0 640 166" width="100%" role="img" aria-labelledby="lat-roller">
 <line class="gl" x1="116.0" y1="18" x2="116.0" y2="142"/>
 <text class="ax" x="116.0" y="158" text-anchor="middle">1</text>
@@ -570,20 +567,20 @@ hr.rule { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
 <line class="gl" x1="582.0" y1="18" x2="582.0" y2="142"/>
 <text class="ax" x="582.0" y="158" text-anchor="middle">1,000</text>
 <text class="ax lbl" x="106" y="39" text-anchor="end">p50</text>
-<rect x="116" y="22" width="419.6" height="20" rx="4" fill="var(--s3)"/>
-<text class="val" x="542.6" y="39">503ms</text>
+<rect x="116" y="22" width="421.2" height="20" rx="4" fill="var(--s3)"/>
+<text class="val" x="544.2" y="39">515ms</text>
 <text class="ax lbl" x="106" y="69" text-anchor="end">p90</text>
-<rect x="116" y="52" width="421.0" height="20" rx="4" fill="var(--s3)"/>
-<text class="val" x="544.0" y="69">513ms</text>
+<rect x="116" y="52" width="421.6" height="20" rx="4" fill="var(--s3)"/>
+<text class="val" x="544.6" y="69">518ms</text>
 <text class="ax lbl" x="106" y="99" text-anchor="end">p99</text>
-<rect x="116" y="82" width="421.1" height="20" rx="4" fill="var(--s3)"/>
-<text class="val" x="544.1" y="99">514ms</text>
+<rect x="116" y="82" width="423.4" height="20" rx="4" fill="var(--s3)"/>
+<text class="val" x="546.4" y="99">532ms</text>
 <text class="ax lbl" x="106" y="129" text-anchor="end">max</text>
-<rect x="116" y="112" width="423.8" height="20" rx="4" fill="var(--s3)"/>
-<text class="val" x="546.8" y="129">535ms</text>
+<rect x="116" y="112" width="426.6" height="20" rx="4" fill="var(--s3)"/>
+<text class="val" x="549.6" y="129">558ms</text>
 <text class="ax" x="640" y="12" text-anchor="end">log scale · ms</text>
 </svg>
-      <figcaption>Median 503 ms, but a worst single request of 535 ms — a 1× spread that a median-only dashboard hides entirely.</figcaption>
+      <figcaption>Median 515 ms, but a worst single request of 558 ms — a 1× spread that a median-only dashboard hides entirely.</figcaption>
     </figure>
   </div>
 
@@ -601,17 +598,17 @@ hr.rule { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
 <line class="gl" x1="8" y1="54.5" x2="632" y2="54.5"/>
 <line class="gl" x1="8" y1="16.0" x2="632" y2="16.0"/>
 <line class="gl axis-line" x1="8" y1="170" x2="632" y2="170"/>
-<rect x="93.0" y="16.0" width="38.0" height="154.0" rx="4" fill="var(--s1)"/>
-<text class="val" x="112.0" y="11.0" text-anchor="middle">27.0%</text>
+<rect x="93.0" y="33.2" width="38.0" height="136.8" rx="4" fill="var(--s1)"/>
+<text class="val" x="112.0" y="28.2" text-anchor="middle">27.1%</text>
 <text class="ax" x="112.0" y="187" text-anchor="middle">JSPWiki 2.12.4</text>
-<rect x="301.0" y="38.2" width="38.0" height="131.8" rx="4" fill="var(--s2)"/>
-<text class="val" x="320.0" y="33.2" text-anchor="middle">23.1%</text>
+<rect x="301.0" y="53.4" width="38.0" height="116.6" rx="4" fill="var(--s2)"/>
+<text class="val" x="320.0" y="48.4" text-anchor="middle">23.1%</text>
 <text class="ax" x="320.0" y="187" text-anchor="middle">JPetStore-6</text>
-<rect x="509.0" y="26.3" width="38.0" height="143.7" rx="4" fill="var(--s3)"/>
-<text class="val" x="528.0" y="21.3" text-anchor="middle">25.2%</text>
+<rect x="509.0" y="16.0" width="38.0" height="154.0" rx="4" fill="var(--s3)"/>
+<text class="val" x="528.0" y="11.0" text-anchor="middle">30.5%</text>
 <text class="ax" x="528.0" y="187" text-anchor="middle">Roller 6.1.5</text>
 </svg>
-      <figcaption>JaCoCo-measured coverage of the app's own classes, reached without a single line of test code — just a request grammar. Invariant breaches the driver actually RECEIVED in the same runs: JSPWiki reported 1 · JPetStore-6 reported 342 · Roller reported 0 — read against the reporting loss above, not as the number evaluated.</figcaption>
+      <figcaption>JaCoCo-measured coverage of the app's own classes, reached without a single line of test code — just a request grammar. Invariant breaches the driver actually RECEIVED in the same runs: JSPWiki reported 2918 · JPetStore-6 reported 421 · Roller reported 1402 — read against the reporting loss above, not as the number evaluated.</figcaption>
     </figure>
   </div>
 
@@ -730,7 +727,7 @@ hr.rule { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
     <li><strong>Two observations on this run that are reported, not explained.</strong> JSPWiki
       returns the same <strong>80.7 req/s at concurrency 1 and at concurrency 8</strong>, while its
       p99 rises from 57&nbsp;ms to 743&nbsp;ms — the signature of a resource already saturated at
-      c1, where added concurrency buys queueing rather than throughput. And JPetStore returned <strong>no 5xx at all</strong> across 1.4M requests here — an earlier run did, traced to a single corpus route that NPEs for an unauthenticated caller and then NPEs again inside the framework's own exception handler; this corpus does not contain that route. The JSPWiki
+      c1, where added concurrency buys queueing rather than throughput. And JPetStore returns 5xx on 3.7% of requests under load (48k of 1.3M). The JSPWiki
       throughput plateau is stated as measured and has <em>not</em> been root-caused;
       and load mode was confirmed on every run (no <code>driftUnavailable</code>), so neither is an
       artifact of the target sitting in the wrong mode.</li>

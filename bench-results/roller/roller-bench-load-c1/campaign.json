@@ -3,23 +3,23 @@
   "kind": "BasquinCampaign",
   "metadata": {
     "annotations": {
-      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"basquin.dev/v1alpha1\",\"kind\":\"BasquinCampaign\",\"metadata\":{\"annotations\":{},\"name\":\"roller-bench-load-c1\",\"namespace\":\"basquin-system\"},\"spec\":{\"baseURL\":\"http://roller-app.basquin-system.svc.cluster.local:8080\",\"driver\":{\"classesPath\":\"/usr/local/tomcat/webapps/ROOT/WEB-INF/classes\",\"concurrency\":1,\"corpusConfigMap\":\"roller-bench2-explore-corpus-out\",\"duration\":\"3m\",\"warmup\":\"20s\"},\"mode\":\"load\",\"targetRef\":{\"name\":\"roller\"}}}\n"
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"basquin.dev/v1alpha1\",\"kind\":\"BasquinCampaign\",\"metadata\":{\"annotations\":{},\"name\":\"roller-bench-load-c1\",\"namespace\":\"basquin-system\"},\"spec\":{\"baseURL\":\"http://roller-app.basquin-system.svc.cluster.local:8080\",\"driver\":{\"classesPath\":\"/usr/local/tomcat/webapps/ROOT/WEB-INF/classes\",\"concurrency\":1,\"corpusConfigMap\":\"roller-bench3-explore-corpus-out\",\"duration\":\"5m\",\"warmup\":\"30s\"},\"mode\":\"load\",\"targetRef\":{\"name\":\"roller\"}}}\n"
     },
-    "creationTimestamp": "2026-07-23T05:52:33Z",
+    "creationTimestamp": "2026-07-23T23:00:23Z",
     "generation": 1,
     "name": "roller-bench-load-c1",
     "namespace": "basquin-system",
-    "resourceVersion": "246159",
-    "uid": "947dff0c-365d-4674-8620-de05ae9369dc"
+    "resourceVersion": "392191",
+    "uid": "6cdf2b5f-46a4-4993-b66f-15e6fd5776d1"
   },
   "spec": {
     "baseURL": "http://roller-app.basquin-system.svc.cluster.local:8080",
     "driver": {
       "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
       "concurrency": 1,
-      "corpusConfigMap": "roller-bench2-explore-corpus-out",
-      "duration": "3m",
-      "warmup": "20s"
+      "corpusConfigMap": "roller-bench3-explore-corpus-out",
+      "duration": "5m",
+      "warmup": "30s"
     },
     "mode": "load",
     "targetRef": {
@@ -27,11 +27,11 @@
     }
   },
   "status": {
-    "completionTime": "2026-07-23T05:55:57Z",
+    "completionTime": "2026-07-23T23:05:57Z",
     "conditions": [
       {
-        "lastTransitionTime": "2026-07-23T05:55:57Z",
-        "message": "load complete: 610 requests, 3.4 rps, p99 515ms, 0 latency violations",
+        "lastTransitionTime": "2026-07-23T23:05:57Z",
+        "message": "load complete: 584 requests, 1.9 rps, p99 526ms, 0 latency violations",
         "reason": "Completed",
         "status": "True",
         "type": "Ready"
@@ -40,19 +40,19 @@
     "dashboardURL": "http://roller-bench-load-c1-dashboard.basquin-system.svc.cluster.local:7070",
     "driverJob": "roller-bench-load-c1-driver",
     "load": {
-      "heapDriftKb": -20900,
+      "heapDriftKb": -90792,
       "latencyMs": {
-        "max": 519,
-        "p50": 504,
-        "p90": 513,
-        "p99": 515
+        "max": 532,
+        "p50": 515,
+        "p90": 517,
+        "p99": 526
       },
-      "requests": 610,
-      "throughputRps": "3.4",
+      "requests": 584,
+      "throughputRps": "1.9",
       "violations": {}
     },
     "observedGeneration": 1,
     "phase": "Completed",
-    "startTime": "2026-07-23T05:52:33Z"
+    "startTime": "2026-07-23T23:00:23Z"
   }
 }

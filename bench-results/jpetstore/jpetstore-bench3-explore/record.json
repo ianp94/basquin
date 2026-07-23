@@ -1,5 +1,5 @@
 {
-  "campaign": "jpetstore-regress-explore",
+  "campaign": "jpetstore-bench3-explore",
   "app": "jpetstore",
   "mode": "explore",
   "driver": {
@@ -9,15 +9,18 @@
     "grammarConfigMap": "jpetstore-grammar"
   },
   "phase": "Completed",
-  "startTime": "2026-07-23T09:13:14Z",
-  "completionTime": "2026-07-23T09:18:19Z",
+  "startTime": "2026-07-23T22:38:21Z",
+  "completionTime": "2026-07-23T22:43:26Z",
   "coveragePct": "23.1",
-  "findingsCrdCorpusSize": 946,
+  "findingsCrdCorpusSize": 907,
   "exploration": {
-    "corpus": 946,
-    "findCrash": 603,
-    "findInvariant": 342,
+    "corpus": 907,
+    "findCrash": 470,
+    "findInvariant": 421,
     "rejected": 0,
+    "reportMisses": 0,
+    "findingsLowerBound": false,
+    "targetViolations": 424,
     "coverage": {
       "covered": 1469,
       "total": 6368,
@@ -26,15 +29,15 @@
       "sourcesExpected": 1
     }
   },
-  "iterations": 3860,
-  "crashes": 603,
-  "corpusConfigMap": "jpetstore-regress-explore-corpus-out",
-  "message": "run complete: coverage 23.1%, 946 findings",
+  "iterations": 3825,
+  "crashes": 470,
+  "corpusConfigMap": "jpetstore-bench3-explore-corpus-out",
+  "message": "run complete: coverage 23.1%, 907 findings",
   "load": null,
   "invariants": {
     "heapDeltaMaxKb": 512,
     "latencyMaxMs": 50,
     "mode": "soft"
   },
-  "artifacts": "bench-results/jpetstore/jpetstore-regress-explore"
+  "artifacts": "bench-results/jpetstore/jpetstore-bench3-explore"
 }

@@ -3,23 +3,23 @@
   "kind": "BasquinCampaign",
   "metadata": {
     "annotations": {
-      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"basquin.dev/v1alpha1\",\"kind\":\"BasquinCampaign\",\"metadata\":{\"annotations\":{},\"name\":\"jspwiki-bench-load-c8\",\"namespace\":\"basquin-system\"},\"spec\":{\"baseURL\":\"http://jspwiki-app.basquin-system.svc.cluster.local:8080\",\"driver\":{\"classesPath\":\"/usr/local/tomcat/webapps/ROOT/WEB-INF/classes\",\"concurrency\":8,\"corpusConfigMap\":\"jspwiki-bench2-explore-corpus-out\",\"duration\":\"3m\",\"warmup\":\"20s\"},\"mode\":\"load\",\"targetRef\":{\"name\":\"jspwiki\"}}}\n"
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"basquin.dev/v1alpha1\",\"kind\":\"BasquinCampaign\",\"metadata\":{\"annotations\":{},\"name\":\"jspwiki-bench-load-c8\",\"namespace\":\"basquin-system\"},\"spec\":{\"baseURL\":\"http://jspwiki-app.basquin-system.svc.cluster.local:8080\",\"driver\":{\"classesPath\":\"/usr/local/tomcat/webapps/ROOT/WEB-INF/classes\",\"concurrency\":8,\"corpusConfigMap\":\"jspwiki-bench3-explore-corpus-out\",\"duration\":\"5m\",\"warmup\":\"30s\"},\"mode\":\"load\",\"targetRef\":{\"name\":\"jspwiki\"}}}\n"
     },
-    "creationTimestamp": "2026-07-23T05:31:17Z",
+    "creationTimestamp": "2026-07-23T22:32:32Z",
     "generation": 1,
     "name": "jspwiki-bench-load-c8",
     "namespace": "basquin-system",
-    "resourceVersion": "242950",
-    "uid": "902bfd60-8527-46bf-910b-b5555cf79dc3"
+    "resourceVersion": "388082",
+    "uid": "87127169-4a2f-4144-a7d9-8afc28b873ff"
   },
   "spec": {
     "baseURL": "http://jspwiki-app.basquin-system.svc.cluster.local:8080",
     "driver": {
       "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
       "concurrency": 8,
-      "corpusConfigMap": "jspwiki-bench2-explore-corpus-out",
-      "duration": "3m",
-      "warmup": "20s"
+      "corpusConfigMap": "jspwiki-bench3-explore-corpus-out",
+      "duration": "5m",
+      "warmup": "30s"
     },
     "mode": "load",
     "targetRef": {
@@ -27,11 +27,11 @@
     }
   },
   "status": {
-    "completionTime": "2026-07-23T05:34:41Z",
+    "completionTime": "2026-07-23T22:38:06Z",
     "conditions": [
       {
-        "lastTransitionTime": "2026-07-23T05:34:41Z",
-        "message": "load complete: 14535 requests, 80.7 rps, p99 743ms, 0 latency violations",
+        "lastTransitionTime": "2026-07-23T22:38:06Z",
+        "message": "load complete: 16599 requests, 55.2 rps, p99 6780ms, 0 latency violations",
         "reason": "Completed",
         "status": "True",
         "type": "Ready"
@@ -40,20 +40,20 @@
     "dashboardURL": "http://jspwiki-bench-load-c8-dashboard.basquin-system.svc.cluster.local:7070",
     "driverJob": "jspwiki-bench-load-c8-driver",
     "load": {
-      "heapDriftKb": 153324,
+      "heapDriftKb": -10941,
       "latencyMs": {
-        "max": 8854,
+        "max": 9568,
         "p50": 2,
-        "p90": 238,
-        "p99": 743
+        "p90": 315,
+        "p99": 6780
       },
-      "requests": 14535,
-      "threadDrift": 3,
-      "throughputRps": "80.7",
+      "requests": 16599,
+      "threadDrift": -1,
+      "throughputRps": "55.2",
       "violations": {}
     },
     "observedGeneration": 1,
     "phase": "Completed",
-    "startTime": "2026-07-23T05:31:17Z"
+    "startTime": "2026-07-23T22:32:32Z"
   }
 }

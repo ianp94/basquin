@@ -1,0 +1,43 @@
+{
+  "campaign": "roller-bench3-explore",
+  "app": "roller",
+  "mode": "explore",
+  "driver": {
+    "classesPath": "/basquin-app-classes",
+    "corpusConfigMap": "roller-corpus",
+    "duration": "5m",
+    "grammarConfigMap": "roller-grammar"
+  },
+  "phase": "Completed",
+  "startTime": "2026-07-23T22:55:04Z",
+  "completionTime": "2026-07-23T23:00:09Z",
+  "coveragePct": "30.5",
+  "findingsCrdCorpusSize": 1443,
+  "exploration": {
+    "corpus": 1443,
+    "findCrash": 0,
+    "findInvariant": 1402,
+    "rejected": 0,
+    "reportMisses": 0,
+    "findingsLowerBound": false,
+    "targetViolations": 1542,
+    "coverage": {
+      "covered": 29433,
+      "total": 96536,
+      "pct": 30.5,
+      "sourcesResponded": 1,
+      "sourcesExpected": 1
+    }
+  },
+  "iterations": 1966,
+  "crashes": 0,
+  "corpusConfigMap": "roller-bench3-explore-corpus-out",
+  "message": "run complete: coverage 30.5%, 1443 findings",
+  "load": null,
+  "invariants": {
+    "heapDeltaMaxKb": 512,
+    "latencyMaxMs": 250,
+    "mode": "soft"
+  },
+  "artifacts": "bench-results/roller/roller-bench3-explore"
+}

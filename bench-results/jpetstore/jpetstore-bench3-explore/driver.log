@@ -1,0 +1,1205 @@
+Picked up JAVA_TOOL_OPTIONS: -Dexamples.http.baseUrl=http://jpetstore-app.basquin-system.svc.cluster.local:8080 -Dbasquin.summary.out=/dev/termination-log -Dbasquin.status=true -Dbasquin.coverage.jacoco=jpetstore-basquin-jacoco.basquin-system.svc.cluster.local:6300 -Dbasquin.coverage.classes=/basquin-classes -Dbasquin.run.duration=5m -Dbasquin.dashboard.push=jpetstore-bench3-explore-dashboard.basquin-system.svc.cluster.local:7070 -Dbasquin.dashboard.id=jpetstore-bench3-explore -Dbasquin.dashboard.token=<redacted> -Dbasquin.grammar=/basquin-grammar/grammar -Dbasquin.corpusDir=/basquin-corpus
+[Basquin] 00:00:00 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] pushing status to dashboard at jpetstore-bench3-explore-dashboard.basquin-system.svc.cluster.local:7070 as "jpetstore-bench3-explore"
+[Basquin] grammar: resolved values "../corpus/jpetstore/values/categoryId.txt" via corpusDir (/basquin-corpus/categoryId.txt)
+[Basquin] grammar: resolved values "../corpus/jpetstore/values/productId.txt" via corpusDir (/basquin-corpus/productId.txt)
+[Basquin] grammar: resolved values "../corpus/jpetstore/values/itemId.txt" via corpusDir (/basquin-corpus/itemId.txt)
+[Basquin] grammar: resolved values "../corpus/jpetstore/values/keyword.txt" via corpusDir (/basquin-corpus/keyword.txt)
+[Basquin] grammar: resolved values "../corpus/jpetstore/values/username.txt" via corpusDir (/basquin-corpus/username.txt)
+[Basquin] loaded grammar /basquin-grammar/grammar: 22 route template(s), 8 rule(s)
+[Basquin] dashboard push failed (1x): java.net.ConnectException: Connection refused
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846304756-1.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846304946-2.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846304946-3.bin
+[Basquin] 00:00:01 iters=1 (1.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=63/63/63ms heap(last/max)=0/0KB threads=11 resets=0 explore[corpus=3 crash=0 inv=3 rejected=0 lastFind=0s ago (@ iter 0)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846305151-4.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846305279-5.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846305539-6.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846305635-7.bin
+[Basquin] 00:00:02 iters=11 (5.5/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=30/64/109ms heap(last/max)=0/450KB threads=11 resets=0 explore[corpus=8 crash=0 inv=7 rejected=0 cov=16.2% lastFind=0s ago (@ iter 8)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846306346-8.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846306446-9.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846306446-10.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846306508-11.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846306663-12.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846306863-13.bin
+[Basquin] 00:00:03 iters=23 (7.7/s) crashes=3 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=31/55/109ms heap(last/max)=0/695KB threads=11 resets=0 explore[corpus=16 crash=3 inv=10 rejected=0 cov=18.4% lastFind=0s ago (@ iter 19)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846307243-14.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846307869-15.bin
+[Basquin] 00:00:04 iters=34 (8.5/s) crashes=3 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/49/109ms heap(last/max)=0/841KB threads=11 resets=0 explore[corpus=20 crash=3 inv=12 rejected=0 cov=19.5% lastFind=0s ago (@ iter 31)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846308829-16.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846309024-17.bin
+[Basquin] 00:00:05 iters=47 (9.4/s) crashes=3 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=29/45/109ms heap(last/max)=0/994KB threads=11 resets=0 explore[corpus=22 crash=3 inv=14 rejected=0 cov=19.5% lastFind=0s ago (@ iter 45)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846309643-18.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846309858-19.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846310020-20.bin
+[Basquin] 00:00:06 iters=60 (10.0/s) crashes=6 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/42/109ms heap(last/max)=0/1781KB threads=11 resets=0 explore[corpus=26 crash=6 inv=14 rejected=0 cov=20.2% lastFind=0s ago (@ iter 58)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846310255-21.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846310418-22.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846310604-23.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846310604-24.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846310747-25.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846310849-26.bin
+[Basquin] 00:00:07 iters=71 (10.1/s) crashes=10 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=56/41/109ms heap(last/max)=0/1781KB threads=11 resets=0 explore[corpus=33 crash=10 inv=16 rejected=0 cov=20.7% lastFind=0s ago (@ iter 68)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846311190-27.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846311296-28.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846311695-29.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846311749-30.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846311802-31.bin
+[Basquin] 00:00:08 iters=88 (11.0/s) crashes=10 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/39/109ms heap(last/max)=0/1781KB threads=11 resets=0 explore[corpus=38 crash=10 inv=21 rejected=0 cov=20.7% lastFind=0s ago (@ iter 82)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846312331-32.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846312383-33.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846312490-34.bin
+[Basquin] 00:00:09 iters=98 (10.9/s) crashes=13 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/38/109ms heap(last/max)=0/1781KB threads=11 resets=0 explore[corpus=42 crash=13 inv=21 rejected=0 cov=20.8% lastFind=0s ago (@ iter 98)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846313289-35.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846313450-36.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846313793-37.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846313954-38.bin
+[Basquin] 00:00:10 iters=112 (11.2/s) crashes=17 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=54/37/109ms heap(last/max)=0/1781KB threads=11 resets=0 explore[corpus=46 crash=17 inv=21 rejected=0 cov=20.8% lastFind=0s ago (@ iter 110)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846314504-39.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846314943-40.bin
+[Basquin] 00:00:11 iters=123 (11.2/s) crashes=17 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/37/109ms heap(last/max)=0/1781KB threads=11 resets=0 explore[corpus=49 crash=17 inv=23 rejected=0 cov=21.5% lastFind=0s ago (@ iter 119)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846315517-41.bin
+[Basquin] 00:00:12 iters=135 (11.2/s) crashes=17 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/36/109ms heap(last/max)=0/1781KB threads=11 resets=0 explore[corpus=50 crash=17 inv=24 rejected=0 cov=21.5% lastFind=0s ago (@ iter 126)]
+[Basquin] 00:00:13 iters=147 (11.3/s) crashes=17 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/36/109ms heap(last/max)=0/1781KB threads=12 resets=0 explore[corpus=51 crash=17 inv=24 rejected=0 cov=21.7% lastFind=0s ago (@ iter 140)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846317192-42.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846317351-43.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846317585-44.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846317637-45.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846317743-46.bin
+[Basquin] 00:00:14 iters=162 (11.6/s) crashes=22 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/36/109ms heap(last/max)=0/1781KB threads=12 resets=0 explore[corpus=56 crash=22 inv=24 rejected=0 cov=21.7% lastFind=0s ago (@ iter 157)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846318274-47.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846318327-48.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846318432-49.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846318810-50.bin
+[Basquin] 00:00:15 iters=174 (11.6/s) crashes=26 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/35/109ms heap(last/max)=0/1781KB threads=12 resets=0 explore[corpus=60 crash=26 inv=24 rejected=0 cov=21.7% lastFind=0s ago (@ iter 170)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846319429-51.bin
+[Basquin] 00:00:16 iters=189 (11.8/s) crashes=26 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/35/109ms heap(last/max)=0/1781KB threads=12 resets=0 explore[corpus=61 crash=26 inv=25 rejected=0 cov=21.7% lastFind=0s ago (@ iter 177)]
+[Basquin] 00:00:17 iters=199 (11.7/s) crashes=26 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/35/109ms heap(last/max)=0/1781KB threads=12 resets=0 explore[corpus=62 crash=26 inv=25 rejected=0 cov=21.9% lastFind=0s ago (@ iter 190)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846321487-52.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846321798-53.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846321851-54.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846321957-55.bin
+[Basquin] 00:00:18 iters=211 (11.7/s) crashes=30 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=54/34/109ms heap(last/max)=0/1781KB threads=12 resets=0 explore[corpus=66 crash=30 inv=25 rejected=0 cov=21.9% lastFind=0s ago (@ iter 209)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846322323-56.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846322377-57.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846322937-58.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846323143-59.bin
+[Basquin] 00:00:19 iters=224 (11.8/s) crashes=34 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/34/109ms heap(last/max)=1024/2138KB threads=12 resets=0 explore[corpus=70 crash=34 inv=25 rejected=0 cov=21.9% lastFind=0s ago (@ iter 224)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846323441-60.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846323594-61.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846323647-62.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846323751-63.bin
+[Basquin] 00:00:20 iters=236 (11.8/s) crashes=38 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/34/109ms heap(last/max)=0/2138KB threads=12 resets=0 explore[corpus=74 crash=38 inv=25 rejected=0 cov=21.9% lastFind=0s ago (@ iter 232)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846324260-64.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846324365-65.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846324824-66.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846325002-67.bin
+[Basquin] 00:00:21 iters=251 (11.9/s) crashes=38 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/34/109ms heap(last/max)=1024/2138KB threads=12 resets=0 explore[corpus=78 crash=38 inv=29 rejected=0 cov=21.9% lastFind=0s ago (@ iter 248)]
+[Basquin] 00:00:22 iters=261 (11.9/s) crashes=38 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/34/109ms heap(last/max)=0/2138KB threads=11 resets=0 explore[corpus=78 crash=38 inv=29 rejected=0 cov=21.9% lastFind=1s ago (@ iter 248)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846326704-68.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846326862-69.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846327037-70.bin
+[Basquin] 00:00:23 iters=273 (11.9/s) crashes=41 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/34/109ms heap(last/max)=0/2138KB threads=12 resets=0 explore[corpus=81 crash=41 inv=29 rejected=0 cov=21.9% lastFind=0s ago (@ iter 272)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846327505-71.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846327881-72.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846328077-73.bin
+[Basquin] 00:00:24 iters=283 (11.8/s) crashes=44 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/34/109ms heap(last/max)=0/2138KB threads=12 resets=0 explore[corpus=84 crash=44 inv=29 rejected=0 cov=21.9% lastFind=0s ago (@ iter 282)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846328517-74.bin
+[Basquin] 00:00:25 iters=294 (11.8/s) crashes=45 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/33/109ms heap(last/max)=0/2138KB threads=12 resets=0 explore[corpus=85 crash=45 inv=29 rejected=0 cov=21.9% lastFind=0s ago (@ iter 286)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846329480-75.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846329639-76.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846330019-77.bin
+[Basquin] 00:00:26 iters=306 (11.8/s) crashes=48 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/33/109ms heap(last/max)=0/2138KB threads=12 resets=0 explore[corpus=88 crash=48 inv=29 rejected=0 cov=21.9% lastFind=0s ago (@ iter 304)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846330893-78.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846330946-79.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846331051-80.bin
+[Basquin] 00:00:27 iters=318 (11.8/s) crashes=51 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/33/109ms heap(last/max)=0/2138KB threads=12 resets=0 explore[corpus=92 crash=51 inv=29 rejected=0 cov=22.5% lastFind=0s ago (@ iter 316)]
+[Basquin] 00:00:28 iters=329 (11.7/s) crashes=51 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/33/109ms heap(last/max)=0/2138KB threads=12 resets=0 explore[corpus=92 crash=51 inv=29 rejected=0 cov=22.5% lastFind=1s ago (@ iter 316)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846332847-81.bin
+[Basquin] 00:00:29 iters=341 (11.8/s) crashes=52 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=29/33/109ms heap(last/max)=0/2138KB threads=12 resets=0 explore[corpus=94 crash=52 inv=29 rejected=0 cov=22.8% lastFind=0s ago (@ iter 341)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846333891-82.bin
+[Basquin] 00:00:30 iters=352 (11.7/s) crashes=53 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/33/109ms heap(last/max)=0/2138KB threads=12 resets=0 explore[corpus=95 crash=53 inv=29 rejected=0 cov=22.8% lastFind=0s ago (@ iter 349)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846334421-83.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846334478-84.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846334582-85.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846334718-86.bin
+[Basquin] 00:00:31 iters=366 (11.8/s) crashes=57 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/33/109ms heap(last/max)=0/2138KB threads=12 resets=0 explore[corpus=99 crash=57 inv=29 rejected=0 cov=22.8% lastFind=0s ago (@ iter 360)]
+[Basquin] 00:00:32 iters=377 (11.8/s) crashes=57 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/33/109ms heap(last/max)=0/2138KB threads=12 resets=0 explore[corpus=99 crash=57 inv=29 rejected=0 cov=22.8% lastFind=1s ago (@ iter 360)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846336766-87.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846336865-88.bin
+[Basquin] 00:00:33 iters=389 (11.8/s) crashes=59 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/33/109ms heap(last/max)=0/2138KB threads=12 resets=0 explore[corpus=101 crash=59 inv=29 rejected=0 cov=22.8% lastFind=0s ago (@ iter 386)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846337262-89.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846337361-90.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846338008-91.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846338106-92.bin
+[Basquin] 00:00:34 iters=400 (11.8/s) crashes=63 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/33/109ms heap(last/max)=0/2138KB threads=12 resets=0 explore[corpus=105 crash=63 inv=29 rejected=0 cov=22.8% lastFind=0s ago (@ iter 399)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846338666-93.bin
+[Basquin] 00:00:35 iters=411 (11.7/s) crashes=63 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/33/109ms heap(last/max)=0/2431KB threads=12 resets=0 explore[corpus=106 crash=63 inv=30 rejected=0 cov=22.8% lastFind=0s ago (@ iter 405)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846339773-94.bin
+[Basquin] 00:00:36 iters=424 (11.8/s) crashes=64 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/33/109ms heap(last/max)=0/2431KB threads=12 resets=0 explore[corpus=107 crash=64 inv=30 rejected=0 cov=22.8% lastFind=0s ago (@ iter 419)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846340609-95.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846340661-96.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846340766-97.bin
+[Basquin] 00:00:37 iters=440 (11.9/s) crashes=67 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/33/109ms heap(last/max)=0/2431KB threads=12 resets=0 explore[corpus=110 crash=67 inv=30 rejected=0 cov=22.8% lastFind=0s ago (@ iter 434)]
+[Basquin] 00:00:38 iters=451 (11.9/s) crashes=67 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/33/109ms heap(last/max)=0/2431KB threads=12 resets=0 explore[corpus=110 crash=67 inv=30 rejected=0 cov=22.8% lastFind=1s ago (@ iter 434)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846342421-98.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846342473-99.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846342580-100.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846342758-101.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846342958-102.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846343111-103.bin
+[Basquin] 00:00:39 iters=464 (11.9/s) crashes=73 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/33/109ms heap(last/max)=121/2431KB threads=12 resets=0 explore[corpus=116 crash=73 inv=30 rejected=0 cov=22.8% lastFind=0s ago (@ iter 463)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846343269-104.bin
+[Basquin] 00:00:40 iters=476 (11.9/s) crashes=74 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/33/109ms heap(last/max)=0/2431KB threads=12 resets=0 explore[corpus=117 crash=74 inv=30 rejected=0 cov=22.8% lastFind=0s ago (@ iter 466)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846344381-105.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846344940-106.bin
+[Basquin] 00:00:41 iters=486 (11.8/s) crashes=76 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/33/109ms heap(last/max)=0/2431KB threads=12 resets=0 explore[corpus=119 crash=76 inv=30 rejected=0 cov=22.8% lastFind=0s ago (@ iter 484)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846345354-107.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846345453-108.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846345681-109.bin
+[Basquin] 00:00:42 iters=499 (11.9/s) crashes=79 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/33/109ms heap(last/max)=0/2431KB threads=12 resets=0 explore[corpus=123 crash=79 inv=30 rejected=0 cov=22.9% lastFind=0s ago (@ iter 494)]
+[Basquin] 00:00:43 iters=511 (11.9/s) crashes=79 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/33/109ms heap(last/max)=0/2431KB threads=12 resets=0 explore[corpus=123 crash=79 inv=30 rejected=0 cov=22.9% lastFind=1s ago (@ iter 494)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846347731-110.bin
+[Basquin] 00:00:44 iters=522 (11.9/s) crashes=80 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/33/109ms heap(last/max)=0/2431KB threads=12 resets=0 explore[corpus=124 crash=80 inv=30 rejected=0 cov=22.9% lastFind=0s ago (@ iter 518)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846348847-111.bin
+[Basquin] 00:00:45 iters=538 (11.9/s) crashes=80 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/33/109ms heap(last/max)=0/2846KB threads=12 resets=0 explore[corpus=125 crash=80 inv=31 rejected=0 cov=22.9% lastFind=0s ago (@ iter 532)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846349812-112.bin
+[Basquin] 00:00:46 iters=553 (12.0/s) crashes=80 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/33/109ms heap(last/max)=1024/2846KB threads=12 resets=0 explore[corpus=126 crash=80 inv=32 rejected=0 cov=22.9% lastFind=0s ago (@ iter 547)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846350691-113.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846350743-114.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846350795-115.bin
+[Basquin] 00:00:47 iters=567 (12.1/s) crashes=80 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/33/109ms heap(last/max)=0/2846KB threads=12 resets=0 explore[corpus=129 crash=80 inv=35 rejected=0 cov=22.9% lastFind=0s ago (@ iter 562)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846351698-116.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846351929-117.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846351982-118.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846352035-119.bin
+[Basquin] 00:00:48 iters=582 (12.1/s) crashes=81 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/33/109ms heap(last/max)=0/2846KB threads=12 resets=0 explore[corpus=133 crash=81 inv=38 rejected=0 cov=22.9% lastFind=0s ago (@ iter 579)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846352661-120.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846352714-121.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846352767-122.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846352820-123.bin
+[Basquin] 00:00:49 iters=594 (12.1/s) crashes=81 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/33/109ms heap(last/max)=0/2846KB threads=12 resets=0 explore[corpus=137 crash=81 inv=42 rejected=0 cov=22.9% lastFind=0s ago (@ iter 590)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846353171-124.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846353327-125.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846353505-126.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846353987-127.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846354144-128.bin
+[Basquin] 00:00:50 iters=608 (12.2/s) crashes=86 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=1024/2846KB threads=12 resets=0 explore[corpus=142 crash=86 inv=42 rejected=0 cov=22.9% lastFind=0s ago (@ iter 608)]
+[Basquin] 00:00:51 iters=622 (12.2/s) crashes=86 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/33/109ms heap(last/max)=0/2846KB threads=12 resets=0 explore[corpus=142 crash=86 inv=42 rejected=0 cov=22.9% lastFind=1s ago (@ iter 608)]
+[Basquin] 00:00:52 iters=636 (12.2/s) crashes=86 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/2846KB threads=12 resets=0 explore[corpus=142 crash=86 inv=42 rejected=0 cov=22.9% lastFind=2s ago (@ iter 608)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846356331-129.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846356384-130.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846356623-131.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846356676-132.bin
+[Basquin] 00:00:53 iters=650 (12.3/s) crashes=86 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/32/109ms heap(last/max)=0/3208KB threads=12 resets=0 explore[corpus=146 crash=86 inv=46 rejected=0 cov=22.9% lastFind=0s ago (@ iter 644)]
+[Basquin] 00:00:54 iters=663 (12.3/s) crashes=86 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/3208KB threads=12 resets=0 explore[corpus=146 crash=86 inv=46 rejected=0 cov=22.9% lastFind=1s ago (@ iter 644)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846358336-133.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846358725-134.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846359116-135.bin
+[Basquin] 00:00:55 iters=674 (12.2/s) crashes=89 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=37/3208KB threads=12 resets=0 explore[corpus=149 crash=89 inv=46 rejected=0 cov=22.9% lastFind=0s ago (@ iter 673)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846359303-136.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846359407-137.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846360110-138.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846360162-139.bin
+[Basquin] 00:00:56 iters=688 (12.3/s) crashes=90 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/32/109ms heap(last/max)=0/3208KB threads=12 resets=0 explore[corpus=153 crash=90 inv=49 rejected=0 cov=22.9% lastFind=0s ago (@ iter 688)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846360949-140.bin
+[Basquin] 00:00:57 iters=697 (12.2/s) crashes=91 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/3208KB threads=12 resets=0 explore[corpus=155 crash=91 inv=49 rejected=0 cov=23.0% lastFind=0s ago (@ iter 695)]
+[Basquin] 00:00:58 iters=708 (12.2/s) crashes=91 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/32/109ms heap(last/max)=0/3208KB threads=12 resets=0 explore[corpus=155 crash=91 inv=49 rejected=0 cov=23.0% lastFind=1s ago (@ iter 695)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846362881-141.bin
+[Basquin] 00:00:59 iters=722 (12.2/s) crashes=92 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/3208KB threads=12 resets=0 explore[corpus=156 crash=92 inv=49 rejected=0 cov=23.0% lastFind=0s ago (@ iter 718)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846363566-142.bin
+[Basquin] 00:01:00 iters=736 (12.3/s) crashes=93 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/3208KB threads=12 resets=0 explore[corpus=157 crash=93 inv=49 rejected=0 cov=23.0% lastFind=0s ago (@ iter 727)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846364205-143.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846364257-144.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846364362-145.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846365036-146.bin
+[Basquin] 00:01:01 iters=749 (12.3/s) crashes=97 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=31/32/109ms heap(last/max)=0/3508KB threads=12 resets=0 explore[corpus=161 crash=97 inv=49 rejected=0 cov=23.0% lastFind=0s ago (@ iter 747)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846365189-147.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846365241-148.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846365345-149.bin
+[Basquin] 00:01:02 iters=761 (12.3/s) crashes=100 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/32/109ms heap(last/max)=0/3508KB threads=12 resets=0 explore[corpus=164 crash=100 inv=49 rejected=0 cov=23.0% lastFind=0s ago (@ iter 752)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846367046-150.bin
+[Basquin] 00:01:03 iters=773 (12.3/s) crashes=101 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/32/109ms heap(last/max)=0/3559KB threads=12 resets=0 explore[corpus=165 crash=101 inv=49 rejected=0 cov=23.0% lastFind=0s ago (@ iter 771)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846367203-151.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846367997-152.bin
+[Basquin] 00:01:04 iters=789 (12.3/s) crashes=102 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=1024/3559KB threads=12 resets=0 explore[corpus=167 crash=102 inv=50 rejected=0 cov=23.0% lastFind=0s ago (@ iter 786)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846368254-153.bin
+[Basquin] 00:01:05 iters=802 (12.3/s) crashes=103 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/32/109ms heap(last/max)=0/3639KB threads=12 resets=0 explore[corpus=168 crash=103 inv=50 rejected=0 cov=23.0% lastFind=0s ago (@ iter 790)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846369613-154.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846369665-155.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846369769-156.bin
+[Basquin] 00:01:06 iters=814 (12.3/s) crashes=106 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/32/109ms heap(last/max)=0/3639KB threads=12 resets=0 explore[corpus=171 crash=106 inv=50 rejected=0 cov=23.0% lastFind=0s ago (@ iter 810)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846370241-157.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846370399-158.bin
+[Basquin] 00:01:07 iters=830 (12.4/s) crashes=108 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/3811KB threads=12 resets=0 explore[corpus=173 crash=108 inv=50 rejected=0 cov=23.0% lastFind=0s ago (@ iter 818)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846372072-159.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846372125-160.bin
+[Basquin] 00:01:08 iters=845 (12.4/s) crashes=110 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/32/109ms heap(last/max)=39/3811KB threads=12 resets=0 explore[corpus=175 crash=110 inv=50 rejected=0 cov=23.0% lastFind=0s ago (@ iter 844)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846372938-161.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846373036-162.bin
+[Basquin] 00:01:09 iters=858 (12.4/s) crashes=112 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/32/109ms heap(last/max)=0/3937KB threads=12 resets=0 explore[corpus=177 crash=112 inv=50 rejected=0 cov=23.0% lastFind=0s ago (@ iter 856)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846373266-163.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846373466-164.bin
+[Basquin] 00:01:10 iters=869 (12.4/s) crashes=114 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/32/109ms heap(last/max)=0/3937KB threads=12 resets=0 explore[corpus=179 crash=114 inv=50 rejected=0 cov=23.0% lastFind=0s ago (@ iter 861)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846374356-165.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846374884-166.bin
+[Basquin] 00:01:11 iters=880 (12.4/s) crashes=115 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/3937KB threads=12 resets=0 explore[corpus=181 crash=115 inv=51 rejected=0 cov=23.0% lastFind=0s ago (@ iter 877)]
+[Basquin] 00:01:12 iters=890 (12.4/s) crashes=115 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/3937KB threads=12 resets=0 explore[corpus=182 crash=115 inv=51 rejected=0 cov=23.1% lastFind=0s ago (@ iter 882)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846376388-167.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846376638-168.bin
+[Basquin] 00:01:13 iters=902 (12.4/s) crashes=117 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/32/109ms heap(last/max)=0/4264KB threads=12 resets=0 explore[corpus=184 crash=117 inv=51 rejected=0 cov=23.1% lastFind=0s ago (@ iter 895)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846378016-169.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846378113-170.bin
+[Basquin] 00:01:14 iters=914 (12.3/s) crashes=119 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/32/109ms heap(last/max)=76/4264KB threads=12 resets=0 explore[corpus=186 crash=119 inv=51 rejected=0 cov=23.1% lastFind=0s ago (@ iter 913)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846378798-171.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846379120-172.bin
+[Basquin] 00:01:15 iters=927 (12.4/s) crashes=119 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/32/109ms heap(last/max)=0/4301KB threads=12 resets=0 explore[corpus=188 crash=119 inv=53 rejected=0 cov=23.1% lastFind=0s ago (@ iter 926)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846379372-173.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846379547-174.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846379600-175.bin
+[Basquin] 00:01:16 iters=941 (12.4/s) crashes=120 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/4301KB threads=12 resets=0 explore[corpus=191 crash=120 inv=55 rejected=0 cov=23.1% lastFind=0s ago (@ iter 933)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846380914-176.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846381071-177.bin
+[Basquin] 00:01:17 iters=957 (12.4/s) crashes=122 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/32/109ms heap(last/max)=0/4396KB threads=12 resets=0 explore[corpus=193 crash=122 inv=55 rejected=0 cov=23.1% lastFind=0s ago (@ iter 955)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846381253-178.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846381449-179.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846381694-180.bin
+[Basquin] 00:01:18 iters=967 (12.4/s) crashes=125 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/32/109ms heap(last/max)=0/4396KB threads=12 resets=0 explore[corpus=196 crash=125 inv=55 rejected=0 cov=23.1% lastFind=0s ago (@ iter 961)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846382226-181.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846382606-182.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846382761-183.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846382937-184.bin
+[Basquin] 00:01:19 iters=979 (12.4/s) crashes=129 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/32/109ms heap(last/max)=0/4396KB threads=12 resets=0 explore[corpus=200 crash=129 inv=55 rejected=0 cov=23.1% lastFind=0s ago (@ iter 976)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846383457-185.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846383849-186.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846383945-187.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846384051-188.bin
+[Basquin] 00:01:20 iters=990 (12.4/s) crashes=132 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/4396KB threads=12 resets=0 explore[corpus=204 crash=132 inv=56 rejected=0 cov=23.1% lastFind=0s ago (@ iter 988)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846384793-189.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846385071-190.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846385123-191.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846385176-192.bin
+[Basquin] 00:01:21 iters=1001 (12.4/s) crashes=132 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/32/109ms heap(last/max)=0/4396KB threads=12 resets=0 explore[corpus=208 crash=132 inv=60 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1001)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846385228-193.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846386156-194.bin
+[Basquin] 00:01:22 iters=1013 (12.3/s) crashes=133 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=1024/4396KB threads=12 resets=0 explore[corpus=210 crash=133 inv=61 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1013)]
+[Basquin] 00:01:23 iters=1024 (12.3/s) crashes=133 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/4954KB threads=12 resets=0 explore[corpus=210 crash=133 inv=61 rejected=0 cov=23.1% lastFind=1s ago (@ iter 1013)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846387286-195.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846387676-196.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846387728-197.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846387832-198.bin
+[Basquin] 00:01:24 iters=1036 (12.3/s) crashes=137 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/32/109ms heap(last/max)=0/4954KB threads=12 resets=0 explore[corpus=214 crash=137 inv=61 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1032)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846388236-199.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846388552-200.bin
+[Basquin] 00:01:25 iters=1051 (12.4/s) crashes=138 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/5177KB threads=12 resets=0 explore[corpus=216 crash=138 inv=62 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1043)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846389722-201.bin
+[Basquin] 00:01:26 iters=1062 (12.3/s) crashes=139 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=25/32/109ms heap(last/max)=0/5177KB threads=12 resets=0 explore[corpus=217 crash=139 inv=62 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1057)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846390260-202.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846390312-203.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846390417-204.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846390596-205.bin
+[Basquin] 00:01:27 iters=1077 (12.4/s) crashes=143 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/5177KB threads=12 resets=0 explore[corpus=221 crash=143 inv=62 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1068)]
+[Basquin] 00:01:28 iters=1090 (12.4/s) crashes=143 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/32/109ms heap(last/max)=0/5177KB threads=12 resets=0 explore[corpus=221 crash=143 inv=62 rejected=0 cov=23.1% lastFind=1s ago (@ iter 1068)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846392392-206.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846392644-207.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846392976-208.bin
+[Basquin] 00:01:29 iters=1105 (12.4/s) crashes=144 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/5265KB threads=12 resets=0 explore[corpus=224 crash=144 inv=64 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1101)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846393557-209.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846393748-210.bin
+[Basquin] 00:01:30 iters=1117 (12.4/s) crashes=146 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=54/32/109ms heap(last/max)=0/5265KB threads=12 resets=0 explore[corpus=226 crash=146 inv=64 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1111)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846394335-211.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846394657-212.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846394708-213.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846394813-214.bin
+[Basquin] 00:01:31 iters=1130 (12.4/s) crashes=150 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/32/109ms heap(last/max)=0/5265KB threads=12 resets=0 explore[corpus=230 crash=150 inv=64 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1126)]
+[Basquin] 00:01:32 iters=1144 (12.4/s) crashes=150 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/32/109ms heap(last/max)=0/5265KB threads=12 resets=0 explore[corpus=230 crash=150 inv=64 rejected=0 cov=23.1% lastFind=1s ago (@ iter 1126)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846396828-215.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846396885-216.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846396989-217.bin
+[Basquin] 00:01:33 iters=1159 (12.5/s) crashes=153 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/32/109ms heap(last/max)=0/5265KB threads=12 resets=0 explore[corpus=233 crash=153 inv=64 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1157)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846398138-218.bin
+[Basquin] 00:01:34 iters=1173 (12.5/s) crashes=154 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/32/109ms heap(last/max)=55/5265KB threads=12 resets=0 explore[corpus=234 crash=154 inv=64 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1172)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846398432-219.bin
+[Basquin] 00:01:35 iters=1183 (12.4/s) crashes=155 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/32/109ms heap(last/max)=0/5265KB threads=12 resets=0 explore[corpus=235 crash=155 inv=64 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1175)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846399289-220.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846399442-221.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846399599-222.bin
+[Basquin] 00:01:36 iters=1197 (12.5/s) crashes=158 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5265KB threads=12 resets=0 explore[corpus=238 crash=158 inv=64 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1189)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846400600-223.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846400652-224.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846400756-225.bin
+[Basquin] 00:01:37 iters=1210 (12.5/s) crashes=161 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/31/109ms heap(last/max)=0/5265KB threads=12 resets=0 explore[corpus=241 crash=161 inv=64 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1206)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846401243-226.bin
+[Basquin] 00:01:38 iters=1225 (12.5/s) crashes=161 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=0/5265KB threads=12 resets=0 explore[corpus=242 crash=161 inv=65 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1211)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846402883-227.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846403136-228.bin
+[Basquin] 00:01:39 iters=1237 (12.5/s) crashes=163 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=6/5283KB threads=12 resets=0 explore[corpus=244 crash=163 inv=65 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1236)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846403364-229.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846403416-230.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846403468-231.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846404044-232.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846404096-233.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846404149-234.bin
+[Basquin] 00:01:40 iters=1251 (12.5/s) crashes=163 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=1030/5283KB threads=12 resets=0 explore[corpus=250 crash=163 inv=71 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1250)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846404201-235.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846404866-236.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846404919-237.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846404970-238.bin
+[Basquin] 00:01:41 iters=1264 (12.5/s) crashes=163 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=254 crash=163 inv=75 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1260)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846405486-239.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846405840-240.bin
+[Basquin] 00:01:42 iters=1279 (12.5/s) crashes=165 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=256 crash=165 inv=75 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1272)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846407152-241.bin
+[Basquin] 00:01:43 iters=1290 (12.5/s) crashes=166 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=6/5283KB threads=12 resets=0 explore[corpus=257 crash=166 inv=75 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1289)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846407565-242.bin
+[Basquin] 00:01:44 iters=1303 (12.5/s) crashes=167 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=258 crash=167 inv=75 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1295)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846408365-243.bin
+[Basquin] 00:01:45 iters=1314 (12.5/s) crashes=168 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=259 crash=168 inv=75 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1305)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846409765-244.bin
+[Basquin] 00:01:46 iters=1327 (12.5/s) crashes=168 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=260 crash=168 inv=76 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1323)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846410425-245.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846410796-246.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846411168-247.bin
+[Basquin] 00:01:47 iters=1339 (12.5/s) crashes=171 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=263 crash=171 inv=76 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1339)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846411594-248.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846411647-249.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846411752-250.bin
+[Basquin] 00:01:48 iters=1353 (12.5/s) crashes=174 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=266 crash=174 inv=76 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1348)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846412866-251.bin
+[Basquin] 00:01:49 iters=1366 (12.5/s) crashes=174 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=267 crash=174 inv=77 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1361)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846413408-252.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846413683-253.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846413736-254.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846413788-255.bin
+[Basquin] 00:01:50 iters=1378 (12.5/s) crashes=175 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=271 crash=175 inv=80 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1373)]
+[Basquin] 00:01:51 iters=1391 (12.5/s) crashes=175 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=271 crash=175 inv=80 rejected=0 cov=23.1% lastFind=1s ago (@ iter 1373)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846415476-256.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846415528-257.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846415633-258.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846415956-259.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846416008-260.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846416111-261.bin
+[Basquin] 00:01:52 iters=1405 (12.5/s) crashes=181 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=10/5283KB threads=12 resets=0 explore[corpus=277 crash=181 inv=80 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1404)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846416651-262.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846416703-263.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846417001-264.bin
+[Basquin] 00:01:53 iters=1417 (12.5/s) crashes=181 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=280 crash=181 inv=83 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1415)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846417297-265.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846417493-266.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846417593-267.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846418155-268.bin
+[Basquin] 00:01:54 iters=1428 (12.5/s) crashes=181 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/31/109ms heap(last/max)=9/5283KB threads=12 resets=0 explore[corpus=284 crash=181 inv=87 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1427)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846418208-269.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846418261-270.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846418313-271.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846418408-272.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846418733-273.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846418785-274.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846418837-275.bin
+[Basquin] 00:01:55 iters=1441 (12.5/s) crashes=181 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=291 crash=181 inv=94 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1437)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846419267-276.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846419319-277.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846419371-278.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846419703-279.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846419756-280.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846419808-281.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846419860-282.bin
+[Basquin] 00:01:56 iters=1457 (12.6/s) crashes=181 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=298 crash=181 inv=101 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1453)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846420485-283.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846420705-284.bin
+[Basquin] 00:01:57 iters=1468 (12.5/s) crashes=183 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=300 crash=183 inv=101 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1463)]
+[Basquin] 00:01:58 iters=1479 (12.5/s) crashes=183 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=300 crash=183 inv=101 rejected=0 cov=23.1% lastFind=1s ago (@ iter 1463)]
+[Basquin] 00:01:59 iters=1493 (12.5/s) crashes=183 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=300 crash=183 inv=101 rejected=0 cov=23.1% lastFind=2s ago (@ iter 1463)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846423521-285.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846423721-286.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846423822-287.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846424051-288.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846424103-289.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846424155-290.bin
+[Basquin] 00:02:00 iters=1507 (12.6/s) crashes=185 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=8/5283KB threads=12 resets=0 explore[corpus=306 crash=185 inv=105 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1506)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846424505-291.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846424653-292.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846424810-293.bin
+[Basquin] 00:02:01 iters=1520 (12.6/s) crashes=187 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=25/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=309 crash=187 inv=106 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1516)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846425709-294.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846425901-295.bin
+[Basquin] 00:02:02 iters=1531 (12.5/s) crashes=188 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=311 crash=188 inv=107 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1528)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846426539-296.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846426867-297.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846426971-298.bin
+[Basquin] 00:02:03 iters=1547 (12.6/s) crashes=189 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=71/5283KB threads=12 resets=0 explore[corpus=314 crash=189 inv=109 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1543)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846427425-299.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846427782-300.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846428157-301.bin
+[Basquin] 00:02:04 iters=1559 (12.6/s) crashes=191 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=55/5283KB threads=12 resets=0 explore[corpus=317 crash=191 inv=110 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1558)]
+[Basquin] 00:02:05 iters=1571 (12.6/s) crashes=191 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=1024/5283KB threads=12 resets=0 explore[corpus=317 crash=191 inv=110 rejected=0 cov=23.1% lastFind=1s ago (@ iter 1558)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846429217-302.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846429417-303.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846430124-304.bin
+[Basquin] 00:02:06 iters=1582 (12.6/s) crashes=192 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=10/5283KB threads=12 resets=0 explore[corpus=320 crash=192 inv=112 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1581)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846430298-305.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846430350-306.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846430403-307.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846430455-308.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846430948-309.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846431141-310.bin
+[Basquin] 00:02:07 iters=1594 (12.5/s) crashes=193 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=5/5283KB threads=12 resets=0 explore[corpus=326 crash=193 inv=117 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1593)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846431297-311.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846431454-312.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846432053-313.bin
+[Basquin] 00:02:08 iters=1606 (12.5/s) crashes=196 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=329 crash=196 inv=117 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1604)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846432674-314.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846432726-315.bin
+[Basquin] 00:02:09 iters=1619 (12.5/s) crashes=196 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=331 crash=196 inv=119 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1612)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846433949-316.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846434100-317.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846434153-318.bin
+[Basquin] 00:02:10 iters=1632 (12.5/s) crashes=199 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=10/5283KB threads=12 resets=0 explore[corpus=334 crash=199 inv=119 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1631)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846434256-319.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846434541-320.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846434698-321.bin
+[Basquin] 00:02:11 iters=1646 (12.6/s) crashes=202 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=337 crash=202 inv=119 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1640)]
+[Basquin] 00:02:12 iters=1657 (12.5/s) crashes=202 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=337 crash=202 inv=119 rejected=0 cov=23.1% lastFind=1s ago (@ iter 1640)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846436669-322.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846436896-323.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846436948-324.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846437052-325.bin
+[Basquin] 00:02:13 iters=1671 (12.6/s) crashes=206 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=341 crash=206 inv=119 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1669)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846437380-326.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846437536-327.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846437810-328.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846437910-329.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846438108-330.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846438160-331.bin
+[Basquin] 00:02:14 iters=1684 (12.6/s) crashes=212 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=10/5283KB threads=12 resets=0 explore[corpus=347 crash=212 inv=119 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1683)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846438264-332.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846438495-333.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846438547-334.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846438651-335.bin
+[Basquin] 00:02:15 iters=1697 (12.6/s) crashes=216 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=351 crash=216 inv=119 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1691)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846439347-336.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846439549-337.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846440114-338.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846440166-339.bin
+[Basquin] 00:02:16 iters=1710 (12.6/s) crashes=217 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=1034/5283KB threads=12 resets=0 explore[corpus=355 crash=217 inv=122 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1709)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846440464-340.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846440639-341.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846440691-342.bin
+[Basquin] 00:02:17 iters=1722 (12.6/s) crashes=218 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=358 crash=218 inv=124 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1716)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846441719-343.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846441817-344.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846442140-345.bin
+[Basquin] 00:02:18 iters=1734 (12.6/s) crashes=221 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=6/5283KB threads=12 resets=0 explore[corpus=361 crash=221 inv=124 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1733)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846442288-346.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846442340-347.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846442444-348.bin
+[Basquin] 00:02:19 iters=1749 (12.6/s) crashes=224 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=364 crash=224 inv=124 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1738)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846443951-349.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846444003-350.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846444055-351.bin
+[Basquin] 00:02:20 iters=1766 (12.6/s) crashes=224 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=367 crash=224 inv=127 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1763)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846444862-352.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846445012-353.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846445064-354.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846445167-355.bin
+[Basquin] 00:02:21 iters=1780 (12.6/s) crashes=228 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=6/5283KB threads=12 resets=0 explore[corpus=371 crash=228 inv=127 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1779)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846445345-356.bin
+[Basquin] 00:02:22 iters=1793 (12.6/s) crashes=229 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=372 crash=229 inv=127 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1781)]
+[Basquin] 00:02:23 iters=1809 (12.6/s) crashes=229 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=372 crash=229 inv=127 rejected=0 cov=23.1% lastFind=1s ago (@ iter 1781)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846447285-357.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846447384-358.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846447577-359.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846447673-360.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846447902-361.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846447955-362.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846448007-363.bin
+[Basquin] 00:02:24 iters=1823 (12.7/s) crashes=231 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=379 crash=231 inv=132 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1819)]
+[Basquin] 00:02:25 iters=1833 (12.6/s) crashes=231 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=379 crash=231 inv=132 rejected=0 cov=23.1% lastFind=1s ago (@ iter 1819)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846449352-364.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846449500-365.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846449552-366.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846449656-367.bin
+[Basquin] 00:02:26 iters=1845 (12.6/s) crashes=235 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=383 crash=235 inv=132 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1839)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846450361-368.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846450511-369.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846450563-370.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846450667-371.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846450897-372.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846451053-373.bin
+[Basquin] 00:02:27 iters=1859 (12.6/s) crashes=241 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=389 crash=241 inv=132 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1857)]
+[Basquin] 00:02:28 iters=1871 (12.6/s) crashes=241 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=389 crash=241 inv=132 rejected=0 cov=23.1% lastFind=1s ago (@ iter 1857)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846452929-374.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846453085-375.bin
+[Basquin] 00:02:29 iters=1884 (12.6/s) crashes=243 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=391 crash=243 inv=132 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1882)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846453260-376.bin
+[Basquin] 00:02:30 iters=1898 (12.6/s) crashes=244 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=392 crash=244 inv=132 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1884)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846454274-377.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846455066-378.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846455118-379.bin
+[Basquin] 00:02:31 iters=1911 (12.7/s) crashes=245 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=395 crash=245 inv=134 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1909)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846456173-380.bin
+[Basquin] 00:02:32 iters=1922 (12.6/s) crashes=245 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=396 crash=245 inv=135 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1922)]
+[Basquin] 00:02:33 iters=1936 (12.6/s) crashes=245 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=396 crash=245 inv=135 rejected=0 cov=23.1% lastFind=1s ago (@ iter 1922)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846457573-381.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846457669-382.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846458140-383.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846458196-384.bin
+[Basquin] 00:02:34 iters=1948 (12.6/s) crashes=247 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=13/5283KB threads=12 resets=0 explore[corpus=400 crash=247 inv=137 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1948)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846458301-385.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846459013-386.bin
+[Basquin] 00:02:35 iters=1962 (12.7/s) crashes=249 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/31/109ms heap(last/max)=1024/5283KB threads=12 resets=0 explore[corpus=402 crash=249 inv=137 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1960)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846459789-387.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846459942-388.bin
+[Basquin] 00:02:36 iters=1977 (12.7/s) crashes=249 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=404 crash=249 inv=139 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1973)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846460539-389.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846460592-390.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846460644-391.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846460696-392.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846460793-393.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846460993-394.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846461089-395.bin
+[Basquin] 00:02:37 iters=1988 (12.7/s) crashes=249 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=5/5283KB threads=12 resets=0 explore[corpus=411 crash=249 inv=146 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1987)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846461632-396.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846461738-397.bin
+[Basquin] 00:02:38 iters=2001 (12.7/s) crashes=249 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=413 crash=249 inv=148 rejected=0 cov=23.1% lastFind=0s ago (@ iter 1995)]
+[Basquin] 00:02:39 iters=2015 (12.7/s) crashes=249 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=413 crash=249 inv=148 rejected=0 cov=23.1% lastFind=1s ago (@ iter 1995)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846463252-398.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846463304-399.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846463408-400.bin
+[Basquin] 00:02:40 iters=2029 (12.7/s) crashes=252 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=1024/5283KB threads=12 resets=0 explore[corpus=416 crash=252 inv=148 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2019)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846464300-401.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846464526-402.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846464579-403.bin
+[Basquin] 00:02:41 iters=2043 (12.7/s) crashes=253 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/31/109ms heap(last/max)=1024/5283KB threads=12 resets=0 explore[corpus=419 crash=253 inv=150 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2034)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846465923-404.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846465975-405.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846466027-406.bin
+[Basquin] 00:02:42 iters=2056 (12.7/s) crashes=253 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=422 crash=253 inv=153 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2053)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846466359-407.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846466411-408.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846466463-409.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846466539-410.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846466811-411.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846466863-412.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846466967-413.bin
+[Basquin] 00:02:43 iters=2070 (12.7/s) crashes=253 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=429 crash=253 inv=160 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2067)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846467257-414.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846467353-415.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846467548-416.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846467875-417.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846467927-418.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846467979-419.bin
+[Basquin] 00:02:44 iters=2083 (12.7/s) crashes=254 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=435 crash=254 inv=165 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2079)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846468243-420.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846468399-421.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846468725-422.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846468881-423.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846469057-424.bin
+[Basquin] 00:02:45 iters=2098 (12.7/s) crashes=258 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=2/5283KB threads=12 resets=0 explore[corpus=440 crash=258 inv=166 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2096)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846469208-425.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846469260-426.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846469363-427.bin
+[Basquin] 00:02:46 iters=2111 (12.7/s) crashes=261 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=443 crash=261 inv=166 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2101)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846470604-428.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846471100-429.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846471151-430.bin
+[Basquin] 00:02:47 iters=2125 (12.7/s) crashes=264 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=12/5283KB threads=12 resets=0 explore[corpus=446 crash=264 inv=166 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2124)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846471255-431.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846471591-432.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846471772-433.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846472141-434.bin
+[Basquin] 00:02:48 iters=2138 (12.7/s) crashes=268 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=11/5283KB threads=12 resets=0 explore[corpus=450 crash=268 inv=166 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2137)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846472340-435.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846472436-436.bin
+[Basquin] 00:02:49 iters=2150 (12.7/s) crashes=268 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=4282/5283KB threads=12 resets=0 explore[corpus=452 crash=268 inv=168 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2140)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846473309-437.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846473405-438.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846473733-439.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846474061-440.bin
+[Basquin] 00:02:50 iters=2162 (12.7/s) crashes=269 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=456 crash=269 inv=171 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2160)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846474589-441.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846475009-442.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846475110-443.bin
+[Basquin] 00:02:51 iters=2173 (12.7/s) crashes=270 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/31/109ms heap(last/max)=3072/5283KB threads=12 resets=0 explore[corpus=459 crash=270 inv=173 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2172)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846475260-444.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846475312-445.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846475416-446.bin
+[Basquin] 00:02:52 iters=2189 (12.7/s) crashes=273 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=462 crash=273 inv=173 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2177)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846476591-447.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846476644-448.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846476696-449.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846476949-450.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846477045-451.bin
+[Basquin] 00:02:53 iters=2202 (12.7/s) crashes=273 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=4235/5283KB threads=12 resets=0 explore[corpus=467 crash=273 inv=178 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2200)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846477285-452.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846477514-453.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846477566-454.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846477618-455.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846477948-456.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846478001-457.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846478054-458.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846478106-459.bin
+[Basquin] 00:02:54 iters=2216 (12.7/s) crashes=273 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=5/5283KB threads=12 resets=0 explore[corpus=475 crash=273 inv=186 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2215)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846478204-460.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846478379-461.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846478431-462.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846478483-463.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846478535-464.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846478807-465.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846478859-466.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846478911-467.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846478964-468.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846479112-469.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846479164-470.bin
+[Basquin] 00:02:55 iters=2231 (12.7/s) crashes=275 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=4224/5283KB threads=12 resets=0 explore[corpus=486 crash=275 inv=195 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2230)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846479267-471.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846479494-472.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846479650-473.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846479825-474.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846480016-475.bin
+[Basquin] 00:02:56 iters=2244 (12.7/s) crashes=280 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=491 crash=280 inv=195 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2242)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846480792-476.bin
+[Basquin] 00:02:57 iters=2256 (12.7/s) crashes=281 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=492 crash=281 inv=195 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2253)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846481717-477.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846481896-478.bin
+[Basquin] 00:02:58 iters=2268 (12.7/s) crashes=283 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=29/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=494 crash=283 inv=195 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2265)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846482441-479.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846482596-480.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846482869-481.bin
+[Basquin] 00:02:59 iters=2281 (12.7/s) crashes=286 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=497 crash=286 inv=195 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2277)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846483564-482.bin
+[Basquin] 00:03:00 iters=2293 (12.7/s) crashes=287 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=498 crash=287 inv=195 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2284)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846484861-483.bin
+[Basquin] 00:03:01 iters=2305 (12.7/s) crashes=288 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=499 crash=288 inv=195 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2301)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846485651-484.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846485702-485.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846486137-486.bin
+[Basquin] 00:03:02 iters=2318 (12.7/s) crashes=288 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=6/5283KB threads=12 resets=0 explore[corpus=502 crash=288 inv=198 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2317)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846486877-487.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846486973-488.bin
+[Basquin] 00:03:03 iters=2329 (12.7/s) crashes=290 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=504 crash=290 inv=198 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2326)]
+[Basquin] 00:03:04 iters=2340 (12.7/s) crashes=290 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=504 crash=290 inv=198 rejected=0 cov=23.1% lastFind=1s ago (@ iter 2326)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846489157-489.bin
+[Basquin] 00:03:05 iters=2352 (12.7/s) crashes=291 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=1094/5283KB threads=12 resets=0 explore[corpus=505 crash=291 inv=198 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2351)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846489314-490.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846489493-491.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846489594-492.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846489692-493.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846490146-494.bin
+[Basquin] 00:03:06 iters=2365 (12.7/s) crashes=295 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=5/5283KB threads=12 resets=0 explore[corpus=510 crash=295 inv=199 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2364)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846490614-495.bin
+[Basquin] 00:03:07 iters=2378 (12.7/s) crashes=295 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=511 crash=295 inv=200 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2370)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846491618-496.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846491671-497.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846492017-498.bin
+[Basquin] 00:03:08 iters=2390 (12.7/s) crashes=296 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=514 crash=296 inv=202 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2388)]
+[Basquin] 00:03:09 iters=2400 (12.7/s) crashes=296 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=514 crash=296 inv=202 rejected=0 cov=23.1% lastFind=1s ago (@ iter 2388)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846493955-499.bin
+[Basquin] 00:03:10 iters=2415 (12.7/s) crashes=297 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=515 crash=297 inv=202 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2412)]
+[Basquin] 00:03:11 iters=2430 (12.7/s) crashes=297 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=515 crash=297 inv=202 rejected=0 cov=23.1% lastFind=1s ago (@ iter 2412)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846495232-500.bin
+[Basquin] 00:03:12 iters=2441 (12.7/s) crashes=297 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=516 crash=297 inv=203 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2430)]
+[Basquin] 00:03:13 iters=2456 (12.7/s) crashes=297 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=516 crash=297 inv=203 rejected=0 cov=23.1% lastFind=1s ago (@ iter 2430)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846497477-501.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846498183-502.bin
+[Basquin] 00:03:14 iters=2467 (12.7/s) crashes=297 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=1024/5283KB threads=12 resets=0 explore[corpus=518 crash=297 inv=205 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2467)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846498235-503.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846498286-504.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846498689-505.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846498845-506.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846499020-507.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846499199-508.bin
+[Basquin] 00:03:15 iters=2482 (12.7/s) crashes=301 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=524 crash=301 inv=207 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2482)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846500079-509.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846500131-510.bin
+[Basquin] 00:03:16 iters=2498 (12.7/s) crashes=303 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=526 crash=303 inv=207 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2496)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846500234-511.bin
+[Basquin] 00:03:17 iters=2508 (12.7/s) crashes=304 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=25/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=527 crash=304 inv=207 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2498)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846501509-512.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846501561-513.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846501961-514.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846502061-515.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846502157-516.bin
+[Basquin] 00:03:18 iters=2521 (12.7/s) crashes=304 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=5/5283KB threads=12 resets=0 explore[corpus=532 crash=304 inv=212 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2520)]
+[Basquin] 00:03:19 iters=2535 (12.7/s) crashes=304 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=532 crash=304 inv=212 rejected=0 cov=23.1% lastFind=1s ago (@ iter 2520)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846503234-517.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846503287-518.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846503590-519.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846503789-520.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846503889-521.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846504117-522.bin
+[Basquin] 00:03:20 iters=2547 (12.7/s) crashes=304 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=5/5283KB threads=12 resets=0 explore[corpus=538 crash=304 inv=218 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2546)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846504385-523.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846504713-524.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846504913-525.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846505108-526.bin
+[Basquin] 00:03:21 iters=2557 (12.7/s) crashes=305 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=10/5283KB threads=12 resets=0 explore[corpus=542 crash=305 inv=221 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2556)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846505529-527.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846505633-528.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846505992-529.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846506125-530.bin
+[Basquin] 00:03:22 iters=2571 (12.7/s) crashes=307 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=33/5283KB threads=12 resets=0 explore[corpus=546 crash=307 inv=223 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2570)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846506403-531.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846506455-532.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846506559-533.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846506925-534.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846507124-535.bin
+[Basquin] 00:03:23 iters=2584 (12.7/s) crashes=312 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=34/5283KB threads=12 resets=0 explore[corpus=551 crash=312 inv=223 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2583)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846507833-536.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846508062-537.bin
+[Basquin] 00:03:24 iters=2597 (12.7/s) crashes=312 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=553 crash=312 inv=225 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2594)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846508421-538.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846508691-539.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846508743-540.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846508795-541.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846508847-542.bin
+[Basquin] 00:03:25 iters=2611 (12.7/s) crashes=314 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=558 crash=314 inv=228 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2606)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846509464-543.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846510104-544.bin
+[Basquin] 00:03:26 iters=2624 (12.7/s) crashes=316 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=11/5283KB threads=12 resets=0 explore[corpus=560 crash=316 inv=228 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2623)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846510296-545.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846510931-546.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846511111-547.bin
+[Basquin] 00:03:27 iters=2636 (12.7/s) crashes=319 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=10/5283KB threads=12 resets=0 explore[corpus=563 crash=319 inv=228 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2635)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846511380-548.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846511886-549.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846511938-550.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846511990-551.bin
+[Basquin] 00:03:28 iters=2651 (12.7/s) crashes=320 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=1024/5283KB threads=12 resets=0 explore[corpus=567 crash=320 inv=231 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2647)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846512436-552.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846512610-553.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846512662-554.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846512714-555.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846512915-556.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846512967-557.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846513070-558.bin
+[Basquin] 00:03:29 iters=2665 (12.7/s) crashes=324 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=574 crash=324 inv=234 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2663)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846513724-559.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846513824-560.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846513921-561.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846514150-562.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846514202-563.bin
+[Basquin] 00:03:30 iters=2676 (12.7/s) crashes=326 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=5/5283KB threads=12 resets=0 explore[corpus=579 crash=326 inv=237 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2676)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846514254-564.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846514556-565.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846514608-566.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846514711-567.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846514892-568.bin
+[Basquin] 00:03:31 iters=2691 (12.7/s) crashes=330 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=584 crash=330 inv=238 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2687)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846515504-569.bin
+[Basquin] 00:03:32 iters=2701 (12.7/s) crashes=331 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=585 crash=331 inv=238 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2694)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846516581-570.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846517015-571.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846517067-572.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846517171-573.bin
+[Basquin] 00:03:33 iters=2714 (12.7/s) crashes=334 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=5/5283KB threads=12 resets=0 explore[corpus=589 crash=334 inv=239 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2713)]
+[Basquin] 00:03:34 iters=2726 (12.7/s) crashes=334 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=589 crash=334 inv=239 rejected=0 cov=23.1% lastFind=1s ago (@ iter 2713)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846518345-574.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846518537-575.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846518762-576.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846518814-577.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846518866-578.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846519172-579.bin
+[Basquin] 00:03:35 iters=2740 (12.7/s) crashes=335 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=11/5283KB threads=12 resets=0 explore[corpus=595 crash=335 inv=244 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2739)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846519228-580.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846519332-581.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846519508-582.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846519605-583.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846519856-584.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846520144-585.bin
+[Basquin] 00:03:36 iters=2752 (12.7/s) crashes=341 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=57/5283KB threads=12 resets=0 explore[corpus=601 crash=341 inv=244 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2751)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846520241-586.bin
+[Basquin] 00:03:37 iters=2765 (12.7/s) crashes=341 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=602 crash=341 inv=245 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2752)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846521260-587.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846521357-588.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846521453-589.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846521548-590.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846521969-591.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846522068-592.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846522165-593.bin
+[Basquin] 00:03:38 iters=2776 (12.7/s) crashes=342 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=56/5283KB threads=12 resets=0 explore[corpus=609 crash=342 inv=251 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2775)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846522365-594.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846522657-595.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846522852-596.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846523045-597.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846523141-598.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846523197-599.bin
+[Basquin] 00:03:39 iters=2786 (12.7/s) crashes=344 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=5/5283KB threads=12 resets=0 explore[corpus=615 crash=344 inv=255 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2786)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846523297-600.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846523397-601.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846523726-602.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846524018-603.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846524166-604.bin
+[Basquin] 00:03:40 iters=2797 (12.7/s) crashes=344 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=28/31/109ms heap(last/max)=5/5283KB threads=12 resets=0 explore[corpus=620 crash=344 inv=260 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2796)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846524764-605.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846524817-606.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846524870-607.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846524922-608.bin
+[Basquin] 00:03:41 iters=2809 (12.7/s) crashes=344 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=624 crash=344 inv=264 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2806)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846525213-609.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846525312-610.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846526116-611.bin
+[Basquin] 00:03:42 iters=2819 (12.7/s) crashes=346 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=33/5283KB threads=12 resets=0 explore[corpus=627 crash=346 inv=265 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2818)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846526780-612.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846526877-613.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846527054-614.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846527158-615.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846527210-616.bin
+[Basquin] 00:03:43 iters=2831 (12.7/s) crashes=347 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=5/5283KB threads=12 resets=0 explore[corpus=632 crash=347 inv=269 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2831)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846527461-617.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846527701-618.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846527797-619.bin
+[Basquin] 00:03:44 iters=2843 (12.7/s) crashes=348 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=635 crash=348 inv=271 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2838)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846528309-620.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846528508-621.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846528702-622.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846528801-623.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846529120-624.bin
+[Basquin] 00:03:45 iters=2853 (12.7/s) crashes=349 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=10/5283KB threads=12 resets=0 explore[corpus=640 crash=349 inv=275 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2852)]
+[Basquin] 00:03:46 iters=2867 (12.7/s) crashes=349 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=25/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=640 crash=349 inv=275 rejected=0 cov=23.1% lastFind=1s ago (@ iter 2852)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846530320-625.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846530512-626.bin
+[Basquin] 00:03:47 iters=2878 (12.7/s) crashes=349 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=642 crash=349 inv=277 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2870)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846531976-627.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846532124-628.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846532175-629.bin
+[Basquin] 00:03:48 iters=2891 (12.7/s) crashes=352 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=10/5283KB threads=12 resets=0 explore[corpus=645 crash=352 inv=277 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2890)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846532279-630.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846533112-631.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846533164-632.bin
+[Basquin] 00:03:49 iters=2904 (12.7/s) crashes=355 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=11/5283KB threads=12 resets=0 explore[corpus=648 crash=355 inv=277 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2903)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846533268-633.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846533491-634.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846533542-635.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846533646-636.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846533916-637.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846534063-638.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846534115-639.bin
+[Basquin] 00:03:50 iters=2919 (12.7/s) crashes=362 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=655 crash=362 inv=277 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2917)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846534218-640.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846535010-641.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846535061-642.bin
+[Basquin] 00:03:51 iters=2932 (12.7/s) crashes=363 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=658 crash=363 inv=279 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2929)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846535364-643.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846535558-644.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846535656-645.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846535752-646.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846535948-647.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846536044-648.bin
+[Basquin] 00:03:52 iters=2943 (12.7/s) crashes=364 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=664 crash=364 inv=284 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2941)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846536365-649.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846536417-650.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846536468-651.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846536737-652.bin
+[Basquin] 00:03:53 iters=2957 (12.7/s) crashes=364 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=668 crash=364 inv=288 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2951)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846537422-653.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846537474-654.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846538088-655.bin
+[Basquin] 00:03:54 iters=2972 (12.7/s) crashes=367 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=671 crash=367 inv=288 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2970)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846538264-656.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846538492-657.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846538689-658.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846539163-659.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846539215-660.bin
+[Basquin] 00:03:55 iters=2985 (12.7/s) crashes=372 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=14/5283KB threads=12 resets=0 explore[corpus=676 crash=372 inv=288 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2985)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846539319-661.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846539869-662.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846539973-663.bin
+[Basquin] 00:03:56 iters=2997 (12.7/s) crashes=374 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=679 crash=374 inv=289 rejected=0 cov=23.1% lastFind=0s ago (@ iter 2994)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846540241-664.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846540293-665.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846541038-666.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846541089-667.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846541141-668.bin
+[Basquin] 00:03:57 iters=3010 (12.7/s) crashes=374 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=10/5283KB threads=12 resets=0 explore[corpus=684 crash=374 inv=294 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3009)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846541392-669.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846541488-670.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846541636-671.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846541687-672.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846541790-673.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846542064-674.bin
+[Basquin] 00:03:58 iters=3024 (12.7/s) crashes=378 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=690 crash=378 inv=296 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3022)]
+[Basquin] 00:03:59 iters=3039 (12.7/s) crashes=378 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=690 crash=378 inv=296 rejected=0 cov=23.1% lastFind=1s ago (@ iter 3022)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846543556-675.bin
+[Basquin] 00:04:00 iters=3055 (12.7/s) crashes=378 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=691 crash=378 inv=297 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3045)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846544548-676.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846544644-677.bin
+[Basquin] 00:04:01 iters=3065 (12.7/s) crashes=378 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=693 crash=378 inv=299 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3059)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846545468-678.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846545913-679.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846546017-680.bin
+[Basquin] 00:04:02 iters=3078 (12.7/s) crashes=378 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/31/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=696 crash=378 inv=302 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3076)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846546381-681.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846546433-682.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846546538-683.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846546732-684.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846546833-685.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846547130-686.bin
+[Basquin] 00:04:03 iters=3090 (12.7/s) crashes=378 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/31/109ms heap(last/max)=9/5283KB threads=12 resets=0 explore[corpus=702 crash=378 inv=308 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3089)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846547228-687.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846547325-688.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846547420-689.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846547645-690.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846547697-691.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846547749-692.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846548101-693.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846548201-694.bin
+[Basquin] 00:04:04 iters=3103 (12.7/s) crashes=378 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/30/109ms heap(last/max)=9/5283KB threads=12 resets=0 explore[corpus=710 crash=378 inv=316 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3103)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846548377-695.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846548481-696.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846548532-697.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846548785-698.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846548884-699.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846548981-700.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846549172-701.bin
+[Basquin] 00:04:05 iters=3117 (12.7/s) crashes=381 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=10/5283KB threads=12 resets=0 explore[corpus=717 crash=381 inv=320 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3116)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846549373-702.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846549473-703.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846549707-704.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846549759-705.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846549812-706.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846550065-707.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846550161-708.bin
+[Basquin] 00:04:06 iters=3130 (12.7/s) crashes=382 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/30/109ms heap(last/max)=4/5283KB threads=12 resets=0 explore[corpus=724 crash=382 inv=326 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3129)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846550353-709.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846550448-710.bin
+[Basquin] 00:04:07 iters=3142 (12.7/s) crashes=383 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=726 crash=383 inv=327 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3132)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846551926-711.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846551978-712.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846552082-713.bin
+[Basquin] 00:04:08 iters=3158 (12.7/s) crashes=386 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=729 crash=386 inv=327 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3156)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846552353-714.bin
+[Basquin] 00:04:09 iters=3170 (12.7/s) crashes=387 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=730 crash=387 inv=327 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3159)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846553830-715.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846553882-716.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846554085-717.bin
+[Basquin] 00:04:10 iters=3182 (12.7/s) crashes=388 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=733 crash=388 inv=329 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3180)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846554277-718.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846554372-719.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846554469-720.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846554565-721.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846554661-722.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846554756-723.bin
+[Basquin] 00:04:11 iters=3193 (12.7/s) crashes=389 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=739 crash=389 inv=334 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3187)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846555269-724.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846555364-725.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846555590-726.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846555643-727.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846555695-728.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846555949-729.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846556101-730.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846556201-731.bin
+[Basquin] 00:04:12 iters=3206 (12.7/s) crashes=389 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/30/109ms heap(last/max)=10/5283KB threads=12 resets=0 explore[corpus=747 crash=389 inv=342 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3206)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846556538-732.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846556591-733.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846556642-734.bin
+[Basquin] 00:04:13 iters=3220 (12.7/s) crashes=389 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=750 crash=389 inv=345 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3212)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846557768-735.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846558056-736.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846558153-737.bin
+[Basquin] 00:04:14 iters=3232 (12.7/s) crashes=389 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/30/109ms heap(last/max)=4/5283KB threads=12 resets=0 explore[corpus=753 crash=389 inv=348 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3231)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846558253-738.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846558352-739.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846558449-740.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846558545-741.bin
+[Basquin] 00:04:15 iters=3243 (12.7/s) crashes=389 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=25/30/109ms heap(last/max)=1024/5283KB threads=12 resets=0 explore[corpus=757 crash=389 inv=352 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3235)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846559260-742.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846559357-743.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846559716-744.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846559897-745.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846560217-746.bin
+[Basquin] 00:04:16 iters=3255 (12.7/s) crashes=392 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=762 crash=392 inv=354 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3255)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846560269-747.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846560321-748.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846560750-749.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846560801-750.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846560854-751.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846561005-752.bin
+[Basquin] 00:04:17 iters=3269 (12.7/s) crashes=393 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=768 crash=393 inv=359 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3267)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846561241-753.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846562044-754.bin
+[Basquin] 00:04:18 iters=3281 (12.7/s) crashes=394 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=770 crash=394 inv=360 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3279)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846562957-755.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846563112-756.bin
+[Basquin] 00:04:19 iters=3294 (12.7/s) crashes=396 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=772 crash=396 inv=360 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3292)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846563667-757.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846563719-758.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846563921-759.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846564112-760.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846564212-761.bin
+[Basquin] 00:04:20 iters=3305 (12.7/s) crashes=397 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=2313/5283KB threads=12 resets=0 explore[corpus=777 crash=397 inv=364 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3305)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846564413-762.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846564564-763.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846564615-764.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846564719-765.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846565047-766.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846565099-767.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846565201-768.bin
+[Basquin] 00:04:21 iters=3319 (12.7/s) crashes=403 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=784 crash=403 inv=365 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3319)]
+[Basquin] 00:04:22 iters=3331 (12.7/s) crashes=403 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=1024/5283KB threads=12 resets=0 explore[corpus=784 crash=403 inv=365 rejected=0 cov=23.1% lastFind=1s ago (@ iter 3319)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846566543-769.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846566716-770.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846566960-771.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846567012-772.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846567115-773.bin
+[Basquin] 00:04:23 iters=3345 (12.7/s) crashes=408 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=789 crash=408 inv=365 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3343)]
+[Basquin] 00:04:24 iters=3360 (12.7/s) crashes=408 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=789 crash=408 inv=365 rejected=0 cov=23.1% lastFind=1s ago (@ iter 3343)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846568872-774.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846568969-775.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846569064-776.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846569160-777.bin
+[Basquin] 00:04:25 iters=3373 (12.7/s) crashes=410 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/30/109ms heap(last/max)=9/5283KB threads=12 resets=0 explore[corpus=793 crash=410 inv=367 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3372)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846569309-778.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846569465-779.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846569644-780.bin
+[Basquin] 00:04:26 iters=3388 (12.7/s) crashes=413 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=25/30/109ms heap(last/max)=4275/5283KB threads=12 resets=0 explore[corpus=796 crash=413 inv=367 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3379)]
+[Basquin] 00:04:27 iters=3401 (12.7/s) crashes=413 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=796 crash=413 inv=367 rejected=0 cov=23.1% lastFind=1s ago (@ iter 3379)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846571400-781.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846571716-782.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846572034-783.bin
+[Basquin] 00:04:28 iters=3413 (12.7/s) crashes=415 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=4488/5283KB threads=12 resets=0 explore[corpus=799 crash=415 inv=368 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3409)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846572432-784.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846572483-785.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846572587-786.bin
+[Basquin] 00:04:29 iters=3425 (12.7/s) crashes=418 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=802 crash=418 inv=368 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3418)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846573689-787.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846573742-788.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846573845-789.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846574032-790.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846574187-791.bin
+[Basquin] 00:04:30 iters=3440 (12.7/s) crashes=422 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=957/5283KB threads=12 resets=0 explore[corpus=807 crash=422 inv=369 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3439)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846574360-792.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846575076-793.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846575172-794.bin
+[Basquin] 00:04:31 iters=3451 (12.7/s) crashes=423 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=5/5283KB threads=12 resets=0 explore[corpus=810 crash=423 inv=371 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3450)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846575272-795.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846575369-796.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846575594-797.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846575697-798.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846576029-799.bin
+[Basquin] 00:04:32 iters=3463 (12.7/s) crashes=424 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=815 crash=424 inv=375 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3461)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846576225-800.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846576420-801.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846577026-802.bin
+[Basquin] 00:04:33 iters=3476 (12.7/s) crashes=426 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=818 crash=426 inv=376 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3474)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846577275-803.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846577327-804.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846577430-805.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846578031-806.bin
+[Basquin] 00:04:34 iters=3490 (12.7/s) crashes=430 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=822 crash=430 inv=376 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3488)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846578424-807.bin
+[Basquin] 00:04:35 iters=3503 (12.7/s) crashes=431 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=25/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=823 crash=431 inv=376 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3492)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846579256-808.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846579417-809.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846579692-810.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846580168-811.bin
+[Basquin] 00:04:36 iters=3516 (12.7/s) crashes=435 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=11/5283KB threads=12 resets=0 explore[corpus=827 crash=435 inv=376 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3515)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846580264-812.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846580763-813.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846580815-814.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846580918-815.bin
+[Basquin] 00:04:37 iters=3529 (12.7/s) crashes=439 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=831 crash=439 inv=376 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3525)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846581239-816.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846581291-817.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846581394-818.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846581572-819.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846582192-820.bin
+[Basquin] 00:04:38 iters=3543 (12.7/s) crashes=443 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/30/109ms heap(last/max)=6/5283KB threads=12 resets=0 explore[corpus=836 crash=443 inv=377 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3542)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846582444-821.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846582540-822.bin
+[Basquin] 00:04:39 iters=3554 (12.7/s) crashes=444 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=25/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=838 crash=444 inv=378 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3547)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846583949-823.bin
+[Basquin] 00:04:40 iters=3567 (12.7/s) crashes=445 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=839 crash=445 inv=378 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3564)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846584321-824.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846584502-825.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846584752-826.bin
+[Basquin] 00:04:41 iters=3583 (12.7/s) crashes=447 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=842 crash=447 inv=379 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3574)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846585558-827.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846585610-828.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846585808-829.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846586130-830.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846586182-831.bin
+[Basquin] 00:04:42 iters=3596 (12.7/s) crashes=447 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=6/5283KB threads=12 resets=0 explore[corpus=847 crash=447 inv=384 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3595)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846586234-832.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846586777-833.bin
+[Basquin] 00:04:43 iters=3609 (12.7/s) crashes=447 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=849 crash=447 inv=386 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3603)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846587233-834.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846587504-835.bin
+[Basquin] 00:04:44 iters=3621 (12.7/s) crashes=449 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=25/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=851 crash=449 inv=386 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3612)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846588575-836.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846588749-837.bin
+[Basquin] 00:04:45 iters=3633 (12.7/s) crashes=450 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=25/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=853 crash=450 inv=387 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3628)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846589428-838.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846590064-839.bin
+[Basquin] 00:04:46 iters=3644 (12.7/s) crashes=451 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=855 crash=451 inv=388 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3641)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846590620-840.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846590949-841.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846591001-842.bin
+[Basquin] 00:04:47 iters=3658 (12.7/s) crashes=451 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=858 crash=451 inv=391 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3655)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846591333-843.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846591385-844.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846591436-845.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846591916-846.bin
+[Basquin] 00:04:48 iters=3673 (12.7/s) crashes=451 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=862 crash=451 inv=395 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3669)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846592338-847.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846592889-848.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846593069-849.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846593173-850.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846593224-851.bin
+[Basquin] 00:04:49 iters=3686 (12.8/s) crashes=452 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=27/30/109ms heap(last/max)=4/5283KB threads=12 resets=0 explore[corpus=867 crash=452 inv=399 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3686)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846593572-852.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846593721-853.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846593877-854.bin
+[Basquin] 00:04:50 iters=3701 (12.8/s) crashes=454 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=870 crash=454 inv=400 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3696)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846594660-855.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846594711-856.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846594815-857.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846595084-858.bin
+[Basquin] 00:04:51 iters=3715 (12.8/s) crashes=457 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=874 crash=457 inv=401 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3713)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846595472-859.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846595802-860.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846595854-861.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846595906-862.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846596208-863.bin
+[Basquin] 00:04:52 iters=3727 (12.8/s) crashes=457 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=879 crash=457 inv=406 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3727)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846596382-864.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846596433-865.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846596485-866.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846596538-867.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846596639-868.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846596741-869.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846596837-870.bin
+[Basquin] 00:04:53 iters=3740 (12.8/s) crashes=458 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=886 crash=458 inv=412 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3735)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846597384-871.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846597561-872.bin
+[Basquin] 00:04:54 iters=3751 (12.8/s) crashes=459 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=52/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=888 crash=459 inv=413 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3744)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846598761-873.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846598856-874.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846598912-875.bin
+[Basquin] 00:04:55 iters=3763 (12.8/s) crashes=460 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=51/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=891 crash=460 inv=415 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3759)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846599328-876.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846599520-877.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846599712-878.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846600036-879.bin
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846600228-880.bin
+[Basquin] 00:04:56 iters=3774 (12.7/s) crashes=460 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=896 crash=460 inv=420 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3774)]
+[Basquin][Fuzz] Saved input (Invariant-Remote) to fuzz-results/input-1784846600324-881.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846600695-882.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846600747-883.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846600850-884.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846601081-885.bin
+[Basquin] 00:04:57 iters=3788 (12.8/s) crashes=464 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=901 crash=464 inv=421 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3785)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846601235-886.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846601504-887.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846602036-888.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846602088-889.bin
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846602191-890.bin
+[Basquin] 00:04:58 iters=3801 (12.8/s) crashes=469 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=26/30/109ms heap(last/max)=10/5283KB threads=12 resets=0 explore[corpus=906 crash=469 inv=421 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3800)]
+[Basquin] 00:04:59 iters=3812 (12.7/s) crashes=469 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=53/30/109ms heap(last/max)=0/5283KB threads=12 resets=0 explore[corpus=906 crash=469 inv=421 rejected=0 cov=23.1% lastFind=1s ago (@ iter 3800)]
+[Basquin][Fuzz] Saved interesting input to fuzz-results/input-1784846603859-891.bin
+[Basquin] 00:05:00 iters=3825 (12.7/s) crashes=470 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=25/30/109ms heap(last/max)=0/5283KB threads=11 resets=0 explore[corpus=907 crash=470 inv=421 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3821)]
+CoverageGuidedRun done: corpus=130 coverage=1469/6368 pheromone=off seed=1
+[Basquin] reporting: measured=3871 misses=0 targetViolations=424
+[Basquin] replay cost-ranked (top 5): /actions/Catalog.action?viewProduct=&productId=K9-DL-01=2006, /actions/Catalog.action?searchProducts=&keyword=cat=1960, /actions/Cart.action?removeItemFromCart=&workingItemId=EST-28=1857, /actions/Cart.action?addItemToCart=&workingItemId=EST-10=1092, /actions/Cart.action?checkOut==1087
+[Basquin] 00:05:00 iters=3825 (12.7/s) crashes=470 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=25/30/109ms heap(last/max)=0/5283KB threads=11 resets=0 explore[corpus=907 crash=470 inv=421 rejected=0 cov=23.1% lastFind=0s ago (@ iter 3821)]

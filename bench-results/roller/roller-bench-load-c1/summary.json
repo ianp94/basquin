@@ -1,24 +1,26 @@
 {
   "load": {
-    "requests": 610,
-    "throughputRps": "3.4",
+    "requests": 584,
+    "throughputRps": "1.9",
     "latencyMs": {
-      "p50": 504,
-      "p90": 513,
-      "p99": 515,
-      "max": 519
+      "p50": 515,
+      "p90": 517,
+      "p99": 526,
+      "max": 532
     },
-    "heapDriftKb": -20900,
+    "heapDriftKb": -90792,
     "threadDrift": 0,
     "serverErrors": 0,
     "captureMisses": 0,
-    "clientErrors": 15,
+    "clientErrors": 0,
     "redirects": 0,
     "redirectTargets": {},
     "violations": {
-      "latency": 0,
-      "heap": 0,
-      "thread": 0
+      "notEvaluated": [
+        "latency",
+        "heap",
+        "thread"
+      ]
     }
   }
 }

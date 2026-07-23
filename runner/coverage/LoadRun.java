@@ -336,11 +336,19 @@ public final class LoadRun {
 
     private static final Pattern CORRELATION_REF_PATTERN = Pattern.compile("\\$\\{\\{([^}]+)\\}\\}");
 
+    // DD-038: a per-fire unique payload token. RUN_SALT is per-process (millis + pid, so two driver
+    // JVMs starting in the same millisecond still differ); NONCE is the within-run counter.
+    static final String RUN_SALT =
+            Long.toString(System.currentTimeMillis()) + "x" + Long.toString(ProcessHandle.current().pid());
+    static final java.util.concurrent.atomic.AtomicLong NONCE = new java.util.concurrent.atomic.AtomicLong();
+
     /**
      * Replaces each {@code ${{name}}} reference in {@code body} with the (already URL-encoded) value
      * bound to {@code name} in {@code bindings}. Returns null if ANY referenced name is missing a
      * binding — the worker loop treats a null return as "skip firing this step" (a required prior
-     * capture never bound).
+     * capture never bound). The special ref {@code ${{@nonce}}} (DD-038) is never looked up in
+     * {@code bindings} — it's generated fresh every call from {@link #RUN_SALT}/{@link #NONCE}, so it
+     * NEVER causes a null return, unlike every other (real, captured) ref.
      */
     static String substitute(String body, java.util.Map<String, String> bindings) {
         Matcher m = CORRELATION_REF_PATTERN.matcher(body);
@@ -348,10 +356,14 @@ public final class LoadRun {
         int last = 0;
         while (m.find()) {
             String name = m.group(1);
-            String value = bindings == null ? null : bindings.get(name);
-            if (value == null) return null;
             out.append(body, last, m.start());
-            out.append(value);   // bindings already hold the URL-encoded, body-ready text (DD-037 model A)
+            if (name.equals("@nonce")) {
+                out.append(RUN_SALT).append('-').append(NONCE.getAndIncrement());
+            } else {
+                String value = bindings == null ? null : bindings.get(name);
+                if (value == null) return null;
+                out.append(value);   // bindings already hold the URL-encoded, body-ready text (DD-037 model A)
+            }
             last = m.end();
         }
         out.append(body, last, body.length());

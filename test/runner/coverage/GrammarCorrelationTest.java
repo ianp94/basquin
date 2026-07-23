@@ -115,4 +115,11 @@ public class GrammarCorrelationTest {
                     post.contains("${page}") || post.contains("${text}"));
         }
     }
+
+    @Test
+    public void nonceGeneratorEmitsTheFireTimeMarker() throws IOException {
+        RequestGrammar g = load("$rev = <nonce>\n/edit?r=${rev}\n");
+        assertEquals("<nonce> defers to the fire-time marker, not a baked value",
+                "/edit?r=${{@nonce}}", g.randomRequest());
+    }
 }

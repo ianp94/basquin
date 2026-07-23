@@ -17,6 +17,8 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -166,5 +168,20 @@ public class LoadCorrelationTest {
         assertEquals(1, plainSeq.steps().size());
         assertFalse("a plain route has no ${{name}} ref, so it must not be correlated",
                 plainSeq.correlated());
+    }
+
+    @Test
+    public void substituteFillsNonceUniquelyAndNeedsNoBinding() {
+        String a = LoadRun.substitute("x=${{@nonce}}", new java.util.HashMap<>());
+        String b = LoadRun.substitute("x=${{@nonce}}", new java.util.HashMap<>());
+        assertNotNull(a); assertNotNull(b);
+        assertTrue(a.startsWith("x=")); assertFalse(a.contains("${{"));   // marker gone
+        assertNotEquals("each fire's nonce differs", a, b);
+    }
+
+    @Test
+    public void nonceDoesNotMaskAnUnboundRealRef() {
+        // @nonce fills, but an unbound ${{csrf}} still makes the step skip (null)
+        assertNull(LoadRun.substitute("a=${{@nonce}}&t=${{csrf}}", new java.util.HashMap<>()));
     }
 }

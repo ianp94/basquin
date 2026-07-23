@@ -602,7 +602,7 @@ public final class CoverageGuidedRun {
 
     /**
      * DD-040: the result poll's read timeout. It MUST exceed the target handler's quiescence bound
-     * ({@code LoadModeControl}'s 2 s wait on ITERATION_LOCK) — a poll that gives up first turns
+     * ({@code LoadModeControl.QUIESCENCE_WAIT_MS}, 3.5 s on ITERATION_LOCK) — a poll that gives up first turns
      * "queued behind the iteration that is about to write my entry" into a systematic miss, on
      * exactly the committed-response class this channel exists to recover.
      */
@@ -841,9 +841,16 @@ public final class CoverageGuidedRun {
      * <p><b>Which pod it asks</b> (§A.6). The store is per-JVM, so a poll through the Service VIP
      * reaches the pod that holds the entry with probability 1/N and returns {@code miss} the rest of
      * the time — a target that scales stops being measurable. {@link PodPollTargets} therefore hands
-     * back the pod addresses to try; each is asked in turn until one returns the entry. A run-salted
-     * id plus remove-on-read means at most one pod can hold it, so asking several cannot return
-     * another pod's data — the worst a fan-out can do is find nothing, which is a recorded miss.
+     * back the pod addresses to try; each is asked in turn until one returns the entry. For a request
+     * answered without a redirect, a run-salted id plus remove-on-read means at most one pod can hold
+     * it, so asking several cannot return another pod's data — the worst a fan-out can do is find
+     * nothing, which is a recorded miss.
+     *
+     * <p><b>Known residual (multi-replica + followed redirect).</b> A followed same-method hop
+     * re-sends the same id, so on a multi-replica target two pods can hold entries under it at once
+     * and this loop returns whichever answers first in DNS order — which may be the wrong hop's
+     * measurement, marked {@code measured=true}. See {@link PodPollTargets} for the full statement;
+     * DD-039's per-hop ids remove the case.
      */
     static CostSample pollResult(String base, String reqId, String label) {
         List<String> pollBases = PodPollTargets.pollBases(base);

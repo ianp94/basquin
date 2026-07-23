@@ -39,8 +39,9 @@ public final class RequestBoundary {
     private static final ReentrantLock ITERATION_LOCK = new ReentrantLock(true);
     private static final ThreadLocal<Phase> PHASE = new ThreadLocal<>();
     /** DD-040: the driver's salted request id for the explore iteration in flight on this thread.
-     *  Set by the glue only on the EXPLORE_BEGAN branch; cleared in {@link #onExit} with the same
-     *  discipline as {@link #PHASE}. */
+     *  Written and cleared ONLY on the EXPLORE_BEGAN path — the glue stamps it only there, and
+     *  {@link #onExit} removes it only there. A load or control request never touches this
+     *  variable at all, in either direction. */
     private static final ThreadLocal<String> REQ_ID = new ThreadLocal<>();
     private static final Map<String, String> NO_HEADERS = Collections.emptyMap();
 
@@ -58,7 +59,10 @@ public final class RequestBoundary {
      *
      * <p>Sets the thread-local <b>unconditionally</b> — a null argument overwrites. Connector
      * threads are pooled, and an id left behind by an earlier request would publish a later
-     * kubelet probe's metrics under a driver id: stale data presented as fresh.
+     * kubelet probe's metrics under a driver id: stale data presented as fresh. (An unstamped
+     * explore request — a probe, say — still reaches here with a null header and so still
+     * overwrites; only load and control requests skip this call, and those cannot leave an id
+     * behind because they can never write one. See {@link #onExit}.)
      */
     public static void stampRequestId(String reqId) {
         REQ_ID.set(reqId);
@@ -107,13 +111,23 @@ public final class RequestBoundary {
     public static ExitResult onExit(Throwable appError) {
         Phase phase = PHASE.get();
         PHASE.remove();
-        // Cleared for EVERY phase, not just explore: the id must never outlive the request that
-        // carried it on a pooled connector thread (see stampRequestId).
-        String reqId = REQ_ID.get();
-        REQ_ID.remove();
         if (phase != Phase.EXPLORE_BEGAN) {
             return new ExitResult(NO_HEADERS, appError); // control / load: nothing to close
         }
+        // REQ_ID is touched ONLY here, on the explore branch — the load and control paths never
+        // read or clear it, which is what "the load path gains zero instructions" has to mean.
+        // Safe because only an explore request can ever set it: both glue sites
+        // (BasquinValve.invoke and TomcatBoundaryAdvice.enter) call stampRequestId under
+        // `phase == EXPLORE_BEGAN`, and a CONTROL_HANDLED decision returns from the valve before
+        // reaching that call at all. So no load or control request can write an id, and the branch
+        // below always removes the one an explore request wrote — an id cannot go stale on a
+        // pooled connector thread, which is the failure the old unconditional clear guarded
+        // against. Clearing unconditionally was not free, either: ThreadLocal.get() on an unset
+        // variable does not merely probe, setInitialValue() INSERTS a null-valued
+        // ThreadLocalMap.Entry, so every load passthrough exit paid a map insert, a map removal
+        // and one allocation that main's code did not.
+        String reqId = REQ_ID.get();
+        REQ_ID.remove();
         Throwable pending = appError;
         Map<String, String> headers = NO_HEADERS;
         // DD-040: capture the context BEFORE endIteration(), never from its outcome. endIteration()

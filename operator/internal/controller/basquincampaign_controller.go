@@ -219,6 +219,10 @@ func (r *BasquinCampaignReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			} else {
 				campaign.Status.CoveragePct = fmt.Sprintf("%.1f", s.Exploration.Coverage.Pct)
 				campaign.Status.Findings = s.Exploration.Corpus
+				// DD-040: carry the driver's own "I could not see everything" markers into status,
+				// so the finding count is never presented as complete when the driver knows it is not.
+				campaign.Status.FindingsLowerBound = s.Exploration.FindingsLowerBound
+				campaign.Status.ReportMisses = s.Exploration.ReportMisses
 				// Persist the interesting "replay corpus" as a campaign-owned ConfigMap (DD-026 PR 1) —
 				// for reproducibility, the dashboard corpus view, and load-mode replay. The driver stays
 				// credential-less: it wrote the corpus into its summary (termination message); the
@@ -241,7 +245,7 @@ func (r *BasquinCampaignReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		campaign.Status.Phase = basquinv1alpha1.CampaignCompleted
 		now := metav1.Now()
 		campaign.Status.CompletionTime = &now
-		msg := fmt.Sprintf("run complete: coverage %s%%, %d findings", campaign.Status.CoveragePct, campaign.Status.Findings)
+		msg := exploreReadyMessage(&campaign.Status)
 		if campaign.Spec.Mode == "load" && campaign.Status.Load != nil {
 			msg = loadReadyMessage(campaign.Status.Load)
 		}
@@ -265,6 +269,29 @@ func (r *BasquinCampaignReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+}
+
+// exploreReadyMessage renders the Ready condition for a completed explore run — the line an
+// operator actually reads out of `kubectl get basquincampaign -o yaml`.
+//
+// DD-040: this used to print "%d findings" unconditionally. The driver already knew better — it
+// emits findingsLowerBound whenever any request's measurements went unobtained — but nothing read
+// it, so a run that was blind to a third of its traffic still announced a flat, confident count.
+// That is the same shape as DD-035's driftUnavailable being emitted and parsed nowhere, which this
+// very design decision fixes elsewhere. A count the run knows is a floor now says so, and says how
+// many requests it could not see.
+func exploreReadyMessage(st *basquinv1alpha1.BasquinCampaignStatus) string {
+	if !st.FindingsLowerBound {
+		return fmt.Sprintf("run complete: coverage %s%%, %d findings", st.CoveragePct, st.Findings)
+	}
+	msg := fmt.Sprintf("run complete: coverage %s%%, at least %d findings", st.CoveragePct, st.Findings)
+	if st.ReportMisses != nil {
+		// Not "0 misses" when the count is absent — nil means the driver never said.
+		msg += fmt.Sprintf(" (lower bound: %d request(s) reported no measurement)", *st.ReportMisses)
+	} else {
+		msg += " (lower bound: this run could not measure every request)"
+	}
+	return msg
 }
 
 // loadReadyMessage renders the Ready condition for a completed load run — the line an operator
@@ -297,6 +324,11 @@ type driverSummary struct {
 		Coverage struct {
 			Pct float64 `json:"pct"`
 		} `json:"coverage"`
+		// DD-040 honesty markers for an explore run. ReportMisses is a pointer so "the driver did
+		// not report it" (an older image) stays distinguishable from "it reported zero" — the same
+		// reason LoadStatus.HeapDriftKb is one.
+		ReportMisses       *int64 `json:"reportMisses"`
+		FindingsLowerBound bool   `json:"findingsLowerBound"`
 	} `json:"exploration"`
 	// ReplayCorpus is the capped set of interesting inputs the run fired (DD-026 PR 1); the operator
 	// materializes it into status.corpusConfigMap.

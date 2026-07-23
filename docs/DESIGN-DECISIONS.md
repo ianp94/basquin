@@ -1671,7 +1671,14 @@ operator wiring; nothing added to the load path.
 
 1. **The channel.** The driver stamps each explore request `X-Basquin-Req: <RUN_SALT>-<n>`; the glue
    calls `RequestBoundary.stampRequestId` **only** on the `EXPLORE_BEGAN` branch (so a load request
-   never even reads the header); `onExit` writes `id → Entry(costCsv, invariantCount, detail, leak)`
+   never even reads the header) — and `onExit` likewise touches the id thread-local **only** after
+   the phase check. The first version cleared it before the check, so every load passthrough paid a
+   `ThreadLocal.get()` (whose `setInitialValue` *inserts* a null-valued `ThreadLocalMap.Entry` — an
+   allocation) plus a `remove()`, while three separate places in this repo said the load path gained
+   zero instructions. The clear is safe to skip because only an explore request can ever *write* an
+   id, and the explore branch always removes it, so nothing can go stale on a pooled connector
+   thread; `RequestBoundaryLoadPathCostTest` now asserts the absence of the map entry directly
+   rather than restating the claim. `onExit` writes `id → Entry(costCsv, invariantCount, detail, leak)`
    into a 256-entry LRU; the driver `GET`s `/__basquin/result?id=…`, which is `CONTROL_HANDLED` and
    never reaches the app. Entries are removed on read; retention is bounded to ≈ 256 × ~0.5 KB
    ≤ **~150 KB**, stated as a byte bound because it is a baseline shift inside the very JVM whose
@@ -1719,7 +1726,17 @@ operator wiring; nothing added to the load path.
 6. **A miss is *unmeasured*, never zero.** `CostSample.EMPTY` is gone — deliberately renamed
    `UNMEASURED`, so a zero-filled sample cannot be reintroduced by autocomplete. A miss skips
    `CostModel.score` entirely, increments `reportMisses`, and marks the run's finding count as a
-   **lower bound** as first-class data (`findingsLowerBound`), not prose. A run where misses are the
+   **lower bound** as first-class data (`findingsLowerBound`), not prose — *and that marker is wired
+   all the way through*, which it was not when this PR was first handed over. Emitting it into the
+   driver summary and reading it nowhere would have been the DD-035 `driftUnavailable` defect (item
+   7) reintroduced by the change that fixes it: the operator would still print "run complete: …, 12
+   findings" for a run that was blind to a third of its traffic. So both markers are parsed into
+   `status.findingsLowerBound` / `status.reportMisses` (a **pointer**, so "the driver never said" is
+   not rendered as "zero misses"), the Ready condition says "at least N findings (lower bound: M
+   request(s) reported no measurement)", and the dashboard prefixes the count with `≥` and names the
+   unmeasured requests. Both CRD copies were regenerated — a field absent from the *served* schema is
+   pruned by Kubernetes, which would silently defeat the whole chain, and a test now pins its
+   presence in both. A run where misses are the
    *majority* prints a FATAL line and exits 3 (`-Dbasquin.report.failOnMissMajority=false`
    downgrades it) — against an uninstrumented target `reportMisses` ≈ iteration count, a situation
    that used to read as a clean zero. The poll lives in a `finally`, because a `serverError` would
@@ -1775,16 +1792,29 @@ operator wiring; nothing added to the load path.
     `InetAddress.getAllByName` (DD-023's exact mechanism and loopback collapse, reused) from
     `-Dbasquin.report.podHost`, else the host of `-Dbasquin.coverage.jacoco` — the headless coverage
     Service the operator already passes on every explore campaign, so **no operator change was
-    required** — else the baseURL host, and tries each until one returns the entry. The fan-out is
-    safe **only because of §A.4 and §A.7**: ids are salted and entries are removed on read, so at
-    most one pod can ever hold a given id. A fan-out can therefore be wrong only by finding nothing,
-    which is a counted miss — never by returning another pod's measurement. Single-replica behaviour
+    required** — else the baseURL host, and tries each until one returns the entry. The fan-out
+    rests on §A.4 and §A.7: ids are salted and entries are removed on read, so **for a request
+    answered without a redirect** at most one pod can hold a given id, and a fan-out can be wrong
+    only by finding nothing — a counted miss, never another pod's measurement. **That property does
+    not hold across a followed redirect on a multi-replica target, and this record originally
+    claimed it did**; see residual 2 below. Single-replica behaviour
     is byte-identical (a derived source resolving to fewer than two addresses returns the base URL
     untouched). `X-Basquin-Pod` is still emitted, demoted to what it can actually do: attribution
     (`pod=` on a finding), which is what a two-replica reconciliation against pod logs needs.
 
-**Verified.** 274 unit/envtest tests, and an acceptance run against Apache Roller on 2026-07-23
+**Verified.** 278 Java unit tests (275 before the approver round that added the load-path-cost
+probe) plus the operator's Go unit + envtest suites, and an acceptance run against Apache Roller on 2026-07-23
 that **did not pass**, recorded here as measured rather than as success.
+
+**Evidence: [`bench-results/dd040-acceptance-2026-07-23/`](../bench-results/dd040-acceptance-2026-07-23/).**
+Every figure below re-derives from committed artifacts — the redacted driver log and summary, the
+target pod's `[Basquin][Invariant]` lines sliced to the driver's exact window, and the run's own
+`Invariant-Remote` findings — via `reconcile.py`, which exits nonzero if any of them drifts from
+what this record claims. They were prose only when this PR was first handed over, which is invariant
+3's failure mode and, uncomfortably, this record's own defect class one level up. What is *not*
+recoverable (the campaign object and the driver's `summary.json`, deleted with the campaign; the
+live redirect probe and the 200-poll perturbation check, which produced no files) is named as such
+in that directory's README rather than reconstructed.
 
 The run recovered a great deal: **1,413 violations reported** where the same campaign shape
 previously reported **0**, with `reportMisses: 0` and the retained corpus back to **99 entries**
@@ -1797,7 +1827,7 @@ genuinely never begins an iteration).
 **But the pod logged 1,602 in the same window: a residual gap of 189, or 11.8%.** The acceptance
 criterion was that these two numbers agree, and they do not.
 
-**Root cause, reproduced on demand.** A followed redirect that *changes method* (POST → 302 → GET)
+**Residual 1 — root cause, reproduced on demand.** A followed redirect that *changes method* (POST → 302 → GET)
 loses the `X-Basquin-Req` header, because the JDK does not carry a `setRequestProperty` value onto a
 method-rewritten hop. Hop 2 therefore runs unstamped: it evaluates, it logs, it publishes nothing,
 and it is never counted. Measured live — `POST /roller-ui/authoring/entryAdd.rol` → `login.rol` moved
@@ -1822,7 +1852,26 @@ be described as complete.
 
 Probe noise is not the explanation: measured idle rate is 3 lines/120s, and the kubelet probe's
 5-second grid accounts for at most ~22 lines on the most generous attribution, against a gap of 189.
-Multi-replica (spec verification item 14) was not exercised — the run was single-replica.
+
+**Residual 2 — the §A.6 fan-out can return the wrong hop's measurement on a multi-replica target,
+and this record originally claimed it could not.** §A.6 above asserted, as the reason pod fan-out is
+safe, that "at most one pod can ever hold a given id". That is false for a **same-method redirect
+hop across replicas**. Explore deliberately re-sends the same `X-Basquin-Req` on a followed hop
+(final-hop-wins), and the JDK *does* preserve the header on a same-method hop — so hop 1 (pod A) and
+hop 2 (pod B) can both `put` under that id, and the fan-out returns whichever pod answers first in
+DNS order. That may be hop 1's clean, cheap 302 for a request whose real work violated on hop 2:
+`measured=true` with the wrong hop's numbers, invisible to `reportMisses` because nothing missed.
+
+It is the *same class* as residual 1 — a clean zero for work that violated — reached by a different
+route, and it is worth saying plainly that residual 1 was found by measurement while this one was
+found by an approver reading the claim against the code. Scope: single-replica targets cannot hit it
+(the run above was single-replica, and multi-replica — spec verification item 14 — was not
+exercised); multi-replica targets are a supported configuration (DD-020), so this is a real hole,
+not a hypothetical one. **No fix is attempted here:** DD-039 replaces auto-follow with an explicit
+per-hop loop that gives every hop its own id, which dissolves residual 1 and residual 2 together,
+and a partial fix in this PR would be a second mechanism to retire a week later. The claim sites are
+corrected instead — spec §A.6, this §A.6, `PodPollTargets`'s class javadoc and `pollResult`'s — so
+nothing in the tree still asserts a guarantee the code does not provide.
 
 **Rejected alternatives.**
 - **Set the headers before the app runs.** The values do not exist yet.

@@ -24,9 +24,20 @@ import java.util.List;
  * <p><b>What this class does.</b> It turns one base URL into the ordered list of base URLs a poll
  * should try. When the driver can see that the target is more than one instance it addresses the
  * pods directly — bypassing the VIP entirely — and the caller tries each until one returns the
- * entry. Because the store is keyed by a run-salted id and removes on read, at most one pod can ever
- * hold a given id: a fan-out can be wrong only by finding nothing, which is a recorded miss, which is
- * honest.
+ * entry.
+ *
+ * <p><b>The fan-out's safety, stated exactly.</b> For a request the driver sends and the target
+ * answers <em>without a redirect</em>, the run-salted id plus remove-on-read means at most one pod
+ * can hold that id, so a fan-out can be wrong only by finding nothing — a recorded miss, which is
+ * honest. <b>That is not true across a followed same-method redirect on a multi-replica target.</b>
+ * Explore re-sends the same {@code X-Basquin-Req} on such a hop by design, and the Service may route
+ * hop 2 to a different pod; both pods then hold an entry under the same id, and the fan-out returns
+ * whichever answers first in DNS order — possibly hop 1's cheap, clean measurement for work that
+ * happened on hop 2, reported as {@code measured=true}. {@code reportMisses} cannot see that,
+ * because nothing missed. This is the same class of defect as the method-changing-redirect gap
+ * DD-040's acceptance run measured, and DD-039 dissolves both by replacing the JDK's auto-follow
+ * with an explicit hop loop that stamps every hop with its own id. Until then it is a documented
+ * residual: single-replica targets are unaffected, and multi-replica targets are unexercised.
  *
  * <p><b>Why fan-out rather than following {@code X-Basquin-Pod}.</b> The boundary does stamp its pod
  * identity on every explore exit, but that header rides the same response headers as

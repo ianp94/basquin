@@ -1,0 +1,14 @@
+apiVersion: basquin.dev/v1alpha1
+kind: BasquinCampaign
+metadata:
+  name: roller-explore-dd040
+  namespace: basquin-system
+spec:
+  mode: explore
+  targetRef: { name: roller }
+  baseURL: http://roller-app.basquin-system.svc.cluster.local:8080
+  driver:
+    grammarConfigMap: roller-grammar
+    corpusConfigMap: roller-corpus
+    classesPath: /basquin-app-classes
+    duration: 5m

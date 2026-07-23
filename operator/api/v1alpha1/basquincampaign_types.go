@@ -144,6 +144,27 @@ type BasquinCampaignStatus struct {
 	CoveragePct string `json:"coveragePct,omitempty"`
 	// +optional
 	Findings int32 `json:"findings,omitempty"`
+
+	// FindingsLowerBound / ReportMisses qualify Findings for an EXPLORE run (DD-040).
+	//
+	// The driver polls the target for each request's measurements; a poll that misses yields an
+	// unmeasured sample, never a zero, and ticks reportMisses. A run with any miss therefore knows
+	// its own finding count is incomplete — and the driver has emitted exactly that, as
+	// findingsLowerBound, since DD-040. It reached no consumer: `kubectl get basquincampaign` read
+	// "run complete: …, 12 findings" for a partially blind run, which is precisely the
+	// emitted-since-DD-035-and-parsed-nowhere defect DD-040 fixes for driftUnavailable.
+	//
+	// FindingsLowerBound true means Findings is a floor, not a count.
+	// +optional
+	FindingsLowerBound bool `json:"findingsLowerBound,omitempty"`
+
+	// ReportMisses is how many requests the driver could not obtain measurements for. A POINTER, on
+	// the same reasoning as LoadStatus.HeapDriftKb: nil means the driver never reported the figure
+	// (an older driver image), a non-nil 0 means it reported and nothing missed. A plain int64 would
+	// render both as a reassuring "0 misses".
+	// +optional
+	ReportMisses *int64 `json:"reportMisses,omitempty"`
+
 	// CorpusConfigMap names a ConfigMap the operator emits at end-of-run holding the run's interesting
 	// "replay corpus" (the inputs that reached new coverage), for reproducibility, the dashboard corpus
 	// view, and load-mode replay (DD-026 PR 1). Owner-referenced to the campaign, so it GCs with it.

@@ -18,6 +18,7 @@ package controller
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -126,6 +127,125 @@ func TestLoadReadyMessageNeverPrintsACountItDoesNotHave(t *testing.T) {
 				t.Errorf("message %q must not claim %q", msg, tc.wantAbsent)
 			}
 		})
+	}
+}
+
+// --- the same contract, for EXPLORE ------------------------------------------------------------
+//
+// findingsLowerBound shipped in the driver's summary and was read by nobody: no field in
+// campaign.Status, no branch in the Ready message, nothing on the dashboard. A run that could not
+// measure a third of its requests still announced "run complete: …, 12 findings". That is the
+// DD-035 driftUnavailable defect above, reintroduced by the same change that fixes it.
+
+func explorationFromSummary(t *testing.T, summary string) driverSummary {
+	t.Helper()
+	var s driverSummary
+	if err := json.Unmarshal([]byte(summary), &s); err != nil {
+		t.Fatalf("driver summary must parse: %v", err)
+	}
+	return s
+}
+
+func TestFindingsLowerBoundIsActuallyParsed(t *testing.T) {
+	s := explorationFromSummary(t, `{"exploration":{"corpus":12,"findCrash":0,"findInvariant":9,`+
+		`"reportMisses":17,"findingsLowerBound":true,"coverage":{"pct":25.2}}}`)
+
+	if !s.Exploration.FindingsLowerBound {
+		t.Error("findingsLowerBound must reach status, not stop at the summary JSON")
+	}
+	if s.Exploration.ReportMisses == nil {
+		t.Fatal("reportMisses must be parsed")
+	}
+	if *s.Exploration.ReportMisses != 17 {
+		t.Errorf("reportMisses = %d, want 17", *s.Exploration.ReportMisses)
+	}
+}
+
+func TestAnAbsentReportMissesDoesNotBecomeZero(t *testing.T) {
+	// An older driver image emits neither marker. "Nobody reported misses" must not read as
+	// "zero misses" — the whole point of the pointer.
+	s := explorationFromSummary(t, `{"exploration":{"corpus":12,"coverage":{"pct":25.2}}}`)
+	if s.Exploration.ReportMisses != nil {
+		t.Errorf("an absent reportMisses must stay absent, got %d", *s.Exploration.ReportMisses)
+	}
+	if s.Exploration.FindingsLowerBound {
+		t.Error("an absent marker must not read as a lower-bound run")
+	}
+}
+
+func TestMeasuredZeroMissesStaysDistinguishableFromAbsent(t *testing.T) {
+	s := explorationFromSummary(t, `{"exploration":{"corpus":12,"reportMisses":0,`+
+		`"findingsLowerBound":false,"coverage":{"pct":25.2}}}`)
+	if s.Exploration.ReportMisses == nil {
+		t.Fatal("a reported 0 must round trip as a present 0, not as absent")
+	}
+	if *s.Exploration.ReportMisses != 0 {
+		t.Errorf("reportMisses = %d, want 0", *s.Exploration.ReportMisses)
+	}
+}
+
+func TestExploreReadyMessageQualifiesALowerBoundCount(t *testing.T) {
+	misses := int64(17)
+	zero := int64(0)
+
+	cases := []struct {
+		name        string
+		st          *basquinv1alpha1.BasquinCampaignStatus
+		wantContain string
+		wantAbsent  string
+	}{
+		{
+			name:        "complete run reads exactly as before",
+			st:          &basquinv1alpha1.BasquinCampaignStatus{CoveragePct: "25.2", Findings: 12, ReportMisses: &zero},
+			wantContain: "run complete: coverage 25.2%, 12 findings",
+			wantAbsent:  "lower bound",
+		},
+		{
+			name: "partially blind run says so, with the count",
+			st: &basquinv1alpha1.BasquinCampaignStatus{CoveragePct: "25.2", Findings: 12,
+				FindingsLowerBound: true, ReportMisses: &misses},
+			wantContain: "at least 12 findings (lower bound: 17 request(s) reported no measurement)",
+			// The bare, confident phrasing is exactly what must not survive.
+			wantAbsent: "coverage 25.2%, 12 findings",
+		},
+		{
+			name: "flagged but no count: no fabricated zero",
+			st: &basquinv1alpha1.BasquinCampaignStatus{CoveragePct: "25.2", Findings: 12,
+				FindingsLowerBound: true},
+			wantContain: "lower bound: this run could not measure every request",
+			wantAbsent:  "0 request(s)",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			msg := exploreReadyMessage(tc.st)
+			if !strings.Contains(msg, tc.wantContain) {
+				t.Errorf("message %q does not contain %q", msg, tc.wantContain)
+			}
+			if tc.wantAbsent != "" && strings.Contains(msg, tc.wantAbsent) {
+				t.Errorf("message %q must not claim %q", msg, tc.wantAbsent)
+			}
+		})
+	}
+}
+
+// A field absent from the SERVED schema is pruned by the API server, which would silently undo the
+// wiring above: status would round trip through etcd with the markers stripped and the condition
+// would go back to a confident count. Pin both CRD copies (operator + Helm chart).
+func TestHonestyMarkersAreInTheServedCRDSchema(t *testing.T) {
+	for _, path := range []string{
+		"../../config/crd/bases/basquin.dev_basquincampaigns.yaml",
+		"../../../deploy/helm/basquin-operator/crds/basquin.dev_basquincampaigns.yaml",
+	} {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("reading %s: %v", path, err)
+		}
+		for _, field := range []string{"findingsLowerBound", "reportMisses"} {
+			if !strings.Contains(string(b), field) {
+				t.Errorf("%s: %q is missing from the served schema; Kubernetes will prune it", path, field)
+			}
+		}
 	}
 }
 

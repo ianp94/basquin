@@ -186,9 +186,22 @@ What ships instead is **DNS fan-out over the target's pod addresses**:
   `campaign_resources.go:81` already passes on every explore campaign — so no operator change was
   required), else the baseURL host.
 - The poll tries each address until one returns the entry.
-- **The fan-out is safe only because of §A.4 and §A.7**: ids are salted and entries are removed on
-  read, so at most one pod can ever hold a given id. A fan-out can therefore be wrong only by
-  finding nothing, which is a counted miss — never by returning another pod's measurement.
+- **The fan-out's safety rests on §A.4 and §A.7, and holds for requests answered without a
+  redirect**: ids are salted and entries are removed on read, so for such a request at most one pod
+  can hold a given id, and a fan-out can be wrong only by finding nothing — a counted miss, never
+  another pod's measurement.
+
+  **Correction (post-implementation).** This spec originally claimed the "at most one pod" property
+  unconditionally, and that is false. §A.5 has explore re-send the *same* id on a followed
+  same-method redirect hop (final-hop-wins). On a multi-replica target the Service can route hop 2
+  to a different pod, so two pods hold entries under the same id simultaneously, and the fan-out
+  returns whichever answers first in DNS order. That may be hop 1's clean, cheap 302 for a request
+  whose real work happened on hop 2 — recorded as `measured=true` with the wrong hop's numbers, and
+  invisible to `reportMisses` because nothing missed. It is the same *"clean but wrong"* class as
+  the method-changing-redirect gap the acceptance run measured, in a different configuration.
+  Scope: single-replica targets cannot hit it; multi-replica targets are supported (DD-020) but
+  unexercised. DD-039 removes the case entirely by replacing the JDK's auto-follow with an explicit
+  hop loop that stamps each hop with its own id, so no per-hop id is ever shared between pods.
 - A source that will not resolve polls nobody, including the VIP, and counts a miss.
 - Single-replica behaviour is byte-identical: a source resolving to fewer than two addresses returns
   the base URL untouched.

@@ -734,6 +734,14 @@ tasks.register('verifyThreadDeltaInvariant', JavaExec) {
     }
 }
 
+// DD-040 invariant 4 ("the load path gains zero instructions") is only checkable by looking at the
+// thread's real ThreadLocalMap — see test/agent/RequestBoundaryLoadPathCostTest.java, which exists
+// because the first version of the claim was false and no test could tell. Reading
+// Thread.threadLocals needs java.lang opened; nothing else in the suite uses this.
+tasks.named('test') {
+    jvmArgs '--add-opens', 'java.base/java.lang=ALL-UNNAMED'
+}
+
 // Include verification tasks in check
 tasks.named('check') {
     dependsOn 'verifyLatencyInvariant', 'verifyHeapInvariant', 'verifyThreadDeltaInvariant', 'verifyResetClassloader'

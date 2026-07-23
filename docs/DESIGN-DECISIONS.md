@@ -1898,3 +1898,184 @@ nothing in the tree still asserts a guarantee the code does not provide.
   that always commits — and would still have to fan out over that incomplete set.
 - **Pod-name → address via headless DNS.** `<pod>.<svc>` only resolves with `spec.hostname`/
   `subdomain`, a StatefulSet convention; Basquin instruments Deployments.
+
+## DD-039: Session carry across redirects in explore mode — the follow loop that closes DD-040's residual (2026-07-23)
+
+*(Numbered below DD-040 but written after it: DD-039 was specced first and lands second, because it
+is the fix DD-040's acceptance run named as its own residual. It closes that residual.)*
+
+**Context.** This is **three** defects, not one, and all three come from a single line — explore
+mode delegating redirects to `HttpURLConnection.setInstanceFollowRedirects(true)`. A JDK 17 probe
+against a local `HttpServer`, recording what the server *actually received*, established each one
+(spec "Evidence"):
+
+1. *A `Set-Cookie` on the intermediate 3xx is unreachable.* When the JDK follows a redirect itself it
+   discards the response headers before re-issuing, so neither the indexed header walk nor
+   `getHeaderFields()` can see them. That is exactly where a large class of frameworks put the new
+   session: Spring Security's form login answers `POST /login` with a `302` and issues the **rotated**
+   `JSESSIONID` on that 302 — a deliberate session-fixation defence — while the redirect target sets
+   no cookie at all. The driver therefore kept the pre-login session forever, and every later sequence
+   step ran anonymous. Reproduced live on Apache Roller: `JSESSIONID 5E9F79…` before login, `ADA9D5…`
+   issued on the 302, every subsequent step anonymous.
+2. *The `Cookie` **request** header is dropped on every method-rewritten hop.* Probed: on a
+   301/302/303 the JDK issues the follow hop with **no `Cookie` header at all** — a
+   `setRequestProperty` value is not carried. (A 307 preserves it; it is specifically the
+   method-rewriting path that strips it.) So the post-redirect landing page rendered **anonymously all
+   along**, even for a session that never rotated. Every redirecting explore step had been scoring
+   coverage against a logged-out page.
+3. *The intermediate hop's `X-Basquin-Invariant-Count`/`-Cost` are discarded.* Same mechanism — only
+   the final hop's headers survive — so an invariant breach on a redirecting hop was silently thrown
+   away. **This is DD-040's measured 189-violation gap** (1,413 reported vs 1,602 logged, 11.8%): a
+   `POST /login` that redirects to a 900 ms dashboard render reported the login's own violation and
+   discarded the dashboard's. DD-040's own record predicted this exact JDK behaviour and did not
+   connect it in time; DD-040's Task 3 was told to keep final-hop-wins and leave per-hop semantics
+   here, and that instruction produced the gap.
+
+The blast radius is every Spring-Security form-login app, plus anything else that rotates a session
+on authentication (the recommended practice). Load mode was already correct — DD-038 made it stop
+following redirects and read `Set-Cookie` off the direct 3xx before any follow; DD-039 is the
+explore-mode half of the same problem.
+
+**Decision.** Explore stops delegating redirects and follows them itself. `setInstanceFollowRedirects(false)`,
+then a loop while the status is a 3xx with a `Location`. Each hop re-attaches **both**
+`X-Basquin-Req` and `Cookie` (the JDK carries neither onto a method-rewritten hop), captures a
+rotated `Set-Cookie` before the next hop is issued, drains its body to EOF so the connection returns
+to the keep-alive pool, and drops the request body with its `Content-Type` together on a 301/302/303
+method rewrite. The method table is the JDK's own — HEAD stays HEAD, 307/308 keep method and body —
+so this **preserves** today's behaviour rather than choosing new behaviour; deviating would be the
+change that needed justifying. The response attributed to the input is the final hop's.
+
+1. **A redirect loop is a finding, not a nuisance.** An app that redirects indefinitely is
+   unavailable — a browser surfaces `ERR_TOO_MANY_REDIRECTS` — and availability is this tool's
+   oracle. A `LinkedHashSet` of resolved URLs detects a **revisited** URL (an auth-failure bounce
+   `/protected → /login → /protected` is a real loop that never reaches the cap), a **5-hop** backstop
+   catches the rest, and either files a `Redirect-Loop` finding carrying the **raw** step label
+   (DD-036: never a substituted line) and the ordered hop URLs. The follow is **same-origin only**
+   (host compared case-insensitively, an absent port normalized against the scheme default), because a
+   fuzzed open redirect must not turn the explorer into a client for another server; a refusal is
+   **counted** (`crossOriginRedirects`) and warned once. A `Location` that will not parse ends the
+   chain — `URI` throws on the unencoded spaces, `{}`, `|`, `^` a fuzzer reflects, and `request(...)`'s
+   caller files any `Throwable` as a **crash finding against the app**, so an unguarded parse would
+   blame the app for a driver bug.
+
+2. **The result store ACCUMULATES per id; per-hop ids were rejected.** DD-040 mints one
+   `X-Basquin-Req` per request and `ResultStore.put` replaces by key, so "just stamp every hop with
+   its own id" is both **insufficient and wrong**: a chain of N hops under N ids needs N polls — each
+   an extra round trip on the explore hot path, and each inflating `latMs`, a cost-model input, which
+   distorts the very corpus ranking DD-040 set out to repair — while `put` would still overwrite. What
+   ships is **one id per request, re-sent on every hop, and a store that appends** that id's hops
+   (bounded by the same 5-hop cap the follow loop enforces). `take(id)` returns all hops and removes
+   the id once. The driver sums invariant counts and heap/thread deltas across the hops, and saves
+   **one `Invariant-Remote` record per breaching hop**, each carrying its `hop=<n>` — because a single
+   summed record reads "6 violations on `POST /login`" when three of them were the dashboard render,
+   erasing exactly the multi-hop identity this section exists to keep.
+
+3. **Exactly one reconciliation point, and nothing saves before it.** The header fast path is valid
+   **only for a single hop** — `exitHeaders` can only describe the hop that produced the response the
+   client received. Since the driver runs the follow loop it **knows its own hop count**, so the rule
+   is exact, not heuristic: `hops == 1` uses the header and does not poll (remove-on-read would take
+   the store's own copy of the same violation); `hops > 1` polls and **merges**, preferring the polled
+   hop set and falling back to the header **only when the poll returns nothing at all**. "Merge" is a
+   preference, not a set union, because the header is always a **subset** of what the store holds (the
+   boundary publishes unconditionally, so an uncommitted final hop is described by *both* its header
+   and its own store entry). "Poll and *replace*" would be wrong: a forced poll that misses would
+   discard a perfectly good final-hop header and, on a redirect-heavy target, trip the majority-miss
+   `System.exit(3)`. This closes DD-040's residual precisely: the case that leaked (`POST → 302 → GET`)
+   is by definition multi-hop, so it always polls, and the poll now returns both hops.
+
+4. **Four §4b amendments the build required, and why.** The naïve design does not survive contact
+   with the code, and the plan says so rather than shipping the intermediate bug:
+   - **A4b-1 — "de-duplicate on hop identity" is not implementable.** `Entry` carries no hop identity
+     (`hop=<n>` is *driver-assigned* from `take`'s return order), so there is nothing to key a dedup
+     on. The correct reduction is the subset-fallback rule in (3): prefer the poll, fall back to the
+     header only on an empty poll.
+   - **A4b-2 — the header save is *removed* from the read site, not reordered.** DD-040 saved the
+     header-derived record the instant it read the count; a later decision to poll instead **cannot
+     un-save a file**, so clearing a `headerReported` flag leaves a double-save. The call is deleted
+     from the header-read site and the record is held in a local, emitted (or not) only inside
+     `reconcile`. This is a structural change to `request()`, spike-confirmed, not a flag reorder.
+   - **A4b-3 — `hops > 1` asks EVERY pod base and merges.** DD-040's fan-out breaks at the first pod
+     that answers, correct only while at most one pod can hold an id. A redirect chain behind a
+     multi-replica Service may be served by different pods, each holding part of the id's story, so
+     break-at-first would return a plausible, silently truncated result as `measured=true`. Every base
+     is asked and the hops merged; break-at-first is retained for `hops <= 1`, where the assumption
+     still holds. (`MultiReplicaPollTest.theFanOutFindsTheEntryBehindAPodThatMisses` still pins the
+     single-hop path.)
+   - **A4b-4 — the measured/miss decision is made once, inside `reconcile`.** If `pollResult` records
+     a miss and `reconcile` then falls back to the header and records *measured*, both counters tick
+     for one request. And `format` must sanitise **newlines as well as pipes** — `detail` is
+     app-derived, and a `\n` in it would forge an extra hop line, *fabricating* a measurement rather
+     than merely losing one, which is worse.
+
+5. **`latMs` excludes the forced poll.** `reconcile` runs inside `request()`'s own `finally`, so a
+   `hops > 1` poll happens **inside** the wall-clock window the caller measures around `request()`, and
+   can cost up to `POLL_READ_TIMEOUT_MS` (4000 ms) per pod base. Since `latMs` feeds `CostModel.score`,
+   leaving it in would make every redirecting input out-rank every non-redirecting one purely for being
+   polled. `request()` resets a `lastPollMs` at its top, `pollResultOrNull` accumulates the fetch time
+   into it, and the caller subtracts via a pure `wireLatency(elapsed, poll)` (floored at zero). Pure so
+   the subtraction is assertable without a run.
+
+6. **The corpus entry records its hop count.** The replay corpus is explore's output and load's input
+   (DD-035), and load fires exactly one hop (DD-038, deliberately). A login POST ranked expensive on
+   the strength of its dashboard hop is, under load, a cheap 302. Nothing breaks — the ranking is a
+   heuristic — but `CostSample.hops` now rides through `CostCorpus.consider` onto `CorpusEntry.hops`
+   (additive overloads, so ~20 existing construction sites default to 1 and compile unchanged), and
+   the cost-ranked log line appends `(h=N)` when `N > 1`, so the next reader of a cost-ranked corpus
+   knows a multi-hop number is an **explore-side** measurement.
+
+**The spike.** Three prior plan versions did not survive review, each assuming an obvious fix that the
+code does not support. A throwaway spike (`.superpowers/sdd/dd039-spike-report.md`) built only the
+minimal data path — accumulate, follow-and-stamp, one reconcile — reproduced DD-040's exact failure
+(`POST → 302 → GET`, both hops violate) and asserted the driver's **finding count**, not a parsed
+integer: **1 counted → 2**. Front-loading that measurement surfaced the three corrections above that a
+paper design missed — A4b-1 (the un-implementable hop-identity dedup), A4b-2 (the header-save removal
+is structural, not a flag), and A4b-4 (the double-count seam) — which is why the fourth plan landed
+cleanly, task by task, where the first three had not.
+
+**Verified.** 324 Java unit tests (was 282 before this feature; Tasks 1–5 took it to 319, Task 6's
+hop-accounting adds five), against local `HttpServer`s in the `LoadCorrelationTest` pattern. The
+motivating cases are pinned directly: a session rotated on a 302 reaches the next hop; a pre-existing
+cookie is carried onto a no-cookie 302 hop (the assertion that *discriminates*, since it fails even
+without rotation); a committed no-header landing page behind a 302 is recovered and filed **exactly
+once** (the 97.3%-committed case, unreachable through the header path — the shape of the 189); a
+redirect loop files a `Redirect-Loop` finding; a malformed `Location` files no crash; HEAD stays HEAD.
+Every mechanism was proven load-bearing by removal (re-adding the header save fails 3-vs-2; un-stamping
+a hop fails on hop 1; collapsing per-hop records fails the count).
+
+**The green suite does not prove the feature works, and the record must not pretend otherwise.** Two
+things remain unproven here, both stated as measured-or-deferred rather than as success:
+
+- **The cookie carry's real proof is Task 7, and Task 7 has NOT yet run.** No unit test can show that
+  carrying the session across the rewritten hop closes the coverage/violation gap on a *real*
+  session-rotating app; that needs a Roller explore campaign reaching an authenticated write path,
+  evidenced by **rows in the database**, not by a coverage number (coverage can rise for unrelated
+  reasons). The piece most likely to be silently dropped is precisely the one no unit test fails
+  without — which is why it is called out here and gated on an acceptance run that has not happened.
+- **The multi-replica same-method-hop merge (A4b-3) is unexercised.** The spike ran single-address
+  (`localhost` resolves to one pod), and DD-040's acceptance run was single-replica. The `hops > 1`
+  all-pods merge is unit-covered on the single-pod path only; the genuine split-pod case awaits a
+  multi-replica target.
+
+**Evidence.** The JDK-probe transcript is in the spec ("Evidence"); the 189-gap it explains is
+re-derivable from [`bench-results/dd040-acceptance-2026-07-23/`](../bench-results/dd040-acceptance-2026-07-23/).
+DD-039's own acceptance evidence does not exist yet — see the Task-7 caveat above.
+
+**Rejected alternatives.**
+- **Keep auto-follow and install a `CookieHandler`/`CookieManager`.** Demonstrably broken, not merely
+  inelegant: with a manager installed, its cookie *and* the manually-set `Cookie` property both apply,
+  producing a duplicate-name header (`JSESSIONID=ROTATED;JSESSIONID=ANON`, probed) whose resolution is
+  container-dependent — and it is process-global state in a driver that should carry none.
+- **Stamp each hop with its own id.** The alternative to §4b's accumulate: N polls per input (each an
+  `latMs`-inflating round trip), and `put` still replaces by key so the gap stays open. See Decision 2.
+- **Re-POST to the redirect target.** Genuinely an interesting code path, but it **doubles every
+  write** — Roller's 16 distinct-nonce comments would become 32 rows from 16 inputs, breaking DD-038's
+  one-row-per-fire accounting. An author who wants it writes an explicit second step, where it is
+  visible and countable.
+- **Follow only after a POST.** Rotation is a property of the *response*, not the method — a GET to a
+  protected page can 302 to login and rotate too. The hole would resurface as "explores less than it
+  should".
+- **Adopt load mode's no-follow exactly.** Explore would stop at the 302 and never reach the post-login
+  page, losing the coverage that is its whole purpose. The engines want the same *cookie* handling and
+  different *follow* handling: load measures redirects, explore traverses them.
+- **Do nothing; require grammars to avoid login redirects.** Pushes an HTTP-client bug onto every
+  grammar author, and cannot be expressed anyway — the grammar cannot see the 302.

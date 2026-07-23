@@ -26,18 +26,27 @@ import java.util.List;
  * pods directly — bypassing the VIP entirely — and the caller tries each until one returns the
  * entry.
  *
- * <p><b>The fan-out's safety, stated exactly.</b> For a request the driver sends and the target
- * answers <em>without a redirect</em>, the run-salted id plus remove-on-read means at most one pod
- * can hold that id, so a fan-out can be wrong only by finding nothing — a recorded miss, which is
- * honest. <b>That is not true across a followed same-method redirect on a multi-replica target.</b>
- * Explore re-sends the same {@code X-Basquin-Req} on such a hop by design, and the Service may route
- * hop 2 to a different pod; both pods then hold an entry under the same id, and the fan-out returns
- * whichever answers first in DNS order — possibly hop 1's cheap, clean measurement for work that
- * happened on hop 2, reported as {@code measured=true}. {@code reportMisses} cannot see that,
- * because nothing missed. This is the same class of defect as the method-changing-redirect gap
- * DD-040's acceptance run measured, and DD-039 dissolves both by replacing the JDK's auto-follow
- * with an explicit hop loop that stamps every hop with its own id. Until then it is a documented
- * residual: single-replica targets are unaffected, and multi-replica targets are unexercised.
+ * <p><b>The fan-out's safety, and how the redirect chain changes it.</b> For a request the driver
+ * sends and the target answers <em>without a redirect</em> ({@code hops <= 1}), the run-salted id
+ * plus remove-on-read means at most one pod can hold that id, so break-at-the-first-answer is exact:
+ * a fan-out can be wrong only by finding nothing — a recorded miss, which is honest. That single-hop
+ * path is unchanged from DD-040 and is pinned by
+ * {@code MultiReplicaPollTest.theFanOutFindsTheEntryBehindAPodThatMisses}, where pod A misses and
+ * pod B holds the entry.
+ *
+ * <p>A followed redirect breaks the "at most one pod" premise. DD-040 predicted this as a residual
+ * and mis-stated its own fix: DD-039 does <b>not</b> stamp each hop with its own id (a chain of N
+ * hops under N ids would need N polls, each an extra round trip inflating {@code latMs} — a
+ * cost-model input — and {@code ResultStore.put} would still replace by key). What ships is <b>one
+ * id</b> per request, re-sent on every hop, and a store that <b>accumulates</b> that id's hops
+ * (spec §4b). The Service VIP may route hop 2 to a different replica, so hop 0's entry can sit on
+ * pod A and hop 1's on pod B under the same id. The driver therefore knows its own hop count, and
+ * for {@code hops > 1} the caller asks <b>every</b> base and <b>merges</b> — {@link CoverageGuidedRun}'s
+ * {@code pollResultOrNull} sums the counts and heap/thread deltas across all pods' entries rather
+ * than returning whichever pod answers first. That closes the residual DD-040 recorded here (a
+ * same-method hop's clean measurement returned for work that violated on another hop): no hop's
+ * measurement is dropped, because all of them are collected. Break-at-first is retained only for
+ * {@code hops <= 1}, where the original one-pod assumption still holds.
  *
  * <p><b>Why fan-out rather than following {@code X-Basquin-Pod}.</b> The boundary does stamp its pod
  * identity on every explore exit, but that header rides the same response headers as

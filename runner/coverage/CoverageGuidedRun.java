@@ -299,7 +299,11 @@ public final class CoverageGuidedRun {
             long t0 = System.nanoTime();
             try {
                 sample = request(baseUrl, input);
-                latMs = (System.nanoTime() - t0) / 1_000_000L;
+                // DD-039: subtract the forced multi-hop poll from wall-clock. request() resets
+                // lastPollMs at its top and pollResultOrNull accumulates into it, so on a redirecting
+                // input this removes up to POLL_READ_TIMEOUT_MS of poll time that would otherwise be
+                // scored as the app's own latency and out-rank every non-redirecting input.
+                latMs = wireLatency((System.nanoTime() - t0) / 1_000_000L, lastPollMs);
                 // DD-040: cost measurement being ENABLED is not the same as this request having BEEN
                 // measured. Scoring an unmeasured sample means scoring zeros — which is how a run
                 // that saw 1,906 violations reported none and collapsed its corpus to 2 entries.
@@ -328,7 +332,7 @@ public final class CoverageGuidedRun {
             if (pheromoneOn && parent != null && measured) corpus.reinforce(parent, cost);
             if (coverageFind || measured) {
                 corpus.consider(input, cost, latMs, sample.heapDeltaKb, sample.threadDelta,
-                        sample.invariantCount, coverageFind);
+                        sample.invariantCount, coverageFind, sample.hops);
             }
         }
         // DD-040: close the window BEFORE the summary is rendered/written (the summary rides a
@@ -355,6 +359,9 @@ public final class CoverageGuidedRun {
             for (CorpusEntry e : corpus.snapshotByCost()) {
                 if (n++ >= 5) break;
                 top.append(n == 1 ? "" : ", ").append(e.input).append('=').append(String.format("%.0f", e.cost));
+                // DD-039: flag a multi-hop input's cost as an explore-side (summed) measurement — load
+                // replays it with follow OFF and fires one hop, so the number is not comparable there.
+                if (e.hops > 1) top.append("(h=").append(e.hops).append(')');
             }
             System.out.println("[Basquin] replay cost-ranked (top " + Math.min(5, corpus.size()) + "): " + top);
         }
@@ -834,8 +841,12 @@ public final class CoverageGuidedRun {
      */
     static final class CostSample {
         final long heapDeltaKb; final int threadDelta; final int invariantCount; final boolean measured;
-        CostSample(long h, int t, int inv, boolean measured) {
-            heapDeltaKb = h; threadDelta = t; invariantCount = inv; this.measured = measured;
+        /** DD-039: how many HTTP requests the chain fired (1 for a non-redirecting input). Rides onto
+         *  the CorpusEntry so a cost-ranked corpus records that a multi-hop cost is explore-side. */
+        final int hops;
+        CostSample(long h, int t, int inv, boolean measured) { this(h, t, inv, measured, 1); }
+        CostSample(long h, int t, int inv, boolean measured, int hops) {
+            heapDeltaKb = h; threadDelta = t; invariantCount = inv; this.measured = measured; this.hops = hops;
         }
         /** No measurement — deliberately NOT named EMPTY: it is not "a measured zero". */
         static final CostSample UNMEASURED = new CostSample(0, 0, 0, false);
@@ -850,6 +861,17 @@ public final class CoverageGuidedRun {
 
     /** DD-040: requests whose measurements the driver DID obtain, by either channel. */
     static volatile long reportMeasured;
+
+    /** DD-039: milliseconds the last {@code request()} call spent inside its result poll. Subtracted
+     *  from the caller's wall-clock, because a forced multi-hop poll would otherwise inflate latMs —
+     *  which feeds CostModel.score, so redirecting inputs would out-rank everything else purely for
+     *  being polled. Single-threaded explore loop, like the other run counters. */
+    static volatile long lastPollMs;
+
+    /** Wire time only. Pure, so the subtraction is assertable without a run. */
+    static long wireLatency(long elapsedMs, long pollMs) {
+        return Math.max(0L, elapsedMs - pollMs);
+    }
 
     /**
      * DD-039: {@code Location}s refused because they left the target's origin. Surfaced in the
@@ -970,6 +992,7 @@ public final class CoverageGuidedRun {
         // discard the intermediate hop's response headers before re-issuing (so a Set-Cookie on the
         // 3xx was unreachable and the hop's X-Basquin-* were thrown away) and issue the follow hop
         // with NO Cookie and NO X-Basquin-Req at all on a method rewrite. See the spec's JDK probe.
+        lastPollMs = 0;                     // DD-039: this request's poll time, subtracted from latMs
         String method = r.method();
         String reqBody = r.body();          // NOT `body`: StringBuilder body is declared below
         String url = base + r.path();
@@ -1073,7 +1096,7 @@ public final class CoverageGuidedRun {
                 url = next.toString();                               // the FULL url is dialled; only
                                                                      // the recorded key is stripped
             }
-            if (headerReported) sample = new CostSample(heapKb, threadDelta, invCount, true);
+            if (headerReported) sample = new CostSample(heapKb, threadDelta, invCount, true, hops);
             if (hops > 0) {
                 InputStream is = code >= 400 ? c.getErrorStream() : c.getInputStream();
                 StringBuilder body = new StringBuilder();
@@ -1169,7 +1192,8 @@ public final class CoverageGuidedRun {
         if (pollBases.isEmpty()) return null;
         List<String> bodies = new ArrayList<>();
         List<String> servedBy = new ArrayList<>();
-        for (String pollBase : pollBases) {
+        long p0 = System.nanoTime();       // DD-039: only the network fetch is subtracted from latMs,
+        for (String pollBase : pollBases) {                        // not the parse/save below
             String candidate = fetchResult(pollBase, reqId);
             // '|' is the field separator: anything without it is `miss` or garbage, and the next pod
             // may still hold the real entry. Only a well-formed body counts as an answer.
@@ -1181,6 +1205,7 @@ public final class CoverageGuidedRun {
             servedBy.add(pollBases.size() > 1 ? pollBase : null);   // only meaningful when we chose
             if (hops <= 1) break;                                   // see the javadoc: one pod, one answer
         }
+        lastPollMs += (System.nanoTime() - p0) / 1_000_000L;
         if (bodies.isEmpty()) return null;
 
         int totalCount = 0; long heapKb = 0; int threadDelta = 0; boolean anyLeak = false;
@@ -1233,7 +1258,7 @@ public final class CoverageGuidedRun {
             // Saving is best-effort against the never-throw contract above; the measurement stands.
         }
         reportMeasured++;
-        return new CostSample(heapKb, threadDelta, totalCount, true);
+        return new CostSample(heapKb, threadDelta, totalCount, true, hops);
     }
 
     /**

@@ -62,22 +62,51 @@ def terminal_summary(pod: str) -> dict | None:
         return {"_unparseable": raw[:4096]}
 
 
-# Deliberately not a -D-only blocklist: the same credential appears as a JVM property in the driver
-# log, as a JSON field in the campaign object, and as an env-var reference in the pod spec. Anything
-# whose KEY looks credential-shaped gets its VALUE stripped, in every artifact we write.
-_SECRET_RE = re.compile(
-    r"([-\w.]*(?:token|secret|password|passwd|apikey|api_key|credential)[-\w.]*)"
-    r"(\s*[=:]\s*\"?)([^\s\",}]+)", re.IGNORECASE)
+# Redaction is deliberately NARROW and anchored to shapes we know carry a credential.
+#
+# A previous attempt matched any key containing "token"/"secret"/... anywhere, and it destroyed
+# exactly what these artifacts exist to preserve: the corpus recipe `X-XSRF-TOKEN=${{csrf}}`
+# contains "TOKEN", so it became `X-XSRF-TOKEN=<redacted>`. That recipe -- the substitution
+# placeholder, never the captured value -- is the DD-036 invariant. A redactor that cannot tell a
+# recipe from a secret is worse than none, because it corrupts evidence while claiming to protect it.
+#
+# So: match a credential-shaped KEY only in the three concrete forms we actually emit, and never
+# touch a value that is a substitution placeholder.
+_CRED_KEY = r"[\w.\-]*(?:token|secret|password|passwd|apikey|api[_-]?key|credential)[\w.\-]*"
+
+# 1. JVM property:            -Dbasquin.dashboard.token=abc123
+_RE_PROP = re.compile(rf"(-D{_CRED_KEY}=)(\S+)", re.IGNORECASE)
+# 2. JSON field:              "token": "abc123"   /   "dashboardToken":"abc123"
+_RE_JSON = re.compile(rf'("{_CRED_KEY}"\s*:\s*")([^"]*)(")', re.IGNORECASE)
+# 3. Credential HTTP headers, which carry the secret in the VALUE with a fixed key.
+_RE_HEADER = re.compile(r"^(\s*(?:Authorization|Proxy-Authorization|Set-Cookie|Cookie)\s*:\s*)(.+)$",
+                        re.IGNORECASE | re.MULTILINE)
+
+_PLACEHOLDER = "${{"
 
 
 def _redact(text: str) -> str:
-    """Strip credential-shaped JVM properties out of anything we persist.
+    """Strip credential VALUES from anything we persist, without touching corpus recipes.
 
-    The driver's log opens with the JVM echoing every -D property it was given, which
-    includes -Dbasquin.dashboard.token=<256-bit token>. These files are committed as
-    benchmark evidence, so anything matched here would otherwise be published.
+    These artifacts are committed as benchmark evidence, so a credential in one is published. The
+    driver log in particular opens with the JVM echoing every -D property it was given, which is how
+    nine live dashboard tokens reached a public repository.
+
+    A substitution placeholder (${{name}}) is a recipe, not a secret -- it is precisely what DD-036
+    says must be on disk instead of the captured value -- so it is never redacted.
     """
-    return _SECRET_RE.sub(r"\1\2<redacted>", text)
+    def sub_prop(m):
+        return m.group(1) + ("<redacted>" if not m.group(2).startswith(_PLACEHOLDER) else m.group(2))
+
+    def sub_json(m):
+        return m.group(1) + ("<redacted>" if not m.group(2).startswith(_PLACEHOLDER) else m.group(2)) + m.group(3)
+
+    def sub_header(m):
+        return m.group(1) + ("<redacted>" if not m.group(2).startswith(_PLACEHOLDER) else m.group(2))
+
+    text = _RE_PROP.sub(sub_prop, text)
+    text = _RE_JSON.sub(sub_json, text)
+    return _RE_HEADER.sub(sub_header, text)
 
 
 def collect(campaign: str) -> dict | None:

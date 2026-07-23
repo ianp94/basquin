@@ -161,7 +161,8 @@ def redirect_figure() -> str:
         f"Where {fmt(total)} redirects went — JSPWiki under load, classified by Location",
         stacked_bar(parts, title_id=fid),
         f'Every one of these was a 3xx: not a 5xx, not a 4xx, and every CSRF and anti-spam token was '
-        f'captured successfully (<code>captureMisses: 0</code>), so a load tool counts all '
+        f'submitted (<code>captureMisses: {fmt(int(ld.get("captureMisses", 0)))}</code> of '
+        f'{fmt(int(ld.get("requests", 0)))} requests), so a load tool counts all '
         f'{fmt(total)} as served. Split by destination they resolve into {verdict_line} — a '
         f'distinction carried entirely by a response header that a redirect-following client '
         f'discards before anyone can read it.',
@@ -218,7 +219,7 @@ def heap_figure(lg: dict) -> str:
     fid = "heap"
     return fig("Heap allocated per request, measured inside the app JVM",
                grouped_bars(groups, series, title_id=fid, unit=" KB", height=240),
-               'The soft budget is 256&nbsp;KB. This is the measurement no external load tool can take: '
+               'This is the measurement no external load tool can take: '
                'the valve reads the JVM\'s own allocation counter on either side of the request, so the '
                'number is the app\'s real cost for that one input — not a process-wide average.',
                fid=fid)
@@ -315,6 +316,18 @@ def build() -> str:
     app_sentence = (" and ".join([", ".join(_names[:-1]), _names[-1]]) if len(_names) > 1
                     else (_names[0] if _names else "No apps collected")) + "."
     n_load = len(load_runs)
+    # Derived, not asserted: an earlier draft claimed "roughly 5% 5xx" from a run that was later
+    # discarded, and the sentence outlived its data.
+    _jps = [r for r in load_runs if r["app"] == "jpetstore"]
+    _e = sum(int((r.get("load") or {}).get("serverErrors", 0) or 0) for r in _jps)
+    _n = sum(int((r.get("load") or {}).get("requests", 0) or 0) for r in _jps)
+    jps_5xx_clause = (
+        f'And JPetStore returns 5xx on {100*_e/_n:.1f}% of requests under load '
+        f'({fmt(_e)} of {fmt(_n)}).' if _jps and _e and _n else
+        f'And JPetStore returned <strong>no 5xx at all</strong> across {fmt(_n)} requests here — an '
+        f'earlier run did, traced to a single corpus route that NPEs for an unauthenticated caller '
+        f'and then NPEs again inside the framework\'s own exception handler; this corpus does not '
+        f'contain that route.' if _jps else '')
     jw_lat = jw_load.get("latencyMs") or {}
     jw_max = fmt(float(jw_lat.get("max", 0)))
     jw_p50 = esc(jw_lat.get("p50", "—"))
@@ -508,7 +521,8 @@ def build() -> str:
   <p>JSPWiki's editor is guarded by two per-session tokens — an anti-CSRF field, and an anti-spam
     hash whose field <em>name</em> is six random letters that rotate. Basquin correlates both out of
     the edit form and replays the write, so the saves are well-formed:
-    <code>captureMisses: 0</code> means every token was found and submitted.</p>
+    the run's <code>captureMisses</code> counter — reported in the figure below — says how often a
+    required prior capture failed to bind, and the rest were submitted with both tokens.</p>
   <p>What comes back is a <code>302</code> either way. A save that lands and a save the app throws
     away are the same status code, the same absence of any error, and the same entry in a load
     tool's success column. The only thing that separates them is the <code>Location</code> header —
@@ -638,8 +652,8 @@ def build() -> str:
     <li><strong>Two observations on this run that are reported, not explained.</strong> JSPWiki
       returns the same <strong>80.7 req/s at concurrency 1 and at concurrency 8</strong>, while its
       p99 rises from 57&nbsp;ms to 743&nbsp;ms — the signature of a resource already saturated at
-      c1, where added concurrency buys queueing rather than throughput. And JPetStore returns 5xx on
-      roughly 5% of requests under load. Both are stated as measured; neither has been root-caused,
+      c1, where added concurrency buys queueing rather than throughput. {jps_5xx_clause} Both are
+      stated as measured; neither has been root-caused,
       and load mode was confirmed on every run (no <code>driftUnavailable</code>), so neither is an
       artifact of the target sitting in the wrong mode.</li>
     <li><strong>No heap-drift number is published, deliberately.</strong> The driver's

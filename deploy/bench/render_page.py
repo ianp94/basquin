@@ -360,6 +360,8 @@ def build() -> str:
   td.num, th.num {{ text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }}
   td.num.ok {{ color: var(--ok); }}
   tbody th[scope="row"] {{ text-align: left; font-weight: 600; }}
+  th.grp {{ font-weight: 600; font-size: .78rem; color: var(--text-muted); text-align: center;
+            border-bottom: 1px solid var(--border); }}
 
   .tiles {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin: 24px 0; }}
   .tile {{ border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); padding: 16px 18px; }}
@@ -446,10 +448,19 @@ def build() -> str:
 
   <div class="table-scroll">
     <table>
-      <caption class="muted">One explore campaign and one load campaign per app — the highest
-        concurrency level where several were run. The tiles above aggregate <strong>every</strong>
-        collected load run ({n_load} of them), so their totals are larger than this table's.</caption>
-      <thead><tr>
+      <caption class="muted">Each row splices <strong>two separate campaigns</strong>: the coverage
+        and breach columns come from that app's <em>explore</em> run, the traffic columns from a
+        <em>different</em>, later <em>load</em> run at the highest concurrency tested. They are not
+        two views of one run, and a number in one group says nothing about the other. The tiles
+        above aggregate <strong>every</strong> collected load run ({n_load} of them), so their
+        totals exceed this table's.</caption>
+      <thead>
+      <tr>
+        <th></th>
+        <th class="num grp" colspan="3">from the explore campaign</th>
+        <th class="num grp" colspan="4">from the load campaign — no invariants evaluated</th>
+      </tr>
+      <tr>
         <th>App</th>
         <th class="num">Coverage</th>
         <th class="num">Invariant breaches</th>
@@ -600,8 +611,13 @@ def build() -> str:
       hand-tuned.</li>
     <li><strong>Apps unmodified.</strong> {app_sentence} Each runs on Tomcat 9 with the
       namespace-free Basquin valve + agent. No code, config, or bytecode changes to the apps.</li>
-    <li><strong>Budgets are per app, not universal.</strong> {budget_sentence} All soft mode:
-      findings are recorded and the run continues.</li>
+    <li><strong>Budgets are per app, and apply only to the explore runs.</strong>
+      {budget_sentence} All soft mode: findings are recorded and the run continues.
+      <strong>Load mode evaluates no invariants at all</strong> — it is lock-free passthrough by
+      design (DD-029) and its driver is never even given a threshold — so a load run's latency
+      percentiles are measured against no budget, and its <code>violations</code> counts are
+      structurally zero rather than checked. Roller's load p50 of 503&nbsp;ms is not a 250&nbsp;ms
+      budget that passed; it is a budget that was never applied.</li>
     <li><strong>Load runs are serialized.</strong> The bench cluster is a single kind node, so two
       concurrent drivers would measure each other. <code>deploy/bench/battery.sh</code> blocks on each
       campaign reaching a terminal phase before starting the next.</li>

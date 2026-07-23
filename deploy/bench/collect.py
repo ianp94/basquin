@@ -62,7 +62,12 @@ def terminal_summary(pod: str) -> dict | None:
         return {"_unparseable": raw[:4096]}
 
 
-_SECRET_RE = re.compile(r"(-D\S*(?:token|secret|password)\s*=)(\S+)", re.IGNORECASE)
+# Deliberately not a -D-only blocklist: the same credential appears as a JVM property in the driver
+# log, as a JSON field in the campaign object, and as an env-var reference in the pod spec. Anything
+# whose KEY looks credential-shaped gets its VALUE stripped, in every artifact we write.
+_SECRET_RE = re.compile(
+    r"([-\w.]*(?:token|secret|password|passwd|apikey|api_key|credential)[-\w.]*)"
+    r"(\s*[=:]\s*\"?)([^\s\",}]+)", re.IGNORECASE)
 
 
 def _redact(text: str) -> str:
@@ -72,7 +77,7 @@ def _redact(text: str) -> str:
     includes -Dbasquin.dashboard.token=<256-bit token>. These files are committed as
     benchmark evidence, so anything matched here would otherwise be published.
     """
-    return _SECRET_RE.sub(r"\1<redacted>", text)
+    return _SECRET_RE.sub(r"\1\2<redacted>", text)
 
 
 def collect(campaign: str) -> dict | None:
@@ -93,7 +98,7 @@ def collect(campaign: str) -> dict | None:
         invariants = None
     dest = OUT / app / campaign
     dest.mkdir(parents=True, exist_ok=True)
-    (dest / "campaign.json").write_text(json.dumps(obj, indent=2))
+    (dest / "campaign.json").write_text(_redact(json.dumps(obj, indent=2)))
 
     summary = None
     try:
@@ -106,7 +111,7 @@ def collect(campaign: str) -> dict | None:
     if pod:
         summary = terminal_summary(pod)
         if summary is not None:
-            (dest / "summary.json").write_text(json.dumps(summary, indent=2))
+            (dest / "summary.json").write_text(_redact(json.dumps(summary, indent=2)))
         try:
             # NEVER write a driver log verbatim: its first line is the JVM's
             # "Picked up JAVA_TOOL_OPTIONS: ..." echo, which contains the campaign's
@@ -144,7 +149,7 @@ def collect(campaign: str) -> dict | None:
         "invariants": invariants,
         "artifacts": str(dest.relative_to(ROOT)),
     }
-    (dest / "record.json").write_text(json.dumps(rec, indent=2))
+    (dest / "record.json").write_text(_redact(json.dumps(rec, indent=2)))
     print(f"  ok {campaign:<28} {obj['spec']['mode']:<8} {status.get('phase')}"
           f"  -> {dest.relative_to(ROOT)}")
     return rec

@@ -151,6 +151,11 @@ def stacked_bar(parts: list[tuple[str, float, str, str]], *, title_id: str,
     """
     total = sum(v for _, v, _, _ in parts) or 1
     row_h = 21
+    # A legend row is one line of text at ~6.2 units/char; a long note (e.g. Login.jsp's) ran 84-180
+    # units past the 640 viewBox and was clipped on the published chart. Widen the box to whatever
+    # the longest row actually needs rather than trusting it to fit.
+    _need = max((16 + 8 + len(f"{lbl}{fmt(v)}{note}") * 6.2 + 40) for lbl, v, _, note in parts)
+    width = max(width, int(_need))
     out = [f'<svg viewBox="0 0 {width} {bar_h + 20 + row_h*len(parts)}" width="100%" role="img" '
            f'aria-labelledby="{title_id}">']
     x = 0.0

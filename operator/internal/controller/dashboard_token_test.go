@@ -89,7 +89,7 @@ func TestDriverJobTokenWiring(t *testing.T) {
 	c := tokenTestCampaign()
 
 	t.Run("operator-owned dashboard gets the token", func(t *testing.T) {
-		job := buildDriverJob(c, "app:1", "cov:6300", "runner:1", "dash:7070", dashboardTokenSecretName(c))
+		job := buildDriverJob(c, basquinv1alpha1.InvariantsSpec{}, "app:1", "cov:6300", "runner:1", "dash:7070", dashboardTokenSecretName(c))
 		env := job.Spec.Template.Spec.Containers[0].Env
 
 		tok, tokIdx, ok := envByName(env, dashboardTokenEnvVar)
@@ -111,7 +111,7 @@ func TestDriverJobTokenWiring(t *testing.T) {
 	// externalPush points at a dashboard we don't own and have no token for. Sending one would be
 	// meaningless; mounting a Secret that may not exist would wedge the pod on startup.
 	t.Run("external dashboard gets no token", func(t *testing.T) {
-		job := buildDriverJob(c, "app:1", "cov:6300", "runner:1", "external:7070", "")
+		job := buildDriverJob(c, basquinv1alpha1.InvariantsSpec{}, "app:1", "cov:6300", "runner:1", "external:7070", "")
 		env := job.Spec.Template.Spec.Containers[0].Env
 
 		if _, _, ok := envByName(env, dashboardTokenEnvVar); ok {
@@ -127,7 +127,7 @@ func TestDriverJobTokenWiring(t *testing.T) {
 	})
 
 	t.Run("no dashboard means no token and no push", func(t *testing.T) {
-		job := buildDriverJob(c, "app:1", "cov:6300", "runner:1", "", "")
+		job := buildDriverJob(c, basquinv1alpha1.InvariantsSpec{}, "app:1", "cov:6300", "runner:1", "", "")
 		env := job.Spec.Template.Spec.Containers[0].Env
 
 		if _, _, ok := envByName(env, dashboardTokenEnvVar); ok {

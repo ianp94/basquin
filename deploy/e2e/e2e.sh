@@ -486,9 +486,10 @@ YAML
 
     # (b) the driver's own terminal accounting agrees: its mode toggle to load was never logged as
     #     failed, and its "[Basquin] load done: {...}" JSON never carries "driftUnavailable":true — i.e.
-    #     it never had to fall back to a fabricated heapDriftKb:0. There is no status.load.driftUnavailable
-    #     CRD field (driftUnavailable only ever appears in this log line), so this must be a Job-log grep,
-    #     not a kubectl jsonpath query.
+    #     it never had to fall back to a fabricated heapDriftKb:0. DD-040 DID add a
+    #     status.load.driftUnavailable field (before that the marker was emitted and parsed nowhere),
+    #     but this stays a Job-log grep on purpose: it checks the DRIVER's own account of the run,
+    #     independently of whether the operator parsed and persisted it correctly.
     ldlog="$(mktemp)"; $K -n "$NS" logs "job/$ljob" > "$ldlog" 2>/dev/null || true
     ltogglefail="$(grep -c 'mode load toggle failed' "$ldlog" || true)"
     ldriftunavail="$(grep '\[Basquin\] load done:' "$ldlog" | grep -c '"driftUnavailable":true' || true)"

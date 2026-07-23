@@ -286,9 +286,23 @@ spec:
                 description: 'Load holds load-mode results (throughput, latency percentiles,
                   drift) — set only for mode: load.'
                 properties:
+                  driftUnavailable:
+                    description: |-
+                      DriftUnavailable is the driver's own signal (DD-035) that this run's heap/thread drift is not a
+                      trustworthy number: the baseline or terminal poll failed, or the target never confirmed
+                      load mode. Emitted by the driver since DD-035 but, until DD-040, parsed nowhere at all.
+                    type: boolean
                   heapDriftKb:
-                    description: HeapDriftKb / ThreadDrift are end-minus-start deltas
-                      over the soak (slow-leak signal).
+                    description: |-
+                      HeapDriftKb / ThreadDrift are end-minus-start deltas over the soak (slow-leak signal), polled
+                      from the TARGET over /__basquin/drift.
+
+
+                      Pointers, deliberately (DD-040). The driver already omitted these whenever the drift could not
+                      be trusted, emitting driftUnavailable:true instead (DD-035) — but as non-pointer int64/int32
+                      they unmarshalled straight back to 0, so "we could not measure the target's heap" and "the
+                      target's heap was perfectly flat" arrived here as the same value, and the dashboard printed
+                      `0 KiB` for both. nil means the run did not measure it; see DriftUnavailable for why.
                     format: int64
                     type: integer
                   latencyMs:
@@ -329,6 +343,12 @@ spec:
                       latency:
                         format: int32
                         type: integer
+                      notEvaluated:
+                        description: NotEvaluated lists the invariants this run never
+                          checked ("latency", "heap", "thread").
+                        items:
+                          type: string
+                        type: array
                       thread:
                         format: int32
                         type: integer

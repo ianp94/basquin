@@ -53,6 +53,14 @@ public final class LoadRun {
 
         System.out.printf("[Basquin] load: %d sequence(s), concurrency=%d, warmup=%dms, duration=%dms%n",
                 corpus.size(), concurrency, warmupMs, durationMs);
+        if (latencyMaxMs <= 0) {
+            // DD-040: say it up front. In load mode the target's valve is in lock-free passthrough and
+            // evaluates nothing, so with no -Dbasquin.invariant.latency.maxMs here NOTHING checks
+            // latency for the whole run — and the summary will report it as unevaluated, not as 0.
+            System.err.println("[Basquin] load: no -Dbasquin.invariant.latency.maxMs — latency is NOT "
+                    + "being checked by anyone this run (the target's valve is in passthrough); "
+                    + "set invariants.latencyMaxMs on the BasquinTarget or the campaign's driver");
+        }
 
         final long startNanos = System.nanoTime();
         final long measureFromNanos = startNanos + warmupMs * 1_000_000L; // metrics start after warmup
@@ -253,6 +261,9 @@ public final class LoadRun {
                 percentile(hist, total, 0.50), percentile(hist, total, 0.90),
                 percentile(hist, total, 0.99), maxBucket(hist),
                 drift, serverError.get(), latencyViol.get(),
+                // DD-040: without a threshold the driver never compares anything, so latencyViol is
+                // structurally 0 — report it as unevaluated rather than as "checked and clean".
+                latencyMaxMs > 0,
                 captureMisses.get(), clientErrors.get(), driftUnavailable,
                 redirects.get(), redirectTargetsTop12);
 
@@ -279,13 +290,27 @@ public final class LoadRun {
      * {@link #normalizeLocation}) so a rejected write (e.g. a session-expired save) is visible instead
      * of vanishing into a followed 200. Keys are already {@link #safeKey}-restricted to
      * {@code [A-Za-z0-9._-]} by the caller, so they're emitted verbatim with no further JSON escaping.
+     *
+     * <p>DD-040: the {@code violations} block no longer fabricates zeros. Load mode is lock-free
+     * passthrough (DD-029) — the target's valve evaluates <em>nothing</em> — so the driver is the only
+     * evaluator, and it only evaluates <em>latency</em>, and only when {@code
+     * basquin.invariant.latency.maxMs} was actually configured ({@code latencyEvaluated}). The old
+     * block hardcoded {@code "heap":0,"thread":0} and always printed a latency count; a Roller run
+     * therefore reported {@code violations.latency: 0} at a p50 of 503 ms against an intended 250 ms
+     * budget. A count that was never checked is omitted, and every omitted count is NAMED in
+     * {@code notEvaluated} — so "absent" is data an operator (and the Go {@code LoadViolations}
+     * pointers) can act on, never something inferred from a missing key. A real measured zero still
+     * prints as {@code "latency":0}, and now means what it says: checked, and clean.
      */
     static String summaryJson(long total, double rps, int p50, int p90, int p99, int max, DriftDelta drift,
-            long serverErr, long latViol, long captureMisses, long clientErrors, boolean driftUnavailable,
-            long redirects, java.util.Map<String, Long> redirectTargets) {
+            long serverErr, long latViol, boolean latencyEvaluated, long captureMisses, long clientErrors,
+            boolean driftUnavailable, long redirects, java.util.Map<String, Long> redirectTargets) {
         String driftJson = driftUnavailable
                 ? "\"driftUnavailable\":true"
                 : "\"heapDriftKb\":" + drift.heapDriftKb + ",\"threadDrift\":" + drift.threadDrift;
+        // heap/thread are ALWAYS unevaluated in load mode; latency only when a threshold was set.
+        String violJson = (latencyEvaluated ? "\"latency\":" + latViol + "," : "")
+                + "\"notEvaluated\":[" + (latencyEvaluated ? "" : "\"latency\",") + "\"heap\",\"thread\"]";
         StringBuilder rt = new StringBuilder();
         for (java.util.Map.Entry<String, Long> e : redirectTargets.entrySet()) {
             if (rt.length() > 0) rt.append(',');
@@ -296,11 +321,9 @@ public final class LoadRun {
               + "\"latencyMs\":{\"p50\":%d,\"p90\":%d,\"p99\":%d,\"max\":%d},"
               + "%s,\"serverErrors\":%d,\"captureMisses\":%d,\"clientErrors\":%d,"
               + "\"redirects\":%d,\"redirectTargets\":{%s},"
-              // Only latency is threshold-gated in this first cut; heap/thread are reported as drift
-              // above, not as violation counts (see LoadViolations godoc / DD-026 deferred items).
-              + "\"violations\":{\"latency\":%d,\"heap\":0,\"thread\":0}}}",
+              + "\"violations\":{%s}}}",
                 total, rps, p50, p90, p99, max, driftJson, serverErr, captureMisses, clientErrors,
-                redirects, rt, latViol);
+                redirects, rt, violJson);
     }
 
     /**

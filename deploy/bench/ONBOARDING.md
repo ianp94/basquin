@@ -91,7 +91,17 @@ spec:
 ```
 
 **Heap sizing is not optional.** At `-Xmx512m` an instrumented app GC-thrashes under c=50 and the
-drift poll times out — the run reports a silent `heapDriftKb:0`. Use `-Xmx2g`.
+drift poll times out. Since DD-040 that surfaces as `driftUnavailable: true` with `heapDriftKb`
+absent (it used to be a silent `heapDriftKb:0`), but the run has still lost the measurement. Use
+`-Xmx2g`.
+
+**Set `invariants.latencyMaxMs` on the `BasquinTarget`, or nothing checks latency.** Under load the
+target's valve is in lock-free passthrough and evaluates nothing, so the *driver* is the only
+evaluator — and it needs the threshold. The campaign now inherits it from the target automatically
+(DD-040), but if neither the target nor `spec.driver.invariants` sets one, the summary reports
+`violations.notEvaluated: [latency, heap, thread]` and the Ready condition says "not evaluated".
+That is the honest answer, not a passing run: `violations.latency: 0` on an unconfigured run used to
+read as a clean result at a p50 of 503 ms against an intended 250 ms budget.
 
 ## 4. Instrument with a `BasquinTarget`
 

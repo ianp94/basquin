@@ -155,7 +155,10 @@ func (r *BasquinCampaignReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			}
 			campaign.Spec.Driver.GrammarKey = key // in-memory, consumed by buildDriverJob
 		}
-		desired := buildDriverJob(&campaign, appImage, target.Status.CoverageEndpoint, runnerImage, dashboardPush, dashboardTokenSecret)
+		// The target's invariants ride along: in load mode the driver is the only evaluator, so its
+		// latency budget has to be inherited from the target unless the campaign overrides it (DD-040).
+		desired := buildDriverJob(&campaign, target.Spec.Invariants, appImage, target.Status.CoverageEndpoint,
+			runnerImage, dashboardPush, dashboardTokenSecret)
 		// Stamp the run-defining spec hash so a later spec edit is detected as a NEW run (§7c). Compute
 		// it from the spec as stored (before the in-memory GrammarKey resolution above), so the value
 		// matches what the job-exists branch recomputes from the unmutated spec on the next reconcile.
@@ -240,9 +243,7 @@ func (r *BasquinCampaignReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		campaign.Status.CompletionTime = &now
 		msg := fmt.Sprintf("run complete: coverage %s%%, %d findings", campaign.Status.CoveragePct, campaign.Status.Findings)
 		if campaign.Spec.Mode == "load" && campaign.Status.Load != nil {
-			ld := campaign.Status.Load
-			msg = fmt.Sprintf("load complete: %d requests, %s rps, p99 %dms, %d latency violations",
-				ld.Requests, ld.ThroughputRps, ld.LatencyMs.P99, ld.Violations.Latency)
+			msg = loadReadyMessage(campaign.Status.Load)
 		}
 		meta.SetStatusCondition(&campaign.Status.Conditions, metav1.Condition{
 			Type: "Ready", Status: metav1.ConditionTrue, Reason: "Completed", Message: msg})
@@ -264,6 +265,29 @@ func (r *BasquinCampaignReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+}
+
+// loadReadyMessage renders the Ready condition for a completed load run — the line an operator
+// actually reads out of `kubectl get basquincampaign`.
+//
+// DD-040: this used to print "%d latency violations" unconditionally, which is where omitting the
+// field at the driver would have turned into theater. In load mode the target's valve is in
+// lock-free passthrough (DD-029) and evaluates nothing, so unless a latencyMaxMs threshold reached
+// the DRIVER, nothing checked latency at all — and the condition still announced "0 latency
+// violations", the single most reassuring sentence the system could possibly emit about a run in
+// which no one looked. A count the run does not have is now named as unevaluated, and the fix that
+// makes it actionable (inheriting the target's threshold) lives in buildDriverJob.
+func loadReadyMessage(ld *basquinv1alpha1.LoadStatus) string {
+	viol := "latency violations not evaluated (set invariants.latencyMaxMs)"
+	if ld.Violations.Latency != nil {
+		viol = fmt.Sprintf("%d latency violations", *ld.Violations.Latency)
+	}
+	msg := fmt.Sprintf("load complete: %d requests, %s rps, p99 %dms, %s",
+		ld.Requests, ld.ThroughputRps, ld.LatencyMs.P99, viol)
+	if ld.DriftUnavailable {
+		msg += "; heap/thread drift unavailable"
+	}
+	return msg
 }
 
 // driverSummary is the subset of the driver's end-of-run summary the campaign surfaces.
@@ -537,6 +561,10 @@ const specHashAnnotation = "basquin.dev/spec-hash"
 // computed from the spec as stored — the in-memory GrammarKey resolution isn't persisted, so both the
 // create-time stamp and the later comparison hash the same value. Target-driven inputs (app image,
 // coverage endpoint) are deliberately excluded: those changing is handled as TargetGone, not a rerun.
+// DD-040 adds one more target-driven input — the target's invariants.latencyMaxMs, which a load
+// driver inherits — and keeps it out of the hash for the same reason: editing the TARGET does not
+// restart an in-flight campaign. An operator who changes the budget mid-run gets the old one until
+// the campaign is re-created, exactly as with the app image today.
 //
 // This hashes the Driver/Dashboard structs whole (today every field of both feeds the Job, so that
 // equals an allowlist). Note for future edits: ANY new field added to CampaignDriverSpec or

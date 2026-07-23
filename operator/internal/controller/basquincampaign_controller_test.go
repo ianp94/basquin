@@ -91,6 +91,9 @@ var _ = Describe("BasquinCampaign Controller (P5a)", func() {
 				DeploymentRef: basquinv1alpha1.DeploymentReference{Name: deployName},
 				Container:     "app",
 				Agents:        basquinv1alpha1.AgentsSpec{Coverage: basquinv1alpha1.CoverageSpec{Enabled: true, Includes: "com.x.*"}},
+				// Where operators actually put the latency budget (every bench manifest does this) —
+				// and, before DD-040, the only place it ever went, reaching the target jvm alone.
+				Invariants: basquinv1alpha1.InvariantsSpec{Mode: "soft", LatencyMaxMs: 250},
 			},
 		}
 		Expect(k8sClient.Create(ctx, t)).To(Succeed())
@@ -173,6 +176,10 @@ var _ = Describe("BasquinCampaign Controller (P5a)", func() {
 		Expect(jto).To(ContainSubstring("-Dbasquin.coverage.jacoco=" + covEndpoint))
 		Expect(jto).To(ContainSubstring("-Dbasquin.coverage.classes=" + campaignClassesDir))
 		Expect(jto).To(ContainSubstring("-Dbasquin.summary.out=/dev/termination-log"))
+		// DD-040: explore must NOT inherit the target's latency budget. There the target's own agent
+		// evaluates it and reports back over the result channel, so a driver-side copy would count the
+		// same request twice, at a different scope (client round trip, incl. network + driver GC).
+		Expect(jto).NotTo(ContainSubstring("-Dbasquin.invariant.latency.maxMs"))
 		Expect(tmpl.Containers[0].Args).To(Equal([]string{"500"}))
 		Expect(job.OwnerReferences).To(ContainElement(HaveField("Name", campaignName)))
 		// Driver pods carry component=driver so the rerun cleanup can target them without hitting the
@@ -289,6 +296,10 @@ var _ = Describe("BasquinCampaign Controller (P5a)", func() {
 		Expect(jto).To(ContainSubstring("-Dbasquin.corpusDir="))
 		Expect(jto).NotTo(ContainSubstring("-Dbasquin.coverage.jacoco"))
 		Expect(jto).NotTo(ContainSubstring("-Dbasquin.coverage.classes"))
+		// DD-040: under load the target's valve is in passthrough and evaluates nothing, so the driver
+		// is the only evaluator — and it must be given the budget the operator set on the TARGET.
+		// Without this the run reports violations.latency for a threshold no process ever held.
+		Expect(jto).To(ContainSubstring("-Dbasquin.invariant.latency.maxMs=250"))
 	})
 
 	It("completes a load run and reads status.load from the summary", func() {
@@ -328,8 +339,64 @@ var _ = Describe("BasquinCampaign Controller (P5a)", func() {
 		Expect(got.Status.Load.Requests).To(Equal(int64(1000)))
 		Expect(got.Status.Load.ThroughputRps).To(Equal("250.5"))
 		Expect(got.Status.Load.LatencyMs.P99).To(Equal(int32(55)))
-		Expect(got.Status.Load.Violations.Latency).To(Equal(int32(3)))
+		Expect(got.Status.Load.Violations.Latency).NotTo(BeNil())
+		Expect(*got.Status.Load.Violations.Latency).To(Equal(int32(3)))
 		Expect(got.Status.CorpusConfigMap).To(BeEmpty()) // load consumes a corpus, doesn't emit one
+	})
+
+	// DD-040, the layer where omitting a field at the driver would have been theater: this drives the
+	// summary of a load run that evaluated NOTHING (no latency threshold reached the driver, and load
+	// mode never evaluates heap/thread) all the way through a real API server round trip — JSON →
+	// unmarshal → status subresource write → read back. With the old non-pointer int32 fields every
+	// omitted count would arrive here as a confident, entirely fabricated 0.
+	It("never turns an unevaluated violation count into a measured zero", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makeInjectedTarget()
+		corpusCM := "corp3-" + fmt.Sprint(runID)
+		Expect(k8sClient.Create(ctx, &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: corpusCM, Namespace: namespace},
+			Data:       map[string]string{"corpus.txt": "/actions/Catalog.action\n"}})).To(Succeed())
+		Expect(k8sClient.Create(ctx, newLoadCampaign(corpusCM))).To(Succeed())
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		job := getJob(jobKey)
+		job.Status.Succeeded = 1
+		Expect(k8sClient.Status().Update(ctx, job)).To(Succeed())
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: campaignName + "-driver-u", Namespace: namespace,
+				Labels: map[string]string{"basquin.dev/campaign": campaignName}},
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "driver", Image: runnerImg}}},
+		}
+		Expect(k8sClient.Create(ctx, pod)).To(Succeed())
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: namespace}, pod)).To(Succeed())
+		pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+			Name: "driver",
+			State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+				// Exactly what the DD-040 driver emits with no threshold configured: the Roller shape,
+				// p50 503ms against an intended 250ms budget, and no count for anything.
+				Message: `{"load":{"requests":1000,"throughputRps":"250.5","latencyMs":{"p50":503,"p90":700,"p99":900,"max":1200},` +
+					`"driftUnavailable":true,"violations":{"notEvaluated":["latency","heap","thread"]}}}`}},
+		}}
+		Expect(k8sClient.Status().Update(ctx, pod)).To(Succeed())
+
+		_, err = reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+		got := &basquinv1alpha1.BasquinCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.Load).NotTo(BeNil())
+		Expect(got.Status.Load.Violations.Latency).To(BeNil(), "an unevaluated count must survive the round trip as absent")
+		Expect(got.Status.Load.Violations.Heap).To(BeNil())
+		Expect(got.Status.Load.Violations.Thread).To(BeNil())
+		Expect(got.Status.Load.Violations.NotEvaluated).To(ConsistOf("latency", "heap", "thread"))
+		Expect(got.Status.Load.HeapDriftKb).To(BeNil(), "unavailable drift must not materialize as 0")
+		Expect(got.Status.Load.DriftUnavailable).To(BeTrue(), "DD-035's marker must finally be parsed")
+
+		// And the message an operator actually reads must not claim a clean run.
+		cond := meta.FindStatusCondition(got.Status.Conditions, "Ready")
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Message).NotTo(ContainSubstring("0 latency violations"))
+		Expect(cond.Message).To(ContainSubstring("not evaluated"))
 	})
 
 	It("surfaces a failed initContainer's reason in campaign status (review #24)", func() {

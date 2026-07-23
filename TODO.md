@@ -644,3 +644,268 @@ that will reshape a lot of this anyway):
   start) instead of a manual host-side unzip step.
 - A single CLI entry point that replaces the current mix of `up.sh` + manual `kubectl`/`docker`
   commands from the README/deploy docs.
+
+## Follow-ups from the 2026-07-23 benchmark campaign
+
+Each of these was established against a live app during the multi-app benchmark pass, not
+theorized. Recorded here so the evidence isn't lost with the session that found it.
+
+### Tool
+
+- [ ] **GC-bracketed drift sampling.** `heapDriftKb` is a raw `totalMemory − freeMemory` difference
+      with no collection on either side, so it reports GC phase as much as retention: the same
+      metric came back **+381 MB** on one run of JSPWiki and **−194 MB** on another, and 600 probe
+      reads alone swung raw used-heap by +684 MB, all of it collectable. Bracketing with a forced
+      collection (or taking a min-envelope over many polls) showed no unbounded growth at all.
+      Until this lands, no drift number is publishable — the benchmark page deliberately omits one.
+- [ ] **`violations.heap` is hardcoded 0 in load mode.** `summaryJson` reports a heap violation
+      count that no code ever increments — load mode has no heap gate. "0 violations" therefore is
+      not a check that passed, which is exactly the kind of reassuring-but-empty signal this project
+      exists to eliminate. Either gate it or stop reporting it.
+- [ ] **`readCorpus` counts each ConfigMap corpus file twice.** `Files.walk` sees both the
+      `corpus.txt` symlink and the same file inside the volume's `..<timestamp>` real directory, so
+      the driver logs "54 sequence(s)" for a 27-line corpus. Uniformly 2×, so no selection skew —
+      but the logged corpus size is wrong.
+- [ ] **Attribute the "failed request" count.** Explore runs report a large count of iterations
+      where the driver's own HTTP call threw (1307 of 7813 on JPetStore). Not yet split between the
+      app, the driver, and the single-node cluster, so it currently can't be reported as a defect
+      count. Saving the exception class alongside the input would settle it.
+- [ ] **DD-039 — session carry across redirects in explore mode.** Spring Security rotates the
+      `JSESSIONID` **on the 302**, and `HttpURLConnection` only exposes the final hop's headers when
+      it follows redirects itself, so the rotated cookie is unreachable and every later step runs
+      anonymous. Blocks every form-login app, not just Roller. Spec:
+      `docs/superpowers/specs/2026-07-23-redirect-session-carry-design.md`.
+- [ ] **A request-header directive** (`>>Header: value`, the mirror of `<<name=header:`). Roller's
+      AtomPub surface (`/roller-services/app/*`) is a complete authenticated write API guarded by
+      HTTP Basic — no session, no CSRF, ideal for a corpus — and unreachable today because a route
+      can express method, path, and body but not a header.
+
+- [ ] **Load mode has no counter for a transport failure.** `fireR` returns `code == -1` when the
+      request throws (connection refused, reset, read timeout, protocol error). `-1` is neither
+      `>= 500` nor in `[400,500)`, so it increments **neither** `serverErrors` nor `clientErrors` --
+      it is counted as an ordinary successful request with its measured latency. A run against an
+      app that is refusing connections therefore reports high throughput, a low p50, and zero
+      errors: the exact "broken run looks clean" failure this project exists to eliminate. Add a
+      `transportFailures` counter and surface it in the summary.
+- [ ] **JPetStore: `/actions/Order.action?listOrders=` 500s for an unauthenticated caller** --
+      `NullPointerException`, and then a *second* NPE inside Stripes'
+      `DefaultExceptionHandler` ("Unhandled exception in exception handler"). Reproducible with a
+      plain curl, no instrumentation involved. This is the source of the ~5.5% 5xx rate in the
+      2026-07-23 load runs; the 2026-07-21 baseline's corpus never fired that route, so it is a
+      newly-reached app defect and NOT a regression. Worth reporting upstream.
+
+- [ ] **CRITICAL — the invariant reporting channel drops most violations.** The valve evaluates
+      every invariant server-side and logs it, then attaches `X-Basquin-Invariant-Count` to the
+      response *only* `if (!response.isCommitted())` (`BasquinValve.java:66`,
+      `TomcatBoundaryAdvice.java:43`). The driver learns about violations **solely** by reading that
+      header, so a committed response silently discards the finding. Evaluation is intact; only
+      reporting is lost.
+
+      Measured on each app's real replay corpus, with synchronized server-log windows:
+
+      | app | responses that cannot report | violations lost |
+      |---|---|---|
+      | roller | 36/37 (97.3%) | 52/52 (100%) |
+      | jspwiki | 24/32 (75%) | 23/23 (100%) |
+      | jpetstore | 0/43 (0%) | 0/5 (0%) |
+
+      One Roller explore window evaluated **1,906 violations and reported 0**. The 25% of jspwiki
+      responses that *can* report are redirects and 400s, which never violate — so its effective
+      loss is also total. JPetStore is the only app whose published numbers were ever real, which is
+      exactly why it looked healthy and the other two looked clean.
+
+      Note *which* boundary: the operator injects `-Dbasquin.boundary=agent`
+      (`operator/internal/controller/injection.go:115`), so k8s runs `TomcatBoundaryAdvice` woven
+      into `StandardHostValve.invoke`, whose exit runs **after** Tomcat's error-page dispatch. Under
+      the compose-path Context valve the exit runs *before* it, so trigger (c) would not apply —
+      which matters for reproducing this outside k8s.
+
+      The commit rule: lost iff
+      committed at boundary exit — >8192 bytes through the output buffer, any explicit flush
+      (Struts/Tiles JSPs, Roller's opensearch servlet, which kills even a 552-byte response), or any
+      error status with a **custom** `web.xml` error-page (forward commits and closes at any size —
+      that is Roller's 1215-byte 404; jspwiki and jpetstore have no custom error pages so their 404s
+      survive). Survives on redirects, sub-8KB non-flushing responses, and static files >48KB via
+      sendfile (a 36KB js loses it, a 51KB js keeps it — only sendfile explains that
+      non-monotonicity).
+
+      **Fix:** a per-request-id side channel over the existing `/__basquin/*` valve surface. The
+      driver sends `X-Basquin-Req: <id>`; `onExit` stores `id -> (cost, violations)` in a small
+      bounded map under the already-held lock; the driver GETs `/__basquin/result?id=` after each
+      explore request. The poll is `CONTROL_HANDLED` at `onEnter` so it never touches the app and
+      never begins an iteration. Cost is negligible beside the existing 25ms grace sleep per explore
+      iteration, and it adds zero instructions to the load path. Note the target never talks to the
+      dashboard (the *driver* does), so a target-side dashboard push would be new infrastructure.
+      Cumulative counters alone are not enough — per-input attribution is what the corpus cost model
+      needs, and losing it is why Roller's corpus collapsed to 2 search entries.
+- [ ] **Load mode never evaluates invariants at all** (passthrough by design, DD-029) *and* the
+      load driver JVM is never given `-Dbasquin.invariant.latency.maxMs` (`LoadRun.java:52` defaults
+      to 0 = disabled). Roller's load `violations.latency: 0` at p50 503 ms against an intended
+      250 ms budget is structural, not empirical. The fix needs the operator to propagate
+      `latencyMaxMs` into the load driver's JVM opts.
+- [ ] **The explore summary's `invariants` block is the driver measuring itself** with no thresholds
+      configured, so it is structurally 0 too. Two different reported zeros, neither meaning what a
+      reader would assume.
+- [ ] **The leak detector throws unconditionally at `agent/Agent.java:249`, ignoring
+      `invariant.mode=soft`**, turning a response the app had already written
+      into an empty 500. Observed while publishing a Roller entry manually: the row was written and
+      the client got a 500. Soft mode must record and continue, never alter the response.
+- [ ] **Roller's `login_publish` sequence has never published a single row.** Explore's `request()`
+      still follows redirects, so the login 302's `Set-Cookie` is eaten, the salt capture misses, and
+      the step is silently skipped — the exact bug class DD-038 fixed in `LoadRun.fireR` but not in
+      explore. This is live confirmation that DD-039 is worth doing.
+- [ ] **The jspwiki readiness probe violates heapDelta ~12/min at idle** — a noise source that any
+      server-side counting fix will pick up.
+
+- [ ] **The lost violations are recoverable without re-running anything.** Evaluation is intact and
+      every violation is in the target pod's log with its iteration number, so the explore windows
+      already captured under `bench-results/` can be re-scored from logs offline. Worth a small
+      script — it turns discarded campaigns back into real data.
+
+### Future: DD-042 — a load-mode oracle (deferred, not scoped)
+
+The intended division of labour is sound: **explore** finds serialized, per-request defects
+(invariant breaches, expensive inputs, cold cliffs) because it runs one clean iteration at a time;
+**load** is the only mode that produces real interleaving, so it is the only mode that can expose
+concurrency defects. But exposure is not detection, and today load mode has **no failure oracle at
+all** — it counts and reports, and the campaign completes as long as the driver Job exits 0.
+
+The evidence is embarrassing and worth keeping: two load campaigns ran against a JSPWiki instance
+that had two workers spinning at 100% of a core and a dead NIO Poller. They reported 2.1 rps and a
+p50 of 5003 ms and were marked **Completed**. The outage was caught by a human noticing `0/1
+Running`; the app's own WatchDog logged it for five hours; Basquin did not. See
+`bench-results/jspwiki/incident-2026-07-23-login-hang/ANALYSIS.md`.
+
+What load mode would need for the claim to hold:
+
+- **A latency budget that actually fires.** In scope for DD-040 item B (the threshold lives on the
+  BasquinTarget and never reaches the load driver).
+- **Transport-failure counting.** Already recorded above: `code == -1` currently increments neither
+  error counter and lands in the histogram as a fast success.
+- **A degradation oracle**, which does not exist in any form: throughput collapse, a latency cliff
+  mid-run, or the target becoming unreachable should FAIL a campaign, not complete it. Availability
+  is supposedly the bug oracle; a run that ends with the target dark must not be a pass.
+#### Proposed shape: an out-of-band census, with the oracle in the driver
+
+The constraint that makes this hard is also what makes it easy: load mode is lock-free passthrough
+and must stay that way, because that lock-freedom is the *only* reason real interleaving happens.
+So the oracle must add **zero per-request work** — which means it cannot be instrumentation at all.
+It has to be sampling.
+
+The channel already exists. The driver polls `/__basquin/drift` periodically during a load run
+(`LoadMode.driftSnapshotCsv()`), out of band. Add a sibling endpoint returning a compact thread
+census computed on demand, and keep the *analysis* in the driver so the target JVM stays dumb:
+
+```
+GET /__basquin/threads  ->  deadlocked=<ids>
+                            <id>,<state>,<cpuNs>,<stackFingerprint>
+                            ...
+```
+
+- `stackFingerprint` is a hash of the top ~8 frames, so the payload stays tiny; the full stack is
+  fetched only for a confirmed suspect.
+- Uses `ThreadMXBean`, already held as `Agent.THREAD_MX`. Guard on
+  `isThreadCpuTimeSupported()`/`isThreadCpuTimeEnabled()` and degrade to state-only if absent.
+- Excludes Basquin's own threads and the sampler.
+
+Four findings fall out of comparing consecutive samples, all in the driver:
+
+1. **Spin** — `cpuNs` delta ≈ wall-clock delta (say ≥90%) **and** an unchanged stack fingerprint
+   across ≥2 samples. That is precisely the JSPWiki `WeakHashMap` signature: pinned at 100% of a
+   core, `RUNNABLE`, same frame, forever. Would have caught it in seconds instead of five hours.
+2. **Deadlock** — `ThreadMXBean.findDeadlockedThreads()` is a JDK-native call that returns `null`
+   in the normal case. Essentially free, and definitive when it fires.
+3. **Contention** — ≥K threads `BLOCKED` on the same lock across ≥2 samples; report the lock and the
+   owner's stack. Catches the hot-lock case that shows up as a latency cliff with idle CPU.
+4. **Stall** — `RUNNABLE` with an unchanged fingerprint and *no* CPU growth: blocked in a syscall or
+   lost, distinct from (1) and worth distinguishing.
+
+Cost: ~50 threads × (one native CPU call + an 8-frame `getThreadInfo`) at a 5 s interval —
+sub-millisecond, off the request path, and nothing added to the request path at all. Compare with
+the per-request cost of explore mode's boundary (a 25 ms grace sleep plus two full thread
+enumerations), which is three orders of magnitude more work per request.
+
+Two properties worth preserving in the design: the target only *reports*, it never decides (so the
+finding is attributable to the campaign and lands in the run summary), and a spin is confirmed only
+across multiple samples (a thread transiently inside a hot method is normal; the same thread still
+there 20 s later is not).
+
+- **A wedged-thread detector.** The `WeakHashMap` spin's signature was CPU pinned at ~100% of a core
+  with the thread count *stable* — so `threadDrift`, which counts threads, is blind to it. Sampling
+  per-thread CPU (`ThreadMXBean.getThreadCpuTime`) and flagging a thread whose CPU climbs at wall-clock
+  rate while its stack is unchanged would have caught it in seconds, and is a genuinely new class of
+  finding for this tool.
+
+Ordering note: this is independent of DD-040 and DD-041 and could be built at any point, but the
+latency-budget half is already inside DD-040, so start there and let the rest follow.
+
+### Next after DD-040: DD-041 — clustered exploration across replicas (wanted)
+
+Explore mode is synchronous and globally serialized: `ITERATION_LOCK` (a *fair* `ReentrantLock`,
+`RequestBoundary.java:39`) is held across the whole app call, and `Agent.end()` adds a synchronous
+25 ms grace sleep plus two thread enumerations before releasing it. Throughput is therefore capped
+near `1/(25ms + appTime)` — under ~40 rps regardless of driver concurrency (observed: roller 6.1/s,
+jspwiki ~11/s). Only triage I/O is off the hot path (DD-006). This is DD-005's deliberate choice:
+per-request heap delta is only meaningful with one request in flight.
+
+The tension to resolve, stated plainly so it is not rediscovered later:
+
+- **Scale-out across target replicas** multiplies throughput linearly *without weakening
+  measurement* — each pod still runs one clean iteration at a time. It needs a coordinator for the
+  shared corpus and coverage map (both are global state today), and per-pod result attribution,
+  which DD-040's salted `<RUN_SALT>-<n>` id already provides.
+- **Concurrency within a pod** is the only thing that makes explore able to find *concurrency*
+  defects at all — today it structurally cannot, which is why the JSPWiki `WeakHashMap` spin was
+  findable only in load mode (see `bench-results/jspwiki/incident-2026-07-23-login-hang/ANALYSIS.md`
+  §7.2). But it breaks whole-heap per-request attribution: it would need per-thread allocation
+  counting (`ThreadMXBean.getThreadAllocatedBytes` / JFR) instead of a heap delta, and retention
+  still could not be attributed per request.
+
+**Why this is wanted, concretely:** real apps run behind a Service with several replicas, and that
+is the deployment shape the tool has to be credible against. Today a campaign points at a Service
+VIP and the requests round-robin, which is not "N clean serialized streams" — it is one stream
+scattered across N JVMs, and several things quietly break:
+
+- **Sequences lose their session.** `@sequence` steps carry a cookie; step 2 landing on a different
+  replica than step 1 is an anonymous request. This is the same class of silent skip DD-039 exists
+  to fix, arriving from a different direction.
+- **DD-040's result poll goes to the wrong pod.** The result store is per-JVM, so a poll through the
+  Service VIP reaches a pod that never saw the request. Addressed pre-emptively in DD-040 §A.6 —
+  the driver must address the serving pod directly — but it is called out here because it is the
+  general shape of the problem: *anything* per-JVM must be addressed per-pod.
+- **Coverage is already multi-source** (`JacocoCoverageProvider` aggregates
+  `sourcesResponded`/`sourcesTotal`, and the target status already tracks `InstrumentedReplicas`),
+  so that part of the groundwork exists and should be reused rather than reinvented.
+
+The design that preserves the premise: the driver resolves **pod addresses** from the headless
+Service and pins each worker to one pod, so every replica runs one clean serialized iteration at a
+time. N replicas then give N× throughput with per-request allocation fidelity fully intact — the
+serialization is per-JVM, and that is exactly where it needs to be. What has to become shared is the
+*coordination* (corpus, coverage map, cost ranking), not the measurement.
+
+So the honest shape is probably: shard across replicas for throughput, keep each replica serialized
+for allocation fidelity, and treat concurrency-defect hunting as load mode's job rather than
+retrofitting it into explore. That should be a spec of its own, after DD-040 lands — DD-040's result
+store is a prerequisite either way, since a distributed driver cannot rely on response headers it
+may not be the one to receive.
+
+### Bench targets
+
+- [ ] **The seeded JSPWiki pages are not being served.** `jspwiki-custom.properties` sets
+      `jspwiki.fileSystemPath`, but the provider reads `jspwiki.fileSystemProvider.pageDir`. JSPWiki
+      silently falls back to `/root/jspwiki-files`, so the seeded 70-page corpus in
+      `/var/jspwiki/pages` is ignored and many corpus "views" hit pages that don't exist. Fix the
+      key and re-seed.
+- [ ] Roller's default comment CAPTCHA ("what is 3 + 5?") requires computing an answer, which the
+      grammar cannot express — hence the swap to `DefaultCommentAuthenticator` in the bench deploy.
+      Worth noting as a general limit: captured values can be replayed, not computed.
+
+### JSPWiki behaviours worth knowing (verified live on 2.12.4)
+
+- An empty `page=` redirects to `/Login.jsp?redirect=` **with or without** a valid session cookie —
+  it is not a session-loss symptom.
+- An unresolved page name is canonicalized by uppercasing the first kept character only
+  (`ndws` → `Ndws`, `nDWS` → `NDWS`, `FOO` → `FOO`).
+- A concurrent-edit conflict answers `302 /PageModified.jsp?page=<page>`; a missing anti-spam pair
+  gives `302 /Wiki.jsp?page=SessionExpired`; a missing CSRF token gives `302 /error/Forbidden.html`.
+- Tomcat rejects a request line containing a raw `"` or `<` with a 400 before JSPWiki sees it.

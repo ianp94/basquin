@@ -1,0 +1,118 @@
+# Apache Roller request grammar (bench target #3 — Roller 6.1.5, a DB-backed blog CMS).
+# Structure = grammar; values = corpus (DD-018). Unlike JPetStore (embedded HSQLDB) and JSPWiki
+# (filesystem pages), Roller talks to a NETWORKED PostgreSQL over JPA/EclipseLink, so the cost that
+# matters here is query + Velocity render + Lucene, and the availability interest is what happens
+# when a fuzzer drives those concurrently with writes that invalidate Roller's page cache.
+#
+# Measured on the seeded bench weblog (warm, deploy/bench/roller/probe.sh):
+#   /basquin/search?q=…      ~530ms   <-- Lucene query + searchresults.vm render; 10-25x everything
+#   /basquin/date/YYYYMM      ~50ms   <-- month archive: N-day loop, each day its own entry query
+#   /basquin/feed/entries/*   ~40ms   <-- ROME feed build over 15 entries
+#   /basquin/entry/<anchor>   ~20ms   <-- permalink + comment list
+#   /basquin/ , /             ~2ms    <-- weblog-page / sitewide cache hit
+#
+#   $name = alt | alt | ...     alt = literal | @valuesFile | ~structure | <generator>
+#   /path?x=${name}             route template
+#   ... <<name=input:field      capture: bind `name` from the response's <input name="field"> value
+#   ...body...${{name}}         reference: substitute a value captured earlier in this sequence (DD-036)
+
+$entry    = @../corpus/roller/values/roller-entries.txt | ~bench-entry-[0-9]{2} | <empty> | <string>
+$cat      = @../corpus/roller/values/roller-categories.txt | ~[A-Z][a-z]{3,9} | <empty> | <string>
+$q        = @../corpus/roller/values/roller-queries.txt | ~[a-z]{3,9} | <empty> | <long>
+# Roller parses the date segment by LENGTH (6 = month archive, 8 = day archive) and 404s anything
+# else — so the structural generator has to produce both shapes, not one generic number.
+$date     = @../corpus/roller/values/roller-dates.txt | ~20260[1-9] | ~20260[1-9][0-2][0-9] | <int>
+$page     = 0 | 1 | 2 | 3 | <int>
+$catid    = @../corpus/roller/values/roller-categoryids.txt | ~[a-f0-9]{34} | <empty>
+$text     = ~[a-z ]{60,240} | <string>
+# DD-038: a per-FIRE unique token. Roller's entry save is not idempotent (it inserts a row), but the
+# comment path IS deduplicated by content in practice — and more importantly, a fixed body makes
+# every write land in the same weblog-page cache bucket, so the invalidation path stops being
+# exercised after the first fire. A nonce in the payload keeps every replayed write a REAL write.
+$rev      = <nonce>
+
+# ---- Weblog render surface (PageServlet -> Velocity) --------------------------------------------
+# `/` is the frontpage weblog (roller_properties site.frontpage.weblog.handle=basquin) and is served
+# from the SITEWIDE cache; `/basquin/` from the weblog-page cache. Both are ~2ms hits, and they are
+# in the grammar precisely because they go cold the moment a write below invalidates them — the
+# cache-miss re-render is the interesting sample, not the hit.
+/
+/basquin/
+/basquin/?page=${page}
+
+# Permalink: entry row + its comment list. A structurally-valid-but-absent anchor (~bench-entry-NN)
+# reaches the lookup-then-404 path rather than being rejected at parse.
+/basquin/entry/${entry}
+
+# Category archive — a different WeblogEntryManager query shape (category join + pager).
+/basquin/category/${cat}
+/basquin/category/${cat}?page=${page}
+
+# Date archive — the month form loops per-day, so it is ~3x a category page for the same row count.
+/basquin/date/${date}
+
+# ---- Full-text search: the expensive route (~530ms, 10-25x a cached page view) -------------------
+# Lucene query over the auto-rebuilt index + searchresults.vm. NOT cached by Roller at all, so every
+# fire is real work — this is where an availability bug would show first under concurrency.
+/basquin/search?q=${q}
+/basquin/search?q=${q}&page=${page}
+/basquin/search?q=${q}&cat=${cat}
+
+# ---- Feeds (ROME serialization, separate cache) --------------------------------------------------
+/basquin/feed/entries/rss
+/basquin/feed/entries/atom
+/basquin/feed/entries/rss?cat=${cat}
+/basquin/feed/entries/atom?excerpts=true
+/basquin/feed/comments/rss
+
+# ---- Non-weblog servlets ------------------------------------------------------------------------
+# login.rol is here for its own sake: it renders a Struts/Tiles page, which is a completely different
+# stack from the Velocity weblog renderer, and it mints the session the write sequences depend on.
+/roller-ui/login.rol
+/roller-ui/register.rol
+/roller-services/opensearch/
+/roller-ui/rendering/rsd/basquin
+
+# ---- Unauthenticated write: comment POST (DD-038) ------------------------------------------------
+# Roller's CommentServlet is reached through the entry permalink itself (the themes post back to the
+# permalink with method=post), NOT through /roller-ui/rendering/comment/*, which is the mapping in
+# web.xml — the URL you would guess from web.xml is not the URL the app uses.
+# No CSRF token guards this path, but the default comment.authenticator IS a math CAPTCHA
+# (MathCommentAuthenticator, "what is 3 + 5?"): the shipped themes never render the question, so the
+# path is unreachable until the deployment sets DefaultCommentAuthenticator — see
+# deploy/bench/roller/setup.sh. ${rev} makes each comment distinct so the entry's comment list keeps
+# growing and its cached render keeps being invalidated.
+POST /basquin/entry/${entry} method=post&name=Fuzz+${rev}&email=fuzz@example.com&url=&content=Comment+${rev}+${text}&post=Post
+
+# ---- Authenticated write: publish an entry (DD-036 salt correlation) -----------------------------
+# Roller's Struts 2 CSRF defence is NOT struts.token — it is a per-session one-shot "salt"
+# (SaltCache, cache.salt.* in roller.properties) rendered by <s:hidden name="salt"/> into every
+# authoring form. A POST without a live salt is bounced by ValidateSaltInterceptor, so a static
+# corpus can never publish; the salt has a STATIC field name, so DD-036's `input:` capture is enough
+# (no DD-037 inputpair needed — that was JSPWiki's dynamically-NAMED spam field).
+# Steps 1-2 mint the session: Spring Security's form login at /roller_j_security_check. The runner
+# carries JSESSIONID across the steps of a sequence, which is what makes step 3's salt usable in
+# step 4. Step 2 is also the app's most CPU-expensive single request (a bcrypt verify at cost 10).
+# bean.categoryId must be a REAL category id — Roller rejects the save with "Category is required
+# field" otherwise, and the write silently becomes a 200-with-error-page instead of a 302.
+# ${rev} in the title/anchor is what keeps each publish a distinct row (DD-038).
+@sequence login_publish
+  /roller-ui/login.rol
+  POST /roller_j_security_check j_username=basquin&j_password=basquin
+  /roller-ui/authoring/entryAdd.rol?weblog=basquin <<salt=input:salt
+  POST /roller-ui/authoring/entryAdd.rol salt=${{salt}}&weblog=basquin&bean.title=Fuzz+${rev}&bean.text=${text}+${rev}&bean.categoryId=${catid}&bean.status=PUBLISHED&bean.tagsAsString=bench&bean.locale=en_US&bean.commentDays=3650&action:entryAdd!publish=Publish
+  /basquin/
+
+# ---- Authenticated read: the authoring UI (Struts + Tiles, admin-gated) --------------------------
+# These 302 to the login page when anonymous, so they are only worth anything behind the session the
+# sequence above mints — hence a sequence rather than bare routes. entries.rol is a paged query over
+# the same table the fuzzer is writing to, which is exactly the read/write interleaving that makes
+# DB-backed apps interesting for availability.
+@sequence authoring_browse
+  /roller-ui/login.rol
+  POST /roller_j_security_check j_username=basquin&j_password=basquin
+  /roller-ui/menu.rol
+  /roller-ui/authoring/entries.rol?weblog=basquin
+  /roller-ui/authoring/comments.rol?weblog=basquin
+  /roller-ui/authoring/categories.rol?weblog=basquin
+  /roller-ui/admin/globalConfig.rol

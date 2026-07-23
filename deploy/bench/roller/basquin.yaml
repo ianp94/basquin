@@ -1,0 +1,44 @@
+# Basquin instrumentation + an explore campaign for the Roller bench target.
+# Apply k8s.yaml first and wait for the pod to be Ready.
+apiVersion: basquin.dev/v1alpha1
+kind: BasquinTarget
+metadata:
+  name: roller
+  namespace: basquin-system
+spec:
+  deploymentRef: { name: roller }
+  container: roller
+  jvmOptsVar: CATALINA_OPTS
+  coverageService: true
+  agents:
+    threadTracker: true
+    valve: true
+    coverage:
+      enabled: true
+      includes: "org.apache.roller.*"   # matches what Dockerfile.raw stages in /basquin-app-classes
+      port: 6300
+  invariants:
+    mode: soft
+    # Roller's steady state is NOT JSPWiki's. A cached weblog page is ~2ms, but /basquin/search is
+    # ~530ms every single time (Lucene + an uncached Velocity render), so a 25ms budget would fire on
+    # every search and drown the signal. 250ms sits above the render routes and below a search that
+    # has started to degrade — which is the failure this target exists to catch.
+    latencyMaxMs: 250
+    heapDeltaMaxKb: 512
+---
+apiVersion: basquin.dev/v1alpha1
+kind: BasquinCampaign
+metadata:
+  name: roller-explore
+  namespace: basquin-system
+spec:
+  mode: explore
+  targetRef: { name: roller }
+  baseURL: http://roller-app.basquin-system.svc.cluster.local:8080
+  driver:
+    grammarConfigMap: roller-grammar
+    corpusConfigMap: roller-corpus
+    # Roller DOES ship real classes in WEB-INF/classes, but that dir also holds ~40MB of themes and
+    # i18n; Dockerfile.raw stages just org/apache/roller here.
+    classesPath: /basquin-app-classes
+    duration: 30m

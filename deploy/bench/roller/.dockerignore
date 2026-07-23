@@ -1,0 +1,7 @@
+# Keep the build context small — the 59MB dist tarball and the unpacked dist are inputs to
+# setup.sh, not to the image (setup.sh explodes roller.war into webapp/, which is what we COPY).
+roller-bin.tar.gz
+apache-roller-6.1.5/
+roller_data/
+*.md
+docker-compose.yml

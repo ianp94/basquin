@@ -1,0 +1,1223 @@
+Compiled from "DefaultUserManager.java"
+public class org.apache.wiki.auth.DefaultUserManager implements org.apache.wiki.auth.UserManager {
+  private static final java.lang.String USERDATABASE_PACKAGE;
+
+  private static final java.lang.String SESSION_MESSAGES;
+
+  private static final java.lang.String PARAM_EMAIL;
+
+  private static final java.lang.String PARAM_FULLNAME;
+
+  private static final java.lang.String PARAM_PASSWORD;
+
+  private static final java.lang.String PARAM_LOGINNAME;
+
+  private static final java.lang.String UNKNOWN_CLASS;
+
+  private org.apache.wiki.api.core.Engine m_engine;
+
+  private static final org.apache.logging.log4j.Logger LOG;
+
+  private final java.util.Map<org.apache.wiki.api.core.Session, org.apache.wiki.auth.user.UserProfile> m_profiles;
+
+  private org.apache.wiki.auth.user.UserDatabase m_database;
+
+  public org.apache.wiki.auth.DefaultUserManager();
+    Code:
+       0: aload_0
+       1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+       4: aload_0
+       5: new           #7                  // class java/util/WeakHashMap
+       8: dup
+       9: invokespecial #9                  // Method java/util/WeakHashMap."<init>":()V
+      12: putfield      #10                 // Field m_profiles:Ljava/util/Map;
+      15: return
+    LineNumberTable:
+      line 79: 0
+      line 94: 4
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0      16     0  this   Lorg/apache/wiki/auth/DefaultUserManager;
+
+  public void initialize(org.apache.wiki.api.core.Engine, java.util.Properties);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: putfield      #16                 // Field m_engine:Lorg/apache/wiki/api/core/Engine;
+       5: aload_0
+       6: aload_1
+       7: ldc           #20                 // class org/apache/wiki/pages/PageManager
+       9: invokeinterface #22,  2           // InterfaceMethod org/apache/wiki/api/core/Engine.getManager:(Ljava/lang/Class;)Ljava/lang/Object;
+      14: checkcast     #28                 // class org/apache/wiki/event/WikiEventListener
+      17: invokevirtual #30                 // Method addWikiEventListener:(Lorg/apache/wiki/event/WikiEventListener;)V
+      20: ldc           #36                 // String users
+      22: new           #38                 // class org/apache/wiki/auth/DefaultUserManager$JSONUserModule
+      25: dup
+      26: aload_0
+      27: invokespecial #40                 // Method org/apache/wiki/auth/DefaultUserManager$JSONUserModule."<init>":(Lorg/apache/wiki/auth/DefaultUserManager;)V
+      30: new           #43                 // class org/apache/wiki/auth/permissions/AllPermission
+      33: dup
+      34: aconst_null
+      35: invokespecial #45                 // Method org/apache/wiki/auth/permissions/AllPermission."<init>":(Ljava/lang/String;)V
+      38: invokestatic  #48                 // Method org/apache/wiki/ajax/WikiAjaxDispatcherServlet.registerServlet:(Ljava/lang/String;Lorg/apache/wiki/ajax/WikiAjaxServlet;Ljava/security/Permission;)V
+      41: return
+    LineNumberTable:
+      line 102: 0
+      line 106: 5
+      line 109: 20
+      line 110: 41
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0      42     0  this   Lorg/apache/wiki/auth/DefaultUserManager;
+          0      42     1 engine   Lorg/apache/wiki/api/core/Engine;
+          0      42     2 props   Ljava/util/Properties;
+
+  public org.apache.wiki.auth.user.UserDatabase getUserDatabase();
+    Code:
+       0: aload_0
+       1: getfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+       4: ifnull        12
+       7: aload_0
+       8: getfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+      11: areturn
+      12: ldc           #58                 // String <unknown>
+      14: astore_1
+      15: aload_0
+      16: getfield      #16                 // Field m_engine:Lorg/apache/wiki/api/core/Engine;
+      19: invokeinterface #60,  1           // InterfaceMethod org/apache/wiki/api/core/Engine.getWikiProperties:()Ljava/util/Properties;
+      24: ldc           #64                 // String jspwiki.userdatabase
+      26: invokestatic  #66                 // Method org/apache/wiki/util/TextUtil.getRequiredProperty:(Ljava/util/Properties;Ljava/lang/String;)Ljava/lang/String;
+      29: astore_1
+      30: getstatic     #72                 // Field LOG:Lorg/apache/logging/log4j/Logger;
+      33: ldc           #76                 // String Attempting to load user database class {}
+      35: aload_1
+      36: invokeinterface #78,  3           // InterfaceMethod org/apache/logging/log4j/Logger.info:(Ljava/lang/String;Ljava/lang/Object;)V
+      41: aload_0
+      42: ldc           #84                 // String org.apache.wiki.auth.user
+      44: aload_1
+      45: invokestatic  #86                 // Method org/apache/wiki/util/ClassUtil.buildInstance:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;
+      48: checkcast     #92                 // class org/apache/wiki/auth/user/UserDatabase
+      51: putfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+      54: aload_0
+      55: getfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+      58: aload_0
+      59: getfield      #16                 // Field m_engine:Lorg/apache/wiki/api/core/Engine;
+      62: aload_0
+      63: getfield      #16                 // Field m_engine:Lorg/apache/wiki/api/core/Engine;
+      66: invokeinterface #60,  1           // InterfaceMethod org/apache/wiki/api/core/Engine.getWikiProperties:()Ljava/util/Properties;
+      71: invokeinterface #94,  3           // InterfaceMethod org/apache/wiki/auth/user/UserDatabase.initialize:(Lorg/apache/wiki/api/core/Engine;Ljava/util/Properties;)V
+      76: getstatic     #72                 // Field LOG:Lorg/apache/logging/log4j/Logger;
+      79: ldc           #98                 // String UserDatabase initialized.
+      81: invokeinterface #100,  2          // InterfaceMethod org/apache/logging/log4j/Logger.info:(Ljava/lang/String;)V
+      86: aload_0
+      87: getfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+      90: ifnonnull     284
+      93: getstatic     #72                 // Field LOG:Lorg/apache/logging/log4j/Logger;
+      96: ldc           #102                // String I could not create a database object you specified (or didn\'t specify), so I am falling back to a default.
+      98: invokeinterface #100,  2          // InterfaceMethod org/apache/logging/log4j/Logger.info:(Ljava/lang/String;)V
+     103: aload_0
+     104: new           #104                // class org/apache/wiki/auth/user/DummyUserDatabase
+     107: dup
+     108: invokespecial #106                // Method org/apache/wiki/auth/user/DummyUserDatabase."<init>":()V
+     111: putfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+     114: goto          284
+     117: astore_2
+     118: getstatic     #72                 // Field LOG:Lorg/apache/logging/log4j/Logger;
+     121: ldc           #111                // String You have not set the \'{}\'. You need to do this if you want to enable user management by JSPWiki.
+     123: ldc           #64                 // String jspwiki.userdatabase
+     125: aload_2
+     126: invokeinterface #113,  4          // InterfaceMethod org/apache/logging/log4j/Logger.error:(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V
+     131: aload_0
+     132: getfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+     135: ifnonnull     284
+     138: getstatic     #72                 // Field LOG:Lorg/apache/logging/log4j/Logger;
+     141: ldc           #102                // String I could not create a database object you specified (or didn\'t specify), so I am falling back to a default.
+     143: invokeinterface #100,  2          // InterfaceMethod org/apache/logging/log4j/Logger.info:(Ljava/lang/String;)V
+     148: aload_0
+     149: new           #104                // class org/apache/wiki/auth/user/DummyUserDatabase
+     152: dup
+     153: invokespecial #106                // Method org/apache/wiki/auth/user/DummyUserDatabase."<init>":()V
+     156: putfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+     159: goto          284
+     162: astore_2
+     163: getstatic     #72                 // Field LOG:Lorg/apache/logging/log4j/Logger;
+     166: ldc           #119                // String UserDatabase {} cannot be instantiated
+     168: aload_1
+     169: aload_2
+     170: invokeinterface #113,  4          // InterfaceMethod org/apache/logging/log4j/Logger.error:(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V
+     175: aload_0
+     176: getfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+     179: ifnonnull     284
+     182: getstatic     #72                 // Field LOG:Lorg/apache/logging/log4j/Logger;
+     185: ldc           #102                // String I could not create a database object you specified (or didn\'t specify), so I am falling back to a default.
+     187: invokeinterface #100,  2          // InterfaceMethod org/apache/logging/log4j/Logger.info:(Ljava/lang/String;)V
+     192: aload_0
+     193: new           #104                // class org/apache/wiki/auth/user/DummyUserDatabase
+     196: dup
+     197: invokespecial #106                // Method org/apache/wiki/auth/user/DummyUserDatabase."<init>":()V
+     200: putfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+     203: goto          284
+     206: astore_2
+     207: getstatic     #72                 // Field LOG:Lorg/apache/logging/log4j/Logger;
+     210: ldc           #123                // String Exception initializing user database: {}
+     212: aload_2
+     213: invokevirtual #125                // Method org/apache/wiki/auth/WikiSecurityException.getMessage:()Ljava/lang/String;
+     216: aload_2
+     217: invokeinterface #113,  4          // InterfaceMethod org/apache/logging/log4j/Logger.error:(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V
+     222: aload_0
+     223: getfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+     226: ifnonnull     284
+     229: getstatic     #72                 // Field LOG:Lorg/apache/logging/log4j/Logger;
+     232: ldc           #102                // String I could not create a database object you specified (or didn\'t specify), so I am falling back to a default.
+     234: invokeinterface #100,  2          // InterfaceMethod org/apache/logging/log4j/Logger.info:(Ljava/lang/String;)V
+     239: aload_0
+     240: new           #104                // class org/apache/wiki/auth/user/DummyUserDatabase
+     243: dup
+     244: invokespecial #106                // Method org/apache/wiki/auth/user/DummyUserDatabase."<init>":()V
+     247: putfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+     250: goto          284
+     253: astore_3
+     254: aload_0
+     255: getfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+     258: ifnonnull     282
+     261: getstatic     #72                 // Field LOG:Lorg/apache/logging/log4j/Logger;
+     264: ldc           #102                // String I could not create a database object you specified (or didn\'t specify), so I am falling back to a default.
+     266: invokeinterface #100,  2          // InterfaceMethod org/apache/logging/log4j/Logger.info:(Ljava/lang/String;)V
+     271: aload_0
+     272: new           #104                // class org/apache/wiki/auth/user/DummyUserDatabase
+     275: dup
+     276: invokespecial #106                // Method org/apache/wiki/auth/user/DummyUserDatabase."<init>":()V
+     279: putfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+     282: aload_3
+     283: athrow
+     284: aload_0
+     285: getfield      #54                 // Field m_database:Lorg/apache/wiki/auth/user/UserDatabase;
+     288: areturn
+    Exception table:
+       from    to  target type
+          15    86   117   Class java/util/NoSuchElementException
+          15    86   117   Class org/apache/wiki/api/exceptions/NoRequiredPropertyException
+          15    86   162   Class java/lang/ReflectiveOperationException
+          15    86   206   Class org/apache/wiki/auth/WikiSecurityException
+          15    86   253   any
+         117   131   253   any
+         162   175   253   any
+         206   222   253   any
+    LineNumberTable:
+      line 115: 0
+      line 116: 7
+      line 119: 12
+      line 122: 15
+      line 124: 30
+      line 125: 41
+      line 126: 54
+      line 127: 76
+      line 135: 86
+      line 136: 93
+      line 137: 103
+      line 128: 117
+      line 129: 118
+      line 135: 131
+      line 136: 138
+      line 137: 148
+      line 130: 162
+      line 131: 163
+      line 135: 175
+      line 136: 182
+      line 137: 192
+      line 132: 206
+      line 133: 207
+      line 135: 222
+      line 136: 229
+      line 137: 239
+      line 135: 253
+      line 136: 261
+      line 137: 271
+      line 139: 282
+      line 141: 284
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+        118      13     2     e   Ljava/lang/Exception;
+        163      12     2     e   Ljava/lang/ReflectiveOperationException;
+        207      15     2     e   Lorg/apache/wiki/auth/WikiSecurityException;
+          0     289     0  this   Lorg/apache/wiki/auth/DefaultUserManager;
+         15     274     1 dbClassName   Ljava/lang/String;
+
+  public org.apache.wiki.auth.user.UserProfile getUserProfile(org.apache.wiki.api.core.Session);
+    Code:
+       0: aload_0
+       1: getfield      #10                 // Field m_profiles:Ljava/util/Map;
+       4: aload_1
+       5: invokeinterface #129,  2          // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+      10: checkcast     #135                // class org/apache/wiki/auth/user/UserProfile
+      13: astore_2
+      14: aload_2
+      15: ifnonnull     22
+      18: iconst_1
+      19: goto          23
+      22: iconst_0
+      23: istore_3
+      24: aconst_null
+      25: astore        4
+      27: aload_1
+      28: invokeinterface #137,  1          // InterfaceMethod org/apache/wiki/api/core/Session.isAuthenticated:()Z
+      33: ifeq          68
+      36: aload_1
+      37: invokeinterface #143,  1          // InterfaceMethod org/apache/wiki/api/core/Session.getUserPrincipal:()Ljava/security/Principal;
+      42: astore        4
+      44: aload_0
+      45: invokevirtual #147                // Method getUserDatabase:()Lorg/apache/wiki/auth/user/UserDatabase;
+      48: aload         4
+      50: invokeinterface #151,  1          // InterfaceMethod java/security/Principal.getName:()Ljava/lang/String;
+      55: invokeinterface #156,  2          // InterfaceMethod org/apache/wiki/auth/user/UserDatabase.find:(Ljava/lang/String;)Lorg/apache/wiki/auth/user/UserProfile;
+      60: astore_2
+      61: iconst_0
+      62: istore_3
+      63: goto          68
+      66: astore        5
+      68: iload_3
+      69: ifeq          119
+      72: aload_0
+      73: invokevirtual #147                // Method getUserDatabase:()Lorg/apache/wiki/auth/user/UserDatabase;
+      76: invokeinterface #162,  1          // InterfaceMethod org/apache/wiki/auth/user/UserDatabase.newProfile:()Lorg/apache/wiki/auth/user/UserProfile;
+      81: astore_2
+      82: aload         4
+      84: ifnull        100
+      87: aload_2
+      88: aload         4
+      90: invokeinterface #151,  1          // InterfaceMethod java/security/Principal.getName:()Ljava/lang/String;
+      95: invokeinterface #166,  2          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.setLoginName:(Ljava/lang/String;)V
+     100: aload_2
+     101: invokeinterface #169,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.isNew:()Z
+     106: ifne          119
+     109: new           #172                // class java/lang/IllegalStateException
+     112: dup
+     113: ldc           #174                // String New profile should be marked \'new\'. Check your UserProfile implementation.
+     115: invokespecial #176                // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+     118: athrow
+     119: aload_0
+     120: getfield      #10                 // Field m_profiles:Ljava/util/Map;
+     123: aload_1
+     124: aload_2
+     125: invokeinterface #177,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+     130: pop
+     131: aload_2
+     132: areturn
+    Exception table:
+       from    to  target type
+          44    63    66   Class org/apache/wiki/auth/NoSuchPrincipalException
+    LineNumberTable:
+      line 148: 0
+      line 149: 14
+      line 150: 24
+      line 153: 27
+      line 154: 36
+      line 156: 44
+      line 157: 61
+      line 158: 63
+      line 161: 68
+      line 162: 72
+      line 163: 82
+      line 164: 87
+      line 166: 100
+      line 167: 109
+      line 172: 119
+      line 173: 131
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0     133     0  this   Lorg/apache/wiki/auth/DefaultUserManager;
+          0     133     1 session   Lorg/apache/wiki/api/core/Session;
+         14     119     2 profile   Lorg/apache/wiki/auth/user/UserProfile;
+         24     109     3 newProfile   Z
+         27     106     4  user   Ljava/security/Principal;
+
+  public void setUserProfile(org.apache.wiki.api.core.Context, org.apache.wiki.auth.user.UserProfile) throws org.apache.wiki.auth.user.DuplicateUserException, org.apache.wiki.api.exceptions.WikiException;
+    Code:
+       0: aload_1
+       1: invokeinterface #181,  1          // InterfaceMethod org/apache/wiki/api/core/Context.getWikiSession:()Lorg/apache/wiki/api/core/Session;
+       6: astore_3
+       7: new           #187                // class org/apache/wiki/auth/permissions/WikiPermission
+      10: dup
+      11: aload_0
+      12: getfield      #16                 // Field m_engine:Lorg/apache/wiki/api/core/Engine;
+      15: invokeinterface #189,  1          // InterfaceMethod org/apache/wiki/api/core/Engine.getApplicationName:()Ljava/lang/String;
+      20: ldc           #192                // String editProfile
+      22: invokespecial #194                // Method org/apache/wiki/auth/permissions/WikiPermission."<init>":(Ljava/lang/String;Ljava/lang/String;)V
+      25: astore        4
+      27: aload_0
+      28: getfield      #16                 // Field m_engine:Lorg/apache/wiki/api/core/Engine;
+      31: ldc           #197                // class org/apache/wiki/auth/AuthorizationManager
+      33: invokeinterface #22,  2           // InterfaceMethod org/apache/wiki/api/core/Engine.getManager:(Ljava/lang/Class;)Ljava/lang/Object;
+      38: checkcast     #197                // class org/apache/wiki/auth/AuthorizationManager
+      41: aload_3
+      42: aload         4
+      44: invokeinterface #199,  3          // InterfaceMethod org/apache/wiki/auth/AuthorizationManager.checkPermission:(Lorg/apache/wiki/api/core/Session;Ljava/security/Permission;)Z
+      49: ifne          62
+      52: new           #121                // class org/apache/wiki/auth/WikiSecurityException
+      55: dup
+      56: ldc           #203                // String You are not allowed to save wiki profiles.
+      58: invokespecial #205                // Method org/apache/wiki/auth/WikiSecurityException."<init>":(Ljava/lang/String;)V
+      61: athrow
+      62: aload_2
+      63: invokeinterface #169,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.isNew:()Z
+      68: istore        5
+      70: aload_0
+      71: aload_3
+      72: invokevirtual #206                // Method getUserProfile:(Lorg/apache/wiki/api/core/Session;)Lorg/apache/wiki/auth/user/UserProfile;
+      75: astore        6
+      77: aload         6
+      79: ifnull        134
+      82: aload         6
+      84: invokeinterface #210,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getFullname:()Ljava/lang/String;
+      89: ifnull        134
+      92: aload         6
+      94: invokeinterface #210,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getFullname:()Ljava/lang/String;
+      99: aload_2
+     100: invokeinterface #210,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getFullname:()Ljava/lang/String;
+     105: invokevirtual #213                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+     108: ifeq          130
+     111: aload         6
+     113: invokeinterface #219,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getLoginName:()Ljava/lang/String;
+     118: aload_2
+     119: invokeinterface #219,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getLoginName:()Ljava/lang/String;
+     124: invokevirtual #213                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+     127: ifne          134
+     130: iconst_1
+     131: goto          135
+     134: iconst_0
+     135: istore        7
+     137: aload_0
+     138: invokevirtual #147                // Method getUserDatabase:()Lorg/apache/wiki/auth/user/UserDatabase;
+     141: aload_2
+     142: invokeinterface #219,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getLoginName:()Ljava/lang/String;
+     147: invokeinterface #222,  2          // InterfaceMethod org/apache/wiki/auth/user/UserDatabase.findByLoginName:(Ljava/lang/String;)Lorg/apache/wiki/auth/user/UserProfile;
+     152: astore        8
+     154: aload         8
+     156: ifnull        192
+     159: aload         8
+     161: aload         6
+     163: invokevirtual #225                // Method java/lang/Object.equals:(Ljava/lang/Object;)Z
+     166: ifne          192
+     169: new           #226                // class org/apache/wiki/auth/user/DuplicateUserException
+     172: dup
+     173: ldc           #228                // String security.error.login.taken
+     175: iconst_1
+     176: anewarray     #2                  // class java/lang/Object
+     179: dup
+     180: iconst_0
+     181: aload_2
+     182: invokeinterface #219,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getLoginName:()Ljava/lang/String;
+     187: aastore
+     188: invokespecial #230                // Method org/apache/wiki/auth/user/DuplicateUserException."<init>":(Ljava/lang/String;[Ljava/lang/Object;)V
+     191: athrow
+     192: goto          197
+     195: astore        9
+     197: aload_0
+     198: invokevirtual #147                // Method getUserDatabase:()Lorg/apache/wiki/auth/user/UserDatabase;
+     201: aload_2
+     202: invokeinterface #210,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getFullname:()Ljava/lang/String;
+     207: invokeinterface #233,  2          // InterfaceMethod org/apache/wiki/auth/user/UserDatabase.findByFullName:(Ljava/lang/String;)Lorg/apache/wiki/auth/user/UserProfile;
+     212: astore        8
+     214: aload         8
+     216: ifnull        252
+     219: aload         8
+     221: aload         6
+     223: invokevirtual #225                // Method java/lang/Object.equals:(Ljava/lang/Object;)Z
+     226: ifne          252
+     229: new           #226                // class org/apache/wiki/auth/user/DuplicateUserException
+     232: dup
+     233: ldc           #236                // String security.error.fullname.taken
+     235: iconst_1
+     236: anewarray     #2                  // class java/lang/Object
+     239: dup
+     240: iconst_0
+     241: aload_2
+     242: invokeinterface #210,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getFullname:()Ljava/lang/String;
+     247: aastore
+     248: invokespecial #230                // Method org/apache/wiki/auth/user/DuplicateUserException."<init>":(Ljava/lang/String;[Ljava/lang/Object;)V
+     251: athrow
+     252: goto          257
+     255: astore        9
+     257: iload         5
+     259: ifeq          362
+     262: aload         6
+     264: ifnull        362
+     267: aload         6
+     269: invokeinterface #169,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.isNew:()Z
+     274: ifeq          362
+     277: aload_0
+     278: aload_1
+     279: aload_2
+     280: invokevirtual #238                // Method startUserProfileCreationWorkflow:(Lorg/apache/wiki/api/core/Context;Lorg/apache/wiki/auth/user/UserProfile;)V
+     283: aload_0
+     284: getfield      #16                 // Field m_engine:Lorg/apache/wiki/api/core/Engine;
+     287: ldc           #242                // class org/apache/wiki/auth/AuthenticationManager
+     289: invokeinterface #22,  2           // InterfaceMethod org/apache/wiki/api/core/Engine.getManager:(Ljava/lang/Class;)Ljava/lang/Object;
+     294: checkcast     #242                // class org/apache/wiki/auth/AuthenticationManager
+     297: astore        9
+     299: aload         9
+     301: invokeinterface #244,  1          // InterfaceMethod org/apache/wiki/auth/AuthenticationManager.isContainerAuthenticated:()Z
+     306: ifne          331
+     309: aload         9
+     311: aload_3
+     312: aconst_null
+     313: aload_2
+     314: invokeinterface #219,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getLoginName:()Ljava/lang/String;
+     319: aload_2
+     320: invokeinterface #247,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getPassword:()Ljava/lang/String;
+     325: invokeinterface #250,  5          // InterfaceMethod org/apache/wiki/auth/AuthenticationManager.login:(Lorg/apache/wiki/api/core/Session;Ljavax/servlet/http/HttpServletRequest;Ljava/lang/String;Ljava/lang/String;)Z
+     330: pop
+     331: goto          351
+     334: astore        9
+     336: new           #121                // class org/apache/wiki/auth/WikiSecurityException
+     339: dup
+     340: aload         9
+     342: invokevirtual #256                // Method org/apache/wiki/api/exceptions/WikiException.getMessage:()Ljava/lang/String;
+     345: aload         9
+     347: invokespecial #257                // Method org/apache/wiki/auth/WikiSecurityException."<init>":(Ljava/lang/String;Ljava/lang/Throwable;)V
+     350: athrow
+     351: aload_0
+     352: bipush        53
+     354: aload_3
+     355: aload_2
+     356: invokevirtual #262                // Method fireEvent:(ILorg/apache/wiki/api/core/Session;Ljava/lang/Object;)V
+     359: goto          458
+     362: iload         7
+     364: ifeq          408
+     367: aload         6
+     369: invokeinterface #219,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getLoginName:()Ljava/lang/String;
+     374: aload_2
+     375: invokeinterface #219,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getLoginName:()Ljava/lang/String;
+     380: invokevirtual #213                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+     383: ifne          408
+     386: aload_0
+     387: invokevirtual #147                // Method getUserDatabase:()Lorg/apache/wiki/auth/user/UserDatabase;
+     390: aload         6
+     392: invokeinterface #219,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getLoginName:()Ljava/lang/String;
+     397: aload_2
+     398: invokeinterface #219,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getLoginName:()Ljava/lang/String;
+     403: invokeinterface #266,  3          // InterfaceMethod org/apache/wiki/auth/user/UserDatabase.rename:(Ljava/lang/String;Ljava/lang/String;)V
+     408: aload_0
+     409: invokevirtual #147                // Method getUserDatabase:()Lorg/apache/wiki/auth/user/UserDatabase;
+     412: aload_2
+     413: invokeinterface #269,  2          // InterfaceMethod org/apache/wiki/auth/user/UserDatabase.save:(Lorg/apache/wiki/auth/user/UserProfile;)V
+     418: iload         7
+     420: ifeq          450
+     423: iconst_2
+     424: anewarray     #135                // class org/apache/wiki/auth/user/UserProfile
+     427: dup
+     428: iconst_0
+     429: aload         6
+     431: aastore
+     432: dup
+     433: iconst_1
+     434: aload_2
+     435: aastore
+     436: astore        9
+     438: aload_0
+     439: bipush        54
+     441: aload_3
+     442: aload         9
+     444: invokevirtual #262                // Method fireEvent:(ILorg/apache/wiki/api/core/Session;Ljava/lang/Object;)V
+     447: goto          458
+     450: aload_0
+     451: bipush        53
+     453: aload_3
+     454: aload_2
+     455: invokevirtual #262                // Method fireEvent:(ILorg/apache/wiki/api/core/Session;Ljava/lang/Object;)V
+     458: return
+    Exception table:
+       from    to  target type
+         137   192   195   Class org/apache/wiki/auth/NoSuchPrincipalException
+         197   252   255   Class org/apache/wiki/auth/NoSuchPrincipalException
+         283   331   334   Class org/apache/wiki/api/exceptions/WikiException
+    LineNumberTable:
+      line 179: 0
+      line 181: 7
+      line 182: 27
+      line 183: 52
+      line 187: 62
+      line 190: 70
+      line 191: 77
+      line 192: 94
+      line 193: 113
+      line 196: 137
+      line 197: 154
+      line 198: 169
+      line 201: 192
+      line 200: 195
+      line 203: 197
+      line 204: 214
+      line 205: 229
+      line 208: 252
+      line 207: 255
+      line 211: 257
+      line 212: 277
+      line 217: 283
+      line 218: 299
+      line 219: 309
+      line 223: 331
+      line 221: 334
+      line 222: 336
+      line 227: 351
+      line 230: 362
+      line 231: 386
+      line 235: 408
+      line 237: 418
+      line 239: 423
+      line 240: 438
+      line 241: 447
+      line 243: 450
+      line 246: 458
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+        154      41     8 otherProfile   Lorg/apache/wiki/auth/user/UserProfile;
+        214      41     8 otherProfile   Lorg/apache/wiki/auth/user/UserProfile;
+        299      32     9   mgr   Lorg/apache/wiki/auth/AuthenticationManager;
+        336      15     9     e   Lorg/apache/wiki/api/exceptions/WikiException;
+        438       9     9 profiles   [Lorg/apache/wiki/auth/user/UserProfile;
+          0     459     0  this   Lorg/apache/wiki/auth/DefaultUserManager;
+          0     459     1 context   Lorg/apache/wiki/api/core/Context;
+          0     459     2 profile   Lorg/apache/wiki/auth/user/UserProfile;
+          7     452     3 session   Lorg/apache/wiki/api/core/Session;
+         27     432     4     p   Ljava/security/Permission;
+         70     389     5 newProfile   Z
+         77     382     6 oldProfile   Lorg/apache/wiki/auth/user/UserProfile;
+        137     322     7 nameChanged   Z
+
+  public void startUserProfileCreationWorkflow(org.apache.wiki.api.core.Context, org.apache.wiki.auth.user.UserProfile) throws org.apache.wiki.api.exceptions.WikiException;
+    Code:
+       0: aload_0
+       1: getfield      #16                 // Field m_engine:Lorg/apache/wiki/api/core/Engine;
+       4: invokestatic  #273                // Method org/apache/wiki/workflow/WorkflowBuilder.getBuilder:(Lorg/apache/wiki/api/core/Engine;)Lorg/apache/wiki/workflow/WorkflowBuilder;
+       7: astore_3
+       8: aload_1
+       9: invokeinterface #181,  1          // InterfaceMethod org/apache/wiki/api/core/Context.getWikiSession:()Lorg/apache/wiki/api/core/Session;
+      14: invokeinterface #143,  1          // InterfaceMethod org/apache/wiki/api/core/Session.getUserPrincipal:()Ljava/security/Principal;
+      19: astore        4
+      21: aload_0
+      22: getfield      #16                 // Field m_engine:Lorg/apache/wiki/api/core/Engine;
+      25: ldc_w         #279                // class org/apache/wiki/tasks/TasksManager
+      28: invokeinterface #22,  2           // InterfaceMethod org/apache/wiki/api/core/Engine.getManager:(Ljava/lang/Class;)Ljava/lang/Object;
+      33: checkcast     #279                // class org/apache/wiki/tasks/TasksManager
+      36: aload_1
+      37: invokeinterface #181,  1          // InterfaceMethod org/apache/wiki/api/core/Context.getWikiSession:()Lorg/apache/wiki/api/core/Session;
+      42: invokeinterface #281,  1          // InterfaceMethod org/apache/wiki/api/core/Session.getLocale:()Ljava/util/Locale;
+      47: invokeinterface #285,  2          // InterfaceMethod org/apache/wiki/tasks/TasksManager.buildSaveUserProfileTask:(Ljava/util/Locale;)Lorg/apache/wiki/workflow/Step;
+      52: astore        5
+      54: aload_2
+      55: invokeinterface #289,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getEmail:()Ljava/lang/String;
+      60: ifnull        67
+      63: iconst_1
+      64: goto          68
+      67: iconst_0
+      68: istore        6
+      70: iload         6
+      72: ifeq          79
+      75: iconst_4
+      76: goto          80
+      79: iconst_3
+      80: anewarray     #292                // class org/apache/wiki/workflow/Fact
+      83: astore        7
+      85: aload         7
+      87: iconst_0
+      88: new           #292                // class org/apache/wiki/workflow/Fact
+      91: dup
+      92: ldc_w         #296                // String prefs.fullname
+      95: aload_2
+      96: invokeinterface #210,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getFullname:()Ljava/lang/String;
+     101: invokespecial #298                // Method org/apache/wiki/workflow/Fact."<init>":(Ljava/lang/String;Ljava/io/Serializable;)V
+     104: aastore
+     105: aload         7
+     107: iconst_1
+     108: new           #292                // class org/apache/wiki/workflow/Fact
+     111: dup
+     112: ldc_w         #301                // String prefs.loginname
+     115: aload_2
+     116: invokeinterface #219,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getLoginName:()Ljava/lang/String;
+     121: invokespecial #298                // Method org/apache/wiki/workflow/Fact."<init>":(Ljava/lang/String;Ljava/io/Serializable;)V
+     124: aastore
+     125: aload         7
+     127: iconst_2
+     128: new           #292                // class org/apache/wiki/workflow/Fact
+     131: dup
+     132: ldc_w         #303                // String fact.submitter
+     135: aload         4
+     137: invokeinterface #151,  1          // InterfaceMethod java/security/Principal.getName:()Ljava/lang/String;
+     142: invokespecial #298                // Method org/apache/wiki/workflow/Fact."<init>":(Ljava/lang/String;Ljava/io/Serializable;)V
+     145: aastore
+     146: iload         6
+     148: ifeq          171
+     151: aload         7
+     153: iconst_3
+     154: new           #292                // class org/apache/wiki/workflow/Fact
+     157: dup
+     158: ldc_w         #305                // String prefs.email
+     161: aload_2
+     162: invokeinterface #289,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getEmail:()Ljava/lang/String;
+     167: invokespecial #298                // Method org/apache/wiki/workflow/Fact."<init>":(Ljava/lang/String;Ljava/io/Serializable;)V
+     170: aastore
+     171: aload_3
+     172: aload         4
+     174: ldc_w         #307                // String workflow.createUserProfile
+     177: aconst_null
+     178: ldc_w         #309                // String decision.createUserProfile
+     181: aload         7
+     183: aload         5
+     185: aconst_null
+     186: invokevirtual #311                // Method org/apache/wiki/workflow/WorkflowBuilder.buildApprovalWorkflow:(Ljava/security/Principal;Ljava/lang/String;Lorg/apache/wiki/workflow/Step;Ljava/lang/String;[Lorg/apache/wiki/workflow/Fact;Lorg/apache/wiki/workflow/Step;Ljava/lang/String;)Lorg/apache/wiki/workflow/Workflow;
+     189: astore        8
+     191: aload         8
+     193: ldc_w         #315                // String userProfile
+     196: aload_2
+     197: invokevirtual #317                // Method org/apache/wiki/workflow/Workflow.setAttribute:(Ljava/lang/String;Ljava/io/Serializable;)V
+     200: aload         8
+     202: aload_1
+     203: invokevirtual #322                // Method org/apache/wiki/workflow/Workflow.start:(Lorg/apache/wiki/api/core/Context;)V
+     206: aload         8
+     208: invokevirtual #326                // Method org/apache/wiki/workflow/Workflow.getCurrentStep:()Lorg/apache/wiki/workflow/Step;
+     211: instanceof    #330                // class org/apache/wiki/workflow/Decision
+     214: istore        9
+     216: iload         9
+     218: ifeq          232
+     221: new           #332                // class org/apache/wiki/workflow/DecisionRequiredException
+     224: dup
+     225: ldc_w         #334                // String This profile must be approved before it becomes active
+     228: invokespecial #336                // Method org/apache/wiki/workflow/DecisionRequiredException."<init>":(Ljava/lang/String;)V
+     231: athrow
+     232: return
+    LineNumberTable:
+      line 251: 0
+      line 252: 8
+      line 253: 21
+      line 256: 54
+      line 257: 70
+      line 258: 85
+      line 259: 105
+      line 260: 125
+      line 261: 146
+      line 262: 151
+      line 264: 171
+      line 272: 191
+      line 273: 200
+      line 275: 206
+      line 278: 216
+      line 279: 221
+      line 281: 232
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0     233     0  this   Lorg/apache/wiki/auth/DefaultUserManager;
+          0     233     1 context   Lorg/apache/wiki/api/core/Context;
+          0     233     2 profile   Lorg/apache/wiki/auth/user/UserProfile;
+          8     225     3 builder   Lorg/apache/wiki/workflow/WorkflowBuilder;
+         21     212     4 submitter   Ljava/security/Principal;
+         54     179     5 completionTask   Lorg/apache/wiki/workflow/Step;
+         70     163     6 hasEmail   Z
+         85     148     7 facts   [Lorg/apache/wiki/workflow/Fact;
+        191      42     8 workflow   Lorg/apache/wiki/workflow/Workflow;
+        216      17     9 approvalRequired   Z
+
+  public org.apache.wiki.auth.user.UserProfile parseProfile(org.apache.wiki.api.core.Context);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: invokeinterface #181,  1          // InterfaceMethod org/apache/wiki/api/core/Context.getWikiSession:()Lorg/apache/wiki/api/core/Session;
+       7: invokevirtual #206                // Method getUserProfile:(Lorg/apache/wiki/api/core/Session;)Lorg/apache/wiki/auth/user/UserProfile;
+      10: astore_2
+      11: aload_1
+      12: invokeinterface #337,  1          // InterfaceMethod org/apache/wiki/api/core/Context.getHttpRequest:()Ljavax/servlet/http/HttpServletRequest;
+      17: astore_3
+      18: aload_3
+      19: ldc_w         #341                // String loginname
+      22: invokeinterface #343,  2          // InterfaceMethod javax/servlet/http/HttpServletRequest.getParameter:(Ljava/lang/String;)Ljava/lang/String;
+      27: astore        4
+      29: aload_3
+      30: ldc_w         #349                // String password
+      33: invokeinterface #343,  2          // InterfaceMethod javax/servlet/http/HttpServletRequest.getParameter:(Ljava/lang/String;)Ljava/lang/String;
+      38: astore        5
+      40: aload_3
+      41: ldc_w         #351                // String fullname
+      44: invokeinterface #343,  2          // InterfaceMethod javax/servlet/http/HttpServletRequest.getParameter:(Ljava/lang/String;)Ljava/lang/String;
+      49: astore        6
+      51: aload_3
+      52: ldc_w         #353                // String email
+      55: invokeinterface #343,  2          // InterfaceMethod javax/servlet/http/HttpServletRequest.getParameter:(Ljava/lang/String;)Ljava/lang/String;
+      60: astore        7
+      62: aload         4
+      64: invokestatic  #355                // Method org/apache/commons/lang3/StringUtils.trim:(Ljava/lang/String;)Ljava/lang/String;
+      67: astore        4
+      69: aload         5
+      71: invokestatic  #360                // Method org/apache/wiki/ui/InputValidator.isBlank:(Ljava/lang/String;)Z
+      74: ifeq          81
+      77: aconst_null
+      78: goto          83
+      81: aload         5
+      83: astore        5
+      85: aload         6
+      87: invokestatic  #355                // Method org/apache/commons/lang3/StringUtils.trim:(Ljava/lang/String;)Ljava/lang/String;
+      90: astore        6
+      92: aload         7
+      94: invokestatic  #355                // Method org/apache/commons/lang3/StringUtils.trim:(Ljava/lang/String;)Ljava/lang/String;
+      97: astore        7
+      99: aload_0
+     100: getfield      #16                 // Field m_engine:Lorg/apache/wiki/api/core/Engine;
+     103: ldc           #242                // class org/apache/wiki/auth/AuthenticationManager
+     105: invokeinterface #22,  2           // InterfaceMethod org/apache/wiki/api/core/Engine.getManager:(Ljava/lang/Class;)Ljava/lang/Object;
+     110: checkcast     #242                // class org/apache/wiki/auth/AuthenticationManager
+     113: invokeinterface #244,  1          // InterfaceMethod org/apache/wiki/auth/AuthenticationManager.isContainerAuthenticated:()Z
+     118: ifeq          153
+     121: aload_1
+     122: invokeinterface #181,  1          // InterfaceMethod org/apache/wiki/api/core/Context.getWikiSession:()Lorg/apache/wiki/api/core/Session;
+     127: invokeinterface #137,  1          // InterfaceMethod org/apache/wiki/api/core/Session.isAuthenticated:()Z
+     132: ifeq          153
+     135: aload_1
+     136: invokeinterface #181,  1          // InterfaceMethod org/apache/wiki/api/core/Context.getWikiSession:()Lorg/apache/wiki/api/core/Session;
+     141: invokeinterface #366,  1          // InterfaceMethod org/apache/wiki/api/core/Session.getLoginPrincipal:()Ljava/security/Principal;
+     146: invokeinterface #151,  1          // InterfaceMethod java/security/Principal.getName:()Ljava/lang/String;
+     151: astore        4
+     153: aload_2
+     154: aload         4
+     156: invokeinterface #166,  2          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.setLoginName:(Ljava/lang/String;)V
+     161: aload_2
+     162: aload         7
+     164: invokeinterface #369,  2          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.setEmail:(Ljava/lang/String;)V
+     169: aload_2
+     170: aload         6
+     172: invokeinterface #372,  2          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.setFullname:(Ljava/lang/String;)V
+     177: aload_2
+     178: aload         5
+     180: invokeinterface #375,  2          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.setPassword:(Ljava/lang/String;)V
+     185: aload_2
+     186: areturn
+    LineNumberTable:
+      line 287: 0
+      line 288: 11
+      line 291: 18
+      line 292: 29
+      line 293: 40
+      line 294: 51
+      line 295: 62
+      line 296: 69
+      line 297: 85
+      line 298: 92
+      line 301: 99
+      line 302: 135
+      line 306: 153
+      line 307: 161
+      line 308: 169
+      line 309: 177
+      line 310: 185
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0     187     0  this   Lorg/apache/wiki/auth/DefaultUserManager;
+          0     187     1 context   Lorg/apache/wiki/api/core/Context;
+         11     176     2 profile   Lorg/apache/wiki/auth/user/UserProfile;
+         18     169     3 request   Ljavax/servlet/http/HttpServletRequest;
+         29     158     4 loginName   Ljava/lang/String;
+         40     147     5 password   Ljava/lang/String;
+         51     136     6 fullname   Ljava/lang/String;
+         62     125     7 email   Ljava/lang/String;
+
+  public void validateProfile(org.apache.wiki.api.core.Context, org.apache.wiki.auth.user.UserProfile);
+    Code:
+       0: aload_1
+       1: invokeinterface #181,  1          // InterfaceMethod org/apache/wiki/api/core/Context.getWikiSession:()Lorg/apache/wiki/api/core/Session;
+       6: astore_3
+       7: new           #361                // class org/apache/wiki/ui/InputValidator
+      10: dup
+      11: ldc_w         #378                // String profile
+      14: aload_1
+      15: invokespecial #380                // Method org/apache/wiki/ui/InputValidator."<init>":(Ljava/lang/String;Lorg/apache/wiki/api/core/Context;)V
+      18: astore        4
+      20: aload_1
+      21: ldc_w         #385                // String CoreResources
+      24: invokestatic  #387                // Method org/apache/wiki/preferences/Preferences.getBundle:(Lorg/apache/wiki/api/core/Context;Ljava/lang/String;)Ljava/util/ResourceBundle;
+      27: astore        5
+      29: aload_0
+      30: getfield      #16                 // Field m_engine:Lorg/apache/wiki/api/core/Engine;
+      33: ldc_w         #393                // class org/apache/wiki/filters/FilterManager
+      36: invokeinterface #22,  2           // InterfaceMethod org/apache/wiki/api/core/Engine.getManager:(Ljava/lang/Class;)Ljava/lang/Object;
+      41: checkcast     #393                // class org/apache/wiki/filters/FilterManager
+      44: astore        6
+      46: aload         6
+      48: invokeinterface #395,  1          // InterfaceMethod org/apache/wiki/filters/FilterManager.getFilterList:()Ljava/util/List;
+      53: astore        7
+      55: aload         7
+      57: invokeinterface #399,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+      62: astore        8
+      64: aload         8
+      66: invokeinterface #405,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+      71: ifeq          123
+      74: aload         8
+      76: invokeinterface #410,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+      81: checkcast     #414                // class org/apache/wiki/api/filters/PageFilter
+      84: astore        9
+      86: aload         9
+      88: instanceof    #416                // class org/apache/wiki/filters/SpamFilter
+      91: ifeq          120
+      94: aload         9
+      96: checkcast     #416                // class org/apache/wiki/filters/SpamFilter
+      99: aload_1
+     100: aload_2
+     101: invokevirtual #418                // Method org/apache/wiki/filters/SpamFilter.isValidUserProfile:(Lorg/apache/wiki/api/core/Context;Lorg/apache/wiki/auth/user/UserProfile;)Z
+     104: ifne          123
+     107: aload_3
+     108: ldc_w         #378                // String profile
+     111: ldc_w         #422                // String Invalid userprofile
+     114: invokeinterface #424,  3          // InterfaceMethod org/apache/wiki/api/core/Session.addMessage:(Ljava/lang/String;Ljava/lang/String;)V
+     119: return
+     120: goto          64
+     123: aload_0
+     124: getfield      #16                 // Field m_engine:Lorg/apache/wiki/api/core/Engine;
+     127: ldc           #242                // class org/apache/wiki/auth/AuthenticationManager
+     129: invokeinterface #22,  2           // InterfaceMethod org/apache/wiki/api/core/Engine.getManager:(Ljava/lang/Class;)Ljava/lang/Object;
+     134: checkcast     #242                // class org/apache/wiki/auth/AuthenticationManager
+     137: invokeinterface #244,  1          // InterfaceMethod org/apache/wiki/auth/AuthenticationManager.isContainerAuthenticated:()Z
+     142: ifeq          176
+     145: aload_1
+     146: invokeinterface #181,  1          // InterfaceMethod org/apache/wiki/api/core/Context.getWikiSession:()Lorg/apache/wiki/api/core/Session;
+     151: invokeinterface #137,  1          // InterfaceMethod org/apache/wiki/api/core/Session.isAuthenticated:()Z
+     156: ifne          176
+     159: aload_3
+     160: ldc_w         #378                // String profile
+     163: aload         5
+     165: ldc_w         #427                // String security.error.createprofilebeforelogin
+     168: invokevirtual #429                // Method java/util/ResourceBundle.getString:(Ljava/lang/String;)Ljava/lang/String;
+     171: invokeinterface #424,  3          // InterfaceMethod org/apache/wiki/api/core/Session.addMessage:(Ljava/lang/String;Ljava/lang/String;)V
+     176: aload         4
+     178: aload_2
+     179: invokeinterface #219,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getLoginName:()Ljava/lang/String;
+     184: aload         5
+     186: ldc_w         #434                // String security.user.loginname
+     189: invokevirtual #429                // Method java/util/ResourceBundle.getString:(Ljava/lang/String;)Ljava/lang/String;
+     192: invokevirtual #436                // Method org/apache/wiki/ui/InputValidator.validateNotNull:(Ljava/lang/String;Ljava/lang/String;)Z
+     195: pop
+     196: aload         4
+     198: aload_2
+     199: invokeinterface #210,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getFullname:()Ljava/lang/String;
+     204: aload         5
+     206: ldc_w         #440                // String security.user.fullname
+     209: invokevirtual #429                // Method java/util/ResourceBundle.getString:(Ljava/lang/String;)Ljava/lang/String;
+     212: invokevirtual #436                // Method org/apache/wiki/ui/InputValidator.validateNotNull:(Ljava/lang/String;Ljava/lang/String;)Z
+     215: pop
+     216: aload         4
+     218: aload_2
+     219: invokeinterface #289,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getEmail:()Ljava/lang/String;
+     224: aload         5
+     226: ldc_w         #442                // String security.user.email
+     229: invokevirtual #429                // Method java/util/ResourceBundle.getString:(Ljava/lang/String;)Ljava/lang/String;
+     232: iconst_1
+     233: invokevirtual #444                // Method org/apache/wiki/ui/InputValidator.validate:(Ljava/lang/String;Ljava/lang/String;I)Z
+     236: pop
+     237: aload_0
+     238: getfield      #16                 // Field m_engine:Lorg/apache/wiki/api/core/Engine;
+     241: ldc           #242                // class org/apache/wiki/auth/AuthenticationManager
+     243: invokeinterface #22,  2           // InterfaceMethod org/apache/wiki/api/core/Engine.getManager:(Ljava/lang/Class;)Ljava/lang/Object;
+     248: checkcast     #242                // class org/apache/wiki/auth/AuthenticationManager
+     251: invokeinterface #244,  1          // InterfaceMethod org/apache/wiki/auth/AuthenticationManager.isContainerAuthenticated:()Z
+     256: ifne          415
+     259: aload_2
+     260: invokeinterface #247,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getPassword:()Ljava/lang/String;
+     265: astore        8
+     267: aload         8
+     269: ifnonnull     292
+     272: aload_3
+     273: ldc_w         #378                // String profile
+     276: aload         5
+     278: ldc_w         #448                // String security.error.blankpassword
+     281: invokevirtual #429                // Method java/util/ResourceBundle.getString:(Ljava/lang/String;)Ljava/lang/String;
+     284: invokeinterface #424,  3          // InterfaceMethod org/apache/wiki/api/core/Session.addMessage:(Ljava/lang/String;Ljava/lang/String;)V
+     289: goto          415
+     292: aload_1
+     293: invokeinterface #337,  1          // InterfaceMethod org/apache/wiki/api/core/Context.getHttpRequest:()Ljavax/servlet/http/HttpServletRequest;
+     298: astore        9
+     300: aload         9
+     302: ifnonnull     309
+     305: aconst_null
+     306: goto          319
+     309: aload         9
+     311: ldc_w         #450                // String password0
+     314: invokeinterface #343,  2          // InterfaceMethod javax/servlet/http/HttpServletRequest.getParameter:(Ljava/lang/String;)Ljava/lang/String;
+     319: astore        10
+     321: aload         9
+     323: ifnonnull     330
+     326: aconst_null
+     327: goto          340
+     330: aload         9
+     332: ldc_w         #452                // String password2
+     335: invokeinterface #343,  2          // InterfaceMethod javax/servlet/http/HttpServletRequest.getParameter:(Ljava/lang/String;)Ljava/lang/String;
+     340: astore        11
+     342: aload         8
+     344: aload         11
+     346: invokevirtual #213                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+     349: ifne          369
+     352: aload_3
+     353: ldc_w         #378                // String profile
+     356: aload         5
+     358: ldc_w         #454                // String security.error.passwordnomatch
+     361: invokevirtual #429                // Method java/util/ResourceBundle.getString:(Ljava/lang/String;)Ljava/lang/String;
+     364: invokeinterface #424,  3          // InterfaceMethod org/apache/wiki/api/core/Session.addMessage:(Ljava/lang/String;Ljava/lang/String;)V
+     369: aload_2
+     370: invokeinterface #169,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.isNew:()Z
+     375: ifne          415
+     378: aload_0
+     379: invokevirtual #147                // Method getUserDatabase:()Lorg/apache/wiki/auth/user/UserDatabase;
+     382: aload_2
+     383: invokeinterface #219,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getLoginName:()Ljava/lang/String;
+     388: aload         10
+     390: invokeinterface #456,  3          // InterfaceMethod org/apache/wiki/auth/user/UserDatabase.validatePassword:(Ljava/lang/String;Ljava/lang/String;)Z
+     395: ifne          415
+     398: aload_3
+     399: ldc_w         #378                // String profile
+     402: aload         5
+     404: ldc_w         #454                // String security.error.passwordnomatch
+     407: invokevirtual #429                // Method java/util/ResourceBundle.getString:(Ljava/lang/String;)Ljava/lang/String;
+     410: invokeinterface #424,  3          // InterfaceMethod org/apache/wiki/api/core/Session.addMessage:(Ljava/lang/String;Ljava/lang/String;)V
+     415: aload_2
+     416: invokeinterface #210,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getFullname:()Ljava/lang/String;
+     421: astore        9
+     423: aload_2
+     424: invokeinterface #219,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getLoginName:()Ljava/lang/String;
+     429: astore        10
+     431: aload_2
+     432: invokeinterface #289,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getEmail:()Ljava/lang/String;
+     437: astore        11
+     439: aload_0
+     440: invokevirtual #147                // Method getUserDatabase:()Lorg/apache/wiki/auth/user/UserDatabase;
+     443: aload         9
+     445: invokeinterface #156,  2          // InterfaceMethod org/apache/wiki/auth/user/UserDatabase.find:(Ljava/lang/String;)Lorg/apache/wiki/auth/user/UserProfile;
+     450: astore        8
+     452: aload         8
+     454: ifnull        514
+     457: aload_2
+     458: aload         8
+     460: invokevirtual #225                // Method java/lang/Object.equals:(Ljava/lang/Object;)Z
+     463: ifne          514
+     466: aload         9
+     468: aload         8
+     470: invokeinterface #210,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getFullname:()Ljava/lang/String;
+     475: invokevirtual #213                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+     478: ifne          514
+     481: iconst_1
+     482: anewarray     #2                  // class java/lang/Object
+     485: dup
+     486: iconst_0
+     487: aload         9
+     489: aastore
+     490: astore        12
+     492: aload_3
+     493: ldc_w         #378                // String profile
+     496: aload         5
+     498: ldc_w         #459                // String security.error.illegalfullname
+     501: invokevirtual #429                // Method java/util/ResourceBundle.getString:(Ljava/lang/String;)Ljava/lang/String;
+     504: aload         12
+     506: invokestatic  #461                // Method java/text/MessageFormat.format:(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+     509: invokeinterface #424,  3          // InterfaceMethod org/apache/wiki/api/core/Session.addMessage:(Ljava/lang/String;Ljava/lang/String;)V
+     514: goto          519
+     517: astore        12
+     519: aload_0
+     520: invokevirtual #147                // Method getUserDatabase:()Lorg/apache/wiki/auth/user/UserDatabase;
+     523: aload         10
+     525: invokeinterface #156,  2          // InterfaceMethod org/apache/wiki/auth/user/UserDatabase.find:(Ljava/lang/String;)Lorg/apache/wiki/auth/user/UserProfile;
+     530: astore        8
+     532: aload         8
+     534: ifnull        594
+     537: aload_2
+     538: aload         8
+     540: invokevirtual #225                // Method java/lang/Object.equals:(Ljava/lang/Object;)Z
+     543: ifne          594
+     546: aload         10
+     548: aload         8
+     550: invokeinterface #219,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getLoginName:()Ljava/lang/String;
+     555: invokevirtual #213                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+     558: ifne          594
+     561: iconst_1
+     562: anewarray     #2                  // class java/lang/Object
+     565: dup
+     566: iconst_0
+     567: aload         10
+     569: aastore
+     570: astore        12
+     572: aload_3
+     573: ldc_w         #378                // String profile
+     576: aload         5
+     578: ldc_w         #467                // String security.error.illegalloginname
+     581: invokevirtual #429                // Method java/util/ResourceBundle.getString:(Ljava/lang/String;)Ljava/lang/String;
+     584: aload         12
+     586: invokestatic  #461                // Method java/text/MessageFormat.format:(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+     589: invokeinterface #424,  3          // InterfaceMethod org/apache/wiki/api/core/Session.addMessage:(Ljava/lang/String;Ljava/lang/String;)V
+     594: goto          599
+     597: astore        12
+     599: aload_0
+     600: invokevirtual #147                // Method getUserDatabase:()Lorg/apache/wiki/auth/user/UserDatabase;
+     603: aload         11
+     605: invokeinterface #469,  2          // InterfaceMethod org/apache/wiki/auth/user/UserDatabase.findByEmail:(Ljava/lang/String;)Lorg/apache/wiki/auth/user/UserProfile;
+     610: astore        8
+     612: aload         8
+     614: ifnull        699
+     617: aload_2
+     618: invokeinterface #472,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getUid:()Ljava/lang/String;
+     623: aload         8
+     625: invokeinterface #472,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getUid:()Ljava/lang/String;
+     630: invokevirtual #213                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+     633: ifne          699
+     636: aload_2
+     637: aload         8
+     639: invokevirtual #225                // Method java/lang/Object.equals:(Ljava/lang/Object;)Z
+     642: ifne          699
+     645: aload         11
+     647: invokestatic  #475                // Method org/apache/commons/lang3/StringUtils.lowerCase:(Ljava/lang/String;)Ljava/lang/String;
+     650: aload         8
+     652: invokeinterface #289,  1          // InterfaceMethod org/apache/wiki/auth/user/UserProfile.getEmail:()Ljava/lang/String;
+     657: invokestatic  #475                // Method org/apache/commons/lang3/StringUtils.lowerCase:(Ljava/lang/String;)Ljava/lang/String;
+     660: invokevirtual #213                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+     663: ifeq          699
+     666: iconst_1
+     667: anewarray     #2                  // class java/lang/Object
+     670: dup
+     671: iconst_0
+     672: aload         11
+     674: aastore
+     675: astore        12
+     677: aload_3
+     678: ldc_w         #378                // String profile
+     681: aload         5
+     683: ldc_w         #478                // String security.error.email.taken
+     686: invokevirtual #429                // Method java/util/ResourceBundle.getString:(Ljava/lang/String;)Ljava/lang/String;
+     689: aload         12
+     691: invokestatic  #461                // Method java/text/MessageFormat.format:(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+     694: invokeinterface #424,  3          // InterfaceMethod org/apache/wiki/api/core/Session.addMessage:(Ljava/lang/String;Ljava/lang/String;)V
+     699: goto          704
+     702: astore        12
+     704: return
+    Exception table:
+       from    to  target type
+         439   514   517   Class org/apache/wiki/auth/NoSuchPrincipalException
+         519   594   597   Class org/apache/wiki/auth/NoSuchPrincipalException
+         599   699   702   Class org/apache/wiki/auth/NoSuchPrincipalException
+    LineNumberTable:
+      line 316: 0
+      line 317: 7
+      line 318: 20
+      line 321: 29
+      line 322: 46
+      line 323: 55
+      line 324: 86
+      line 325: 94
+      line 326: 107
+      line 327: 119
+      line 331: 120
+      line 334: 123
+      line 335: 146
+      line 336: 159
+      line 339: 176
+      line 340: 196
+      line 341: 216
+      line 343: 237
+      line 345: 259
+      line 346: 267
+      line 347: 272
+      line 349: 292
+      line 350: 300
+      line 351: 321
+      line 352: 342
+      line 353: 352
+      line 355: 369
+      line 356: 398
+      line 362: 415
+      line 363: 423
+      line 364: 431
+      line 368: 439
+      line 369: 452
+      line 370: 481
+      line 371: 492
+      line 373: 514
+      line 377: 519
+      line 378: 532
+      line 379: 561
+      line 380: 572
+      line 382: 594
+      line 386: 599
+      line 387: 612
+      line 388: 639
+      line 389: 652
+      line 390: 666
+      line 391: 677
+      line 393: 699
+      line 394: 704
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+         86      34     9    pf   Lorg/apache/wiki/api/filters/PageFilter;
+        300     115     9 request   Ljavax/servlet/http/HttpServletRequest;
+        321      94    10 password0   Ljava/lang/String;
+        342      73    11 password2   Ljava/lang/String;
+        267     148     8 password   Ljava/lang/String;
+        492      22    12  args   [Ljava/lang/Object;
+        452      65     8 otherProfile   Lorg/apache/wiki/auth/user/UserProfile;
+        572      22    12  args   [Ljava/lang/Object;
+        532      65     8 otherProfile   Lorg/apache/wiki/auth/user/UserProfile;
+        677      22    12  args   [Ljava/lang/Object;
+        612      90     8 otherProfile   Lorg/apache/wiki/auth/user/UserProfile;
+          0     705     0  this   Lorg/apache/wiki/auth/DefaultUserManager;
+          0     705     1 context   Lorg/apache/wiki/api/core/Context;
+          0     705     2 profile   Lorg/apache/wiki/auth/user/UserProfile;
+          7     698     3 session   Lorg/apache/wiki/api/core/Session;
+         20     685     4 validator   Lorg/apache/wiki/ui/InputValidator;
+         29     676     5    rb   Ljava/util/ResourceBundle;
+         46     659     6    fm   Lorg/apache/wiki/filters/FilterManager;
+         55     650     7    ls   Ljava/util/List;
+        423     282     9 fullName   Ljava/lang/String;
+        431     274    10 loginName   Ljava/lang/String;
+        439     266    11 email   Ljava/lang/String;
+
+  public java.security.Principal[] listWikiNames() throws org.apache.wiki.auth.WikiSecurityException;
+    Code:
+       0: aload_0
+       1: invokevirtual #147                // Method getUserDatabase:()Lorg/apache/wiki/auth/user/UserDatabase;
+       4: invokeinterface #480,  1          // InterfaceMethod org/apache/wiki/auth/user/UserDatabase.getWikiNames:()[Ljava/security/Principal;
+       9: areturn
+    LineNumberTable:
+      line 399: 0
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0      10     0  this   Lorg/apache/wiki/auth/DefaultUserManager;
+
+  public synchronized void addWikiEventListener(org.apache.wiki.event.WikiEventListener);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: invokestatic  #484                // Method org/apache/wiki/event/WikiEventManager.addWikiEventListener:(Ljava/lang/Object;Lorg/apache/wiki/event/WikiEventListener;)Z
+       5: pop
+       6: return
+    LineNumberTable:
+      line 410: 0
+      line 411: 6
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0       7     0  this   Lorg/apache/wiki/auth/DefaultUserManager;
+          0       7     1 listener   Lorg/apache/wiki/event/WikiEventListener;
+
+  public synchronized void removeWikiEventListener(org.apache.wiki.event.WikiEventListener);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: invokestatic  #489                // Method org/apache/wiki/event/WikiEventManager.removeWikiEventListener:(Ljava/lang/Object;Lorg/apache/wiki/event/WikiEventListener;)Z
+       5: pop
+       6: return
+    LineNumberTable:
+      line 419: 0
+      line 420: 6
+    LocalVariableTable:
+      Start  Length  Slot  Name   Signature
+          0       7     0  this   Lorg/apache/wiki/auth/DefaultUserManager;
+          0       7     1 listener   Lorg/apache/wiki/event/WikiEventListener;
+
+  static {};
+    Code:
+       0: ldc           #11                 // class org/apache/wiki/auth/DefaultUserManager
+       2: invokestatic  #492                // Method org/apache/logging/log4j/LogManager.getLogger:(Ljava/lang/Class;)Lorg/apache/logging/log4j/Logger;
+       5: putstatic     #72                 // Field LOG:Lorg/apache/logging/log4j/Logger;
+       8: return
+    LineNumberTable:
+      line 91: 0
+}

@@ -1,0 +1,40 @@
+{
+  "campaign": "jspwiki-bench2-explore",
+  "app": "jspwiki",
+  "mode": "explore",
+  "driver": {
+    "classesPath": "/basquin-app-classes",
+    "corpusConfigMap": "jspwiki-corpus",
+    "duration": "5m",
+    "grammarConfigMap": "jspwiki-grammar"
+  },
+  "phase": "Completed",
+  "startTime": "2026-07-23T05:22:26Z",
+  "completionTime": "2026-07-23T05:27:30Z",
+  "coveragePct": "27.0",
+  "findingsCrdCorpusSize": 57,
+  "exploration": {
+    "corpus": 57,
+    "findCrash": 26,
+    "findInvariant": 1,
+    "rejected": 0,
+    "coverage": {
+      "covered": 24267,
+      "total": 89732,
+      "pct": 27.0,
+      "sourcesResponded": 1,
+      "sourcesExpected": 1
+    }
+  },
+  "iterations": 3436,
+  "crashes": 26,
+  "corpusConfigMap": "jspwiki-bench2-explore-corpus-out",
+  "message": "run complete: coverage 27.0%, 57 findings",
+  "load": null,
+  "invariants": {
+    "heapDeltaMaxKb": 512,
+    "latencyMaxMs": 25,
+    "mode": "soft"
+  },
+  "artifacts": "bench-results/jspwiki/jspwiki-bench2-explore"
+}

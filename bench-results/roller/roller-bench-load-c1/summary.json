@@ -1,0 +1,24 @@
+{
+  "load": {
+    "requests": 610,
+    "throughputRps": "3.4",
+    "latencyMs": {
+      "p50": 504,
+      "p90": 513,
+      "p99": 515,
+      "max": 519
+    },
+    "heapDriftKb": -20900,
+    "threadDrift": 0,
+    "serverErrors": 0,
+    "captureMisses": 0,
+    "clientErrors": 15,
+    "redirects": 0,
+    "redirectTargets": {},
+    "violations": {
+      "latency": 0,
+      "heap": 0,
+      "thread": 0
+    }
+  }
+}

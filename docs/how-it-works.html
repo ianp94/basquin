@@ -160,6 +160,40 @@ $categoryId = FISH | DOGS | ~[A-Z]{4,8}
     live; purely random junk gets rejected at the first validation. Using only one finds noticeably
     less.</p>
 
+  <h2>Reaching write paths that defend themselves</h2>
+  <p>Read paths are easy to drive. The interesting code — the part that allocates, writes, locks, and
+    falls over — usually sits behind a form that will not accept a replayed request. A static corpus
+    can never save a page to a CSRF-protected wiki: the token is minted per session, so every replay
+    is rejected before it reaches the code you wanted to test.</p>
+  <p>A sequence can therefore <strong>capture</strong> a value out of one response and
+    <strong>substitute</strong> it into a later request. What the corpus stores is the
+    <em>recipe</em> — never the token, which would be a secret written to disk and stale by the time
+    it was replayed:</p>
+<pre><code><span class="c"># capture by static field name; ${{name}} substitutes it into a later step</span>
+/Edit.jsp?page=${page} &lt;&lt;csrf=input:X-XSRF-TOKEN
+POST /Edit.jsp page=${page}&amp;X-XSRF-TOKEN=${{csrf}}&amp;ok=Save</code></pre>
+  <p>Some defences randomize the field <em>name</em> as well as its value, which a name-keyed capture
+    cannot express. For those, a capture can match a whole <code>name=value</code> pair by regex and
+    substitute both halves together — JSPWiki's anti-spam field is six random lowercase letters with a
+    numeric value, and anchoring the value pattern to digits keeps it from binding to the decoy
+    fields beside it:</p>
+<pre><code>&lt;&lt;spam=inputpair:[a-z]{6}=-?[0-9]+     <span class="c"># binds the field's NAME and value</span></code></pre>
+  <p>One more thing breaks a replayed write, and it is easy to miss: <strong>an app that detects an
+    unchanged write does nothing and still reports success.</strong> JSPWiki returns before writing
+    when the submitted text equals the page's current text — so after the first replay the save costs
+    nothing, while the load numbers still count it. A <code>&lt;nonce&gt;</code> generator solves it
+    by producing a value that is unique per <em>fire</em> rather than per corpus entry, so every
+    replay is a real change:</p>
+<pre><code>$rev = &lt;nonce&gt;                          <span class="c"># unique per fire, not per corpus line</span>
+POST /Edit.jsp page=${page}&amp;_editedtext=${wikitext} ${rev}&amp;ok=Save</code></pre>
+  <p>Finally, load mode does <strong>not follow redirects</strong>. A rejected write is usually a
+    <code>302</code> — not a 4xx, not a 5xx — so a client that follows it automatically discards the
+    only evidence that anything went wrong, and the run looks clean. Basquin reads the
+    <code>Location</code> instead and classifies it: a redirect back to the page just written is the
+    app confirming the write; a redirect to the login form is the app throwing it away. The counts
+    land in the run summary as <code>redirects</code> and <code>redirectTargets</code>. See the
+    <a href="benchmarks.html#redirects">benchmark page</a> for what that turned up on a real app.</p>
+
   <h2>The decoupled dashboard</h2>
   <p>The web dashboard is a <strong>standalone process</strong> — never embedded in a driver, never
     anywhere near the app under test. Run it once; any number of drivers (one per campaign, one per

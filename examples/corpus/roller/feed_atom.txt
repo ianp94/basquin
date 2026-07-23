@@ -1,0 +1,1 @@
+/basquin/feed/entries/atom

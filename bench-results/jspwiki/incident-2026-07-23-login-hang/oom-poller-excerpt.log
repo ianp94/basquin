@@ -1,0 +1,51 @@
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:201)
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:146)
+	at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:57)
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:170)
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:146)
+	at org.apache.wiki.http.filter.CsrfProtectionFilter.doFilter(CsrfProtectionFilter.java:67)
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:170)
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:146)
+	at org.apache.wiki.ui.WikiServletFilter.doFilter(WikiServletFilter.java:145)
+	at org.apache.wiki.ui.WikiJSPFilter.doFilter(WikiJSPFilter.java:100)
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:170)
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:146)
+	at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:166)
+	at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:88)
+	at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:534)
+	at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:129)
+	at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:86)
+	at org.apache.catalina.valves.AbstractAccessLogValve.invoke(AbstractAccessLogValve.java:764)
+	at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:71)
+	at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:350)
+	at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:407)
+	at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:71)
+	at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:1344)
+	at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:2089)
+	at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:74)
+	at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:976)
+	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:494)
+	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:80)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+Caused by: java.util.MissingResourceException: Can't find bundle for base name CoreResources, locale en_US
+	at java.base/java.util.ResourceBundle.throwMissingResourceException(ResourceBundle.java:2045)
+	at java.base/java.util.ResourceBundle.getBundleImpl(ResourceBundle.java:1683)
+	at java.base/java.util.ResourceBundle.getBundleImpl(ResourceBundle.java:1586)
+	at java.base/java.util.ResourceBundle.getBundleImpl(ResourceBundle.java:1549)
+	at java.base/java.util.ResourceBundle.getBundle(ResourceBundle.java:932)
+	at org.apache.wiki.i18n.InternationalizationManager.getBundle(InternationalizationManager.java:66)
+	at org.apache.wiki.preferences.Preferences.getBundle(Preferences.java:251)
+	at org.apache.wiki.variables.DefaultVariableManager$SystemVariables.getLoginstatus(DefaultVariableManager.java:371)
+	... 92 more
+[1;31m[ERROR][m 2026-07-23 04:31:22.598 [http-nio-8080-exec-30] o.a.w.t.WikiTagBase - Java heap space
+ 
+java.lang.OutOfMemoryError: Java heap space
+Exception in thread "http-nio-8080-Poller" java.lang.OutOfMemoryError: Java heap space
+Beginning iteration
+[1;31m[ERROR][m 2026-07-23 04:31:40.715 [http-nio-8080-exec-6] o.a.w.t.WikiTagBase - Tag failed
+ 
+java.util.MissingResourceException: Can't find bundle for base name CoreResources, locale en_US
+	at java.base/java.util.ResourceBundle.throwMissingResourceException(ResourceBundle.java:2045)
+	at java.base/java.util.ResourceBundle.getBundleImpl(ResourceBundle.java:1683)
+	at java.base/java.util.ResourceBundle.getBundleImpl(ResourceBundle.java:1586)
+	at java.base/java.util.ResourceBundle.getBundleImpl(ResourceBundle.java:1549)

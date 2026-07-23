@@ -1,0 +1,50 @@
+{
+  "campaign": "jpetstore-bench-load-c1",
+  "app": "jpetstore",
+  "mode": "load",
+  "driver": {
+    "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
+    "concurrency": 1,
+    "corpusConfigMap": "jpetstore-regress-explore-corpus-out",
+    "duration": "3m",
+    "warmup": "20s"
+  },
+  "phase": "Completed",
+  "startTime": "2026-07-23T09:18:32Z",
+  "completionTime": "2026-07-23T09:21:55Z",
+  "coveragePct": null,
+  "findingsCrdCorpusSize": null,
+  "exploration": null,
+  "iterations": null,
+  "crashes": null,
+  "corpusConfigMap": null,
+  "message": "load complete: 240059 requests, 1333.6 rps, p99 1ms, 0 latency violations",
+  "load": {
+    "requests": 240059,
+    "throughputRps": "1333.6",
+    "latencyMs": {
+      "p50": 0,
+      "p90": 1,
+      "p99": 1,
+      "max": 7
+    },
+    "heapDriftKb": -65360,
+    "threadDrift": 0,
+    "serverErrors": 0,
+    "captureMisses": 0,
+    "clientErrors": 0,
+    "redirects": 0,
+    "redirectTargets": {},
+    "violations": {
+      "latency": 0,
+      "heap": 0,
+      "thread": 0
+    }
+  },
+  "invariants": {
+    "heapDeltaMaxKb": 512,
+    "latencyMaxMs": 50,
+    "mode": "soft"
+  },
+  "artifacts": "bench-results/jpetstore/jpetstore-bench-load-c1"
+}

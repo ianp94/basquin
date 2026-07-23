@@ -1,0 +1,78 @@
+{
+  "elapsedSec": 300,
+  "iterations": 1786,
+  "rate": 5.95,
+  "crashes": 0,
+  "leaks": 0,
+  "resets": 0,
+  "invariants": {
+    "latency": 0,
+    "heap": 0,
+    "thread": 0
+  },
+  "latencyMs": {
+    "last": 14,
+    "mean": 103,
+    "max": 557
+  },
+  "heapKb": {
+    "last": 0,
+    "max": 2048
+  },
+  "threads": 11,
+  "exploration": {
+    "corpus": 2,
+    "findCrash": 0,
+    "findInvariant": 0,
+    "rejected": 0,
+    "coverage": {
+      "covered": 24296,
+      "total": 96536,
+      "pct": 25.2,
+      "sourcesResponded": 1,
+      "sourcesExpected": 1
+    }
+  },
+  "mode": "explore",
+  "replayCorpus": [
+    "/basquin/search?q=bench",
+    "/basquin/search?q=chew",
+    "/basquin/search?q=entry",
+    "/basquin/search?q=velocity",
+    "/basquin/search?q=render",
+    "/basquin/search?q=analyzer",
+    "/basquin/search?q=basquin",
+    "/basquin/search?q=alpha",
+    "/basquin/search?q=lucene",
+    "/basquin/search?q=paragraph",
+    "POST /basquin/entry/bench-entry-37 method=post&name=Fuzz+${{@nonce}}&email=fuzz@example.com&url=&content=Comment+${{@nonce}}+\"ul <i&post=Post",
+    "/basquin/search?q=kqpg&cat=Availability",
+    "/basquin/search?q=yqu",
+    "/basquin/search?q=bwwv",
+    "/basquin/search?q=dkvbznv",
+    "/basquin/search?q=hsve",
+    "/basquin/search?q=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "/basquin/search?q=gakq",
+    "/basquin/search?q=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "/basquin/date/202609",
+    "/",
+    "/basquin/",
+    "/basquin/?page=0",
+    "/basquin/entry/bench-entry-05",
+    "/basquin/category/Availability",
+    "/basquin/category/Availability?page=255",
+    "/basquin/date/202606",
+    "/basquin/search?q=xnfmqgee&page=332",
+    "/basquin/search?q=paragraph&cat=Notes",
+    "/basquin/feed/entries/rss",
+    "/basquin/feed/entries/atom",
+    "/basquin/feed/entries/rss?cat=Benchmarks",
+    "/basquin/feed/entries/atom?excerpts=true",
+    "/basquin/feed/comments/rss",
+    "/roller-ui/login.rol",
+    "/roller-ui/register.rol",
+    "/roller-services/opensearch/",
+    "/roller-ui/rendering/rsd/basquin",
+    "POST /basquin/entry/z\"q t method=post&name=Fuzz+${{@nonce}}&email=fuzz@example.com&url=&content=Comment+${{@nonce}}+bfqgjdmmkftg dvbuhufjqzpzdlkxubwbnssynjiusiddcllwjapltrrhkipgbskmyjdpkebu vtlozqhouwpwan xlychybugabeoyeobwkneihlumdnlrhfnaziymmrfentnjcegiyvl pbcegpyeiaiupz ueyhamnbndlukdadbfr hausplkjbztknlzcwwxkmdpfkvbli vpzeuh &post=Post"
+  ]
+}

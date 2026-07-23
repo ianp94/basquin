@@ -1,0 +1,9 @@
+# Shell scripts must keep LF endings in the working tree. On a CRLF-checkout platform
+# (this repo is developed under WSL against a Windows-mounted path) git would otherwise
+# rewrite them, and bash then reads `set -euo pipefail\r` as an invalid option name and
+# aborts the script on line 1 — which cost a benchmark battery two silent no-op runs
+# before anyone noticed the \r.
+*.sh        text eol=lf
+gradlew     text eol=lf
+*.py        text eol=lf
+Dockerfile* text eol=lf

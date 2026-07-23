@@ -1,0 +1,30 @@
+{
+  "load": {
+    "requests": 14535,
+    "throughputRps": "80.7",
+    "latencyMs": {
+      "p50": 2,
+      "p90": 238,
+      "p99": 743,
+      "max": 8854
+    },
+    "heapDriftKb": 153324,
+    "threadDrift": 3,
+    "serverErrors": 249,
+    "captureMisses": 260,
+    "clientErrors": 723,
+    "redirects": 4280,
+    "redirectTargets": {
+      "Wiki.jsp": 1747,
+      "Login.jsp": 1485,
+      "Forbidden.html": 793,
+      "Main": 251,
+      "PageModified.jsp": 4
+    },
+    "violations": {
+      "latency": 0,
+      "heap": 0,
+      "thread": 0
+    }
+  }
+}

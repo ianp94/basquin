@@ -1,0 +1,35 @@
+# Apache Roller 6.1.5 on Tomcat 9, UNMODIFIED, with NO Basquin agents — the operator injects those
+# at deploy time (BasquinTarget). Run setup.sh first: it explodes roller.war into ./webapp and writes
+# WEB-INF/classes/roller-custom.properties (jdbc → the `roller-db` Service).
+FROM tomcat:9.0-jdk17-temurin
+
+# Exploded, NOT a war: the campaign's coverage initContainer copies class files OUT of this image,
+# so they have to exist as files before the app ever starts.
+COPY webapp/ /usr/local/tomcat/webapps/ROOT/
+
+# The JDBC driver goes in Tomcat's lib, not the webapp — Roller's DatabaseProvider loads the driver
+# class through the container classloader when database.configurationType=jdbc.
+COPY postgresql.jar /usr/local/tomcat/lib/postgresql.jar
+
+# JavaMail + JAF, also container-provided (this is what the Roller install guide tells you to add to
+# the server). Without them the ROOT context NEVER STARTS: RollerContext -> MailProvider ->
+# ClassNotFoundException: javax.mail.Session -> "One or more listeners failed to start", and Tomcat
+# reports a healthy "Server startup in Nms" while every request 404s. This is the single gotcha that
+# sank the previous Roller attempt. They go in Tomcat's lib rather than WEB-INF/lib so the deployed
+# webapp stays byte-identical to the upstream WAR.
+COPY tomcat-lib/javax.mail.jar       /usr/local/tomcat/lib/javax.mail.jar
+COPY tomcat-lib/javax.activation.jar /usr/local/tomcat/lib/javax.activation.jar
+
+# Roller writes three filesystem stores (search index, uploaded media, planet cache) at the paths
+# roller-custom.properties pins. They must exist and be writable BEFORE first boot or
+# IndexManagerImpl fails to open the Lucene index and the search path silently 500s.
+RUN mkdir -p /var/roller/data/search-index /var/roller/data/mediafiles /var/roller/data/planet-cache \
+ && chmod -R 777 /var/roller
+
+# Roller 6.1.5 (unlike JSPWiki) ships its own classes in WEB-INF/classes, not in WEB-INF/lib jars —
+# so a naive classesPath=WEB-INF/classes technically works. We still stage a dedicated dir because
+# WEB-INF/classes also holds ~40MB of themes/templates/dbscripts/i18n the initContainer would copy
+# for nothing, and JaCoCo would report classes we never instrument. Only org/apache/roller matters.
+RUN mkdir -p /basquin-app-classes \
+ && cp -r /usr/local/tomcat/webapps/ROOT/WEB-INF/classes/org /basquin-app-classes/org \
+ && echo "extracted $(find /basquin-app-classes -name '*.class' | wc -l) .class files"

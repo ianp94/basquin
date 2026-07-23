@@ -1,0 +1,59 @@
+{
+  "apiVersion": "basquin.dev/v1alpha1",
+  "kind": "BasquinCampaign",
+  "metadata": {
+    "annotations": {
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"basquin.dev/v1alpha1\",\"kind\":\"BasquinCampaign\",\"metadata\":{\"annotations\":{},\"name\":\"jspwiki-bench-load-c1\",\"namespace\":\"basquin-system\"},\"spec\":{\"baseURL\":\"http://jspwiki-app.basquin-system.svc.cluster.local:8080\",\"driver\":{\"classesPath\":\"/usr/local/tomcat/webapps/ROOT/WEB-INF/classes\",\"concurrency\":1,\"corpusConfigMap\":\"jspwiki-bench2-explore-corpus-out\",\"duration\":\"3m\",\"warmup\":\"20s\"},\"mode\":\"load\",\"targetRef\":{\"name\":\"jspwiki\"}}}\n"
+    },
+    "creationTimestamp": "2026-07-23T05:27:44Z",
+    "generation": 1,
+    "name": "jspwiki-bench-load-c1",
+    "namespace": "basquin-system",
+    "resourceVersion": "242407",
+    "uid": "aa9d84bc-09fd-478b-9614-8b0649a5282b"
+  },
+  "spec": {
+    "baseURL": "http://jspwiki-app.basquin-system.svc.cluster.local:8080",
+    "driver": {
+      "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
+      "concurrency": 1,
+      "corpusConfigMap": "jspwiki-bench2-explore-corpus-out",
+      "duration": "3m",
+      "warmup": "20s"
+    },
+    "mode": "load",
+    "targetRef": {
+      "name": "jspwiki"
+    }
+  },
+  "status": {
+    "completionTime": "2026-07-23T05:31:07Z",
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-07-23T05:31:07Z",
+        "message": "load complete: 14522 requests, 80.7 rps, p99 57ms, 0 latency violations",
+        "reason": "Completed",
+        "status": "True",
+        "type": "Ready"
+      }
+    ],
+    "dashboardURL": "http://jspwiki-bench-load-c1-dashboard.basquin-system.svc.cluster.local:7070",
+    "driverJob": "jspwiki-bench-load-c1-driver",
+    "load": {
+      "heapDriftKb": 256925,
+      "latencyMs": {
+        "max": 6085,
+        "p50": 2,
+        "p90": 24,
+        "p99": 57
+      },
+      "requests": 14522,
+      "threadDrift": -1,
+      "throughputRps": "80.7",
+      "violations": {}
+    },
+    "observedGeneration": 1,
+    "phase": "Completed",
+    "startTime": "2026-07-23T05:27:44Z"
+  }
+}

@@ -1,0 +1,90 @@
+# Apache Roller 6.1.5 as a Basquin bench target: a seeded PostgreSQL plus the unmodified app on
+# Tomcat 9. `kubectl apply -f k8s.yaml` gives a Roller that is already installed — user, weblog,
+# 40 entries, comments, tags — with no install-wizard step. Build both images and kind-load them
+# first (see README).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: roller-db
+  namespace: basquin-system
+  labels: { app: roller-db }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: roller-db } }
+  template:
+    metadata: { labels: { app: roller-db } }
+    spec:
+      containers:
+        - name: postgres
+          image: basquin/roller-db:0.2.0     # postgres:16-alpine + Roller's DDL + the bench seed
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 5432 }]
+          env:
+            # postgres refuses to initdb into a non-empty dir; PGDATA under the mount keeps the
+            # emptyDir's lost+found (if any) out of the way and makes "restart = fresh install"
+            # honest: the pod is stateless on purpose, so every arm of a benchmark starts identical.
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          volumeMounts: [{ name: pgdata, mountPath: /var/lib/postgresql/data }]
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "roller", "-d", "roller"] }
+            initialDelaySeconds: 5
+            periodSeconds: 3
+            failureThreshold: 40
+      volumes: [{ name: pgdata, emptyDir: {} }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: roller-db          # NAME IS LOAD-BEARING: baked into roller-custom.properties' JDBC URL
+  namespace: basquin-system
+spec:
+  selector: { app: roller-db }
+  ports: [{ port: 5432, targetPort: 5432 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: roller
+  namespace: basquin-system
+  labels: { app: roller-raw }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: roller-raw } }
+  template:
+    metadata: { labels: { app: roller-raw } }
+    spec:
+      # Roller's RollerContext listener bootstraps against the DB during context start and the ROOT
+      # context DIES if it cannot connect — Tomcat then reports a healthy "Server startup in Nms"
+      # while every route 404s. A CrashLoopBackOff would be honest; a 404-serving "Ready" pod is not.
+      # So gate startup on the DB instead of relying on a restart to eventually win the race.
+      initContainers:
+        - name: wait-for-db
+          image: basquin/roller-db:0.2.0     # reused only for its psql client; no extra image to load
+          command: ["sh", "-c", "until pg_isready -h roller-db -U roller -d roller; do sleep 2; done"]
+      containers:
+        - name: roller
+          image: basquin/roller-raw:0.2.0
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8080 }]
+          env:
+            # -Xmx2g, not 512m: an instrumented app at c=50 GC-thrashes on a small heap and the
+            # drift poll times out into a silent heapDriftKb:0 (ONBOARDING.md §3).
+            - { name: CATALINA_OPTS, value: "-Xmx2g" }
+          readinessProbe:
+            # No query string in the probe path (kubelet rejects it). "/" is the seeded frontpage
+            # weblog, which only renders once Roller has bootstrapped AND found its schema — so this
+            # probe actually distinguishes "installed" from "serving the install wizard"... except
+            # the wizard also 200s, which is why the README's smoke test greps for entry text.
+            httpGet: { path: /, port: 8080 }
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 40
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: roller-app
+  namespace: basquin-system
+spec:
+  selector: { app: roller-raw }
+  ports: [{ port: 8080, targetPort: 8080 }]

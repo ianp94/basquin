@@ -1,0 +1,29 @@
+{
+  "load": {
+    "requests": 14522,
+    "throughputRps": "80.7",
+    "latencyMs": {
+      "p50": 2,
+      "p90": 24,
+      "p99": 57,
+      "max": 6085
+    },
+    "heapDriftKb": 256925,
+    "threadDrift": -1,
+    "serverErrors": 271,
+    "captureMisses": 240,
+    "clientErrors": 734,
+    "redirects": 4319,
+    "redirectTargets": {
+      "Wiki.jsp": 1778,
+      "Login.jsp": 1548,
+      "Forbidden.html": 736,
+      "Main": 257
+    },
+    "violations": {
+      "latency": 0,
+      "heap": 0,
+      "thread": 0
+    }
+  }
+}

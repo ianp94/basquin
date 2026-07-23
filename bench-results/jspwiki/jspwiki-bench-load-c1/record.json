@@ -1,0 +1,55 @@
+{
+  "campaign": "jspwiki-bench-load-c1",
+  "app": "jspwiki",
+  "mode": "load",
+  "driver": {
+    "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
+    "concurrency": 1,
+    "corpusConfigMap": "jspwiki-bench2-explore-corpus-out",
+    "duration": "3m",
+    "warmup": "20s"
+  },
+  "phase": "Completed",
+  "startTime": "2026-07-23T05:27:44Z",
+  "completionTime": "2026-07-23T05:31:07Z",
+  "coveragePct": null,
+  "findingsCrdCorpusSize": null,
+  "exploration": null,
+  "iterations": null,
+  "crashes": null,
+  "corpusConfigMap": null,
+  "message": "load complete: 14522 requests, 80.7 rps, p99 57ms, 0 latency violations",
+  "load": {
+    "requests": 14522,
+    "throughputRps": "80.7",
+    "latencyMs": {
+      "p50": 2,
+      "p90": 24,
+      "p99": 57,
+      "max": 6085
+    },
+    "heapDriftKb": 256925,
+    "threadDrift": -1,
+    "serverErrors": 271,
+    "captureMisses": 240,
+    "clientErrors": 734,
+    "redirects": 4319,
+    "redirectTargets": {
+      "Wiki.jsp": 1778,
+      "Login.jsp": 1548,
+      "Forbidden.html": 736,
+      "Main": 257
+    },
+    "violations": {
+      "latency": 0,
+      "heap": 0,
+      "thread": 0
+    }
+  },
+  "invariants": {
+    "heapDeltaMaxKb": 512,
+    "latencyMaxMs": 25,
+    "mode": "soft"
+  },
+  "artifacts": "bench-results/jspwiki/jspwiki-bench-load-c1"
+}

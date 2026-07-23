@@ -1,0 +1,59 @@
+{
+  "apiVersion": "basquin.dev/v1alpha1",
+  "kind": "BasquinCampaign",
+  "metadata": {
+    "annotations": {
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"basquin.dev/v1alpha1\",\"kind\":\"BasquinCampaign\",\"metadata\":{\"annotations\":{},\"name\":\"roller-bench-load-c8\",\"namespace\":\"basquin-system\"},\"spec\":{\"baseURL\":\"http://roller-app.basquin-system.svc.cluster.local:8080\",\"driver\":{\"classesPath\":\"/usr/local/tomcat/webapps/ROOT/WEB-INF/classes\",\"concurrency\":8,\"corpusConfigMap\":\"roller-bench2-explore-corpus-out\",\"duration\":\"3m\",\"warmup\":\"20s\"},\"mode\":\"load\",\"targetRef\":{\"name\":\"roller\"}}}\n"
+    },
+    "creationTimestamp": "2026-07-23T05:56:06Z",
+    "generation": 1,
+    "name": "roller-bench-load-c8",
+    "namespace": "basquin-system",
+    "resourceVersion": "246704",
+    "uid": "72589170-38b0-48a8-bca3-3fda5e1de29b"
+  },
+  "spec": {
+    "baseURL": "http://roller-app.basquin-system.svc.cluster.local:8080",
+    "driver": {
+      "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
+      "concurrency": 8,
+      "corpusConfigMap": "roller-bench2-explore-corpus-out",
+      "duration": "3m",
+      "warmup": "20s"
+    },
+    "mode": "load",
+    "targetRef": {
+      "name": "roller"
+    }
+  },
+  "status": {
+    "completionTime": "2026-07-23T05:59:30Z",
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-07-23T05:59:30Z",
+        "message": "load complete: 5184 requests, 28.7 rps, p99 514ms, 0 latency violations",
+        "reason": "Completed",
+        "status": "True",
+        "type": "Ready"
+      }
+    ],
+    "dashboardURL": "http://roller-bench-load-c8-dashboard.basquin-system.svc.cluster.local:7070",
+    "driverJob": "roller-bench-load-c8-driver",
+    "load": {
+      "heapDriftKb": 56900,
+      "latencyMs": {
+        "max": 535,
+        "p50": 503,
+        "p90": 513,
+        "p99": 514
+      },
+      "requests": 5184,
+      "threadDrift": -3,
+      "throughputRps": "28.7",
+      "violations": {}
+    },
+    "observedGeneration": 1,
+    "phase": "Completed",
+    "startTime": "2026-07-23T05:56:06Z"
+  }
+}

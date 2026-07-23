@@ -1,0 +1,50 @@
+{
+  "campaign": "roller-bench-load-c8",
+  "app": "roller",
+  "mode": "load",
+  "driver": {
+    "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
+    "concurrency": 8,
+    "corpusConfigMap": "roller-bench2-explore-corpus-out",
+    "duration": "3m",
+    "warmup": "20s"
+  },
+  "phase": "Completed",
+  "startTime": "2026-07-23T05:56:06Z",
+  "completionTime": "2026-07-23T05:59:30Z",
+  "coveragePct": null,
+  "findingsCrdCorpusSize": null,
+  "exploration": null,
+  "iterations": null,
+  "crashes": null,
+  "corpusConfigMap": null,
+  "message": "load complete: 5184 requests, 28.7 rps, p99 514ms, 0 latency violations",
+  "load": {
+    "requests": 5184,
+    "throughputRps": "28.7",
+    "latencyMs": {
+      "p50": 503,
+      "p90": 513,
+      "p99": 514,
+      "max": 535
+    },
+    "heapDriftKb": 56900,
+    "threadDrift": -3,
+    "serverErrors": 0,
+    "captureMisses": 0,
+    "clientErrors": 122,
+    "redirects": 0,
+    "redirectTargets": {},
+    "violations": {
+      "latency": 0,
+      "heap": 0,
+      "thread": 0
+    }
+  },
+  "invariants": {
+    "heapDeltaMaxKb": 512,
+    "latencyMaxMs": 250,
+    "mode": "soft"
+  },
+  "artifacts": "bench-results/roller/roller-bench-load-c8"
+}

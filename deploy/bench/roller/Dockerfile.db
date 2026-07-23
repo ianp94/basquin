@@ -1,0 +1,9 @@
+# Roller's database, pre-installed. postgres:16 runs everything in /docker-entrypoint-initdb.d once,
+# in filename order, the first time the data dir is empty — so baking the schema + seed here means a
+# fresh `kubectl apply` yields a Roller that is ALREADY past the install wizard: user, weblog,
+# categories, 40 published entries, tags and comments. No manual step, no ordering dance between the
+# app pod and a seed Job. Run setup.sh first (it emits seed/).
+FROM postgres:16-alpine
+ENV POSTGRES_DB=roller POSTGRES_USER=roller POSTGRES_PASSWORD=roller
+COPY seed/01-schema.sql /docker-entrypoint-initdb.d/01-schema.sql
+COPY seed/02-seed.sql   /docker-entrypoint-initdb.d/02-seed.sql

@@ -1,0 +1,63 @@
+Header-loss investigation — raw evidence (2026-07-23, kind cluster "basquin", ns basquin-system)
+Boundary in k8s: -Dbasquin.boundary=agent (TomcatBoundaryAdvice on StandardHostValve.invoke);
+header write guarded by !response.isCommitted() at BasquinValve.java:66 / TomcatBoundaryAdvice.java:43.
+Driver reads violations ONLY from X-Basquin-Invariant-Count (CoverageGuidedRun.java:629).
+
+== Server-side violations logged vs driver-reported (explore campaigns) ==
+roller pod (roller-6ff8b67955-jpvj5), total [Basquin][Invariant] lines: 5,998 (5,234 heapDelta + 765 latency initially; 6,000+ by end of investigation)
+  roller-bench-explore  window 04:13:24-04:19:24Z:  2,426 (339 latency, 2,087 heap)  -> driver findings: 1
+  roller-bench2-explore window 05:47:17-05:52:17Z:  1,906 (283 latency, 1,623 heap)  -> driver: invariants {0,0,0}, findInvariant 0, 1,786 iterations
+  roller idle rate (probes only) 06:10-06:40Z: 1.6/min  => ~8 of the 1,906 are probe noise
+jspwiki pod: 2,337+ heapDelta lines; ~12/min continuously = kubelet readiness probe (every 5s) violating heapDelta on every hit, even idle
+jpetstore explore driver reported findInvariant=223 (headers survive there; log rotated past its window)
+
+== Synchronized replay of each app's actual load corpus (<app>-bench2-explore-corpus-out), explore mode, in-pod curl ==
+roller   09:09:02-09:09:14Z: 37 GET entries fired; cost header present 1/37 (2.7%); invariant headers seen 0
+         server evaluated in window: 52 violations (20 latency + 32 heap)  => violation loss 52/52 = 100%
+jspwiki  09:09:29-09:09:30Z: 32 GET entries fired; cost header present 8/32 (25% - only 302s and small 400s); inv headers 0
+         server evaluated in window: 23 violations (1 latency + 22 heap)   => violation loss 23/23 = 100%
+jpetstore 09:09:54-09:09:55Z: 43 GET entries fired; cost present 43/43 (100%); inv headers seen 5
+         server evaluated in window: 5                                     => violation loss 0/5 = 0%
+
+== Rule probes (explore mode, in-pod curl; code bytes cost inv route) ==
+ROLLER (custom error-page for 400/403/404/500 + java.lang.Exception in web.xml):
+200 30184 cost=0 /                       (Velocity render >8KB -> committed)
+302 0     cost=1 /basquin                (sendRedirect: suspended, NOT committed -> survives)
+404 1215  cost=0 /basquin/entry/bench-entry-99   (custom error-page forward commits+closes at ANY size)
+404 1269  cost=0 /favicon.ico            (same, static path)
+200 23094 cost=0 /basquin/search?q=velocity (0.53s each; >8KB)
+200 8799  cost=0 /basquin/search?q=      (8,799 > 8,192 buffer -> committed)
+200 5454  cost=0 /roller-ui/login.rol    (<8KB but Struts/Tiles JSP flush -> committed)
+200 3746  cost=0 /roller-ui/register.rol (same)
+200 552   cost=0 /roller-services/opensearch/ (tiny; explicit flush -> committed)
+200 561   cost=1 /roller-ui/rendering/rsd/basquin (small, no flush -> survives)
+200 5918  cost=1 /roller-ui/styles/roller.css (static <8KB -> survives)
+JSPWIKI (no custom error page):
+200 11398 cost=0 /Wiki.jsp?page=Main     (all render JSPs 9.7-20KB -> committed)
+404 759   cost=1 /rss.rdf                (sendError w/o custom error page: ErrorReportValve renders ABOVE the boundary -> survives)
+404 775   cost=1 /nonexistent-servlet-xyz
+200 17787 cost=0 /scripts/fckconfig.js   (static 8KB<x<48KB via output buffer -> committed)
+200 35891 cost=0 /scripts/mootools.js    (same)
+200 51058 cost=1 /scripts/jspwiki-common.js (>48KB sendfile threshold: body bypasses OutputBuffer -> survives)
+JPETSTORE (no custom error page; ALL pages 1-6KB):
+all 14 probed routes cost=1 incl. the 500 (Stripes double-NPE) and 404; live inv=1 headers observed
+
+== Load-mode structural gaps (independent of commit rule) ==
+- Load = LOAD_PASSTHROUGH: no begin/end, no evaluation, NO_HEADERS by design (DD-029); summary violations come from driver.
+- Load driver JVM gets NO -Dbasquin.invariant.latency.maxMs (JAVA_TOOL_OPTIONS of roller-bench-load-c1-driver);
+  LoadRun.java:52 defaults 0 => threshold disabled => violations.latency structurally 0 (p50 503ms vs intended 250ms budget).
+- Explore summary "invariants{latency,heap,thread}" = DRIVER's own Agent.begin/end self-measurement (CoverageGuidedRun.java:290/305)
+  with no thresholds set in the driver JVM => structurally 0 on every app, mislabeled as target invariants.
+
+== Roller write-path (grammar item) ==
+DB: 316 comments, 236 from fuzzer (comment POST works; returns 200 re-render incl. new comment, NOT 302 — zero-redirects is expected app behavior).
+DB: 0 entries titled Fuzz% after all campaigns — login_publish step 4 NEVER fired:
+  driver log: "[Basquin] explore: unresolved correlation ref in POST /roller-ui/authoring/entryAdd.rol salt=${{salt}}...; step skipped" (every firing)
+  cause: explore request() sets setInstanceFollowRedirects(true); login POST 302's Set-Cookie (authenticated JSESSIONID) is lost
+  (HttpURLConnection returns only final-response headers); session stays anonymous; GET entryAdd.rol -> 302 -> followed to login.rol
+  (200, 5,454B, zero <input name="salt">) -> capture null -> binding unbound -> step skipped. Verified: anonymous
+  entryAdd.rol = 302 -> login.rol; follow lands on login page with 0 salt inputs. (DD-038 fixed exactly this in LoadRun.fireR; explore path still follows.)
+Manual replay with cookie jar: login 302->/ (success), salt captured, publish POST persisted the entry (DB count 1)…
+  but response was an EMPTY 500: Basquin's leak detector threw "IllegalStateException: Leak(s) detected after iteration 11698"
+  out of RequestBoundary.onExit (Agent.java:249 throws unconditionally even in invariant soft mode) — the harness itself
+  destroyed the response of the app's successful write.

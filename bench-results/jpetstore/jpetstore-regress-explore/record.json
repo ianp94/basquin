@@ -1,0 +1,40 @@
+{
+  "campaign": "jpetstore-regress-explore",
+  "app": "jpetstore",
+  "mode": "explore",
+  "driver": {
+    "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
+    "corpusConfigMap": "jpetstore-corpus",
+    "duration": "5m",
+    "grammarConfigMap": "jpetstore-grammar"
+  },
+  "phase": "Completed",
+  "startTime": "2026-07-23T09:13:14Z",
+  "completionTime": "2026-07-23T09:18:19Z",
+  "coveragePct": "23.1",
+  "findingsCrdCorpusSize": 946,
+  "exploration": {
+    "corpus": 946,
+    "findCrash": 603,
+    "findInvariant": 342,
+    "rejected": 0,
+    "coverage": {
+      "covered": 1469,
+      "total": 6368,
+      "pct": 23.1,
+      "sourcesResponded": 1,
+      "sourcesExpected": 1
+    }
+  },
+  "iterations": 3860,
+  "crashes": 603,
+  "corpusConfigMap": "jpetstore-regress-explore-corpus-out",
+  "message": "run complete: coverage 23.1%, 946 findings",
+  "load": null,
+  "invariants": {
+    "heapDeltaMaxKb": 512,
+    "latencyMaxMs": 50,
+    "mode": "soft"
+  },
+  "artifacts": "bench-results/jpetstore/jpetstore-regress-explore"
+}

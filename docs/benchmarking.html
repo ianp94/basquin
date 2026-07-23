@@ -263,6 +263,48 @@ spec:
 
   <hr class="rule">
 
+  <h2>Collecting and publishing the results</h2>
+  <p>Three scripts turn a finished campaign into a published figure. They exist because the benchmark
+    page used to carry hand-plotted SVG coordinates &mdash; every re-run was a transcription exercise,
+    and nothing prevented a chart from drifting away from the run it claimed to show.</p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Script</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>deploy/bench/collect.py</code></td>
+          <td>Snapshots a campaign out of the cluster into
+            <code>bench-results/&lt;app&gt;/&lt;campaign&gt;/</code> &mdash; the campaign object, the
+            driver's terminal summary, and its log. Read-only. The terminal summary is the
+            authoritative source: it carries counters the operator's status subresource does not map,
+            including the redirect classification.</td>
+        </tr>
+        <tr>
+          <td><code>deploy/bench/battery.sh</code></td>
+          <td>Runs the load half of the battery for one app across a set of concurrency levels and
+            collects each one. Campaigns run <strong>strictly one at a time</strong> &mdash; see the
+            warning below.</td>
+        </tr>
+        <tr>
+          <td><code>deploy/bench/render_page.py</code></td>
+          <td>Regenerates <code>docs/benchmarks.html</code>. Prose lives in the script; every number
+            and every chart coordinate is read from <code>bench-results/</code>. A section whose
+            campaign has not been collected is omitted rather than filled with a stale figure.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">
+    <span class="tag">warning</span>
+    <p><strong>Never run two load campaigns at once on a single-node cluster.</strong> Two drivers on
+      one node contend for the same CPU, so each one's latency percentiles measure the other driver as
+      much as they measure the app. The numbers look entirely plausible and are unusable.
+      <code>battery.sh</code> blocks on each campaign reaching a terminal phase before starting the
+      next; if you drive campaigns by hand, do the same.</p>
+  </div>
+
+  <hr class="rule">
+
   <h2>Gotchas checklist</h2>
   <ul class="checklist">
     <li>Runner image current (rebuild if the cluster is stale) — else driver crashes on new features.</li>

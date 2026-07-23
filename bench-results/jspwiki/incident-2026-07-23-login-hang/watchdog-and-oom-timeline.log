@@ -1,0 +1,40 @@
+Caused by: java.lang.OutOfMemoryError: Java heap space
+[32m[INFO ][m 2026-07-23 04:29:54.178 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-12' exceeded timeout in state 'Filtering for URL /Login.jsp' by 16738 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:29:54.178 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-2' exceeded timeout in state 'Filtering for URL /Login.jsp' by 16768 secondsEnable DEBUG-level logging to see stack traces.
+Caused by: java.lang.OutOfMemoryError: Java heap space
+[32m[INFO ][m 2026-07-23 04:30:29.895 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-12' exceeded timeout in state 'Filtering for URL /Login.jsp' by 16773 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:30:29.895 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-2' exceeded timeout in state 'Filtering for URL /Login.jsp' by 16804 secondsEnable DEBUG-level logging to see stack traces.
+Caused by: java.lang.OutOfMemoryError: Java heap space
+org.apache.jasper.JasperException: javax.servlet.ServletException: java.lang.OutOfMemoryError: Java heap space
+Caused by: javax.servlet.ServletException: java.lang.OutOfMemoryError: Java heap space
+Caused by: java.lang.OutOfMemoryError: Java heap space
+[1;31m[ERROR][m 2026-07-23 04:30:54.883 [http-nio-8080-exec-5] o.a.w.t.WikiTagBase - javax.servlet.ServletException: java.lang.OutOfMemoryError: Java heap space
+javax.servlet.jsp.JspException: javax.servlet.ServletException: java.lang.OutOfMemoryError: Java heap space
+java.lang.OutOfMemoryError: Java heap space
+Caused by: java.lang.OutOfMemoryError: Java heap space
+[32m[INFO ][m 2026-07-23 04:31:11.504 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-12' exceeded timeout in state 'Filtering for URL /Login.jsp' by 16815 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:31:12.778 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-16' exceeded timeout in state 'Generating INFO response' by 36 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:31:12.778 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-15' exceeded timeout in state 'Generating INFO response' by 36 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:31:12.778 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-2' exceeded timeout in state 'Filtering for URL /Login.jsp' by 16846 secondsEnable DEBUG-level logging to see stack traces.
+java.lang.OutOfMemoryError: Java heap space
+Exception in thread "http-nio-8080-Poller" java.lang.OutOfMemoryError: Java heap space
+	java.lang.OutOfMemoryError: Java heap space
+Caused by: java.lang.OutOfMemoryError: Java heap space
+java.lang.OutOfMemoryError: Java heap space
+	java.util.concurrent.ExecutionException: java.lang.OutOfMemoryError: Java heap space
+	Caused by: java.lang.OutOfMemoryError: Java heap space
+	java.lang.OutOfMemoryError: Java heap space
+	java.lang.OutOfMemoryError: Java heap space: failed reallocation of scalar replaced objects
+[32m[INFO ][m 2026-07-23 04:31:49.973 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-12' exceeded timeout in state 'Filtering for URL /Login.jsp' by 16854 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:31:51.264 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-28' exceeded timeout in state 'Generating INFO response' by 24 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:31:51.558 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-16' exceeded timeout in state 'Generating INFO response' by 75 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:31:51.558 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-15' exceeded timeout in state 'Generating INFO response' by 75 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:31:51.558 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-2' exceeded timeout in state 'Filtering for URL /Login.jsp' by 16885 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:31:51.558 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-14' exceeded timeout in state 'Generating INFO response' by 24 secondsEnable DEBUG-level logging to see stack traces.
+[32m[INFO ][m 2026-07-23 04:32:27.401 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-12' exceeded timeout in state 'Filtering for URL /Login.jsp' by 16891 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:32:57.404 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-12' exceeded timeout in state 'Filtering for URL /Login.jsp' by 16921 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:32:57.404 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-2' exceeded timeout in state 'Filtering for URL /Login.jsp' by 16951 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:33:27.409 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-12' exceeded timeout in state 'Filtering for URL /Login.jsp' by 16951 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:33:27.409 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-2' exceeded timeout in state 'Filtering for URL /Login.jsp' by 16981 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:33:57.412 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-12' exceeded timeout in state 'Filtering for URL /Login.jsp' by 16981 secondsEnable DEBUG-level logging to see stack traces.
+ [32m[INFO ][m 2026-07-23 04:33:57.412 [WatchDog for 'BasquinBenchWiki'] o.a.w.WatchDog - Watchable 'http-nio-8080-exec-2' exceeded timeout in state 'Filtering for URL /Login.jsp' by 17011 secondsEnable DEBUG-level logging to see stack traces.

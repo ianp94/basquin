@@ -1,0 +1,57 @@
+{
+  "apiVersion": "basquin.dev/v1alpha1",
+  "kind": "BasquinCampaign",
+  "metadata": {
+    "annotations": {
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"basquin.dev/v1alpha1\",\"kind\":\"BasquinCampaign\",\"metadata\":{\"annotations\":{},\"name\":\"jpetstore-bench-load-c1\",\"namespace\":\"basquin-system\"},\"spec\":{\"baseURL\":\"http://jpetstore-app.basquin-system.svc.cluster.local:8080\",\"driver\":{\"classesPath\":\"/usr/local/tomcat/webapps/ROOT/WEB-INF/classes\",\"concurrency\":1,\"corpusConfigMap\":\"jpetstore-regress-explore-corpus-out\",\"duration\":\"3m\",\"warmup\":\"20s\"},\"mode\":\"load\",\"targetRef\":{\"name\":\"jpetstore\"}}}\n"
+    },
+    "creationTimestamp": "2026-07-23T09:18:32Z",
+    "generation": 1,
+    "name": "jpetstore-bench-load-c1",
+    "namespace": "basquin-system",
+    "resourceVersion": "274813",
+    "uid": "f84d15d8-44eb-4a15-b9fd-e59812a6c07c"
+  },
+  "spec": {
+    "baseURL": "http://jpetstore-app.basquin-system.svc.cluster.local:8080",
+    "driver": {
+      "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
+      "concurrency": 1,
+      "corpusConfigMap": "jpetstore-regress-explore-corpus-out",
+      "duration": "3m",
+      "warmup": "20s"
+    },
+    "mode": "load",
+    "targetRef": {
+      "name": "jpetstore"
+    }
+  },
+  "status": {
+    "completionTime": "2026-07-23T09:21:55Z",
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-07-23T09:21:55Z",
+        "message": "load complete: 240059 requests, 1333.6 rps, p99 1ms, 0 latency violations",
+        "reason": "Completed",
+        "status": "True",
+        "type": "Ready"
+      }
+    ],
+    "dashboardURL": "http://jpetstore-bench-load-c1-dashboard.basquin-system.svc.cluster.local:7070",
+    "driverJob": "jpetstore-bench-load-c1-driver",
+    "load": {
+      "heapDriftKb": -65360,
+      "latencyMs": {
+        "max": 7,
+        "p90": 1,
+        "p99": 1
+      },
+      "requests": 240059,
+      "throughputRps": "1333.6",
+      "violations": {}
+    },
+    "observedGeneration": 1,
+    "phase": "Completed",
+    "startTime": "2026-07-23T09:18:32Z"
+  }
+}

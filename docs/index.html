@@ -182,6 +182,14 @@
             grammar, not code.</p>
         </div>
         <div class="card">
+          <span class="ico">// correlation</span>
+          <h3>Correlated write paths</h3>
+          <p>A sequence captures a CSRF token or a randomized anti-automation field out of
+            one response and substitutes it into the next, so exploration reaches
+            authenticated writes &mdash; not just the pages a crawler can see. The corpus
+            stores the recipe, never the token.</p>
+        </div>
+        <div class="card">
           <span class="ico">// jvmti</span>
           <h3>JVMTI native agent</h3>
           <p>Event-driven thread lifecycle tracking (ThreadStart/ThreadEnd) — no polling, no

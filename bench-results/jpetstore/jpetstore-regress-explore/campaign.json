@@ -1,0 +1,48 @@
+{
+  "apiVersion": "basquin.dev/v1alpha1",
+  "kind": "BasquinCampaign",
+  "metadata": {
+    "annotations": {
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"basquin.dev/v1alpha1\",\"kind\":\"BasquinCampaign\",\"metadata\":{\"annotations\":{},\"name\":\"jpetstore-regress-explore\",\"namespace\":\"basquin-system\"},\"spec\":{\"baseURL\":\"http://jpetstore-app.basquin-system.svc.cluster.local:8080\",\"driver\":{\"classesPath\":\"/usr/local/tomcat/webapps/ROOT/WEB-INF/classes\",\"corpusConfigMap\":\"jpetstore-corpus\",\"duration\":\"5m\",\"grammarConfigMap\":\"jpetstore-grammar\"},\"mode\":\"explore\",\"targetRef\":{\"name\":\"jpetstore\"}}}\n"
+    },
+    "creationTimestamp": "2026-07-23T09:13:14Z",
+    "generation": 1,
+    "name": "jpetstore-regress-explore",
+    "namespace": "basquin-system",
+    "resourceVersion": "274246",
+    "uid": "df7bfa20-b509-416c-9680-bb212f89bfd8"
+  },
+  "spec": {
+    "baseURL": "http://jpetstore-app.basquin-system.svc.cluster.local:8080",
+    "driver": {
+      "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
+      "corpusConfigMap": "jpetstore-corpus",
+      "duration": "5m",
+      "grammarConfigMap": "jpetstore-grammar"
+    },
+    "mode": "explore",
+    "targetRef": {
+      "name": "jpetstore"
+    }
+  },
+  "status": {
+    "completionTime": "2026-07-23T09:18:19Z",
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-07-23T09:18:19Z",
+        "message": "run complete: coverage 23.1%, 946 findings",
+        "reason": "Completed",
+        "status": "True",
+        "type": "Ready"
+      }
+    ],
+    "corpusConfigMap": "jpetstore-regress-explore-corpus-out",
+    "coveragePct": "23.1",
+    "dashboardURL": "http://jpetstore-regress-explore-dashboard.basquin-system.svc.cluster.local:7070",
+    "driverJob": "jpetstore-regress-explore-driver",
+    "findings": 946,
+    "observedGeneration": 1,
+    "phase": "Completed",
+    "startTime": "2026-07-23T09:13:14Z"
+  }
+}

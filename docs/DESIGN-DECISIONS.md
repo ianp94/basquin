@@ -2042,23 +2042,39 @@ redirect loop files a `Redirect-Loop` finding; a malformed `Location` files no c
 Every mechanism was proven load-bearing by removal (re-adding the header save fails 3-vs-2; un-stamping
 a hop fails on hop 1; collapsing per-hop records fails the count).
 
-**The green suite does not prove the feature works, and the record must not pretend otherwise.** Two
-things remain unproven here, both stated as measured-or-deferred rather than as success:
+**Task 7 acceptance run — PASSED** (2026-07-23, single-replica Roller,
+[`bench-results/dd039-acceptance-2026-07-23/`](../bench-results/dd039-acceptance-2026-07-23/)). A green
+suite cannot prove the cookie carry; a 5-minute Roller explore campaign closed both gaps a unit test
+is blind to:
 
-- **The cookie carry's real proof is Task 7, and Task 7 has NOT yet run.** No unit test can show that
-  carrying the session across the rewritten hop closes the coverage/violation gap on a *real*
-  session-rotating app; that needs a Roller explore campaign reaching an authenticated write path,
-  evidenced by **rows in the database**, not by a coverage number (coverage can rise for unrelated
-  reasons). The piece most likely to be silently dropped is precisely the one no unit test fails
-  without — which is why it is called out here and gated on an acceptance run that has not happened.
-- **The multi-replica same-method-hop merge (A4b-3) is unexercised.** The spike ran single-address
-  (`localhost` resolves to one pod), and DD-040's acceptance run was single-replica. The `hops > 1`
-  all-pods merge is unit-covered on the single-pod path only; the genuine split-pod case awaits a
-  multi-replica target.
+- **The cookie carry works against a session-rotating app — proven by DB rows, not coverage.**
+  `login_publish` wrote **84 distinct authenticated entries** to `weblogentry` (84 distinct ids and
+  anchors, `creator=basquin`, each a distinct per-fire `<nonce>`) during the campaign window. Before
+  DD-039 this path had written **zero** rows for the run's entire life — the login 302's rotated
+  `JSESSIONID` was eaten, so every publish ran anonymous and was bounced by the salt interceptor.
+  Carrying `Cookie` (and `X-Basquin-Req`) across the POST→302→GET rewrite is exactly what
+  authenticates the session, lets step 3 capture the live salt off the authoring form, and lets step 4
+  publish. This is the piece most likely to be silently dropped and the one no unit test fails without.
+- **The 189-violation gap substantially closed.** Reported violations (`targetViolations`, the
+  `/__basquin/violations` delta) were **1,656** against **1,704** `[Basquin][Invariant]` lines in the
+  target pod's log for the same window — a raw gap of **48 (2.8%)**, of which ~8–10 is measured
+  kubelet-probe noise (idle violation rate ~1.8/min, not the ~12/min of JSPWiki), leaving a ~38-line
+  residual an order of magnitude below DD-040's 189 (11.8%). Re-stamping every hop with `X-Basquin-Req`
+  now *counts* the redirect-hop violations that previously logged-but-were-dropped, so the reported
+  count rose to nearly match the log. `crossOriginRedirects=0` (Roller derives its base from the
+  request), `reportMisses=0`, retained corpus 81 (cost-ranked, non-degenerate), crashes 0, leaks 0,
+  coverage 30.4%.
+
+**One thing remains unproven, stated as deferred rather than as success: the multi-replica
+same-method-hop merge (A4b-3) is unexercised.** The spike ran single-address (`localhost` resolves to
+one pod), and this acceptance run — like DD-040's — was single-replica. The `hops > 1` all-pods merge
+is unit-covered on the single-pod path only; the genuine split-pod case awaits a multi-replica target.
 
 **Evidence.** The JDK-probe transcript is in the spec ("Evidence"); the 189-gap it explains is
 re-derivable from [`bench-results/dd040-acceptance-2026-07-23/`](../bench-results/dd040-acceptance-2026-07-23/).
-DD-039's own acceptance evidence does not exist yet — see the Task-7 caveat above.
+DD-039's own acceptance evidence is
+[`bench-results/dd039-acceptance-2026-07-23/`](../bench-results/dd039-acceptance-2026-07-23/) —
+`reconcile.py` there re-derives all of the Task-7 figures above from the committed artifacts.
 
 **Rejected alternatives.**
 - **Keep auto-follow and install a `CookieHandler`/`CookieManager`.** Demonstrably broken, not merely

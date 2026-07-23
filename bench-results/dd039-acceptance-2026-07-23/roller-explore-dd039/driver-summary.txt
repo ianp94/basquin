@@ -1,0 +1,2 @@
+CoverageGuidedRun done: corpus=81 coverage=29362/96536 pheromone=off seed=1
+[Basquin] reporting: measured=2046 misses=0 targetViolations=1656

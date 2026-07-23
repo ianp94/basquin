@@ -270,6 +270,19 @@ public class Agent {
     }
 
     /**
+     * DD-040: the iteration in flight on this thread, WITHOUT removing it.
+     *
+     * <p>The boundary reads this <em>before</em> calling {@link #endIteration()}, never after and
+     * never from that method's outcome. {@code endIteration()} throws on a hard-mode invariant
+     * violation ({@link Invariants}) and on leak detection — i.e. for exactly the iterations that
+     * carry a finding — and its own {@code finally} clears the thread-local either way. So a
+     * context read after the call is {@code null} precisely when there is something to report.
+     */
+    static IterationContext currentContext() {
+        return CURRENT.get();
+    }
+
+    /**
      * End the current thread's iteration boundary.
      * Prefer {@link #end(IterationContext)} in new code.
      */

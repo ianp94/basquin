@@ -55,6 +55,12 @@ public class BasquinValve extends ValveBase {
             response.getWriter().print(decision.controlBody);
             return;
         }
+        // DD-040: stamp the driver's request id ONLY on the explore branch, so the load path reads
+        // no header at all. Request.getHeader is a concrete Catalina method, so this stays
+        // namespace-free (DD-011).
+        if (decision.phase == RequestBoundary.Phase.EXPLORE_BEGAN) {
+            RequestBoundary.stampRequestId(request.getHeader("X-Basquin-Req"));
+        }
         Throwable appError = null;
         try {
             getNext().invoke(request, response);

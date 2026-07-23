@@ -23,6 +23,12 @@ public final class TomcatBoundaryAdvice {
                          @Advice.Argument(1) Response response) {
         RequestBoundary.Decision d =
                 RequestBoundary.onEnter(request.getRequestURI(), request.getQueryString());
+        // DD-040: stamp the driver's request id ONLY on the explore branch, so the load path reads
+        // no header at all. Request.getHeader is a concrete Catalina method, so this stays
+        // namespace-free (DD-011).
+        if (d.phase == RequestBoundary.Phase.EXPLORE_BEGAN) {
+            RequestBoundary.stampRequestId(request.getHeader("X-Basquin-Req"));
+        }
         if (d.skipApp()) {
             try {
                 response.setStatus(200);

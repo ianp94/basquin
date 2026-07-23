@@ -38,9 +38,31 @@ public final class RequestBoundary {
 
     private static final ReentrantLock ITERATION_LOCK = new ReentrantLock(true);
     private static final ThreadLocal<Phase> PHASE = new ThreadLocal<>();
+    /** DD-040: the driver's salted request id for the explore iteration in flight on this thread.
+     *  Set by the glue only on the EXPLORE_BEGAN branch; cleared in {@link #onExit} with the same
+     *  discipline as {@link #PHASE}. */
+    private static final ThreadLocal<String> REQ_ID = new ThreadLocal<>();
     private static final Map<String, String> NO_HEADERS = Collections.emptyMap();
 
     private RequestBoundary() { }
+
+    /**
+     * DD-040: associate the driver's salted request id with the explore iteration in flight, so
+     * {@link #onExit} can publish this request's measurements to {@link ResultStore} — a channel
+     * that survives a response the app already committed, which the reporting headers do not.
+     *
+     * <p>Call this <em>only</em> when {@code onEnter} returned {@link Phase#EXPLORE_BEGAN}. That is
+     * why {@code onEnter} does not take the id itself: the caller cannot know the phase until
+     * {@code onEnter} returns, so reading the header there would put work on every load-mode
+     * request, and the load path must gain zero instructions.
+     *
+     * <p>Sets the thread-local <b>unconditionally</b> — a null argument overwrites. Connector
+     * threads are pooled, and an id left behind by an earlier request would publish a later
+     * kubelet probe's metrics under a driver id: stale data presented as fresh.
+     */
+    public static void stampRequestId(String reqId) {
+        REQ_ID.set(reqId);
+    }
 
     /** Before the wrapped invoke. Never throws. Stashes the phase in a thread-local for {@link #onExit}. */
     public static Decision onEnter(String uri, String query) {
@@ -85,11 +107,22 @@ public final class RequestBoundary {
     public static ExitResult onExit(Throwable appError) {
         Phase phase = PHASE.get();
         PHASE.remove();
+        // Cleared for EVERY phase, not just explore: the id must never outlive the request that
+        // carried it on a pooled connector thread (see stampRequestId).
+        String reqId = REQ_ID.get();
+        REQ_ID.remove();
         if (phase != Phase.EXPLORE_BEGAN) {
             return new ExitResult(NO_HEADERS, appError); // control / load: nothing to close
         }
         Throwable pending = appError;
         Map<String, String> headers = NO_HEADERS;
+        // DD-040: capture the context BEFORE endIteration(), never from its outcome. endIteration()
+        // throws on a hard-mode invariant violation and on a leak — exactly the iterations that
+        // carry a finding — and its own finally does CURRENT.remove(), so a context read afterwards
+        // is null precisely when there is something to publish. All the fields we need
+        // (latency/heap/thread deltas, invariantViolations, leakDetected) are populated before any
+        // of those throws, so the entry below is complete even on the throwing path.
+        IterationContext ctx = Agent.currentContext();
         try {
             Agent.endIteration();
         } catch (Throwable endError) {
@@ -97,12 +130,41 @@ public final class RequestBoundary {
             else pending = endError;
         } finally {
             try {
-                headers = exitHeaders();
+                try {
+                    headers = exitHeaders();
+                } finally {
+                    // Unconditional: whether or not endIteration() threw, and whether or not the
+                    // headers could be built. This is the reliable channel.
+                    publishResult(reqId, ctx);
+                }
             } finally {
                 ITERATION_LOCK.unlock();
             }
         }
         return new ExitResult(headers, pending);
+    }
+
+    /**
+     * DD-040: publish this iteration's measurements under the driver's stamped id.
+     *
+     * <p>Built from the {@link IterationContext} — never from {@code Agent}'s process-global
+     * {@code last*} statics — and written while ITERATION_LOCK is still held, so the numbers
+     * provably belong to THIS request. Unstamped requests (load passthrough, kubelet probes, any
+     * non-driver traffic) write nothing at all. Never throws: reporting must not fail an app
+     * request.
+     */
+    private static void publishResult(String reqId, IterationContext ctx) {
+        if (reqId == null || ctx == null) return;
+        try {
+            List<String> violations = ctx.invariantViolations;
+            int count = (violations == null) ? 0 : violations.size();
+            String detail = (count > 0) ? violations.get(0) : null;
+            // Composed exactly as the X-Basquin-Cost header is (Agent.lastCostCsv): heap in KB.
+            String costCsv = ctx.latencyMs + "," + (ctx.heapDeltaBytes / 1024L) + "," + ctx.threadDelta;
+            ResultStore.put(reqId, new ResultStore.Entry(costCsv, count, detail, ctx.leakDetected));
+        } catch (Throwable ignored) {
+            // best-effort publication; never let it fail a request
+        }
     }
 
     // Test hooks: quiescence is only assertable if a test can hold the same lock. Public (not

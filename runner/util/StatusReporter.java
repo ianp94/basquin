@@ -25,8 +25,10 @@ public final class StatusReporter {
     private static final String SAMPLE_OUT = System.getProperty("basquin.sample.out", "");
     private static final long SAMPLE_INTERVAL_MS = Long.getLong("basquin.sample.intervalMs", 5000L);
     private static final AtomicBoolean SAMPLER_STARTED = new AtomicBoolean(false);
-    // Counters advance when EITHER the box or the sampler is active.
-    private static final boolean TRACKING = ENABLED || !SAMPLE_OUT.isEmpty();
+    // Counters advance when EITHER the box or the sampler is active. Not final only so a test can
+    // turn tracking on in-process (see enableTrackingForTest); production flips it with
+    // -Dbasquin.status / -Dbasquin.sample.out at class-init, exactly as before.
+    private static volatile boolean tracking = ENABLED || !SAMPLE_OUT.isEmpty();
     // Redraw in place when attached to a terminal; forceTty renders the box even when piped
     // (useful for capturing the rich view to a log).
     private static final boolean TTY =
@@ -66,6 +68,15 @@ public final class StatusReporter {
     // hidden. Zero/zero means a single-source or not-yet-reported run.
     private static int coverageSourcesResponded;
     private static int coverageSourcesExpected;
+    // DD-040: requests whose measurements the driver could not obtain at all — no X-Basquin-Cost
+    // header (the response had already committed) AND the /__basquin/result poll missed. Published
+    // so a run with no data is never read as a run with no findings; any miss makes the reported
+    // finding counts a LOWER BOUND, which the summary states as a field, not as prose.
+    private static long reportMisses;
+    // DD-040: the target's own cumulative invariant-violation count over this run's window
+    // (/__basquin/violations at end minus at start). The number a campaign's reported findings are
+    // compared against. -1 = never read; reported as targetViolationsUnavailable rather than 0.
+    private static long targetViolations = -1L;
 
     // DD-033: mode + load-block state (load campaigns feed these via recordLoad).
     private static volatile String mode = "explore";
@@ -86,7 +97,7 @@ public final class StatusReporter {
      * for the sampler-only case is what makes the counters (and thus the CSV) populate.
      */
     public static boolean isEnabled() {
-        return TRACKING;
+        return tracking;
     }
 
     /** Start the render thread and/or CSV sampler once, before the first iteration baseline. */
@@ -111,7 +122,7 @@ public final class StatusReporter {
     /** Record one completed iteration's metrics and any violations/leak it carried. */
     public static synchronized void recordIteration(long latencyMs, long heapDeltaKb, int threads,
                                                     boolean leak, java.util.List<String> violations) {
-        if (!TRACKING) return;
+        if (!tracking) return;
         iterations++;
         lastLatencyMs = latencyMs;
         if (latencyMs > maxLatencyMs) maxLatencyMs = latencyMs;
@@ -158,17 +169,17 @@ public final class StatusReporter {
             driftJson, loadServerErrors, loadRequests);
     }
 
-    public static synchronized void recordCrash() { if (TRACKING) crashes++; }
-    public static synchronized void recordReset() { if (TRACKING) resets++; }
+    public static synchronized void recordCrash() { if (tracking) crashes++; }
+    public static synchronized void recordReset() { if (tracking) resets++; }
     /** An expected input rejection (a target's declared "bad input" exception), not a crash. */
-    public static synchronized void recordRejected() { if (TRACKING) rejected++; }
+    public static synchronized void recordRejected() { if (tracking) rejected++; }
 
     /**
      * Record a saved exploration finding (from the triage layer). {@code classification} is the
      * triage label, e.g. "Crash", "Invariant", "Invariant-Remote". Drives the exploration panel.
      */
     public static synchronized void recordSaved(String classification) {
-        if (!TRACKING) return;
+        if (!tracking) return;
         corpusSaved++;
         if (classification != null && classification.startsWith("Crash")) {
             findCrash++;
@@ -178,6 +189,32 @@ public final class StatusReporter {
         lastFindNanos = System.nanoTime();
         lastFindIter = iterations;
     }
+
+    /**
+     * DD-040: one request whose measurements never reached the driver. Deliberately NOT a violation
+     * counter — it is the count of requests this run cannot speak for, which is what makes
+     * {@code findingsLowerBound} honest.
+     */
+    public static synchronized void recordReportMiss() {
+        if (!tracking) return;
+        reportMisses++;
+    }
+
+    /** DD-040: the target-side violation total for this run's window (see {@link #targetViolations}). */
+    public static synchronized void recordTargetViolations(long delta) {
+        if (!tracking) return;
+        targetViolations = delta;
+    }
+
+    /**
+     * Test hook (DD-040): turn counter tracking on in-process. Counters are otherwise inert unless
+     * {@code -Dbasquin.status} / {@code -Dbasquin.sample.out} was set at JVM start, which a unit test
+     * cannot retrofit. Nothing in production calls this.
+     */
+    public static void enableTrackingForTest() { tracking = true; }
+
+    /** Test hook (DD-040): the invariant-finding count — the number a campaign actually reports. */
+    public static synchronized long findInvariantForTest() { return findInvariant; }
 
     /**
      * Report coverage of the code under test. {@code total} is the instrumentable denominator
@@ -191,7 +228,7 @@ public final class StatusReporter {
 
     /** As above, plus how many coverage sources answered vs were expected (fleet under-reporting). */
     public static synchronized void recordCoverage(long covered, long total, int sourcesResponded, int sourcesExpected) {
-        if (!TRACKING) return;
+        if (!tracking) return;
         coveredEdges = covered;
         totalEdges = total;
         coverageSourcesResponded = sourcesResponded;
@@ -294,8 +331,10 @@ public final class StatusReporter {
             String cov = totalEdges > 0
                 ? String.format(" cov=%.1f%%", 100.0 * coveredEdges / totalEdges) : "";
             String explore = exploring
-                ? String.format(" explore[corpus=%d crash=%d inv=%d rejected=%d%s lastFind=%s]",
-                        corpusSaved, findCrash, findInvariant, rejected, cov, sinceLastFind())
+                ? String.format(" explore[corpus=%d crash=%d inv=%d%s rejected=%d%s lastFind=%s]",
+                        corpusSaved, findCrash, findInvariant,
+                        reportMisses > 0 ? " (lower-bound; " + reportMisses + " unreported)" : "",
+                        rejected, cov, sinceLastFind())
                 : "";
             System.out.printf(
                 "[Basquin] %s iters=%d (%.1f/s) crashes=%d leaks=%d inv[lat=%d heap=%d thr=%d] "
@@ -327,7 +366,9 @@ public final class StatusReporter {
                         100.0 * coveredEdges / totalEdges, coveredEdges, totalEdges, src));
             }
             row(sb, "corpus", String.valueOf(corpusSaved));
-            row(sb, "finds", String.format("crash=%d  invariant=%d", findCrash, findInvariant));
+            row(sb, "finds", String.format("crash=%d  invariant=%d%s", findCrash, findInvariant,
+                    // DD-040: never let a finding count read as complete when it cannot be.
+                    reportMisses > 0 ? "  (lower bound; " + reportMisses + " unreported)" : ""));
             row(sb, "rejected", String.valueOf(rejected));
             row(sb, "last find", sinceLastFind());
         }
@@ -349,6 +390,7 @@ public final class StatusReporter {
             + "\"latencyMs\":{\"last\":%d,\"mean\":%.0f,\"max\":%d},"
             + "\"heapKb\":{\"last\":%d,\"max\":%d},\"threads\":%d,"
             + "\"exploration\":{\"corpus\":%d,\"findCrash\":%d,\"findInvariant\":%d,\"rejected\":%d,"
+            + "\"reportMisses\":%d,\"findingsLowerBound\":%b,%s,"
             + "\"coverage\":{\"covered\":%d,\"total\":%d,\"pct\":%.1f,"
             + "\"sourcesResponded\":%d,\"sourcesExpected\":%d}}}",
             elapsedS, iterations, rate, crashes, leaks, resets,
@@ -356,6 +398,14 @@ public final class StatusReporter {
             lastLatencyMs, meanLatency, maxLatencyMs,
             lastHeapKb, maxHeapKb, lastThreads,
             corpusSaved, findCrash, findInvariant, rejected,
+            // DD-040: findingsLowerBound is DATA, not prose — an operator/dashboard must be able to
+            // read "this run could not see everything" without parsing a log line. A run that missed
+            // even one report cannot claim its finding counts are complete.
+            reportMisses, reportMisses > 0,
+            // Absent, never a fake 0 (the DD-035 driftUnavailable precedent).
+            targetViolations >= 0
+                    ? "\"targetViolations\":" + targetViolations
+                    : "\"targetViolationsUnavailable\":true",
             coveredEdges, totalEdges, coveragePct,
             coverageSourcesResponded, coverageSourcesExpected);
         String extra = ",\"mode\":\"" + mode + "\"" + loadBlockJson();

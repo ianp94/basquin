@@ -176,6 +176,11 @@ only place a constraint appears.
    URL through a null-returning helper. (Tasks 1, 4, 5.)
 6. **Every hop's response is read to EOF before the next is issued**, and every terminal condition
    `break`s *before* the drain, so the final hop's body survives for the capture step. (Task 4.)
+> **Spike caveat, banked for Task 7:** the `Cookie` re-attach on the rewritten hop is the one piece
+> with **no failing unit test** until the driver is pointed at a session-rotating app — which is
+> DD-039's whole purpose. Task 7's acceptance (a Roller login-then-publish writing a DB row) is what
+> actually exercises it; a green unit suite does not prove the cookie carry works.
+
 7. **`Cookie` and `X-Basquin-Req` are set explicitly on every hop.** The JDK carries neither onto a
    method-rewritten hop (spec Evidence TEST A: hop 2 arrived with `cookie=null`). That is DD-039's
    motivating defect and DD-040's residual, in one line. (Task 4.)
@@ -1355,6 +1360,22 @@ The largest task, and it must stay one task: round 3's C4 (suppress the header s
 and merge, don't poll and replace) are **one decision**, and the previous plan's attempt to specify
 either alone produced a bug. Landing the loop without the reconciliation ships a double-save; landing
 the reconciliation without the loop is unobservable.
+
+**Proven by throwaway spike before this build (see `.superpowers/sdd/dd039-spike-report.md`).** The
+data path here takes the motivating POST→302→GET case from **1 counted violation to 2**. Three things
+the spike established that an implementer will otherwise get wrong, each now in the spec's §4b too:
+
+1. **`reconcile` prefers the polled hop set and falls back to the header ONLY when the poll returns
+   no hops.** Do not attempt to de-duplicate by hop identity — `Entry` has none, and the header is
+   always a *subset* of what the store holds for that id, so a union would double-count the final
+   hop.
+2. **The header's `saveWithMeta` is REMOVED from the header-read site**, not guarded by a flag. It
+   moves into `reconcile`, which is the sole caller of `saveWithMeta` for this request. Clearing
+   `headerReported` cannot un-save a call that already ran — the spike's stock run proved this is a
+   structural change, not a reorder.
+3. **The measured-vs-miss decision is made once, inside `reconcile`.** If the poll path records a
+   miss and `reconcile` then records measured off the header fallback, both counters tick for one
+   request. `reconcile` owns the decision.
 
 **Files:**
 - modify: `runner/coverage/CoverageGuidedRun.java` (`request` 4-arg `:697-819`, `resetSession` `:500`)

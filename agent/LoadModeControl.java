@@ -36,6 +36,18 @@ public final class LoadModeControl {
             }
             case "drift":
                 return LoadMode.driftSnapshotCsv();
+            case "result": {
+                String id = param(query, "id");
+                // Bounded wait on ITERATION_LOCK: Agent.end() sleeps 25ms BEFORE measuring, so on a
+                // committed response the client reaches EOF while the entry is still ~25ms away.
+                // Waiting here queues the poll behind the in-flight iteration instead of racing it.
+                // A timeout (not an indefinite block) so a target wedged inside the app misses
+                // rather than hanging the driver.
+                RequestBoundary.awaitQuiescence(2000);
+                return ResultStore.format(ResultStore.take(id));
+            }
+            case "violations":
+                return Long.toString(ResultStore.totalViolations());
             default:
                 return "err:unknown";
         }

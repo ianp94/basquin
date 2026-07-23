@@ -105,6 +105,28 @@ public final class RequestBoundary {
         return new ExitResult(headers, pending);
     }
 
+    // Test hooks: quiescence is only assertable if a test can hold the same lock. Public (not
+    // package-private) because the test that pins awaitQuiescence's wait-then-observe behavior
+    // lives in test/LoadModeControlTest.java, an existing file this task must not fork — and that
+    // file is not in package `agent`, so package-private access would make these two uncallable
+    // from it. Nothing outside this task's own tests calls either method.
+    public static void lockForTest() { ITERATION_LOCK.lock(); }
+    public static void unlockForTest() { ITERATION_LOCK.unlock(); }
+
+    /** DD-040: wait until no explore iteration is in flight, bounded. Used only by the control
+     *  path so a result poll observes the entry the in-flight iteration is about to write. */
+    public static boolean awaitQuiescence(long millis) {
+        try {
+            if (ITERATION_LOCK.tryLock(millis, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                ITERATION_LOCK.unlock();
+                return true;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return false;
+    }
+
     /** Headers to set on the EXPLORE exit: invariant evidence (if any) + the always-present cost header.
      *  Read here — before onExit releases ITERATION_LOCK — so the numbers belong to THIS request. */
     private static Map<String, String> exitHeaders() {

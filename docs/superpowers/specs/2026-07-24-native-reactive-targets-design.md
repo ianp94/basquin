@@ -1,11 +1,73 @@
 # DD-043 — Native and reactive targets
 
-**Status:** designed, not yet planned (2026-07-24). Revised after adversarial review —
-`reviews/2026-07-24-dd043-fable-review.md` (2 blockers, 8 majors; all addressed here).
+**Status:** **Phase 0 spikes RAN (2026-07-24). Gate PASSED — PR-1 is cleared to start.** Amended
+against the evidence; see the amendment ledger below. Previously: designed, not yet planned
+(2026-07-24), revised after adversarial review — `reviews/2026-07-24-dd043-fable-review.md`
+(2 blockers, 8 majors; all addressed here).
 **Depends on:** DD-040 (trustworthy measurement channel), DD-012/DD-023 (coverage over HTTP)
 **Related:** DD-002 (`gcBeforeMeasure`), DD-004 (JFR sampling is soft-only), DD-009/DD-011 (why the
 valve exists), DD-019/DD-040 (log scraping rejected, twice), DD-029 (closure's thesis stated),
 DD-005/DD-010 (why the iteration lock exists)
+
+## Phase-0 amendment ledger
+
+Phase 0 ran on 2026-07-24 under `docs/superpowers/plans/2026-07-24-dd043-phase0-spikes.md`. All four
+spikes resolved; the consolidated verdicts, evidence citations and scope qualifiers are in
+`bench-results/dd043-spikes-2026-07-24/REPORT.md`.
+
+**Gate result: PASSED.** §7.1 named two outcomes that would have voided design sections and **neither
+occurred.** S1 was REFUTED *as specified* and CONFIRMED via S1b once the read path was corrected, so
+§6.4 is amended rather than void and §2's full-parity goal does not reopen. S4 was CONFIRMED in JVM
+and native, so §5's mechanism stands and §5.1's degradation stays a contingency.
+
+| Spike | Verdict | Sections it forced changes in |
+|---|---|---|
+| **S1** | **REFUTED** as specified (reflective read stripped by AOT) | §6.4, §7.1 |
+| **S1b** | **CONFIRMED** (direct typed call) | §6.4, §7.1, §7.4 |
+| **S2** | **CONFIRMED** — scoped to allocations above the quantum; quiescence half DEFERRED | §5, §6.1 |
+| **S3** | **CONFIRMED** | §6, §7.3 |
+| **S4** | **CONFIRMED** — scoped to resolution + augmentation; extension *discovery* inferred, not measured | §5, §5.1 |
+
+Eight amendments were made, each traceable to committed evidence:
+
+1. **§6.4** — the coverage read is a direct compile-time-typed call, `RT.getAgent().getExecutionData(false)`,
+   never reflection. Also decouples the design from JaCoCo's shaded package name. *(S1, S1b)*
+2. **§6.4 / §7.4** — the native coverage denominator differs from the JVM's; native's ceiling is capped
+   below 100% and the two percentages are not like-for-like comparable. *(S1b)*
+3. **§6 / §7.3** — the 5xx/crash signal is gated on `ar.succeeded()`; `disconnected` becomes a third
+   disposition, and §7.3 gains a control asserting a disconnect does **not** increment the crash
+   counter. *(S3)*
+4. **§6.1** — the measurement floor is stated: 524,288 B instrument resolution, ~1 MiB practical
+   per-request minimum. *(S2)*
+5. **§6.1** — `System.gc()` works under SubstrateVM, so `basquin.heap.gcBeforeMeasure` is recommended
+   on native targets, not merely noted as portable. *(S2)*
+6. **§5** — the `nmt` hedge is dropped; `-Dquarkus.native.monitoring=jfr,nmt` is verified and the
+   `additional-build-args` fallback is withdrawn. *(S2)*
+7. **§5** — the injector must construct a fresh `Dependency` per `MavenProject`; a shared instance
+   aliases across a multi-module reactor and passes every single-module test. *(S4 fix round)*
+8. **§7.1** — S1's failure signatures are rewritten: signature (0) is the read path itself, and
+   `NeverCalled` cannot be the signature-(ii) instrument on native because reachability analysis
+   deletes it. The working instrument is a registered-but-never-called JAX-RS route. *(S1, S1b)*
+
+A ninth edit records S4's result in **§5.1**, whose stated hypothesis the spike refuted; the section is
+retained because it is why S4 existed, but it no longer reads as a live unmeasured hazard.
+
+**Where no amendment was needed, stated explicitly** so a silent absence is not mistaken for an
+unchecked section:
+
+- **§4.3** (which end hook to use) — S3 confirmed `addEndHandler` fires on all four dispositions and
+  `addHeadersEndHandler` reaches the client on every completed response, including the 500. The table
+  is correct as written; only the *consumer* of that signal in §6 was wrong.
+- **§6.5** (latency's population) — already excludes `disconnected` samples from the latency
+  distribution, which is exactly what S3's disconnect finding requires. S3 additionally observed that
+  the end handler fires ~1 s after the client aborts, bounded by server-side close detection, so a
+  disconnect's elapsed time is detection latency rather than client-observed latency — §6.5's existing
+  exclusion already covers it and no text change was needed.
+- **§6.2** (the JFR cross-check) — Phase 0 ran no JFR analysis; S2 only proved the `jfr,nmt` build flag
+  is accepted. The section is **unverified, not confirmed**, and its §7.3 control still has to earn it.
+- **§6.3** (event-loop watchdog) — not exercised by any Phase-0 spike. Unchanged and untested.
+- **§4.4** (result store and parking poll) — no spike touched the DD-040 channel transplant. Unchanged.
+- **§8.1** (does Apicurio build native) — still open; Phase 0 did not address it.
 
 ---
 
@@ -237,10 +299,24 @@ before the per-project execution plan is computed.
 
 **Gradle:** an init script (`-I basquin-init.gradle`) doing the same via `allprojects { … }`.
 
-**Native build arguments** ride the same channel. Note `quarkus.native.monitoring` is an enum list;
-whether `nmt` is an accepted value in Quarkus 3.37.3 is unverified, so the fallback
-`-Dquarkus.native.additional-build-args=--enable-monitoring=nmt` is the safe form. S2 settles it in one
-line — a failed *build flag* would otherwise stall the native cells on a triviality.
+**The injector must construct a fresh `Dependency` per `MavenProject`.** Maven's model objects are
+mutable, so hoisting one `Dependency` allocation out of the `for (MavenProject p : session.getProjects())`
+loop aliases a single instance across every module in the reactor — every project's dependency list
+then holds a pointer to the same object, and any later in-place mutation or identity-dependent
+handling on one module bleeds into all the others. **This passes every single-module test**, which is
+what makes it worth specifying rather than leaving to implementation taste: S4's spike fixture is
+single-module and its evidence was byte-for-byte unaffected by the bug, while the real targets are
+multi-module (Apicurio Registry certainly; super-heroes is a multi-project repo). Found and fixed in
+the spike participant — `bench-results/dd043-spikes-2026-07-24/s4-injection/probe-participant/src/main/java/com/basquin/spike/InjectProbe.java:37`
+carries the corrected shape and a comment saying why it must not be hoisted back out.
+
+**Native build arguments** ride the same channel. `quarkus.native.monitoring` is an enum list, and
+`nmt` **is an accepted value in Quarkus 3.37.3** — verified by S2, not assumed:
+`-Dquarkus.native.monitoring=jfr,nmt` was accepted at config parse *and* carried through a full native
+compile to `BUILD SUCCESS`, with Quarkus translating it into a real `--enable-monitoring=jfr,nmt,heapdump,threaddump`
+argument on the `native-image` invocation (`bench-results/dd043-spikes-2026-07-24/s2-memory/build-native-nmt.log:32,104,108,110`).
+Use that form directly. The `-Dquarkus.native.additional-build-args=--enable-monitoring=nmt` fallback
+an earlier draft named as "the safe form" is **not required** and is withdrawn.
 
 No file in the application tree is created or changed. The symmetry:
 
@@ -252,7 +328,17 @@ No file in the application tree is created or changed. The symmetry:
 This assumes the operator of Basquin controls the `mvn` invocation — has the app checked out and
 builds it — while never editing its source. That is the intended deployment model.
 
-### 5.1 The real risk is that Quarkus may not read the model we mutated
+### 5.1 The real risk is that Quarkus may not read the model we mutated — measured, and it did not materialise
+
+**Result first (S4, 2026-07-24): the hypothesis below is REFUTED.** Quarkus's bootstrap resolver
+builds its `ApplicationModel` from the in-memory `MavenProject`/`Model`, not by re-reading `pom.xml`
+from disk. A dependency injected purely in memory reached both `javac` and augmentation, in **JVM and
+native** packaging, and the injected feature appeared in the `Installed features` banner of both
+artifacts. Evidence: `bench-results/dd043-spikes-2026-07-24/s4-injection/` (`banner-baseline.txt` vs
+`banner-jvm-injected.txt` / `banner-native.txt`). §5's mechanism therefore stands as designed and the
+degradation below is **not** the norm — it remains documented only as the contingency it always was.
+The reasoning is retained because it is why S4 existed, and because the same hazard would return for
+any resolver that behaves differently.
 
 The lifecycle-participant mechanism is sound. The hazard is **Quarkus-specific**: the
 `quarkus-maven-plugin` builds its `ApplicationModel` through its own bootstrap resolver
@@ -288,10 +374,36 @@ DD-010 lists the four signals the valve captures. Three change meaning; one chan
 | Signal | Tomcat today | native + reactive |
 |---|---|---|
 | **Latency** | valve self-times the call | filter start → `addEndHandler`; **differently scoped**, see §6.5 |
-| **5xx / crash** | response status | unchanged, from `RoutingContext.response().getStatusCode()` |
+| **5xx / crash** | response status | **gated on `ar.succeeded()`**, then the status code — see below. Reading `getStatusCode()` alone is wrong here |
 | **Heap delta** | `Runtime` delta under `ITERATION_LOCK` | §6.1 — the lock is impossible; isolation weakens and must be *measured* |
 | **Thread leak** | non-daemon thread diff | §6.2 — structurally always zero; replaced |
 | **Coverage** | JaCoCo tcpserver `-javaagent` | §6.4 — offline JaCoCo, served by our own route |
+
+**The 5xx/crash signal must be gated on `ar.succeeded()`, and disconnect is its own disposition.**
+S3 measured a client disconnect reporting a clean `200`:
+
+```
+[PROBE] path=/slow status=200 succeeded=false cause=io.vertx.core.http.HttpClosedException: Connection was closed ms=1006
+```
+
+`200` is Vert.x's default on an `HttpServerResponse` that was never written to the wire — the client
+received nothing at all. A crash signal that reads `getStatusCode()` at the end handler, as an earlier
+draft of this table specified, would therefore have **counted a request that delivered nothing as a
+clean success**. That is DD-040's defect shape (a number meaning "not measured" presented as "fine")
+arriving by a new route, in the one signal whose whole job is to notice failure. So the disposition is
+decided in this order, and only in this order:
+
+| `ar.succeeded()` | Status | Disposition | Counts toward |
+|---|---|---|---|
+| `false` | *(meaningless — do not read)* | `disconnected` | neither success nor 5xx; its own counter, reported like the taint rate |
+| `true` | 5xx | `failed` | the crash counter |
+| `true` | anything else | `completed` | success |
+
+`disconnected` is a **third** disposition, not a flavour of either other one: the request was neither
+served cleanly nor demonstrably broken by the app, and collapsing it into either column manufactures a
+number. §6.5 already excludes it from the latency distribution; this excludes it from the crash count
+for the same reason. Evidence: `bench-results/dd043-spikes-2026-07-24/s3-boundary/probe.log`,
+`curl.txt`.
 
 **All invariants on this path are soft by structure.** `Invariants.evaluateAndMaybeFail` throwing at
 the end handler can fail nothing — the response is fully written by definition of the hook. Tomcat
@@ -331,6 +443,47 @@ is *client-side politeness*. The fix is to make the weakening **observable and d
   the taint rate as data.
 
 This converts a silent attribution error into a measured limitation.
+
+#### The instrument is quantized, not continuous — state the floor
+
+Everything above treats the heap reading as a continuous number that noise perturbs. It is not.
+**`Runtime.freeMemory()` under SubstrateVM quantizes at 524,288 bytes (512 KiB).** Every `used` value
+S2 observed across a whole run — 30 idle samples, the `/alloc` bracket, 5 quiescence samples, and both
+`System.gc()` readings — is an exact multiple of that quantum, with no partial step anywhere
+(`bench-results/dd043-spikes-2026-07-24/s2-memory/series.txt`). `totalMemory()` never moved
+(`13,416,005,632` on every sample), so those deltas are pure allocation and collection with no resize
+artifact confusing them.
+
+The consequence is a hard floor on what this signal can say. A request allocating 100 KB reads as `0`
+or as `524,288` — never as its actual cost.
+
+- **Instrument resolution: 524,288 B (512 KiB).** No per-request heap threshold below this is
+  meaningful, on any target, at any tolerance.
+- **Practical minimum per-request delta: ~1,048,576 B (1 MiB) — two quanta.** One quantum is not
+  enough, because idle drift can contribute a quantum step *inside* a measurement window; a threshold
+  has to survive that coincidence, not just the instrument's resolution.
+- **A per-request delta smaller than the practical minimum is `UNMEASURED`, never a number.** This is
+  the same disposition tainted windows get, for the same reason.
+
+What clears the floor comfortably does work: S2's `/alloc` produced a delta of `4,718,592` B — 9× the
+largest single idle step and 3× the idle series' whole cumulative drift. The invariant is viable for
+allocations well above the quantum and unvalidated below it; that is a scope, not a hedge.
+
+Idle drift is real but must not be quoted as a rate. S2 observed **three** discrete 512 KiB steps over
+a ~29 s idle window in a single run (`used` rising `4,194,304 → 5,767,168` = `1,572,864` B). The
+`≈3.10 MiB/min` figure in that spike's findings is an arithmetic extrapolation from **n=3 events in
+one run** of a step function — usable as an order of magnitude for sizing thresholds, not as a
+measured slope, and not to be printed as one.
+
+**`System.gc()` works under SubstrateVM, so use it.** S2 measured a real collection:
+`10,485,760 → 3,670,016` B, a 65% reduction that landed *below* the pre-`/alloc` idle floor, meaning
+it reclaimed accumulated idle drift as well as the deliberate allocation. DD-002's
+`basquin.heap.gcBeforeMeasure` (`agent/Agent.java:96,126`) is therefore not merely portable to native
+— it is the cheapest available mitigation and it attacks the floor directly, by clearing the drift
+that forces the second quantum. **Recommendation: enable `gcBeforeMeasure` on native targets by
+default**, and record in the bench manifest whether it was on, since it changes what the minimum
+detectable delta means. Collecting *after* the window as well as before is a plausible further
+reduction; untested, so not specified.
 
 ### 6.2 The JFR cross-check, redefined so it can actually fail
 
@@ -397,6 +550,68 @@ Two mechanics the injector must respect, because they are how this silently prod
 - `/basquin/coverage` reads `RuntimeData` **directly**, not via the `jacoco-agent.properties`
   agent-boot path (shutdown hooks, file output), which may not survive native.
 
+#### The read must be a direct, compile-time-typed call. Never reflection.
+
+```java
+IAgent agent = RT.getAgent();          // org.jacoco.agent.rt.RT — public API
+byte[] data = agent.getExecutionData(false);
+```
+
+`RT` and `IAgent` are ordinary public compiled types in `org.jacoco.agent:runtime`, which the injector
+already adds as a compile-scope dependency. Ordinary virtual dispatch is visible to native-image's
+closed-world analysis like any other call, so it needs no `@RegisterForReflection` and no
+`reflect-config.json`.
+
+**A reflective read does not survive AOT.** An earlier draft of this section specified
+`Class.forName(...).getMethod(...).invoke(...)`. S1 measured that form failing deterministically in
+native — three requests, three HTTP 500s, the identical exception each time:
+
+```
+java.lang.NoSuchMethodException: org.jacoco.agent.rt.internal_bac9136.Agent.getExecutionData(boolean)
+```
+
+Native-image's default reflection policy strips it. The failure is specific to the reflective path and
+not to JaCoCo under AOT: `javap` confirms the method exists in the pinned 0.8.15 jar, the class-init
+report confirms the holding class is reachable and build-time-initialized in the image, and the
+identical code works in JVM mode on the same toolchain. S1b then built the direct-call form and got
+real execution data (`01 C0 C0 10` magic header) at all three dump points. Evidence:
+`bench-results/dd043-spikes-2026-07-24/s1-coverage/` (`app.log:8,31,54`, `analysis.txt:5,19,33`,
+`s1b-t{0,1,2}-*.exec`, `s1b-analysis.txt`).
+
+**The direct call also decouples the design from JaCoCo's shaded package name.** The registration key
+a reflective path would need — `org.jacoco.agent.rt.internal_bac9136.Agent` — carries a hash that
+changes between JaCoCo versions. Registering it would pin this spec to one JaCoCo release and break
+silently on upgrade, with the same `NoSuchMethodException` and no compile-time warning. The typed call
+against the public `IAgent` interface has no such coupling: a version bump that moved the shaded
+package would still compile and still link. This is a reason to prefer the direct call *independently*
+of whether reflection could be made to work.
+
+#### The native coverage denominator is not the JVM's, and the two percentages are not comparable
+
+`jacoco-cli` analyzes against `target/generated-classes/jacoco` — the **pre-native preserved
+classfiles**, produced before `native-image` runs and unaffected by what its reachability analysis
+later discards. So code the closed-world analysis proves dead is **deleted from the image while
+remaining in the denominator**: it counts against the percentage and is structurally incapable of ever
+reading covered.
+
+S1b measured this directly. `NeverCalled` was eliminated from the image entirely (zero occurrences in
+the class-initialization report, zero in `strings` on the binary) yet still contributes `11` of the
+`194` total instructions the report counts across the fixture's five classes. That is not a fixture
+artifact — the same build reports `11,223 types ... found reachable` against a far larger compiled
+universe (`s1-coverage/s1b-build-native.log:70`), and how much weight is eliminated varies per build.
+
+Two consequences, both binding:
+
+1. **Native's achievable coverage ceiling is capped below 100% for reasons unrelated to test
+   thoroughness.** An 85% native reading is not evidence of "15% under-tested" the way an 85% JVM
+   reading would be.
+2. **A native coverage percentage is not like-for-like comparable with a JVM one from the same source
+   tree.** Same formula, same denominator source, different achievable maximum.
+
+Therefore: coverage-guided stopping rules and any published threshold must be **within one mode**
+(native run N+1 covers more than native run N), never cross-mode. §7.4 carries the reporting-side
+obligation.
+
 ### 6.5 Latency's population changed, not just its accuracy
 
 `addEndHandler` fires when the response is fully written **to the wire**, so the reading now includes
@@ -415,19 +630,47 @@ or a flaky driver connection manufactures latency findings.
 
 | | Question | Failure signatures |
 |---|---|---|
-| **S1** | Does offline JaCoCo produce *correct* coverage under AOT? | (i) frozen probes; (ii) **inflated baseline from build-time init** — see below; (iii) augmentation/class-id mismatch |
+| **S1** | Does offline JaCoCo produce *correct* coverage under AOT? | **(0) the read path itself fails under AOT** — the one that actually fired, see below; (i) frozen probes; (ii) **inflated baseline from build-time init**; (iii) augmentation/class-id mismatch |
 | **S2** | Does `Runtime.totalMemory()/freeMemory()` behave under SubstrateVM's Serial GC; does `System.gc()`; does post-response work quiesce on Hibernate Reactive; does `quarkus.native.monitoring` accept `nmt`? | heap deltas that are GC noise, like the `heapDriftKb` debt already on the books |
 | **S3** | Does `addEndHandler` fire on errors, 3xx, and client disconnects, and does `addHeadersEndHandler` survive response rewrites? | the requests we most care about are silently skipped |
 | **S4** | Does Quarkus **augmentation** honour the injected dependency — i.e. does the banner list `basquin`, JVM **and** native, through the containerised build? | a successful build producing a silently uninstrumented binary |
 
-**S1's likeliest failure is not the one an earlier draft named.** Quarkus registers application classes
-for **build-time initialization** by default, so during `native-image` the instrumented `<clinit>` runs,
-`$jacocoInit` executes, and both the probe arrays and JaCoCo's `RuntimeData` are captured into the image
-heap. Image-heap objects are **writable at runtime**, so the arrays do not freeze — the likelier defect
-is **pollution**: probes executed during image build read as covered forever, inflating the baseline.
-§7.3's "coverage must increase" control does **not** catch this — coverage increases fine from an
-inflated floor, and the benchmark's headline percentage is simply wrong. S1 must therefore assert that
-a **never-exercised class reads zero**, and record which classes Quarkus shifted to runtime init.
+**S1's failure signatures, rewritten from what the spike actually found.** Two successive drafts of
+this paragraph named the wrong failure. The corrected set:
+
+**(0) The read path fails before any coverage question is reachable — this is what fired.** A
+reflective `RuntimeData` read is stripped by native-image's default reflection policy, so `/coverage`
+returns HTTP 500 and the `.exec` files are error bodies that `jacoco-cli` rejects outright. None of
+(i)–(iii) is testable when this happens: there is no number to be wrong, only no number. §6.4 now
+specifies the direct typed call precisely so this signature cannot recur, and any future re-spike must
+check it **first**, because it masks everything below it.
+
+**(ii)'s instrument cannot be an unreferenced class.** Quarkus registers application classes for
+build-time initialization by default, so during `native-image` the instrumented `<clinit>` runs,
+`$jacocoInit` executes, and both the probe arrays and JaCoCo's `RuntimeData` are captured into the
+image heap. Image-heap objects are **writable at runtime**, so the arrays do not freeze — the defect
+this signature hunts is **pollution**: probes executed during image build reading as covered forever,
+inflating the baseline. §7.3's "coverage must increase" control does **not** catch it — coverage
+increases fine from an inflated floor, and the headline percentage is simply wrong.
+
+But an earlier draft's instrument for this — a `NeverCalled` class referenced from nowhere — **cannot
+work on native.** Closed-world reachability analysis deletes it from the image entirely: S1 found zero
+occurrences in the class-initialization report and zero in `strings` on the binary, despite the class
+being present in the source jar `native-image` consumed. Its `0 covered` reading is then a *structural
+absence* — `jacoco-cli` finding no record and defaulting the whole class to missed — which is
+indistinguishable from the pollution-free result the signature is trying to prove, and therefore
+proves nothing.
+
+**The working instrument is a registered-but-never-called JAX-RS route.** JAX-RS registration keeps it
+reachable, so it survives into the image and gets a real invoker class; never invoking it means its
+probes must read zero. The discriminating evidence is that its zero persists *against a live probe
+record* — S1b's `Probe.unused()` held at `2 missed, 0 covered` at t1 and t2 while sibling methods in
+the same class, backed by the same execution-data record, flipped to covered as their routes were hit.
+That is a live zero, and it is what refuted the pollution hypothesis. Evidence:
+`bench-results/dd043-spikes-2026-07-24/s1-coverage/s1b-t{0,1,2}-after-*.xml`, `s1b-app.log`.
+
+S1 must also record which classes Quarkus shifted to runtime init (S1 found 183, none in the
+application or JaCoCo packages), since that sets the expected floor.
 
 S1–S4 share no state and are **driven by concurrent subagents — but they do not compile
 concurrently.** S1, S2 and S4 each require a native build of the fixture, and §7.2's mutex applies
@@ -441,6 +684,13 @@ on native needs redesigning — which reopens the full-parity goal in §2, since
 the compile-in step. If **S4** fails, §5's no-source-modification property cannot be met by the
 described mechanism and §5.1's degradation becomes the norm. Either outcome returns here before any
 implementation proceeds.
+
+**Phase 0 ran on 2026-07-24 and the gate PASSED. Neither voiding outcome occurred.** S1 was REFUTED as
+specified — the reflective read path does not survive AOT — but CONFIRMED via S1b once the read was
+corrected to a direct typed call, so **§6.4 is amended, not void**, and §2's full-parity goal does not
+reopen. S4 was CONFIRMED in JVM and native, so **§5's mechanism stands** and §5.1's degradation remains
+a contingency rather than the norm. Full verdicts, evidence and the amendment list:
+`bench-results/dd043-spikes-2026-07-24/REPORT.md`.
 
 ### 7.2 Phase 1 — the 2×2
 
@@ -474,7 +724,8 @@ reusable for every future Quarkus target.
 | Invariant | Control | Assertion |
 |---|---|---|
 | latency | `/basquin/control/defect/slow` | violation **arrives in the driver-visible result** |
-| **5xx / crash** | `/basquin/control/defect/error5xx` returning a 500 | the crash is counted **and** attributed to the right iteration id — this signal reads from `getStatusCode()` at the end handler, so a boundary that skips error paths (§6.3, S3) would zero it silently |
+| **5xx / crash** | `/basquin/control/defect/error5xx` returning a 500 | the crash is counted **and** attributed to the right iteration id — a boundary that skips error paths (§6.3, S3) would zero it silently |
+| **5xx / crash, negative half** | a **client disconnect** mid-response (driver aborts before the body is written) | the crash counter does **not** increment, and the iteration is recorded as `disconnected` — S3 measured `getStatusCode()` returning `200` on exactly this disposition, so a control that only proves the counter *can* fire leaves the counter free to fire wrongly (§6) |
 | event-loop blocking | `/basquin/control/defect/block-loop`, sleeping **comfortably above the pinned threshold** | store entry → finding → rendered row |
 | heap | `/basquin/control/defect/alloc` | delta recorded **and not tainted** (§6.1) |
 | heap, **positive-noise** | idle window, no driver request | must read ~zero or `UNMEASURED` — this is the control that catches probe pollution and the `heapDriftKb` class of error |
@@ -505,6 +756,20 @@ passing control is **not published**, matching the discipline that keeps `heapDr
 - `deploy/bench/render_page.py` assumes the Tomcat invariant set. It must handle **per-target invariant
   sets** — no thread-leak column for reactive targets, an event-loop-blocking column instead — plus
   per-target **invariant mode** (§6: soft-by-structure here, hard on Tomcat) and the **taint rate**.
+- **Native and JVM coverage percentages must not share a column.** Per §6.4, `jacoco-cli` analyzes
+  against the pre-native preserved classfiles, so code the reachability analysis eliminated still
+  counts in the native denominator while being incapable of ever reading covered. Native's achievable
+  ceiling is capped below 100% for reasons unrelated to test thoroughness, and by an amount that
+  varies per build. Rendering the two side by side in one column invites exactly the wrong reading
+  ("native is 12 points worse tested"). The page must render them as separate, labelled figures and
+  state the reason inline — this is a per-target note the generator emits, not a footnote someone
+  remembers to add.
+- The **disconnect** disposition (§6) gets its own reported figure alongside the taint rate. It is
+  neither a success nor a 5xx, and a target with a high disconnect rate is telling the reader
+  something about the measurement, not about the app.
+- The **minimum detectable heap delta** (§6.1) is a per-target note on native rows, together with
+  whether `gcBeforeMeasure` was enabled. A heap column without it implies a precision the instrument
+  does not have.
 - Every figure in the native row is derived from the run artifact through that generator. No hand-typed
   numbers.
 
@@ -528,8 +793,8 @@ history says this repo needs.
 
 | PR | Contents | Gate |
 |---|---|---|
-| **PR-0** | Phase-0 spikes S1–S4 → `bench-results/dd043-spikes-…/`, plus whatever spec amendments they force. **No product code.** | Gates everything below |
-| **PR-1** | `basquin-core` extraction (§4.1) — pure refactor, zero behaviour change, existing tests green, no Quarkus code | PR-0 |
+| **PR-0** | Phase-0 spikes S1–S4 → `bench-results/dd043-spikes-2026-07-24/`, plus the spec amendments they forced. **No product code.** — **DONE, gate PASSED** | Gates everything below |
+| **PR-1** | `basquin-core` extraction (§4.1) — pure refactor, zero behaviour change, existing tests green, no Quarkus code | PR-0 — **cleared** |
 | **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + parking poll (§4.4), `/basquin/status\|result`, control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 |
 | **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits | PR-2 |
 | **PR-4** | Coverage — offline-JaCoCo execution injection, `/basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 |

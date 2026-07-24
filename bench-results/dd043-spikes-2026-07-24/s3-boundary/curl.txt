@@ -1,0 +1,11 @@
+== /ok (200) ==
+HTTP/1.1 200 OK
+X-Basquin-Req: probe-7604604051974
+== /boom (500) ==
+HTTP/1.1 500 Internal Server Error
+X-Basquin-Req: probe-7604690294044
+== /redirect (302) ==
+HTTP/1.1 302 Found
+X-Basquin-Req: probe-7604736827795
+== /slow (disconnect) ==
+client aborted

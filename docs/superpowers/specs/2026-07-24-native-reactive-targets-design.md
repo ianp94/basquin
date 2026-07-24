@@ -18,15 +18,17 @@ spikes resolved; the consolidated verdicts, evidence citations and scope qualifi
 **Gate result: PASSED.** §7.1 named two outcomes that would have voided design sections and **neither
 occurred.** S1 was REFUTED *as specified* and CONFIRMED via S1b once the read path was corrected, so
 §6.4 is amended rather than void and §2's full-parity goal does not reopen. S4 was CONFIRMED in JVM
-and native, so §5's mechanism stands and §5.1's degradation stays a contingency.
+and native for the **dependency half** of §5's mechanism — the half it exercised — so §5.1's
+degradation stays a contingency. S4 never injected a **plugin execution**, which §5 requires in equal
+measure; that half is unmeasured and is now §8.2, a PR-4 entry gate.
 
 | Spike | Verdict | Sections it forced changes in |
 |---|---|---|
 | **S1** | **REFUTED** as specified (reflective read stripped by AOT) | §6.4, §7.1 |
 | **S1b** | **CONFIRMED** (direct typed call) | §6.4, §7.1, §7.4 |
 | **S2** | **CONFIRMED** — scoped to allocations above the quantum; quiescence half DEFERRED | §5, §6.1 |
-| **S3** | **CONFIRMED** | §6, §7.3 |
-| **S4** | **CONFIRMED** — scoped to resolution + augmentation; extension *discovery* inferred, not measured | §5, §5.1 |
+| **S3** | **CONFIRMED** — **JVM mode only**; no native build was run, so §4.3/§6's disposition table is unmeasured under AOT (§7.2 carries the re-check) | §6, §7.3 |
+| **S4** | **CONFIRMED** — scoped to *dependency* resolution + augmentation; extension *discovery* inferred, not measured; **plugin-execution injection never exercised** (§8.2) | §5, §5.1 |
 
 Eight amendments were made, each traceable to committed evidence:
 
@@ -57,7 +59,10 @@ unchecked section:
 
 - **§4.3** (which end hook to use) — S3 confirmed `addEndHandler` fires on all four dispositions and
   `addHeadersEndHandler` reaches the client on every completed response, including the 500. The table
-  is correct as written; only the *consumer* of that signal in §6 was wrong.
+  is correct as written; only the *consumer* of that signal in §6 was wrong. **Scope: S3 ran in JVM
+  mode only** (`s3-boundary/findings.md:5-6,162-163`; `REPORT.md:48-49`). The table is therefore
+  *unamended*, not *verified under AOT* — and S1 is this branch's standing proof that a JVM-mode
+  result does not transfer to native on this toolchain. §7.2's native cells carry the re-check.
 - **§6.5** (latency's population) — already excludes `disconnected` samples from the latency
   distribution, which is exactly what S3's disconnect finding requires. S3 additionally observed that
   the end handler fires ~1 s after the client aborts, bounded by server-side close detection, so a
@@ -65,9 +70,41 @@ unchecked section:
   exclusion already covers it and no text change was needed.
 - **§6.2** (the JFR cross-check) — Phase 0 ran no JFR analysis; S2 only proved the `jfr,nmt` build flag
   is accepted. The section is **unverified, not confirmed**, and its §7.3 control still has to earn it.
+  *(Round 2: §6.2's body said "verified" and has been corrected to match this bullet.)*
 - **§6.3** (event-loop watchdog) — not exercised by any Phase-0 spike. Unchanged and untested.
 - **§4.4** (result store and parking poll) — no spike touched the DD-040 channel transplant. Unchanged.
 - **§8.1** (does Apicurio build native) — still open; Phase 0 did not address it.
+
+### Round 2 — final-review fixes (2026-07-24)
+
+A whole-branch review (`.superpowers/sdd/final-review-pr98.md`, 1 Critical / 6 Important / 4 Minor)
+found that round 1 rewrote the sections the evidence contradicted **but not the sections that depend on
+them**. Every finding is an instance of this branch's defining defect class: *a reported zero that means
+"never measured" rather than "checked and clean"*. Round 2 is those follow-throughs. No committed spike
+evidence was altered.
+
+| # | Finding | Sections changed |
+|---|---|---|
+| **C1** | §7.3's coverage control still named the class-level instrument amendment 8 disproved, so it passed having measured nothing | §7.3 |
+| **I1** | §6.2's body claimed native JFR streaming "verified" while the ledger called §6.2 unverified — the ledger disclaimed the section without correcting it | §6.2, §9 (PR-5 gate) |
+| **I2** | §7.3's "closed set over §6" was false — `Thread leak` was in neither the control table nor the unpublished paragraph, and §6's cross-reference pointed at §6.2 instead of §6.3 | §6 table, §7.3 |
+| **I3** | The taint rate and `UNMEASURED` were published figures whose only controls asserted the *negative*; a counter that could never fire would report 0% tainted forever | §6.1, §7.3 |
+| **I4** | Amendment 8's replacement instrument had no §1.1-compatible home — a planted JAX-RS route means editing app source, and an extension-owned one is not in the app's coverage denominator | §7.1, §7.3 |
+| **I5** | S3's JVM-only scope was in `REPORT.md` and the spike findings but nowhere in the spec, which is what PR-2…PR-5 are implemented from | ledger §4.3 bullet, §6, §7.2 |
+| **I6** | "§5's mechanism holds" covered both injections; S4 exercised only the dependency half | ledger, §5, §5.1, §7.1 gate, §8.2 (new), §9 |
+| **M1–M3** | `REPORT.md` prose drifts from the artifacts it cites | `REPORT.md` only |
+| **M4** | §6.2's `com.sun.management`/SubstrateVM claim is uncited and underpins the 2×2 split | §6.2 |
+
+**Judged not worth changing, and why:**
+
+- **The Phase-0 plan (`plans/2026-07-24-dd043-phase0-spikes.md`) is left as executed.** Its Task-5 table
+  still names `NeverCalled` as the signature-(ii) instrument (`:643`). That is the *hypothesis the spike
+  tested and disproved*; editing it would rewrite the record of what was actually run and destroy the
+  provenance of amendment 8. A plan is a record after execution, not a live instruction — the live
+  instruction is §7.1.
+- **`REPORT.md`'s amendment table is not renumbered.** Amendments 1–8 are what the *evidence* forced;
+  round 2 is what a *review* forced. Merging them would make the report claim spike backing for edits no
+  spike produced.
 
 ---
 
@@ -113,7 +150,10 @@ moves. A build where injection silently did not happen produces a binary with no
 rather than eliminated. §5.2 is the guard.
 
 **The non-negotiable constraint this spec inherits: no file in the application's source tree is
-created or modified.** §5 meets it for the build-time path; §7.3 is where it nearly broke.
+created or modified.** §5 meets it for the build-time path; §7.3 is where it nearly broke, twice —
+first for the defect routes (resolved by shipping them in the extension) and then for the coverage
+instrument, which cannot live in the extension because it must sit in the *app's* coverage
+denominator. §7.1 resolves that second case with a withheld application route, planting nothing.
 
 ## 2. Goals and non-goals
 
@@ -160,7 +200,9 @@ code, and it is what makes a wrong number localisable — §7.2.
 with provenance. `rest-heroes` **and** `rest-villains` both set `maven.compiler.release=25`, pin Quarkus
 **3.37.3**, and pin `jacoco.version=0.8.15`. That they pin *identically* matters: §7.2's 2×2 requires the
 blocking control and the reactive target to differ only in request model, and a toolchain difference
-between them would confound every cell. This host has JDK 17 and Maven 3.6.3.
+between them would confound every cell. This host has **JDK 17** (`bench-results/dd043-spikes-2026-07-24/env/ENVIRONMENT.md:8,142`);
+its Maven version is deliberately not quoted here, because nothing committed pins it and nothing
+depends on it — the whole point of the decision below is that **no Maven step runs on the host at all.**
 
 (An earlier draft asserted these as "Verified 2026-07-24" with nothing committed, while this same PR
 carries a review recording the Java-release claim as unverifiable — `reviews/2026-07-24-dd043-fable-review.md`
@@ -297,6 +339,14 @@ and patches only the pod template. The build-time path uses a Maven **core exten
 `Model` — adding the `basquin-quarkus` dependency and the offline-JaCoCo plugin execution (§6.4) —
 before the per-project execution plan is computed.
 
+**Only the first of those two injections is measured.** S4 injected a `Dependency` and nothing else
+(`s4-injection/probe-participant/…/InjectProbe.java:26-43`); no spike ever injected a plugin
+*execution*. The two are not the same operation — a dependency is consumed by resolution, while a
+plugin execution has to survive into the per-project **execution plan**, which Maven computes at a
+different point in the lifecycle. So "§5's mechanism holds" is true of the dependency half and
+**unmeasured** for the plugin half. §8.2 carries it as an open question and PR-4 cannot start on the
+assumption that it is settled.
+
 **Gradle:** an init script (`-I basquin-init.gradle`) doing the same via `allprojects { … }`.
 
 **The injector must construct a fresh `Dependency` per `MavenProject`.** Maven's model objects are
@@ -335,8 +385,10 @@ builds its `ApplicationModel` from the in-memory `MavenProject`/`Model`, not by 
 from disk. A dependency injected purely in memory reached both `javac` and augmentation, in **JVM and
 native** packaging, and the injected feature appeared in the `Installed features` banner of both
 artifacts. Evidence: `bench-results/dd043-spikes-2026-07-24/s4-injection/` (`banner-baseline.txt` vs
-`banner-jvm-injected.txt` / `banner-native.txt`). §5's mechanism therefore stands as designed and the
-degradation below is **not** the norm — it remains documented only as the contingency it always was.
+`banner-jvm-injected.txt` / `banner-native.txt`). §5's **dependency injection** therefore stands as
+designed and the degradation below is **not** the norm — it remains documented only as the contingency
+it always was. The **plugin-execution** injection §5 also requires was not part of this experiment and
+is not covered by this result (§8.2).
 The reasoning is retained because it is why S4 existed, and because the same hazard would return for
 any resolver that behaves differently.
 
@@ -354,8 +406,10 @@ dependencies or plugin executions into the project model; it observes and wraps 
 event spies and its own APIs. "Exact analogue" was an overstatement and is withdrawn.
 
 Other risks: a strict `dependencyManagement`/BOM may pin something the extension needs (the injector
-must **fail loudly**, never silently); builds that run inside their own Dockerfile never see our
-`MAVEN_OPTS`; and injecting a plugin *execution* is harder than injecting a dependency.
+must **fail loudly**, never silently); and builds that run inside their own Dockerfile never see our
+`MAVEN_OPTS`. Injecting a plugin *execution* is harder than injecting a dependency, and after S4 it is
+the **only half of §5 with no evidence at all** — promoted out of this list to §8.2, because a risk
+buried in a trailing sentence is how it stayed invisible to round 1's scope blocks.
 
 ### 5.2 Injection is proven by the banner, not assumed
 
@@ -376,7 +430,7 @@ DD-010 lists the four signals the valve captures. Three change meaning; one chan
 | **Latency** | valve self-times the call | filter start → `addEndHandler`; **differently scoped**, see §6.5 |
 | **5xx / crash** | response status | **gated on `ar.succeeded()`**, then the status code — see below. Reading `getStatusCode()` alone is wrong here |
 | **Heap delta** | `Runtime` delta under `ITERATION_LOCK` | §6.1 — the lock is impossible; isolation weakens and must be *measured* |
-| **Thread leak** | non-daemon thread diff | §6.2 — structurally always zero; replaced |
+| **Thread leak** | non-daemon thread diff | **§6.3** — structurally always zero on a fixed event-loop pool; replaced, and **explicitly unpublished** (§7.3) |
 | **Coverage** | JaCoCo tcpserver `-javaagent` | §6.4 — offline JaCoCo, served by our own route |
 
 **The 5xx/crash signal must be gated on `ar.succeeded()`, and disconnect is its own disposition.**
@@ -404,6 +458,16 @@ served cleanly nor demonstrably broken by the app, and collapsing it into either
 number. §6.5 already excludes it from the latency distribution; this excludes it from the crash count
 for the same reason. Evidence: `bench-results/dd043-spikes-2026-07-24/s3-boundary/probe.log`,
 `curl.txt`.
+
+**Scope of that evidence: S3 ran in JVM mode only** — `s3-boundary/findings.md:5-6` ("JVM mode only,
+per Task 2's scope — no native build was run") and `:162-163` ("native-mode behavior of
+`addEndHandler` is Task 3's question, not answered here"). The disposition table above is therefore
+**measured on the JVM and assumed on native.** Do not read it as settled under AOT: S1 is this
+branch's own proof that a JVM-mode result need not transfer — the identical reflective read worked in
+JVM mode and was stripped by `native-image`. The specific things that could differ under SubstrateVM
+are whether `addEndHandler` fires at all on native close detection, and whether `ar.cause()` is the
+same `HttpClosedException` type. §7.2's two native cells must re-run S3's four dispositions before any
+native row publishes a crash count.
 
 **All invariants on this path are soft by structure.** `Invariants.evaluateAndMaybeFail` throwing at
 the end handler can fail nothing — the response is fully written by definition of the hook. Tomcat
@@ -437,12 +501,21 @@ is *client-side politeness*. The fix is to make the weakening **observable and d
 - The filter maintains an **in-flight counter**. Any window during which the counter exceeded 1, or
   during which a non-driver request started or ended, marks that iteration's sample
   **tainted → `UNMEASURED`** — DD-040 item 6's existing category — never a number.
+- **The counter is process-global, and its decrement runs on every disposition.** Stated because both
+  ways of getting it wrong produce a permanent, silent `0%`: a counter stashed on the `RoutingContext`
+  (§4.4 step 1) is per-request and can never exceed 1, and a decrement placed anywhere other than
+  `addEndHandler` misses the `disconnected` path (§6) and leaks the count upward instead. The
+  `RoutingContext` carries the *id and start time*; the counter does not ride it.
 - The **taint rate** is reported in the run summary exactly as `reportMisses` is; a majority-tainted
   run fails loudly, following `failOnMissMajority`.
 - Local 2×2 runs disable compose healthchecks and say so in the bench manifest; cluster runs accept
   the taint rate as data.
 
-This converts a silent attribution error into a measured limitation.
+This converts a silent attribution error into a measured limitation — **but only if the counter can
+actually fire.** A taint rate of `0%` is the exact shape DD-040 exists to prevent: indistinguishable
+from "checked and clean" while meaning "never detected". So taint is not a self-evidencing number, and
+§7.3 carries a control that forces it positive; without that control passing, the taint rate is not
+published and neither is the heap column that rests on it.
 
 #### The instrument is quantized, not continuous — state the floor
 
@@ -463,7 +536,9 @@ or as `524,288` — never as its actual cost.
   enough, because idle drift can contribute a quantum step *inside* a measurement window; a threshold
   has to survive that coincidence, not just the instrument's resolution.
 - **A per-request delta smaller than the practical minimum is `UNMEASURED`, never a number.** This is
-  the same disposition tainted windows get, for the same reason.
+  the same disposition tainted windows get, for the same reason — and, like taint, it gets a §7.3
+  control that makes it *fire*, driven by a deliberately sub-quantum allocation. A disposition that has
+  only ever been asserted in the negative is not known to exist.
 
 What clears the floor comfortably does work: S2's `/alloc` produced a delta of `4,718,592` B — 9× the
 largest single idle step and 3× the idle series' whole cumulative drift. The invariant is viable for
@@ -487,9 +562,26 @@ reduction; untested, so not specified.
 
 ### 6.2 The JFR cross-check, redefined so it can actually fail
 
-`jdk.ObjectAllocationSample` **is** supported in native-image JFR (Serial GC), and event streaming
-works in native — verified. But the earlier draft compared it against net heap delta and called
-divergence a finding. Those two quantities **never agree**: `ObjectAllocationSample` is a *throttled
+**Nothing in this section is verified on this toolchain, and it is the only section of which that is
+true.** `jdk.ObjectAllocationSample` is *documented* as supported in native-image JFR (Serial GC), and
+native JFR event streaming is what the §7.3 control below assumes as its transport. Phase 0 ran **no
+JFR analysis**: S2 established only that `-Dquarkus.native.monitoring=jfr,nmt` is accepted at config
+parse and survives a full native compile (§5) — that is evidence about a *build flag*, not about
+whether a `RecordingStream` can be opened inside the image or whether `ObjectAllocationSample` is
+emitted there. An earlier draft of this paragraph said "verified" with no artifact behind it, in the
+same document whose ledger called §6.2 unverified; that is precisely the failure this PR's own
+`bench-results/dd043-target-pins-2026-07-24/README.md:3-8` records the approver rejecting once already.
+
+**What would verify it:** on the pinned Mandrel 25.0.3 image, open a `RecordingStream` in-process,
+enable `jdk.ObjectAllocationSample`, drive `/basquin/control/defect/alloc`, and show non-zero sampled
+bytes attributed to that route — i.e. §7.3's JFR row, run and passing, with the recording committed as
+an artifact. Until that exists §6.2 produces **no published figure**, and §7.3's row already prescribes
+the fallback: demote the cross-check to diagnostic-only. **This is a PR-5 entry gate (§9), not a PR-5
+assumption.**
+
+The design point below stands independently of that, because it is a statement about what the two
+quantities *mean* rather than about availability. The earlier draft compared `ObjectAllocationSample`
+against net heap delta and called divergence a finding. Those two quantities **never agree**: `ObjectAllocationSample` is a *throttled
 statistical sampler* estimating **gross** allocation (a request allocating tens of KB may emit zero
 samples), while `totalMemory - freeMemory` is **net** — allocation minus collection plus resize
 artifacts. Without a stated comparator that test is unfalsifiable: it either always "diverges" and is
@@ -502,10 +594,16 @@ behind soft signals only."* That ruling stands and this spec now respects it.
 iterations) and compare **per-route rankings**, not per-request magnitudes. Native JFR streaming
 events carry no stack traces, so a divergence cannot be localised further than a route.
 
-**The exact cross-check lives in the JVM-mode cells.** `ThreadMXBean.getThreadAllocatedBytes` on the
-event-loop thread is exact and per-thread, but `com.sun.management` is JVM-mode only — SubstrateVM
-does not implement it. So the 2×2 gives, for free: **JVM cells = exact cross-check, native cells =
-statistical.** Use it that way.
+**The exact cross-check is expected to live in the JVM-mode cells.**
+`com.sun.management.ThreadMXBean.getThreadAllocatedBytes` on the event-loop thread is exact and
+per-thread. The premise that it is *unavailable* on native — that SubstrateVM does not implement the
+`com.sun.management` extensions — is **uncited and unspiked**, and it is what produces the whole
+**JVM cells = exact cross-check, native cells = statistical** split. It is therefore a hypothesis in
+the same state as everything else in §6.2, and it is cheap to settle: a single call to
+`ManagementFactory.getThreadMXBean() instanceof com.sun.management.ThreadMXBean` in the native image
+resolves it, and it can ride the same PR-5 entry gate. If the extension *is* available on native, the
+split collapses and native gets the exact cross-check too — a better outcome the spec should not
+foreclose by asserting the negative.
 
 ### 6.3 Event-loop blocking: an extension-owned watchdog, not the log-only checker
 
@@ -661,13 +759,74 @@ absence* — `jacoco-cli` finding no record and defaulting the whole class to mi
 indistinguishable from the pollution-free result the signature is trying to prove, and therefore
 proves nothing.
 
-**The working instrument is a registered-but-never-called JAX-RS route.** JAX-RS registration keeps it
-reachable, so it survives into the image and gets a real invoker class; never invoking it means its
-probes must read zero. The discriminating evidence is that its zero persists *against a live probe
-record* — S1b's `Probe.unused()` held at `2 missed, 0 covered` at t1 and t2 while sibling methods in
-the same class, backed by the same execution-data record, flipped to covered as their routes were hit.
-That is a live zero, and it is what refuted the pollution hypothesis. Evidence:
+**The working instrument is a registered-but-never-called JAX-RS route, read at method level.** JAX-RS
+registration keeps it reachable, so it survives into the image and gets a real invoker class; never
+invoking it means its probes must read zero. The discriminating evidence is that its zero persists
+*against a live probe record* — S1b's `Probe.unused()` held at `2 missed, 0 covered` at t1 and t2 while
+sibling methods in the same class, backed by the same execution-data record, flipped to covered as
+their routes were hit. That is a live zero, and it is what refuted the pollution hypothesis. Evidence:
 `bench-results/dd043-spikes-2026-07-24/s1-coverage/s1b-t{0,1,2}-after-*.xml`, `s1b-app.log`.
+
+#### Where that instrument lives on an unmodified target — the §1.1-compatible form
+
+In S1b the never-called route was `Probe.unused()`, **added to the fixture's own source**. On a real
+target that is forbidden: §1.1 says no file in the application's source tree is created or modified,
+and §7.3 exists precisely to avoid that trade. Nor can the route move into the extension: §6.4 has
+`jacoco-cli` analyzing against the **application's** preserved classfiles
+(`target/generated-classes/jacoco`), so a route living in the `basquin-quarkus` jar is not in the
+denominator the coverage percentage is computed over and cannot police it. Left unresolved, PR-4 either
+plants a route in `rest-heroes` and breaks the thesis, or stalls with no instrument. So the spec
+decides it here.
+
+**Decision: the instrument is a *withheld application route*, pre-registered before the run.** Every
+target in §3 is contract-first — the route set is enumerated at build time from
+`src/main/resources/openapi/openapi.yml`, which is also the driver's seed corpus. So the operator can
+name, **in the bench manifest and before the control run starts**, one route the driver is forbidden to
+send, chosen from a resource class whose *other* routes the driver will exercise. That method is then
+exactly S1b's instrument, with none of S1b's source edit: it is application code, already in the
+denominator by construction, kept live in the image by the app's own JAX-RS registration, and never
+invoked.
+
+Three obligations come with it, and each one is what stops the control degenerating into the
+disproven class-level form:
+
+1. **Pre-registration, not post-hoc selection.** The withheld route is fixed before the run. Scanning
+   the report afterwards for a method that happens to read zero and declaring it the instrument is
+   circular — it proves only that some zero exists.
+2. **A reachability precondition, checked against committed build output.** The instrument's class must
+   be present in the `-H:+PrintClassInitialization` report the native build already emits (S1b's is
+   committed as `s1-coverage/s1b-class_initialization_report.csv`; the withheld method's Quarkus
+   invoker appears there as `…$quarkusrestinvoker$<method>_<hash>`, which is how S1b showed `unused`
+   survived while `NeverCalled` did not). **Absent from that report, the instrument is void** — its
+   zero would be `NeverCalled`'s structural absence again — and the control fails rather than passing
+   quietly on a class that no longer exists.
+3. **The zero must be read against a live record.** The assertion is only meaningful at a dump point
+   where a *sibling method of the same class* has already flipped to covered. Before that, the class
+   has no execution-data record and every method in it reads zero for a reason that has nothing to do
+   with pollution.
+
+Withholding a route is in tension with coverage-guided exploration, whose whole job is to reach
+everything, so **the control run is a distinct run from the published explore run** — as §7.3 already
+requires for the defect routes, which are enabled by a system property only during Phase-2 control
+runs. The coverage figure that gets published comes from the unrestricted run; the control run exists
+to prove the number that run produces was measured rather than defaulted. If the two must be the same
+run, the withheld route's instructions are excluded from the published denominator and the bench
+manifest says which route and how many.
+
+**A t0-baseline variant was considered and rejected as the primary instrument.** The proposal: skip the
+instrument entirely, dump coverage at `t0` before any request, and require it to be confined to the
+"genuine startup set" derived from the class-initialization report — pollution then shows up as covered
+instructions in a class with no reason to run at startup. It plants nothing, which is genuinely
+attractive, but the report cannot carry the weight: it records *initialization kind*, not *startup
+execution*, and in S1b's own build **11,912 of 12,094 rows are `BUILD_TIME`** against 183 `RUN_TIME`.
+Build-time initialization is the *precondition for* the pollution being hunted, not a discriminator
+against it — a set containing 98.5% of the image cannot define "had no reason to execute at startup",
+and that judgement would fall to a human rather than to an assertion. It also cannot see the dangerous
+case: pollution inside a class that legitimately does run at startup is invisible to a whole-class
+confinement check, whereas the method-level sibling-flip test catches it. **Retained as a diagnostic**
+— an unexpectedly large t0 covered count is worth investigating — and the report's real contribution is
+kept as obligation 2 above, where it does discriminate: it is what separates a live zero from a deleted
+class.
 
 S1 must also record which classes Quarkus shifted to runtime init (S1 found 183, none in the
 application or JaCoCo packages), since that sets the expected floor.
@@ -688,9 +847,14 @@ implementation proceeds.
 **Phase 0 ran on 2026-07-24 and the gate PASSED. Neither voiding outcome occurred.** S1 was REFUTED as
 specified — the reflective read path does not survive AOT — but CONFIRMED via S1b once the read was
 corrected to a direct typed call, so **§6.4 is amended, not void**, and §2's full-parity goal does not
-reopen. S4 was CONFIRMED in JVM and native, so **§5's mechanism stands** and §5.1's degradation remains
-a contingency rather than the norm. Full verdicts, evidence and the amendment list:
-`bench-results/dd043-spikes-2026-07-24/REPORT.md`.
+reopen. S4 was CONFIRMED in JVM and native, so **§5's dependency injection stands** and §5.1's
+degradation remains a contingency rather than the norm — but S4 injected only a `Dependency`, so §5's
+**plugin-execution** half passed no gate at all and is carried as §8.2. Full verdicts, evidence and the
+amendment list: `bench-results/dd043-spikes-2026-07-24/REPORT.md`.
+
+**Two Phase-0 scopes are carried forward as obligations rather than results**, because a spike that did
+not ask a question is not a spike that answered it: S3 ran in **JVM mode only** (§6, §7.2), and S4
+never injected a plugin execution (§8.2).
 
 ### 7.2 Phase 1 — the 2×2
 
@@ -698,6 +862,17 @@ a contingency rather than the norm. Full verdicts, evidence and the amendment li
 |---|---|---|
 | **`rest-villains`** (blocking) | is the extension itself correct? | does build-time attachment survive AOT? |
 | **`rest-heroes`** (reactive) | are the reactive boundary semantics right? | ← the actual target |
+
+**Both native cells carry an S3 re-check as an entry condition.** S3 measured §4.3's hooks and §6's
+disposition table in **JVM mode only**, and S1 is this branch's proof that a JVM-mode result need not
+survive AOT. So before a native cell publishes any crash count or latency distribution, it must
+reproduce S3's four dispositions under SubstrateVM — `/ok` 200, an app 500, a 3xx, and a mid-response
+client disconnect — and confirm that `addEndHandler` fires on each, that `ar.succeeded()` is `false`
+on the disconnect, and that `addHeadersEndHandler`'s `X-Basquin-Req` still reaches the client on the
+500. If `addEndHandler` does not fire on native close detection, the boundary records nothing for that
+disposition and the crash counter silently reverts to the `getStatusCode()`-reads-200 behaviour
+amendment 3 exists to prevent. The check is cheap — the extension's own control routes (§7.3) already
+provide three of the four dispositions.
 
 Each cell isolates one variable from its neighbours. The four builds are logically independent and
 driven by concurrent subagents, but **`native-image` wants ≥4 cores and several GB each and this host
@@ -716,10 +891,18 @@ unmodified-app claim. Running controls only on the Phase-0 `todo` quickstart pro
 in a *different app on a different stack cell* than the ones published.
 
 **Resolution: negative-control defect routes ship in the extension's own runtime** —
-`/basquin/control/defect/{slow,alloc,block-loop}` — disabled by default, enabled by a system property
-only during Phase-2 control runs. The extension is injected tooling, not app source, so the thesis
-holds; the controls run in the *same* process and stack cell as the published rows; and they are
-reusable for every future Quarkus target.
+`/basquin/control/defect/{slow,alloc,error5xx,block-loop}`, with `alloc` taking a size parameter so it
+can be driven both far above and deliberately below §6.1's quantum — disabled by default, enabled by a
+system property only during Phase-2 control runs. The extension is injected tooling, not app source, so
+the thesis holds; the controls run in the *same* process and stack cell as the published rows; and they
+are reusable for every future Quarkus target.
+
+**The one control that cannot ship in the extension is coverage** (§7.1), because §6.4 computes the
+percentage over the *application's* preserved classfiles and an extension-owned route is not in that
+denominator. Its instrument is a **withheld application route**, pre-registered in the bench manifest
+before the run — app code, already in the denominator, kept alive by the app's own JAX-RS registration,
+and never sent. §1.1 holds because nothing is planted; §7.1 states the three obligations that keep the
+zero live rather than structural.
 
 | Invariant | Control | Assertion |
 |---|---|---|
@@ -727,25 +910,41 @@ reusable for every future Quarkus target.
 | **5xx / crash** | `/basquin/control/defect/error5xx` returning a 500 | the crash is counted **and** attributed to the right iteration id — a boundary that skips error paths (§6.3, S3) would zero it silently |
 | **5xx / crash, negative half** | a **client disconnect** mid-response (driver aborts before the body is written) | the crash counter does **not** increment, and the iteration is recorded as `disconnected` — S3 measured `getStatusCode()` returning `200` on exactly this disposition, so a control that only proves the counter *can* fire leaves the counter free to fire wrongly (§6) |
 | event-loop blocking | `/basquin/control/defect/block-loop`, sleeping **comfortably above the pinned threshold** | store entry → finding → rendered row |
-| heap | `/basquin/control/defect/alloc` | delta recorded **and not tainted** (§6.1) |
-| heap, **positive-noise** | idle window, no driver request | must read ~zero or `UNMEASURED` — this is the control that catches probe pollution and the `heapDriftKb` class of error |
-| coverage | routes exercised progressively | must increase **and** a never-exercised class must read zero (§7.1 S1) |
-| **JFR cross-check** (§6.2) | `/basquin/control/defect/alloc` driven across a run alongside ordinary routes | the alloc route must rank **first** by aggregated `ObjectAllocationSample` totals. If it cannot be made to rank, the cross-check is demoted to **diagnostic-only, not published**, and §6.2 says so |
+| heap | `/basquin/control/defect/alloc`, sized well above the quantum | delta recorded **and not tainted** (§6.1) |
+| **heap, taint — the firing half** | a **deliberately overlapping request**: a second connection sent against any route while `/basquin/control/defect/slow` is in flight on the driver's connection | the in-flight counter must exceed 1; the overlapped iteration must be **counted as tainted** and dispositioned `UNMEASURED`; and the run summary's **taint rate must come back strictly greater than zero**. A run that reports `0%` with the overlap injected **fails** — the counter is per-request, or its decrement is unreachable, and `0%` then means "never detected", not "clean" (§6.1) |
+| **heap, `UNMEASURED` — the firing half** | `/basquin/control/defect/alloc` sized **below one quantum** (≪ 524,288 B) | the sample must be recorded as `UNMEASURED` and **must not** appear as a number anywhere downstream of the boundary. A numeric delta here **fails** the control: the instrument cannot resolve that allocation, so any number it prints is manufactured (§6.1) |
+| heap, **positive-noise** | idle window, no driver request | the sample must be recorded — as exactly `0` or as `UNMEASURED` — and **any reading at or above §6.1's practical minimum (1,048,576 B) with no request in flight fails the control.** Stated as a threshold rather than "~zero or `UNMEASURED`", which passed on either branch and so could not fail. This is the control that catches probe pollution and the `heapDriftKb` class of error |
+| coverage | routes exercised progressively, with **one pre-registered application route withheld** from the driver (§7.1) | the total must increase **and** the withheld route's *method* must read `0 covered` **against a live execution-data record for its own class** — i.e. at a dump point where at least one sibling method of that class has already flipped to covered. Two ways to fail rather than pass vacuously: if no sibling has flipped, the class has no record and the zero measures nothing; if the withheld method's invoker class is absent from the build's `-H:+PrintClassInitialization` report, reachability analysis deleted it and the zero is a structural absence (§7.1). **A never-exercised *class* reading zero is not this control** — amendment 8 disproved that instrument, and using it would admit the coverage percentage on a measurement that never happened |
+| **JFR cross-check** (§6.2) | `/basquin/control/defect/alloc` driven across a run alongside ordinary routes | first, the transport must exist at all: a `RecordingStream` opens in the native image and `jdk.ObjectAllocationSample` events arrive (§6.2 — **unverified**, so this is a precondition, not an assumption). Then the alloc route must rank **first** by aggregated sample totals. If either half cannot be made to hold, the cross-check is demoted to **diagnostic-only, not published**, and §6.2 says so |
 
-**This table is exhaustive over §6 by construction, and that property is load-bearing.** Two signals were
-found silently exempt from it in successive reviews — the JFR cross-check, then 5xx/crash — which is the
-same defect arriving twice by the same route: a signal named in §6 but never enumerated here reads as a
-clean column forever, and nothing in the process catches it.
+**This table is exhaustive over §6 by construction, and that property is load-bearing.** Three signals were
+found silently exempt from it in successive reviews — the JFR cross-check, then 5xx/crash, then **thread
+leak** — which is the same defect arriving three times by the same route: a signal named in §6 but never
+enumerated here reads as a clean column forever, and nothing in the process catches it.
 
 So the rule is stated as a closed set rather than a habit: **every signal named in §6 appears in the table
 above, or is listed in the paragraph below as explicitly unpublished.** Adding a signal to §6 without doing
-one or the other is a spec defect, not an oversight.
+one or the other is a spec defect, not an oversight. The rule now covers **dispositions as well as
+signals**: `disconnected`, `tainted` and `UNMEASURED` are each reported figures (§6, §6.1, §7.4), so each
+needs a row that makes it *fire*, not only a row that asserts it stayed absent. An assertion that a counter
+did not increment is compatible with a counter that cannot increment.
 
-**Explicitly unpublished (no control, therefore no published number):** §6.3's secondary reactive signals —
-worker-pool saturation, Hibernate Reactive connection-pool pending acquisitions, and file-descriptor count.
-They are sketched, not designed; none has a defined threshold or a transport to the result store. They may
-be collected as diagnostics and **must not** appear as an invariant column on the benchmark page until each
-earns a control row above. Promoting one is a spec change, not an implementation detail.
+**Explicitly unpublished (no control, therefore no published number):**
+
+- **Thread leak** (§6, §6.3). On an event-loop stack the non-daemon thread count is a fixed pool, so a
+  per-request diff is **structurally always zero** — the column could never fire, and printing it would
+  be the purest form of the defect this section exists to prevent. §6.3 replaces it *in kind* with the
+  event-loop-blocking watchdog, which has its own control row above; §7.4 carries the rendering
+  obligation (no thread-leak column on reactive targets). Listed here because §6 names it and the closed
+  set admits no third option — it was previously in neither the table nor this paragraph, and §6's own
+  cross-reference pointed at §6.2, which never mentions it.
+- **§6.3's secondary reactive signals** — worker-pool saturation, Hibernate Reactive connection-pool
+  pending acquisitions, and file-descriptor count. They are sketched, not designed; none has a defined
+  threshold or a transport to the result store.
+
+All of the above may be collected as diagnostics and **must not** appear as an invariant column on the
+benchmark page until each earns a control row above. Promoting one is a spec change, not an implementation
+detail.
 
 Every control is verified **end-to-end at the reporting layer** (`render_page.py` input), not at the
 log line — otherwise the control validates the logger, not the invariant. An invariant without a
@@ -754,8 +953,13 @@ passing control is **not published**, matching the discipline that keeps `heapDr
 ### 7.4 Reporting pipeline
 
 - `deploy/bench/render_page.py` assumes the Tomcat invariant set. It must handle **per-target invariant
-  sets** — no thread-leak column for reactive targets, an event-loop-blocking column instead — plus
-  per-target **invariant mode** (§6: soft-by-structure here, hard on Tomcat) and the **taint rate**.
+  sets** — no thread-leak column for reactive targets (§7.3 lists thread leak as explicitly unpublished
+  and §6.3 says why), an event-loop-blocking column instead — plus per-target **invariant mode** (§6:
+  soft-by-structure here, hard on Tomcat) and the **taint rate**.
+- **The taint rate and the `UNMEASURED` count are only rendered if §7.3's two firing controls passed on
+  that run.** They are the figures most exposed to the "zero means never measured" reading, so they
+  inherit §7.3's closing rule literally: no passing control, no published number. A run whose control
+  pass/fail state is unknown renders them as absent, never as `0%`.
 - **Native and JVM coverage percentages must not share a column.** Per §6.4, `jacoco-cli` analyzes
   against the pre-native preserved classfiles, so code the reachability analysis eliminated still
   counts in the native denominator while being incapable of ever reading covered. Native's achievable
@@ -783,6 +987,27 @@ the server. Target 5 is gated on verifying this directly. If the server does not
 substitute real-product Quarkus target is needed — the credibility requirement (a real application, not
 a reference demo) is what matters, not Apicurio specifically.
 
+### 8.2 Does `afterProjectsRead` model mutation reach the *execution plan*, not just resolution?
+
+Unresolved, and the only half of §5 with no evidence behind it. §5 requires the injector to add two
+things to each `MavenProject`'s `Model`: the `basquin-quarkus` **dependency** and the offline-JaCoCo
+**plugin execution** (§6.4). S4 measured the first and never attempted the second — `InjectProbe.java:26-43`
+adds a `Dependency` and nothing else — so "§5's mechanism holds" is a claim about half a mechanism.
+
+The two are not obviously equivalent. A dependency is consumed by *resolution*, which S4 showed reads
+the in-memory model. A plugin execution has to survive into the per-project **execution plan**, which
+Maven computes at a different point in the lifecycle; `afterProjectsRead` fires before that
+computation, so it *should* work, but "should" is what S4 existed to replace with a measurement.
+
+**This is a PR-4 entry gate.** PR-4 needs `jacoco-maven-plugin:instrument` bound to `process-classes`
+in the app's model, and it is the first PR that cannot proceed without it. Settle it the way S4 settled
+the dependency half: inject a plugin execution with an observable side effect into the spike fixture,
+build, and show the effect in the build log — an hour's work, and the alternative is discovering the
+hole after PR-1 through PR-3 have landed on the strength of a claim that covered only the other half.
+If it does not work, the fallback is §5.1's named-app pom edit, which the benchmark row must record —
+and the coverage story for unmodified third-party apps changes materially, which is why this is a gate
+and not a footnote.
+
 ## 9. Delivery — six PRs in dependency order
 
 This is not one implementable unit. It spans a cross-cutting refactor of the measurement core, a new
@@ -797,8 +1022,8 @@ history says this repo needs.
 | **PR-1** | `basquin-core` extraction (§4.1) — pure refactor, zero behaviour change, existing tests green, no Quarkus code | PR-0 — **cleared** |
 | **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + parking poll (§4.4), `/basquin/status\|result`, control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 |
 | **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits | PR-2 |
-| **PR-4** | Coverage — offline-JaCoCo execution injection, `/basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 |
-| **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs | PR-4 |
+| **PR-4** | Coverage — offline-JaCoCo execution injection, `/basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 · **entry gate: §8.2** (plugin-execution injection is unmeasured); the native cells additionally carry §7.2's S3 re-check |
+| **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |
 
 Docs land with their PR: `THIRD-PARTY-APPS.md` gains a build-time-injection section, `ARCHITECTURE.md`
 gains the build-vs-runtime injection symmetry.

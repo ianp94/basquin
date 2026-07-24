@@ -5,11 +5,16 @@
 **Plan:** `docs/superpowers/plans/2026-07-24-dd043-phase0-spikes.md`
 **Toolchain (pinned, unchanged throughout):** Quarkus `3.37.3`, `maven.compiler.release=25`,
 JaCoCo `0.8.15`, Mandrel/GraalVM 25.0.3 in `ubi9-quarkus-mandrel-builder-image:jdk-25` (digest-pinned
-in `env/build.sh`). Host is JDK 17 / Maven 3.6.3 and no Maven step ran on it.
+in `env/build.sh`). Host is **JDK 17** (`env/ENVIRONMENT.md:8,142`) and no Maven step ran on it — the
+host's own Maven version is not quoted here because nothing committed pins it and nothing depends on
+it.
 
 **Gate outcome: PASSED.** All four spikes resolved. Neither of the two spec-voiding outcomes §7.1
-named occurred: §6.4 is not void, and §5's no-source-modification mechanism holds. The design survives
-with **eight amendments**, all made in the same commit as this report.
+named occurred: §6.4 is not void, and §5's no-source-modification mechanism holds **for the half S4
+exercised** — injecting a *dependency* into the in-memory model. The offline-JaCoCo **plugin
+execution** §5 also requires was never injected by any spike; that half is unmeasured and is carried
+as spec §8.2, a PR-4 entry gate. See S4's scope block below. The design survives with **eight
+amendments**, all made in the same commit as this report.
 
 Every figure below is copied from a committed artifact in this directory, with the file (and, where
 the artifact is a log, the line) named. Nothing is typed from memory. Two figures carry explicit
@@ -47,11 +52,22 @@ verdict stays machine-readable; the scope it was carrying is stated here rather 
   S2 question is **DEFERRED** — the fixture has no datasource, so it could not be asked.
 - **S3 — scope:** JVM mode only. Native-mode `addEndHandler` behaviour was not tested here; S4's
   native run exercised the same fixture but not the four dispositions.
-- **S4 — scope:** CONFIRMED for *resolution and augmentation* of an injected dependency, in JVM and
-  native, for a Central artifact **and** for a local-repo-only artifact. It does **not** establish that
-  a locally-installed *Quarkus extension* is discovered by augmentation — extension discovery scans the
-  classpath for `META-INF/quarkus-extension.properties`, and the local-only probe jar carries no such
-  marker. That combination is inferred from two separate experiments, not measured as one.
+- **S4 — scope:** CONFIRMED for *resolution and augmentation* of an injected **dependency**, in JVM and
+  native, for a Central artifact **and** for a local-repo-only artifact. Three things it does **not**
+  establish:
+  1. That a locally-installed *Quarkus extension* is discovered by augmentation — extension discovery
+     scans the classpath for `META-INF/quarkus-extension.properties`, and the local-only probe jar
+     carries no such marker. That combination is inferred from two separate experiments, not measured
+     as one.
+  2. **That an injected *plugin execution* survives into the per-project execution plan.**
+     `probe-participant/src/main/java/com/basquin/spike/InjectProbe.java:26-43` adds a `Dependency` and
+     nothing else; no spike injected a plugin execution at all. §5 requires both injections — the
+     dependency *and* the offline-JaCoCo plugin execution (spec §6.4) — so this spike covers half of
+     the mechanism. A dependency is consumed by resolution; a plugin execution has to reach the
+     **execution plan**, which Maven computes at a different lifecycle point. Carried as spec §8.2 and
+     a PR-4 entry gate, because PR-4 is the first PR that cannot proceed without it.
+  3. That the fix round's multi-module aliasing hazard is absent in practice — the fixture is
+     single-module, so the corrected code is reasoned, not measured (see the fix-round section).
 
 ### Amendments this report forces
 
@@ -194,6 +210,12 @@ t2 `Probe` has a real execution-data record — `<init>` and `ok` have flipped t
 covered`. That is a live zero, not a structural-absence default. **Build-time class initialization did
 not pre-flip probes.**
 
+*How this instrument transfers:* in the fixture, `unused()` was added to the fixture's **own source**,
+which a real target forbids (spec §1.1). The spec therefore transfers the *shape* — a method-level zero
+read against a live record for its own class — onto a **withheld application route**, pre-registered
+before the run, planting nothing. Spec §7.1 states it and the reachability precondition that keeps the
+zero live.
+
 `NeverCalled`'s zero is *not* this kind of evidence and is not used as such; see the S1 section.
 
 ### The denominator finding
@@ -262,9 +284,11 @@ appears in the committed findings.
 
 Window timing, derived from the `[PROBE]` ids in `app.log`: the 30 analyzed idle samples span
 **29.185 s** at **1.006 s** spacing (29 gaps, min 1.00606 s, max 1.00684 s) — clean. The liveness check
-preceding them sits **9.454 s** before the first idle sample, a gap `s2-memory/findings.md`'s method
-narration reads as near-contiguous. No published number depends on that gap; noted so the narration and
-the timestamps are not silently in disagreement.
+preceding them sits **9.454 s** before the first idle sample. `s2-memory/findings.md:29-30` names that
+same gap as "**3 seconds** before sample 1" — a specific figure, and the wrong one, against the
+9.454 s the `[PROBE]` timestamps in `app.log` give. No published number depends on the gap; the exact
+divergence is stated here rather than paraphrased so a re-runner can check the narration against the
+timestamps directly. Committed evidence is left as-is.
 
 Every sample in this series is itself an HTTP request, so part of what drifts is the cost of the poll.
 
@@ -360,13 +384,20 @@ Evidence: `s4-injection/findings.md`, `banner-baseline.txt`, `banner-jvm-injecte
 `banner-native.txt`, `build-jvm-injected.log`, `build-native-injected.log`, `addendum-build.log`,
 `addendum-install.log`, `addendum-central-absence.txt`, `probe-participant/`.
 
-Baseline, then both injected modes — the three committed banner captures:
+Baseline, then both injected modes — the `Installed features` line from each of the three committed
+captures:
 
 ```
 banner-baseline.txt      Installed features: [cdi, rest, smallrye-context-propagation, vertx]
 banner-jvm-injected.txt  Installed features: [cdi, rest, smallrye-context-propagation, smallrye-openapi, vertx]
 banner-native.txt        Installed features: [cdi, rest, smallrye-context-propagation, smallrye-openapi, vertx]
 ```
+
+The three files are **not** the same shape, and the quoted lines are extracts rather than whole files:
+`banner-baseline.txt` and `banner-jvm-injected.txt` are one line each, while `banner-native.txt` is a
+9-line run log (ASCII banner, startup line, profile, features, a `[PROBE]` line, shutdown) that is
+**byte-identical to `banner-native-run.log`** — same `md5sum`. The `Installed features` line above is
+its line 7.
 
 `smallrye-openapi` is absent from the baseline and present in both injected artifacts. Signal 1 — the
 participant ran — is at line 2 of both build logs:
@@ -385,7 +416,9 @@ host with no loader or glibc problem, started in 0.168 s, and served `/ok` → 2
 `ApplicationModel` from the in-memory `MavenProject`/`Model`, not from a fresh read of `pom.xml`. The
 failure this spike existed to catch — signal 1 present, signal 2 absent, i.e. a successful build
 producing a silently uninstrumented binary — was not observed in either mode. §5/§5.2's
-no-source-modification design is unblocked for PR-3.
+no-source-modification design is unblocked for PR-3 **for dependency injection**. What this experiment
+injected was a `Dependency`; §5's other injection, the offline-JaCoCo plugin execution, was not
+attempted here and is not covered by this refutation (spec §8.2).
 
 ### Addendum — a local-repo-only artifact resolves
 
@@ -443,9 +476,24 @@ tidy-up. (Amendment 7.)
 
 - **S1 did not void §6.4.** It refuted the read path §6.4 named, and S1b established a working one.
   §2's full-parity goal does not reopen.
-- **S4 did not force §5.1's degradation.** In-memory model injection is honoured by augmentation, in
-  both modes, including for an artifact that exists only in the local repository.
+- **S4 did not force §5.1's degradation.** In-memory **dependency** injection is honoured by
+  augmentation, in both modes, including for an artifact that exists only in the local repository.
+  The plugin-execution injection §5 also requires was not exercised (spec §8.2).
 
 **PR-1 (`basquin-core` extraction) is cleared to start.** PR-3 and PR-4 inherit hard requirements from
 this report — amendments 1, 2 and 7 in particular — and PR-5's reporting work inherits amendments 2
 and 4.
+
+**Two entry gates leave Phase 0 unsettled**, and they are unsettled because no spike asked the
+question, not because a spike answered it badly:
+
+- **PR-4 — spec §8.2**: does an injected *plugin execution* reach the per-project execution plan?
+  S4 measured only the dependency half of §5's mechanism.
+- **PR-5 — spec §6.2**: does native JFR event streaming work on the pinned Mandrel 25.0.3 image, and
+  is `com.sun.management` really unavailable there? Phase 0 ran **no** JFR analysis; S2 proved only
+  that the `jfr,nmt` *build flag* is accepted and compiles.
+
+Both are recorded in the spec rather than only here, since the spec is what PR-1…PR-5 are implemented
+from. A whole-branch review (`.superpowers/sdd/final-review-pr98.md`) found several such scopes present
+in this report and missing there; that round of fixes is logged in the spec's amendment ledger under
+"Round 2".

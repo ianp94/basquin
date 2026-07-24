@@ -6,7 +6,7 @@ order is what it is*. If you find a detail stated here and nowhere else, it is i
 (The benchmark page had exactly this drift and it is what `deploy/bench/render_page.py` now exists to
 prevent.)
 
-Last reviewed: 2026-07-23.
+Last reviewed: 2026-07-23 (end of session — the DD-040→DD-039 arc is complete and merged; see "Start here next").
 
 ---
 
@@ -22,14 +22,23 @@ Evidence: `bench-results/header-loss-2026-07-23/`, `bench-results/violation-logs
 (9,023 recovered violations), and the "Follow-ups from the 2026-07-23 benchmark campaign" section of
 `TODO.md`.
 
+**That thread is now closed.** DD-040 recovered the discarded violations; DD-039 carried the fix
+across redirects and reached authenticated write paths; and the benchmarks were re-run on the fixed
+channel. The answer to the question that started it — "Roller looks underwhelming" — was **backwards**:
+on the trustworthy channel Roller's explore `findInvariant` went **0 → 1,402** (highest coverage of
+the three, 30.5%), JSPWiki **1 → 2,918**, JPetStore 342 → 421. Roller was the most productive target
+all along; every finding was being discarded at the last hop. What remains (DD-041, DD-042) is new
+work, not cleanup of this thread.
+
 ## Ladder
 
 | | What | State | Blocked by | Detail |
 |---|---|---|---|---|
 | **DD-040** | Trustworthy measurement — a reported zero means "checked and clean" | **merged** as [#94](https://github.com/ianp94/basquin/pull/94) (2026-07-23); all 7 tasks done, acceptance run recorded as **FAILED** with two documented residuals now owned by DD-039 | — | [spec](superpowers/specs/2026-07-23-trustworthy-measurement-design.md) · [plan](superpowers/plans/2026-07-23-trustworthy-measurement.md) · [evidence](../bench-results/dd040-acceptance-2026-07-23/) |
-| **DD-039** | Multi-step exploration — session carry across redirects | all tasks done; Task-7 acceptance **PASSED** (84 `login_publish` DB rows, gap 189→48/2.8%); **in review** as [#96](https://github.com/ianp94/basquin/pull/96) | — | [spec](superpowers/specs/2026-07-23-redirect-session-carry-design.md) · [plan](superpowers/plans/2026-07-23-redirect-session-carry.md) · [evidence](../bench-results/dd039-acceptance-2026-07-23/) |
-| **DD-041** | Clustered exploration across replicas | wanted, not specced | DD-040 | `TODO.md` |
-| **DD-042** | A load-mode concurrency oracle | designed, not specced | independent | `TODO.md` |
+| **DD-039** | Multi-step exploration — session carry across redirects | **merged** as [#96](https://github.com/ianp94/basquin/pull/96) (2026-07-23); Task-7 acceptance **PASSED** (84 `login_publish` DB rows, gap 189→48/2.8%). One residual it ships with: the multi-replica same-method-hop merge is unexercised (single-replica acceptance) → DD-041's entry point | — | [spec](superpowers/specs/2026-07-23-redirect-session-carry-design.md) · [plan](superpowers/plans/2026-07-23-redirect-session-carry.md) · [evidence](../bench-results/dd039-acceptance-2026-07-23/) |
+| **Benchmark re-run** | All three apps re-measured on the trustworthy channel | **merged** as [#97](https://github.com/ianp94/basquin/pull/97) (2026-07-23). This is the payoff — first benchmarks whose finding counts are real | — | `docs/benchmarks.html` (generated), `bench-results/*/‌*-bench3-explore/` |
+| **DD-041** | Clustered exploration across replicas — the one you asked for (service-backed apps) | **next up**, not specced. DD-039 leaves it a clean seam (the same-method-hop merge) | nothing (DD-040/039 merged) | `TODO.md` "Next after DD-040" |
+| **DD-042** | A load-mode concurrency oracle — load counts but never *asserts* | designed, not specced; independent, can precede or follow DD-041 | nothing | `TODO.md` "Future: DD-042" |
 
 ### Why that order
 
@@ -57,15 +66,41 @@ Evidence: `bench-results/header-loss-2026-07-23/`, `bench-results/violation-logs
   concurrency defects. DD-042 is what makes it able to *detect* them; today it counts and never
   asserts.
 
+## Start here next
+
+`main` is clean, no open PRs. Three threads are ready to pick up, in rough priority:
+
+1. **DD-041 — clustered exploration across replicas (the one the user asked for, for service-backed
+   apps).** Not specced yet — so the next step is *brainstorm → spec → plan*, NOT code. DD-039 leaves
+   the clean entry point: its single residual is that `hops > 1` re-uses one id across pods behind a
+   Service, so the §A.6 fan-out can return the wrong hop's measurement (documented in the DD-039
+   record and `TODO.md` "Next after DD-040"). The lesson from DD-039: **author the spec/plan by
+   reading the code, and spike the risky integration before committing to a full build** — three
+   plans written from memory were rejected before one written from the code worked.
+
+2. **DD-042 — a load-mode failure oracle.** Independent of DD-041; could go first. Load mode counts
+   but never *asserts* — a JSPWiki with two pinned cores and a dead Poller was marked **Completed**.
+   Designed in `TODO.md` "Future: DD-042" (an out-of-band `/__basquin/threads` census, analysis in
+   the driver). Its latency-budget half already exists inside DD-040.
+
+3. **Small, cheap wins** — the follow-up sections in `TODO.md`: wire `check_claims.py`/`test_redact.py`
+   into CI (they exist but only fire by hand), the three PR-97 prose tidies in `render_page.py`, and
+   the redaction min-length guard from PR #96. Good warm-up work; the CI-guard one has real value
+   (it would have caught several review rounds automatically).
+
+Also standing, not on the critical path: send the **JSPWiki `WeakHashMap` spin** report upstream
+(`bench-results/jspwiki/incident-2026-07-23-login-hang/ANALYSIS.md` — reproduced, publishable), and
+the JPetStore `listOrders` double-NPE.
+
+**Working rules for whoever picks this up** are in memory (`agent-manager-playbook`): start by reading
+this file; subagent reports go to files and return short; fable for adversarial/diagnostic work and
+the fresh-per-PR approver; **only the human merges**. The cluster is single-node — one campaign at a
+time, nothing CPU-heavy during a run.
+
 ## Open PRs
 
-| PR | What | Waiting on |
-|---|---|---|
-| [#96](https://github.com/ianp94/basquin/pull/96) | DD-039 session carry across redirects — per-hop stamp+cookie, per-hop accumulation, redirect policy + loop findings | approver re-review, then human merge |
-
-PR [#94](https://github.com/ianp94/basquin/pull/94) (DD-040 trustworthy measurement) merged on
-2026-07-23 as its own commit; PR [#93](https://github.com/ianp94/basquin/pull/93) (Roller bench
-target + generated benchmark page) merged on 2026-07-23 as `5655c46`.
+**None.** Everything is merged to `main`. This session shipped #92–#97 (DD-038 classifier fix, Roller
+target + generated page, DD-040, DD-039, the two follow-up PRs, and the benchmark re-run).
 
 PR flow is in memory (`claude-reviews-every-pr`): bot PR → `@claude` review → address → label
 `ready-for-approver` → notify via `scripts/agent-bus/send`. **Only the human merges.**

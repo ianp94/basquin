@@ -326,3 +326,40 @@ that result with this one closes the specific gap this addendum targets —
 whether resolution itself survives when the artifact isn't on Central — but
 the two results were established separately, on two different jars, and
 should be read as complementary rather than as one combined experiment.
+
+### Central-absence precondition, captured
+
+The addendum's method above narrates confirming
+`com.basquin.spike.localonly` is absent from Central but did not originally
+commit the check's raw output. That evidence is now
+`addendum-central-absence.txt` — two `curl` checks against
+`repo1.maven.org` (both `404`), dated.
+
+### Fix round 1 — aliased `Dependency` instance corrected, evidence regenerated
+
+A review finding caught that `InjectProbe.java`'s `afterProjectsRead` built
+one `Dependency` instance *outside* the `for (MavenProject p : ...)` loop
+and added that same mutable instance to every project — harmless for this
+spike's single-module fixture, but a latent aliasing hazard for a
+multi-module reactor. Fixed by constructing a fresh `Dependency` per
+project, inside the loop (see the class's own comment for why). The probe
+jar was rebuilt and both injection scenarios — Central artifact
+(`quarkus-smallrye-openapi`) and local-only artifact (`local-probe-dep`) —
+were re-run in JVM mode only (native mode is unaffected by an in-memory
+model change on the JVM/Maven side and was not re-run, per Task 3's
+already-established native result).
+
+**Results unchanged.** `build-jvm-injected.log`, `banner-jvm-injected.txt`,
+`banner-jvm-injected-run.log`, `addendum-build.log`, and `probe-rebuild.log`
+were regenerated and now reflect the fixed code; content is identical to the
+pre-fix versions apart from timestamps and per-run download/timing noise
+(the local Maven repo was already warm from the original runs, so the
+Central-artifact rebuild additionally shows fewer "Downloading from
+central" lines than the original — an artifact of a warm cache, not a
+behavioural change). Signal 1 (`[INJECT-PROBE] added ... to fixture`) and
+signal 2 (`smallrye-openapi` in the `Installed features:` banner) both still
+fire for the Central scenario; the local-only scenario still reaches `BUILD
+SUCCESS` with the jar landing in
+`fixture/target/quarkus-app/lib/main/com.basquin.spike.localonly.local-probe-dep-1.0.jar`.
+Both verdicts above (CONFIRMED) stand as originally stated — they did not
+depend on the aliasing bug.

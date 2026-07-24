@@ -20,23 +20,27 @@ public class InjectProbe extends AbstractMavenLifecycleParticipant {
     @Override
     public void afterProjectsRead(MavenSession session) {
         boolean local = Boolean.getBoolean("basquin.inject.local");
-        Dependency d = new Dependency();
-        String logArtifactId;
-        if (local) {
-            d.setGroupId("com.basquin.spike.localonly");
-            d.setArtifactId("local-probe-dep");
-            d.setVersion("1.0");
-            logArtifactId = "local-probe-dep";
-        } else {
-            d.setGroupId("io.quarkus");
-            d.setArtifactId("quarkus-smallrye-openapi");
-            d.setVersion("3.37.3");
-            logArtifactId = "quarkus-smallrye-openapi";
-        }
+        String groupId = local ? "com.basquin.spike.localonly" : "io.quarkus";
+        String artifactId = local ? "local-probe-dep" : "quarkus-smallrye-openapi";
+        String version = local ? "1.0" : "3.37.3";
         for (MavenProject p : session.getProjects()) {
+            // A fresh Dependency per project is required, not an optimization to
+            // avoid: Maven's model objects (Dependency, MavenProject, ...) are
+            // mutable, and a single shared instance added to every project's
+            // dependency list would alias one Dependency object across the whole
+            // reactor. The fixture here is single-module, so that aliasing is
+            // invisible in this spike's evidence, but a multi-module reactor
+            // would have every project's dependency list holding pointers to the
+            // *same* object, so a later in-place mutation (or anything that
+            // relies on per-project object identity) on one project would bleed
+            // into all the others. Do not hoist this allocation out of the loop.
+            Dependency d = new Dependency();
+            d.setGroupId(groupId);
+            d.setArtifactId(artifactId);
+            d.setVersion(version);
             p.getModel().getDependencies().add(d);
             p.getDependencies().add(d);
-            System.out.println("[INJECT-PROBE] added " + logArtifactId + " to " + p.getArtifactId());
+            System.out.println("[INJECT-PROBE] added " + artifactId + " to " + p.getArtifactId());
         }
     }
 }

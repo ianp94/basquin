@@ -696,15 +696,13 @@ scripts/agent-bus/send approver review-requested --from programmer \
 
 ---
 
-## Parallelization
+## Execution order — fully serialized
 
-Per §7.2 and the standing subagent grant:
+**Tasks 1 → 6 run one at a time.** An earlier draft of this plan proposed running Task 2 and Task 3's JVM steps concurrently. That was wrong, and the reason is worth recording so it is not reintroduced:
 
-| Wave | Tasks | Concurrency |
-|---|---|---|
-| 1 | Task 1 | alone — everything depends on it |
-| 2 | Task 2, Task 3 steps 1–4 | concurrent (JVM only) |
-| 3 | Task 3 step 5, Task 4, Task 5 | **serialized** — each compiles a native image |
-| 4 | Task 6 | alone |
+- Both tasks invoke `env/build.sh`, which mounts the **same** `fixture/` directory as the container workdir and builds into `fixture/target/`. Two concurrent builds race on one output tree.
+- Both share `$SPIKE/.m2` as the Maven local repository, and Maven has no robust cross-process locking — concurrent resolution into one local repo can corrupt artifacts.
 
-Wave 3 is the wall-clock floor: three native builds, one at a time. Subagents may prepare inputs and analyse outputs concurrently; they may not compile concurrently.
+Either failure produces *plausible-looking but wrong* spike output. On a PR whose entire subject is trustworthy measurement, corrupt build artifacts yielding bogus verdicts is the worst available outcome, and the parallelism it buys is a few minutes: Wave 2 was two short JVM-mode builds, while the three native builds must be serialized regardless and dominate wall-clock.
+
+If parallelism is wanted later, the safe form is per-task isolation — its own `fixture/` copy and its own `.m2` (pre-warmed in Task 1, then copied) — not shared state with staggered timing.

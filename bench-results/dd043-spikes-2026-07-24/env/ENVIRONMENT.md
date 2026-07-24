@@ -11,6 +11,11 @@ image *is* the native toolchain, not a client of a sibling container. Pinned
 via `IMAGE`/`BASQUIN_SPIKE_IMAGE` in `env/build.sh`; overridable per-invocation
 if a later spike needs to.
 
+`env/build.sh`'s `IMAGE` default is the digest below, not the `jdk-25` tag —
+the tag is a moving target, so pinning it would let Tasks 3-5 build against a
+different image than the one validated here, with nothing announcing the
+drift. `BASQUIN_SPIKE_IMAGE` still overrides it.
+
 Probe command and raw output: `env/probe-A.txt` (reproduced below).
 
 ```
@@ -27,8 +32,10 @@ OpenJDK 64-Bit Server VM Mandrel-25.0.3.0-Final (build 25.0.3+9-LTS, mixed mode)
 Both JDK 25 and `native-image` confirmed present — Candidate B (`maven:3.9-eclipse-temurin-25`
 + docker socket) was not needed and was not tried.
 
-Digest actually pulled (for exact reproducibility, since `jdk-25` is a moving
-tag): `sha256:c1d52b8ac781c2b7cf6f0cb3ed366ee3ea5ea4e5e34014eaf060ca6841afd6e5`.
+Digest actually pulled, and the digest `env/build.sh`'s `IMAGE` default now
+pins (not merely recorded — since `jdk-25` is a moving tag, pinning it here
+is what makes the build reproducible):
+`sha256:c1d52b8ac781c2b7cf6f0cb3ed366ee3ea5ea4e5e34014eaf060ca6841afd6e5`.
 
 ## Extension short name
 

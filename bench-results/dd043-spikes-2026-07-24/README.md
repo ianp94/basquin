@@ -71,6 +71,11 @@ rmdir fixture/fixture
 shopt -u dotglob nullglob
 ```
 
+Unlike `env/build.sh`, this snippet does not need `-e HOME=/m2`: it invokes a
+throwaway real `mvn` binary downloaded straight into `/tmp`, not the
+`$HOME`-dependent `mvnw` wrapper (which doesn't exist yet at this point), so
+the wrapper's cache-directory lookup that requires `HOME` never runs here.
+
 Then, since the archetype's `create` goal resolves `quarkus.platform.version`
 against the registry's current recommendation rather than the plugin
 coordinate's version, re-pin it (this project requires exactly `3.37.3`):

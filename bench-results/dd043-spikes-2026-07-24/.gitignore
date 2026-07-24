@@ -1,0 +1,3 @@
+# Spike-local Maven repo cache mounted into the build container by env/build.sh.
+# Populated by every run (currently ~100MB); reproducible from pom.xml, not evidence.
+.m2/

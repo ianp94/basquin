@@ -1,0 +1,4 @@
+[PROBE] id=probe-8489103752045 path=/ok status=200 succeeded=true cause=- ms=77
+[PROBE] id=probe-8489192943266 path=/boom status=500 succeeded=true cause=- ms=31
+[PROBE] id=probe-8489236492382 path=/redirect status=302 succeeded=true cause=- ms=22
+[PROBE] id=probe-8489265923197 path=/slow status=200 succeeded=false cause=io.vertx.core.http.HttpClosedException: Connection was closed ms=1006

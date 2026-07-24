@@ -948,6 +948,43 @@ retrofitting it into explore. That should be a spec of its own, after DD-040 lan
 store is a prerequisite either way, since a distributed driver cannot rely on response headers it
 may not be the one to receive.
 
+#### Shared store (Redis or similar) for coordination — scoped, with the measurement that scopes it
+
+*(user question, 2026-07-24: would a Redis server help message passing; in the original closure work a
+shared memory location for input was very optimal.)*
+
+**Not for explore's hot path, and the numbers say why.** Explore's cost is already located:
+`ITERATION_LOCK` is held across the whole app call and `Agent.end()` adds a synchronous
+`Thread.sleep(25)` (`agent/Agent.java:118`) plus two thread enumerations before releasing, capping
+throughput near `1/(25ms + appTime)` — measured at 6.1/s (Roller) and ~11/s (JSPWiki). At ~91 ms per
+iteration a loopback HTTP round trip is ~0.1–1 ms, so **the grace sleep alone is 25–250× the entire
+transport cost.** Replacing HTTP with Redis or shared memory would recover low single-digit percent
+while the actual cost sits in one `sleep` line and one lock. If explore throughput is the goal, attack
+those (or shard across replicas, above) — not the transport.
+
+**And shared memory specifically does not transfer from the original closure work.** Two reasons, both
+structural rather than incidental:
+
+- **It cannot cross pods.** AFL-style shm is optimal because fuzzer and target share a host. Basquin's
+  target is an unmodified third-party app in a pod, possibly on another node.
+- **The HTTP request is the system under test, not overhead.** Delivering input via shm would bypass
+  the servlet/Vert.x stack — which is precisely where the defects this tool hunts actually live
+  (JSPWiki's `WeakHashMap` spin, JPetStore's `listOrders` NPE). The AFL analogy transfers to the
+  **coverage map**, not the input path.
+
+**Where a shared store is genuinely the right question: DD-041's coordination plane.** The section above
+already names what must become shared — corpus, coverage map, cost ranking — and the partitioning
+choice at line ~307 is exactly "partition per worker vs. a shared work-queue (pull model)". A pull model
+needs atomic pop plus dedup across N workers, which is what an in-memory store is good at.
+
+Before adding Redis as a new stateful dependency, weigh it against what already exists: the **dashboard
+aggregator is already a standalone process that drivers already push to** (DD-013/14/15), and coverage
+is *already* multi-source and union-merged (`JacocoCoverageProvider` aggregates
+`sourcesResponded`/`sourcesTotal`). Extending that may cost less than operating a new stateful component
+— which also cuts against the operator's "instrument any app, minimal footprint" story. Redis earns its
+place if the pull model wins and the aggregator turns out to be the wrong shape for atomic work-stealing;
+that is a DD-041 spec decision, with this measurement as its input.
+
 ### Bench targets
 
 - [ ] **The seeded JSPWiki pages are not being served.** `jspwiki-custom.properties` sets

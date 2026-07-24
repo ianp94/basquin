@@ -1,0 +1,2 @@
+fixture/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/reports/class_initialization_configuration_20260724_223759.csv
+fixture/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/reports/class_initialization_report_20260724_223808.csv

@@ -1,0 +1,26 @@
+Precondition check for the S4 addendum (see findings.md, "Addendum: local-only
+artifact resolution"): the test groupId `com.basquin.spike.localonly` must be
+genuinely absent from Maven Central, otherwise a resolution "success" for
+`com.basquin.spike.localonly:local-probe-dep:1.0` would be ambiguous (it could
+have resolved from Central rather than from the injected local repository).
+The addendum's narrative asserted this via a check against
+`repo.maven.apache.org`; this file captures the equivalent check against
+`repo1.maven.org` (Central's CDN-fronted host, also referenced by the task
+that requested this evidence) so the precondition is directly reproducible,
+not just narrated.
+
+Date (UTC): 2026-07-24T22:04:18Z
+
+Commands and raw output:
+
+$ curl -s -o /dev/null -w "%{http_code}\n" https://repo1.maven.org/maven2/com/basquin/spike/localonly/local-probe-dep/1.0/local-probe-dep-1.0.jar
+404
+
+$ curl -s -o /dev/null -w "%{http_code}\n" https://repo1.maven.org/maven2/com/basquin/spike/localonly/
+404
+
+Both return 404: the specific artifact path and the groupId directory itself
+are both absent from Central. This confirms the addendum's local-only test
+artifact (`com.basquin.spike.localonly:local-probe-dep:1.0`) could only have
+resolved, in the addendum's build, from the spike's local Maven repository
+(the injected in-memory dependency mechanism under test) — not from Central.

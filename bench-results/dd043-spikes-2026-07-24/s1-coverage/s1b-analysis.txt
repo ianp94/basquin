@@ -1,0 +1,30 @@
+=== s1b-t0-startup ===
+[INFO] Loading execution data file /s/s1-coverage/s1b-t0-startup.exec.
+[INFO] Analyzing 5 classes.
+exit=0
+GROUP,PACKAGE,CLASS,INSTRUCTION_MISSED,INSTRUCTION_COVERED,BRANCH_MISSED,BRANCH_COVERED,LINE_MISSED,LINE_COVERED,COMPLEXITY_MISSED,COMPLEXITY_COVERED,METHOD_MISSED,METHOD_COVERED
+JaCoCo Coverage Report,com.basquin.spike,Probe,42,0,2,0,9,0,8,0,7,0
+JaCoCo Coverage Report,com.basquin.spike,MemProbe,35,0,0,0,8,0,3,0,3,0
+JaCoCo Coverage Report,com.basquin.spike,BoundaryProbe,57,40,2,0,6,11,3,3,2,3
+JaCoCo Coverage Report,com.basquin.spike,CoverageProbe,4,5,0,0,1,2,0,2,0,2
+JaCoCo Coverage Report,com.basquin.spike,NeverCalled,11,0,0,0,3,0,3,0,3,0
+=== s1b-t1-after-ok ===
+[INFO] Loading execution data file /s/s1-coverage/s1b-t1-after-ok.exec.
+[INFO] Analyzing 5 classes.
+exit=0
+GROUP,PACKAGE,CLASS,INSTRUCTION_MISSED,INSTRUCTION_COVERED,BRANCH_MISSED,BRANCH_COVERED,LINE_MISSED,LINE_COVERED,COMPLEXITY_MISSED,COMPLEXITY_COVERED,METHOD_MISSED,METHOD_COVERED
+JaCoCo Coverage Report,com.basquin.spike,Probe,37,5,2,0,7,2,6,2,5,2
+JaCoCo Coverage Report,com.basquin.spike,MemProbe,35,0,0,0,8,0,3,0,3,0
+JaCoCo Coverage Report,com.basquin.spike,BoundaryProbe,3,94,1,1,0,17,1,5,0,5
+JaCoCo Coverage Report,com.basquin.spike,CoverageProbe,0,9,0,0,0,3,0,2,0,2
+JaCoCo Coverage Report,com.basquin.spike,NeverCalled,11,0,0,0,3,0,3,0,3,0
+=== s1b-t2-after-more ===
+[INFO] Loading execution data file /s/s1-coverage/s1b-t2-after-more.exec.
+[INFO] Analyzing 5 classes.
+exit=0
+GROUP,PACKAGE,CLASS,INSTRUCTION_MISSED,INSTRUCTION_COVERED,BRANCH_MISSED,BRANCH_COVERED,LINE_MISSED,LINE_COVERED,COMPLEXITY_MISSED,COMPLEXITY_COVERED,METHOD_MISSED,METHOD_COVERED
+JaCoCo Coverage Report,com.basquin.spike,Probe,11,31,0,2,3,6,3,5,3,4
+JaCoCo Coverage Report,com.basquin.spike,MemProbe,35,0,0,0,8,0,3,0,3,0
+JaCoCo Coverage Report,com.basquin.spike,BoundaryProbe,3,94,1,1,0,17,1,5,0,5
+JaCoCo Coverage Report,com.basquin.spike,CoverageProbe,0,9,0,0,0,3,0,2,0,2
+JaCoCo Coverage Report,com.basquin.spike,NeverCalled,11,0,0,0,3,0,3,0,3,0

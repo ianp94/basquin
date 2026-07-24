@@ -1,0 +1,112 @@
+[INFO] Scanning for projects...
+[INJECT-PROBE] added quarkus-smallrye-openapi to fixture
+[INFO] 
+[INFO] ---------------------< com.basquin.spike:fixture >----------------------
+[INFO] Building fixture 1.0.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] ------------------------------[ quarkus ]-------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ fixture ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- quarkus:3.37.3:generate-code (default-generate-code) @ fixture ---
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ fixture ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ fixture ---
+[INFO] skip non existing resourceDirectory /w/src/test/resources
+[INFO] 
+[INFO] --- quarkus:3.37.3:generate-code-tests (default-generate-code-tests) @ fixture ---
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ fixture ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.6:test (default-test) @ fixture ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- quarkus:3.37.3:build (default-build) @ fixture ---
+[INFO] [io.quarkus.deployment.pkg.jar.NativeImageSourceJarBuilder] Building native image source jar: /w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/fixture-1.0.0-SNAPSHOT-runner.jar
+[INFO] [io.quarkus.deployment.pkg.steps.NativeImageBuildStep] Building native image from /w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/fixture-1.0.0-SNAPSHOT-runner.jar
+[INFO] [io.quarkus.deployment.pkg.steps.NativeImageBuildStep] Running Quarkus native-image plugin on MANDREL 25.0.3.0 JDK 25.0.3+9-LTS
+[INFO] [io.quarkus.deployment.pkg.steps.NativeImageBuildRunner] /opt/mandrel/bin/native-image -J-Djava.util.logging.manager=org.jboss.logmanager.LogManager -J-Dsun.nio.ch.maxUpdateArraySize=100 -J-Dvertx.logger-delegate-factory-class-name=io.quarkus.vertx.core.runtime.VertxLogDelegateFactory -J-Dvertx.disableDnsResolver=true -J-Dio.netty.tryReflectionSetAccessible=true -J-Dio.netty.noUnsafe=false -J-Dio.netty.leakDetection.level=DISABLED -J-Dio.netty.allocator.maxOrder=3 -J-Duser.language=en -J-Duser.country=US -J-Dlogging.initial-configurator.min-level=500 -H:+UnlockExperimentalVMOptions -H:IncludeLocales=en-US -H:-UnlockExperimentalVMOptions --enable-native-access=ALL-UNNAMED -J-Dfile.encoding=UTF-8 -J--add-exports=org.graalvm.nativeimage.builder/com.oracle.svm.core.jdk=ALL-UNNAMED --features=io.quarkus.runner.Feature,io.quarkus.runtime.graal.DisableLoggingFeature,io.quarkus.runtime.graal.JVMChecksFeature,io.quarkus.runtime.graal.SkipConsoleServiceProvidersFeature -J--add-exports=java.security.jgss/sun.security.krb5=ALL-UNNAMED -J--add-exports=java.security.jgss/sun.security.jgss=ALL-UNNAMED -J--add-opens=java.base/java.text=ALL-UNNAMED -J--add-opens=java.base/java.io=ALL-UNNAMED -J--add-opens=java.base/java.lang.invoke=ALL-UNNAMED -J--add-opens=java.base/java.util=ALL-UNNAMED -H:+UnlockExperimentalVMOptions -H:BuildOutputJSONFile=fixture-1.0.0-SNAPSHOT-runner-build-output-stats.json -H:-UnlockExperimentalVMOptions -H:+UnlockExperimentalVMOptions -H:+GenerateBuildArtifactsFile -H:-UnlockExperimentalVMOptions -H:+UnlockExperimentalVMOptions -H:+AllowFoldMethods -H:-UnlockExperimentalVMOptions -J-Djava.awt.headless=true --no-fallback --link-at-build-time -H:+UnlockExperimentalVMOptions -H:+ReportExceptionStackTraces -H:-UnlockExperimentalVMOptions -H:-AddAllCharsets --enable-url-protocols=http -H:NativeLinkerOption=-no-pie --enable-monitoring=heapdump,threaddump -H:+UnlockExperimentalVMOptions -H:-UseServiceLoaderFeature -H:-UnlockExperimentalVMOptions -J--add-exports=org.graalvm.nativeimage/org.graalvm.nativeimage.impl=ALL-UNNAMED --exclude-config io\.netty\.netty-codec /META-INF/native-image/io\.netty/netty-codec/generated/handlers/reflect-config\.json --exclude-config io\.netty\.netty-handler /META-INF/native-image/io\.netty/netty-handler/generated/handlers/reflect-config\.json fixture-1.0.0-SNAPSHOT-runner -jar fixture-1.0.0-SNAPSHOT-runner.jar
+Warning: Option 'DynamicProxyConfigurationResources' is deprecated and might be removed in a future release: This can be caused by a proxy-config.json file in your META-INF directory. Consider including proxy configuration in the reflection section of reachability-metadata.md instead.. Please refer to the GraalVM release notes.
+========================================================================================================================
+GraalVM Native Image: Generating 'fixture-1.0.0-SNAPSHOT-runner' (executable)...
+========================================================================================================================
+For detailed information and explanations on the build output, visit:
+https://github.com/oracle/graal/blob/master/docs/reference-manual/native-image/BuildOutput.md
+------------------------------------------------------------------------------------------------------------------------
+[1/8] Initializing...                                                                                    (7.4s @ 0.18GB)
+ Java version: 25.0.3+9-LTS, vendor version: Mandrel-25.0.3.0-Final
+ Graal compiler: optimization level: 2, target machine: x86-64-v3
+ C compiler: gcc (redhat, x86_64, 11.5.0)
+ Garbage collector: Serial GC (max heap size: 80% of RAM)
+ 5 user-specific feature(s):
+ - com.oracle.svm.thirdparty.gson.GsonFeature
+ - io.quarkus.runner.Feature: Auto-generated class by Quarkus from the existing extensions
+ - io.quarkus.runtime.graal.DisableLoggingFeature: Adapts logging during the analysis phase
+ - io.quarkus.runtime.graal.JVMChecksFeature
+ - io.quarkus.runtime.graal.SkipConsoleServiceProvidersFeature: Skip unsupported console service providers when quarkus.native.auto-service-loader-registration is false
+------------------------------------------------------------------------------------------------------------------------
+ 5 experimental option(s) unlocked:
+ - '-H:+AllowFoldMethods' (origin(s): command line)
+ - '-H:BuildOutputJSONFile' (origin(s): command line)
+ - '-H:-UseServiceLoaderFeature' (origin(s): command line)
+ - '-H:+GenerateBuildArtifactsFile' (origin(s): command line)
+ - '-H:AddOpens' (alternative API option(s): --add-opens java.base/java.lang=ALL-UNNAMED, --add-opens java.base/java.nio=ALL-UNNAMED, --add-opens java.base/jdk.internal.misc=ALL-UNNAMED; origin(s): command line)
+------------------------------------------------------------------------------------------------------------------------
+Build resources:
+ - 12.67GB of memory (75.6% of system memory, in container)
+ - 8 thread(s) (100.0% of 8 available processor(s), determined at start)
+[2/8] Performing analysis...  [*****]                                                                   (10.9s @ 1.49GB)
+   12,825 types,  17,537 fields, and  63,465 methods found reachable
+    4,108 types,      82 fields, and   4,455 methods registered for reflection
+       63 types,      69 fields, and      55 methods registered for JNI access
+        0 downcalls and 0 upcalls registered for foreign access
+        4 native libraries: dl, pthread, rt, z
+[3/8] Building universe...                                                                               (1.8s @ 1.87GB)
+[4/8] Parsing methods...      [*]                                                                        (1.2s @ 1.94GB)
+[5/8] Inlining methods...     [***]                                                                      (0.8s @ 1.69GB)
+[6/8] Compiling methods...    [***]                                                                     (11.7s @ 1.17GB)
+[7/8] Laying out methods...   [**]                                                                       (2.4s @ 1.60GB)
+[8/8] Creating image...       [***]                                                                      (7.4s @ 1.92GB)
+  25.88MB (44.54%) for code area:    41,981 compilation units
+  28.11MB (48.38%) for image heap:  314,654 objects and 69 resources
+   4.11MB ( 7.08%) for other data
+  58.11MB in total image size, 54.39MB in total file size
+------------------------------------------------------------------------------------------------------------------------
+Top 10 origins of code area:                                Top 10 object types in image heap:
+  12.90MB java.base                                            7.34MB byte[] for code metadata
+   1.82MB svm.jar (Native Image)                               4.13MB byte[] for java.lang.String
+   1.36MB c.f.jackson.core.jackson-databind-2.22.0.jar         2.78MB java.lang.String
+   1.07MB fixture-1.0.0-SNAPSHOT-runner.jar                    2.57MB com.oracle.svm.core.hub.DynamicHubCompanion
+ 792.25kB modified-io.vertx.vertx-core-4.5.28.jar              1.85MB java.lang.Class
+ 625.57kB io.netty.netty-buffer-4.1.135.Final.jar              1.30MB byte[] for general heap data
+ 452.01kB modified-io.netty.netty-common-4.1.135.Final.jar   663.55kB java.util.HashMap$Node
+ 403.46kB io.netty.netty-codec-http-4.1.135.Final.jar        566.70kB heap alignment
+ 374.63kB com.fasterxml.jackson.core.jackson-core-2.22.0.jar 519.94kB java.lang.Object[]
+ 373.51kB io.netty.netty-codec-http2-4.1.135.Final.jar       485.65kB java.lang.String[]
+   5.06MB for 89 more packages                                 5.92MB for 3358 more object types
+------------------------------------------------------------------------------------------------------------------------
+Recommendations:
+ FUTR: Use '--future-defaults=all' to prepare for future releases.
+ HEAP: Set max heap for improved and more predictable memory usage.
+ CPU:  Enable more CPU features with '-march=native' for improved performance.
+------------------------------------------------------------------------------------------------------------------------
+                        3.1s (6.6% of total time) in 487 GCs | Peak RSS: 2.89GB | CPU load: 4.82
+------------------------------------------------------------------------------------------------------------------------
+Build artifacts:
+ /w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/build-artifacts.json (build_info)
+ /w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/fixture-1.0.0-SNAPSHOT-runner (executable)
+ /w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/fixture-1.0.0-SNAPSHOT-runner-build-output-stats.json (build_info)
+========================================================================================================================
+Finished generating 'fixture-1.0.0-SNAPSHOT-runner' in 45.3s.
+[INFO] [io.quarkus.deployment.pkg.steps.NativeImageBuildRunner] objcopy --strip-debug fixture-1.0.0-SNAPSHOT-runner
+[INFO] [io.quarkus.deployment.QuarkusAugmentor] Quarkus augmentation completed in 137983ms
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  02:52 min
+[INFO] Finished at: 2026-07-24T21:21:31Z
+[INFO] ------------------------------------------------------------------------

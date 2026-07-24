@@ -1,0 +1,42 @@
+=== t0-startup ===
+mkdir: cannot create directory ‘/root’: Permission denied
+Can not write to /root/.m2/copy_reference_file.log. Wrong volume permissions? Carrying on ...
+[INFO] Loading execution data file /s/s1-coverage/t0-startup.exec.
+Exception in thread "main" java.io.IOException: Invalid execution data file.
+	at org.jacoco.cli.internal.core.data.ExecutionDataReader.read(ExecutionDataReader.java:90)
+	at org.jacoco.cli.internal.core.tools.ExecFileLoader.load(ExecFileLoader.java:61)
+	at org.jacoco.cli.internal.core.tools.ExecFileLoader.load(ExecFileLoader.java:75)
+	at org.jacoco.cli.internal.commands.Report.loadExecutionData(Report.java:99)
+	at org.jacoco.cli.internal.commands.Report.execute(Report.java:83)
+	at org.jacoco.cli.internal.Main.execute(Main.java:90)
+	at org.jacoco.cli.internal.Main.main(Main.java:105)
+exit: 1
+(no csv rows / csv not produced)
+=== t1-after-ok ===
+mkdir: cannot create directory ‘/root’: Permission denied
+Can not write to /root/.m2/copy_reference_file.log. Wrong volume permissions? Carrying on ...
+[INFO] Loading execution data file /s/s1-coverage/t1-after-ok.exec.
+Exception in thread "main" java.io.IOException: Invalid execution data file.
+	at org.jacoco.cli.internal.core.data.ExecutionDataReader.read(ExecutionDataReader.java:90)
+	at org.jacoco.cli.internal.core.tools.ExecFileLoader.load(ExecFileLoader.java:61)
+	at org.jacoco.cli.internal.core.tools.ExecFileLoader.load(ExecFileLoader.java:75)
+	at org.jacoco.cli.internal.commands.Report.loadExecutionData(Report.java:99)
+	at org.jacoco.cli.internal.commands.Report.execute(Report.java:83)
+	at org.jacoco.cli.internal.Main.execute(Main.java:90)
+	at org.jacoco.cli.internal.Main.main(Main.java:105)
+exit: 1
+(no csv rows / csv not produced)
+=== t2-after-more ===
+mkdir: cannot create directory ‘/root’: Permission denied
+Can not write to /root/.m2/copy_reference_file.log. Wrong volume permissions? Carrying on ...
+[INFO] Loading execution data file /s/s1-coverage/t2-after-more.exec.
+Exception in thread "main" java.io.IOException: Invalid execution data file.
+	at org.jacoco.cli.internal.core.data.ExecutionDataReader.read(ExecutionDataReader.java:90)
+	at org.jacoco.cli.internal.core.tools.ExecFileLoader.load(ExecFileLoader.java:61)
+	at org.jacoco.cli.internal.core.tools.ExecFileLoader.load(ExecFileLoader.java:75)
+	at org.jacoco.cli.internal.commands.Report.loadExecutionData(Report.java:99)
+	at org.jacoco.cli.internal.commands.Report.execute(Report.java:83)
+	at org.jacoco.cli.internal.Main.execute(Main.java:90)
+	at org.jacoco.cli.internal.Main.main(Main.java:105)
+exit: 1
+(no csv rows / csv not produced)

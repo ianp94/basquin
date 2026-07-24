@@ -1,0 +1,48 @@
+__  ____  __  _____   ___  __ ____  ______ 
+ --/ __ \/ / / / _ | / _ \/ //_/ / / / __/ 
+ -/ /_/ / /_/ / __ |/ , _/ ,< / /_/ /\ \   
+--\___\_\____/_/ |_/_/|_/_/|_|\____/___/   
+2026-07-24 17:48:41,509 INFO  [io.quarkus] (main) fixture 1.0.0-SNAPSHOT native (powered by Quarkus 3.37.3) started in 0.142s. Listening on: http://0.0.0.0:8080
+2026-07-24 17:48:41,512 INFO  [io.quarkus] (main) Profile prod activated. 
+2026-07-24 17:48:41,513 INFO  [io.quarkus] (main) Installed features: [cdi, rest, smallrye-context-propagation, vertx]
+[PROBE] id=probe-10878576832676 path=/mem/used status=200 succeeded=true cause=- ms=2
+[PROBE] id=probe-10888030545987 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10889037383532 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10890043701343 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10891050167718 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10892056535291 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10893063227337 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10894069766204 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10895076575156 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10896083174844 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10897089400597 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10898095809285 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10899102055627 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10900108111316 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10901114570195 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10902120864390 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10903127410618 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10904133794392 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10905140334636 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10906146598121 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10907152798578 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10908158913556 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10909165170327 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10910171396709 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10911177724559 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10912183826175 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10913189936242 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10914196359205 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10915202528102 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10916208920285 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10917215316991 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10918221654621 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10918226191562 path=/alloc status=200 succeeded=true cause=- ms=1
+[PROBE] id=probe-10918231935861 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10918237252687 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10919243274318 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10920249380998 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10921255477417 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10922261678734 path=/mem/used status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-10923267683475 path=/mem/gc status=200 succeeded=true cause=- ms=8
+2026-07-24 17:51:29,840 INFO  [io.quarkus] (Shutdown thread) fixture stopped in 0.004s

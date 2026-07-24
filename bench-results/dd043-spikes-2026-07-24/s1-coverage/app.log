@@ -1,0 +1,76 @@
+__  ____  __  _____   ___  __ ____  ______ 
+ --/ __ \/ / / / _ | / _ \/ //_/ / / / __/ 
+ -/ /_/ / /_/ / __ |/ , _/ ,< / /_/ /\ \   
+--\___\_\____/_/ |_/_/|_/_/|_|\____/___/   
+2026-07-24 18:13:25,135 INFO  [io.quarkus] (main) fixture 1.0.0-SNAPSHOT native (powered by Quarkus 3.37.3) started in 0.145s. Listening on: http://0.0.0.0:8080
+2026-07-24 18:13:25,138 INFO  [io.quarkus] (main) Profile prod activated. 
+2026-07-24 18:13:25,139 INFO  [io.quarkus] (main) Installed features: [cdi, rest, smallrye-context-propagation, vertx]
+2026-07-24 18:13:27,940 ERROR [io.quarkus.vertx.http.runtime.QuarkusErrorHandler] (executor-thread-1) HTTP Request to /coverage failed, error id: 7fa71721-41e8-40ef-b183-c8d2636ef903-1: java.lang.NoSuchMethodException: org.jacoco.agent.rt.internal_bac9136.Agent.getExecutionData(boolean)
+	at java.base@25.0.3/java.lang.Class.checkMethod(DynamicHub.java:1343)
+	at java.base@25.0.3/java.lang.Class.getMethod(DynamicHub.java:1337)
+	at com.basquin.spike.CoverageProbe.dump(CoverageProbe.java:17)
+	at com.basquin.spike.CoverageProbe$quarkusrestinvoker$dump_68824f207c8e822d056177372a1c222b46722db6.invoke(Unknown Source)
+	at org.jboss.resteasy.reactive.server.handlers.InvocationHandler.handle(InvocationHandler.java:29)
+	at io.quarkus.resteasy.reactive.server.runtime.QuarkusResteasyReactiveRequestContext.invokeHandler(QuarkusResteasyReactiveRequestContext.java:195)
+	at org.jboss.resteasy.reactive.common.core.AbstractResteasyReactiveContext.run(AbstractResteasyReactiveContext.java:147)
+	at io.quarkus.vertx.core.runtime.VertxCoreRecorder$15.runWith(VertxCoreRecorder.java:695)
+	at org.jboss.threads.EnhancedQueueExecutor$Task.doRunWith(EnhancedQueueExecutor.java:2651)
+	at org.jboss.threads.EnhancedQueueExecutor$Task.run(EnhancedQueueExecutor.java:2630)
+	at org.jboss.threads.EnhancedQueueExecutor.runThreadBody(EnhancedQueueExecutor.java:1622)
+	at org.jboss.threads.EnhancedQueueExecutor$ThreadBody.run(EnhancedQueueExecutor.java:1589)
+	at org.jboss.threads.DelegatingRunnable.run(DelegatingRunnable.java:11)
+	at org.jboss.threads.ThreadLocalResettingRunnable.run(ThreadLocalResettingRunnable.java:11)
+	at io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30)
+	at java.base@25.0.3/java.lang.Thread.runWith(Thread.java:1487)
+	at java.base@25.0.3/java.lang.Thread.run(Thread.java:1474)
+	at org.graalvm.nativeimage.builder/com.oracle.svm.core.thread.PlatformThreads.threadStartRoutine(PlatformThreads.java:832)
+	at org.graalvm.nativeimage.builder/com.oracle.svm.core.thread.PlatformThreads.threadStartRoutine(PlatformThreads.java:808)
+
+[PROBE] id=probe-12362224527915 path=/coverage status=500 succeeded=true cause=- ms=7
+[PROBE] id=probe-12491728697657 path=/ok status=200 succeeded=true cause=- ms=0
+2026-07-24 18:15:37,446 ERROR [io.quarkus.vertx.http.runtime.QuarkusErrorHandler] (executor-thread-2) HTTP Request to /coverage failed, error id: 7fa71721-41e8-40ef-b183-c8d2636ef903-2: java.lang.NoSuchMethodException: org.jacoco.agent.rt.internal_bac9136.Agent.getExecutionData(boolean)
+	at java.base@25.0.3/java.lang.Class.checkMethod(DynamicHub.java:1343)
+	at java.base@25.0.3/java.lang.Class.getMethod(DynamicHub.java:1337)
+	at com.basquin.spike.CoverageProbe.dump(CoverageProbe.java:17)
+	at com.basquin.spike.CoverageProbe$quarkusrestinvoker$dump_68824f207c8e822d056177372a1c222b46722db6.invoke(Unknown Source)
+	at org.jboss.resteasy.reactive.server.handlers.InvocationHandler.handle(InvocationHandler.java:29)
+	at io.quarkus.resteasy.reactive.server.runtime.QuarkusResteasyReactiveRequestContext.invokeHandler(QuarkusResteasyReactiveRequestContext.java:195)
+	at org.jboss.resteasy.reactive.common.core.AbstractResteasyReactiveContext.run(AbstractResteasyReactiveContext.java:147)
+	at io.quarkus.vertx.core.runtime.VertxCoreRecorder$15.runWith(VertxCoreRecorder.java:695)
+	at org.jboss.threads.EnhancedQueueExecutor$Task.doRunWith(EnhancedQueueExecutor.java:2651)
+	at org.jboss.threads.EnhancedQueueExecutor$Task.run(EnhancedQueueExecutor.java:2630)
+	at org.jboss.threads.EnhancedQueueExecutor$ThreadBody.run(EnhancedQueueExecutor.java:1586)
+	at org.jboss.threads.DelegatingRunnable.run(DelegatingRunnable.java:11)
+	at org.jboss.threads.ThreadLocalResettingRunnable.run(ThreadLocalResettingRunnable.java:11)
+	at io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30)
+	at java.base@25.0.3/java.lang.Thread.runWith(Thread.java:1487)
+	at java.base@25.0.3/java.lang.Thread.run(Thread.java:1474)
+	at org.graalvm.nativeimage.builder/com.oracle.svm.core.thread.PlatformThreads.threadStartRoutine(PlatformThreads.java:832)
+	at org.graalvm.nativeimage.builder/com.oracle.svm.core.thread.PlatformThreads.threadStartRoutine(PlatformThreads.java:808)
+
+[PROBE] id=probe-12491733156650 path=/coverage status=500 succeeded=true cause=- ms=1
+[PROBE] id=probe-12491740880569 path=/alloc status=200 succeeded=true cause=- ms=1
+[PROBE] id=probe-12491746418418 path=/redirect status=302 succeeded=true cause=- ms=0
+2026-07-24 18:15:37,464 ERROR [io.quarkus.vertx.http.runtime.QuarkusErrorHandler] (executor-thread-2) HTTP Request to /coverage failed, error id: 7fa71721-41e8-40ef-b183-c8d2636ef903-3: java.lang.NoSuchMethodException: org.jacoco.agent.rt.internal_bac9136.Agent.getExecutionData(boolean)
+	at java.base@25.0.3/java.lang.Class.checkMethod(DynamicHub.java:1343)
+	at java.base@25.0.3/java.lang.Class.getMethod(DynamicHub.java:1337)
+	at com.basquin.spike.CoverageProbe.dump(CoverageProbe.java:17)
+	at com.basquin.spike.CoverageProbe$quarkusrestinvoker$dump_68824f207c8e822d056177372a1c222b46722db6.invoke(Unknown Source)
+	at org.jboss.resteasy.reactive.server.handlers.InvocationHandler.handle(InvocationHandler.java:29)
+	at io.quarkus.resteasy.reactive.server.runtime.QuarkusResteasyReactiveRequestContext.invokeHandler(QuarkusResteasyReactiveRequestContext.java:195)
+	at org.jboss.resteasy.reactive.common.core.AbstractResteasyReactiveContext.run(AbstractResteasyReactiveContext.java:147)
+	at io.quarkus.vertx.core.runtime.VertxCoreRecorder$15.runWith(VertxCoreRecorder.java:695)
+	at org.jboss.threads.EnhancedQueueExecutor$Task.doRunWith(EnhancedQueueExecutor.java:2651)
+	at org.jboss.threads.EnhancedQueueExecutor$Task.run(EnhancedQueueExecutor.java:2630)
+	at org.jboss.threads.EnhancedQueueExecutor.runThreadBody(EnhancedQueueExecutor.java:1622)
+	at org.jboss.threads.EnhancedQueueExecutor$ThreadBody.run(EnhancedQueueExecutor.java:1589)
+	at org.jboss.threads.DelegatingRunnable.run(DelegatingRunnable.java:11)
+	at org.jboss.threads.ThreadLocalResettingRunnable.run(ThreadLocalResettingRunnable.java:11)
+	at io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30)
+	at java.base@25.0.3/java.lang.Thread.runWith(Thread.java:1487)
+	at java.base@25.0.3/java.lang.Thread.run(Thread.java:1474)
+	at org.graalvm.nativeimage.builder/com.oracle.svm.core.thread.PlatformThreads.threadStartRoutine(PlatformThreads.java:832)
+	at org.graalvm.nativeimage.builder/com.oracle.svm.core.thread.PlatformThreads.threadStartRoutine(PlatformThreads.java:808)
+
+[PROBE] id=probe-12491751498517 path=/coverage status=500 succeeded=true cause=- ms=1
+2026-07-24 18:15:37,488 INFO  [io.quarkus] (Shutdown thread) fixture stopped in 0.003s

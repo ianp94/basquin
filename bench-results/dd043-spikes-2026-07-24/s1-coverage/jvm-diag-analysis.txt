@@ -1,0 +1,27 @@
+=== jvm-diag-t0 ===
+[INFO] Loading execution data file /s/s1-coverage/jvm-diag-t0.exec.
+[INFO] Analyzing 5 classes.
+exit: 0
+JaCoCo Coverage Report,com.basquin.spike,Probe,40,0,2,0,8,0,7,0,6,0
+JaCoCo Coverage Report,com.basquin.spike,MemProbe,35,0,0,0,8,0,3,0,3,0
+JaCoCo Coverage Report,com.basquin.spike,BoundaryProbe,57,40,2,0,6,11,3,3,2,3
+JaCoCo Coverage Report,com.basquin.spike,CoverageProbe,18,27,0,0,3,5,0,2,0,2
+JaCoCo Coverage Report,com.basquin.spike,NeverCalled,11,0,0,0,3,0,3,0,3,0
+=== jvm-diag-t1 ===
+[INFO] Loading execution data file /s/s1-coverage/jvm-diag-t1.exec.
+[INFO] Analyzing 5 classes.
+exit: 0
+JaCoCo Coverage Report,com.basquin.spike,Probe,35,5,2,0,6,2,5,2,4,2
+JaCoCo Coverage Report,com.basquin.spike,MemProbe,35,0,0,0,8,0,3,0,3,0
+JaCoCo Coverage Report,com.basquin.spike,BoundaryProbe,3,94,1,1,0,17,1,5,0,5
+JaCoCo Coverage Report,com.basquin.spike,CoverageProbe,0,45,0,0,0,8,0,2,0,2
+JaCoCo Coverage Report,com.basquin.spike,NeverCalled,11,0,0,0,3,0,3,0,3,0
+=== jvm-diag-t2 ===
+[INFO] Loading execution data file /s/s1-coverage/jvm-diag-t2.exec.
+[INFO] Analyzing 5 classes.
+exit: 0
+JaCoCo Coverage Report,com.basquin.spike,Probe,9,31,0,2,2,6,2,5,2,4
+JaCoCo Coverage Report,com.basquin.spike,MemProbe,35,0,0,0,8,0,3,0,3,0
+JaCoCo Coverage Report,com.basquin.spike,BoundaryProbe,3,94,1,1,0,17,1,5,0,5
+JaCoCo Coverage Report,com.basquin.spike,CoverageProbe,0,45,0,0,0,8,0,2,0,2
+JaCoCo Coverage Report,com.basquin.spike,NeverCalled,11,0,0,0,3,0,3,0,3,0

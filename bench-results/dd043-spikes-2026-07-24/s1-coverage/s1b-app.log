@@ -1,0 +1,14 @@
+__  ____  __  _____   ___  __ ____  ______ 
+ --/ __ \/ / / / _ | / _ \/ //_/ / / / __/ 
+ -/ /_/ / /_/ / __ |/ , _/ ,< / /_/ /\ \   
+--\___\_\____/_/ |_/_/|_/_/|_|\____/___/   
+2026-07-24 18:42:15,433 INFO  [io.quarkus] (main) fixture 1.0.0-SNAPSHOT native (powered by Quarkus 3.37.3) started in 0.147s. Listening on: http://0.0.0.0:8080
+2026-07-24 18:42:15,436 INFO  [io.quarkus] (main) Profile prod activated. 
+2026-07-24 18:42:15,437 INFO  [io.quarkus] (main) Installed features: [cdi, rest, smallrye-context-propagation, vertx]
+[PROBE] id=probe-14099967528225 path=/coverage status=200 succeeded=true cause=- ms=1
+[PROBE] id=probe-14105066153445 path=/ok status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-14105070426360 path=/coverage status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-14111351805497 path=/alloc status=200 succeeded=true cause=- ms=1
+[PROBE] id=probe-14111357863646 path=/redirect status=302 succeeded=true cause=- ms=0
+[PROBE] id=probe-14111362595792 path=/coverage status=200 succeeded=true cause=- ms=0
+2026-07-24 18:42:42,102 INFO  [io.quarkus] (Shutdown thread) fixture stopped in 0.004s

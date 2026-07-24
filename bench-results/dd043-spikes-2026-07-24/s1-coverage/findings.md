@@ -292,3 +292,256 @@ that offline JaCoCo coverage on native is impossible in every form.
 - `build-jvm-diagnostic.log`, `jvm-diag-t0.exec`, `jvm-diag-t1.exec`, `jvm-diag-t2.exec`,
   `jvm-diag-t0.csv`, `jvm-diag-t1.csv`, `jvm-diag-t2.csv`, `jvm-diag-analysis.txt` — the
   supplementary JVM-mode diagnostic (root-cause isolation only, not a substitute result).
+
+---
+
+## S1b: reading coverage without reflection
+
+S1 (above) isolated the failure to the reflective two-hop lookup
+(`Class.forName("...RT").getMethod("getAgent").invoke(null)` then
+`agent.getClass().getMethod("getExecutionData", boolean.class)`), not to JaCoCo-under-AOT in
+general — the identical mechanism worked in JVM mode, and `javap` confirmed the target method
+genuinely exists in the pinned jar. S1b tests the fix S1's own "what would need to change"
+section proposed but explicitly did not try: a compile-time-typed call against JaCoCo's public
+`IAgent` API, with **no reflection at all**.
+
+**Headline result: CONFIRMED.** Approach A — the direct typed call — compiles, builds natively,
+and returns real JaCoCo execution data (magic header `01 C0 C0 10`) on every one of the three
+dump points. Approach B (reflection registration) was not attempted; it wasn't needed. All
+three signatures are now testable on live native data, and all three hold.
+
+### Approach A: direct, compile-time-typed call
+
+`javap` against `org.jacoco.agent-0.8.15-runtime.jar` confirmed the exact shape S1's own
+speculative fix proposed is valid before writing any code:
+
+```
+public final class org.jacoco.agent.rt.RT {
+  public static org.jacoco.agent.rt.IAgent getAgent() throws java.lang.IllegalStateException;
+}
+public interface org.jacoco.agent.rt.IAgent {
+  public abstract byte[] getExecutionData(boolean);
+  ...
+}
+```
+
+`RT` and `IAgent` are ordinary public compiled types in `org.jacoco.agent:runtime`, which
+`fixture/pom.xml` already declares as a compile-time dependency (added for S1, unchanged here).
+`CoverageProbe.java` was rewritten to call them directly:
+
+```java
+@Path("/coverage")
+public class CoverageProbe {
+    @GET
+    @Produces("application/octet-stream")
+    public byte[] dump() throws Exception {
+        IAgent agent = RT.getAgent();
+        return agent.getExecutionData(false);
+    }
+}
+```
+
+No `Class.forName`, no `getMethod`, no `invoke` — ordinary virtual dispatch. This is visible to
+`native-image`'s closed-world analysis the same way any other method call is, so it needs no
+`@RegisterForReflection` and no `reflect-config.json`. Approach B (reflection registration,
+keyed on the shaded `internal_bac9136` package name) was not attempted, per the brief's
+ordering — Approach A worked, so it is the answer.
+
+### Signature (ii)'s new instrument: `Probe.unused()`
+
+S1 found `NeverCalled` eliminated entirely from the native image by reachability analysis
+(absent from `strings` on the binary and from both class-initialization CSVs), so it cannot
+serve as a live never-executed probe there. Per this spike's instructions, a new route was
+added to `Probe.java` — `@GET @Path("unused") public String unused() { return "unused"; }` —
+registered as an ordinary JAX-RS endpoint (so Quarkus's routing feature references it, keeping
+it reachable and present in the image) but never requested by any dump step.
+`s1b-class_initialization_report.csv` confirms it survived into this build: it has its own
+`quarkusrestinvoker` class (`Probe$quarkusrestinvoker$unused_615ac64...`, `BUILD_TIME`), and
+`strings` on the runner binary finds it, unlike `NeverCalled` (still `0` occurrences — its
+elimination is unaffected by this spike's changes). The existing routes `/ok`, `/boom`,
+`/redirect`, `/slow`, `/alloc` and the `NeverCalled` class itself were not touched.
+
+### Step 3 (repeated) — native build result
+
+`BUILD SUCCESS` (`s1b-build-native.log`), `--no-fallback` in effect
+(`s1b-build-native.log:34`, the logged `native-image` invocation) — a genuine AOT image, same
+as S1's. Total Maven wall time 2:49, `native-image` proper 41.6s. Class-initialization CSVs
+copied to `s1b-class_initialization_configuration.csv` / `s1b-class_initialization_report.csv`
+(`s1b-artifacts.txt` records the `find` output). All `com.basquin.spike` and `org.jacoco.*`
+classes are `BUILD_TIME`-initialized, matching S1 exactly; `NeverCalled` is still absent from
+both CSVs and from the binary.
+
+### Step 4 (repeated) — coverage dump: `/coverage` now returns real data
+
+Same sequence as S1's Step 4, run against the rebuilt binary (raw app output: `s1b-app.log`):
+
+| Dump | Trigger | HTTP | Body size |
+|---|---|---|---|
+| `s1b-t0-startup.exec` | before any route | 200 | 134 bytes |
+| `s1b-t1-after-ok.exec` | after `GET /ok` | 200 | 171 bytes |
+| `s1b-t2-after-more.exec` | after `GET /alloc` + `GET /redirect` | 200 | 171 bytes |
+
+All three bodies open with JaCoCo's execution-data magic header (`01 C0 C0 10`), not an error
+page. `/unused` was never requested (`grep -c unused s1b-app.log` on the request-serving lines
+→ `0`); `/ok`, `/alloc`, `/redirect` all returned their expected codes. Port and process
+confirmed clean before and after (`ss -ltnp`, `ps aux`, matching S1's discipline).
+
+**A first attempt at this step produced files that vanished between the `curl` write and the
+following `ls`** (curl reported real HTTP 200 / non-zero byte counts, `app.log` showed a clean
+full run through graceful shutdown, but the `.exec` files were not on disk afterward) — treated
+as an environment flake (background-shell/DrvFs interaction) rather than a real result, and not
+committed. The measurement was re-run with the app started as its own tracked background task
+and each file's presence verified immediately after every `curl`, which is what produced the
+committed `s1b-t{0,1,2}.exec` files above.
+
+### Step 5 (repeated) — analysis against the preserved originals
+
+Ran via the same containerized `jacoco-cli report`, against `target/generated-classes/jacoco`
+(this build's preserved pre-instrumentation originals — regenerated in this run, so they now
+include `Probe.unused()`). Full transcript: `s1b-analysis.txt`. CSV and, for method-level
+detail, XML reports: `s1b-t0-startup.{csv,xml}`, `s1b-t1-after-ok.{csv,xml}`,
+`s1b-t2-after-more.{csv,xml}`.
+
+| Class | t0 (missed,covered) | t1 | t2 |
+|---|---|---|---|
+| `Probe` | 42, 0 | 37, 5 | 11, 31 |
+| `MemProbe` | 35, 0 | 35, 0 | 35, 0 |
+| `BoundaryProbe` | 57, 40 | 3, 94 | 3, 94 |
+| `CoverageProbe` | 4, 5 | 0, 9 | 0, 9 |
+| `NeverCalled` | 11, 0 | 11, 0 | 11, 0 |
+
+(Total instructions per class is stable across all three rows, confirming consistent class-id
+resolution: `Probe`=42, `MemProbe`=35, `BoundaryProbe`=97, `CoverageProbe`=9, `NeverCalled`=11.
+`CoverageProbe`'s total dropped from 45 in S1's JVM-mode diagnostic to 9 here — the direct
+typed call compiles to far less bytecode than the two-hop reflective lookup it replaced.)
+
+### The three signatures — as tested on the actual native artifact, this time
+
+| Signature | Assertion | Native result |
+|---|---|---|
+| (i) frozen probes | `t2` covered > `t1` > `t0` | **HOLDS.** `Probe`: `0 → 5 → 31`, strictly increasing. |
+| (ii) inflated baseline | never-executed probe reads **0** covered at `t0`, `t1` **and** `t2` | **HOLDS**, on the new instrument. See below — this needed a more careful read than the headline number, because two different kinds of "zero" are present in this data and only one of them is the signature the brief means. |
+| (iii) class-id/name mismatch | report resolves all classes by name with non-zero, stable total instructions | **HOLDS.** All five classes resolve by name every time, with the stable per-class totals shown above. |
+
+### Signature (ii), read carefully: two different zeros
+
+The CSV table shows `NeverCalled` at `0` covered throughout, same as S1. But S1 already flagged
+why that specific zero is weak evidence: `NeverCalled` doesn't exist in the running binary at
+all (reachability-eliminated), so `jacoco-cli` is matching zero probe data for it and falling
+back to "all instructions missed" for the whole class — a *structural absence*, not a *live
+reading of zero*. That ambiguity is exactly why the brief asked for a new instrument.
+
+`Probe.unused()` is the real test, and the raw `.exec` bytes make the distinction visible.
+`strings` on the three dumps shows which classes have *any* execution-data record present at
+each point:
+
+| Dump | Classes with real execution-data records |
+|---|---|
+| `s1b-t0-startup.exec` | `CoverageProbe`, `BoundaryProbe` |
+| `s1b-t1-after-ok.exec` | `CoverageProbe`, `Probe`, `BoundaryProbe` |
+| `s1b-t2-after-more.exec` | `CoverageProbe`, `Probe`, `BoundaryProbe` |
+
+`Probe` itself is *absent* from the raw execution data at `t0` — consistent with JaCoCo's
+per-method lazy registration (each instrumented method checks/populates its class's probe-array
+field on first entry; a class whose methods have never run has no record yet, independent of
+whether SVM ran that class's `<clinit>` at build time). `CoverageProbe` and `BoundaryProbe` are
+present from `t0` because `/coverage` itself invokes `CoverageProbe.dump()`, and `BoundaryProbe`
+is the Vert.x-level filter S3 already found fires on every request. `MemProbe` never appears at
+all — none of its routes are hit in this sequence. `NeverCalled` never appears in any dump,
+consistent with it not existing in the binary.
+
+This means `unused()`'s `t0` reading (missed=2, covered=0, from the XML method breakdown) is
+the same *structural-absence* zero as `NeverCalled`'s — `Probe`'s class record doesn't exist
+yet at `t0`, so every one of its methods, including `unused()`, defaults to all-missed. That
+part of signature (ii), on its own, would be exactly as weak as S1's original evidence.
+
+**The `t1` and `t2` readings are not that.** By `t1`, `Probe` *does* have a real execution-data
+record (its name is in the raw bytes; `<init>` and `ok()` both flip to covered). Against that
+real, non-default record, `unused()` still reads missed=2, covered=0 — and stays there at `t2`,
+even as `alloc()` and `redirect()` flip to covered alongside it in the same class:
+
+| Method | t0 | t1 | t2 |
+|---|---|---|---|
+| `<init>` | 3 missed, 0 covered | 0, 3 | 0, 3 |
+| `ok` | 2, 0 | 0, 2 | 0, 2 |
+| `boom` | 5, 0 | 5, 0 | 5, 0 |
+| `redirect` | 7, 0 | 7, 0 | 0, 7 |
+| `slow` | 4, 0 | 4, 0 | 4, 0 |
+| `alloc` | 19, 0 | 19, 0 | 0, 19 |
+| `unused` | 2, 0 | 2, 0 | 2, 0 |
+
+`unused` is the only method whose route was registered-but-never-called and it is the only
+method (besides the equally-never-called `boom`/`slow`, which serve as an internal control)
+that never flips, across a run where its sibling methods in the *same class*, backed by the
+*same* live probe-array record, demonstrably do flip when their routes are hit. That is a live
+reading of zero, not a structural-absence default, and it is direct evidence against the
+inflated-baseline worry: **build-time class initialization did not pre-flip `unused()`'s
+probe.**
+
+### The denominator finding
+
+`NeverCalled` still contributes `11` of the `194` total instructions (`42+35+97+9+11`) that
+`jacoco-cli report` counts across these five classes, because `--classfiles` points at
+`target/generated-classes/jacoco` — the offline-instrumentation backup made from the *compiled,
+pre-native* classpath, which is unaffected by whatever `native-image`'s reachability analysis
+later decides to keep or discard. Those 11 instructions cannot ever read as covered on this
+native binary, no matter how thoroughly it's exercised — the class isn't in the image. A raw
+"% covered" computed from this denominator therefore has a lower achievable ceiling on native
+than on JVM, for a reason that has nothing to do with test thoroughness.
+
+This is a general property, not specific to the one class this fixture deliberately made dead:
+whatever `native-image` eliminates as unreachable — and S1's own build-output stats logged
+"3,758 types ... registered for reflection" out of "11,223 types ... found reachable" against a
+much larger universe of compiled classes — sits in the coverage denominator as permanently
+uncoverable weight. Two consequences for the benchmark design:
+
+1. **A native coverage percentage and a JVM coverage percentage, computed from the same
+   preserved-originals classfiles, are not directly comparable.** They use the same formula and
+   the same denominator source, but native's is capped below 100% by an amount that varies by
+   build (whatever that build's whole-program analysis proves dead), while JVM's is not. An
+   85% native reading is not evidence of "15% under-tested" the way an 85% JVM reading would be.
+2. **Any coverage-guided stopping rule or cross-mode threshold in the spec needs to say which
+   denominator it means** — either compute a native-specific ceiling (e.g., by intersecting the
+   classfiles directory against what `native-image`'s own reachability/class-initialization
+   reports say survived), or restrict claims to *trends within one mode* (native run N+1 covers
+   more than native run N) rather than cross-mode percentage comparisons.
+
+### Overall verdict: **CONFIRMED**
+
+Approach A — reading `RuntimeData` via a direct, compile-time-typed call against JaCoCo's
+public `IAgent` API, with no reflection — survives `native-image` compilation on this toolchain
+(Quarkus 3.37.3, JaCoCo 0.8.15, `maven.compiler.release=25`, Mandrel/GraalVM 25.0.3) and
+produces real, analyzable execution data at every dump point. All three of S1's failure
+signatures are now testable on live native data and all three hold: probes are not frozen
+(signature i), a genuinely never-executed route reads zero against a real, non-default probe
+record (signature ii, using the new `unused()` instrument — `NeverCalled`'s zero remains
+structurally weak evidence, unaffected by this result), and class-id resolution is stable and
+correct (signature iii). Approach B (explicit reflection registration) was not attempted, since
+Approach A succeeded first, per the brief's ordering; note for the record that had B been
+needed, its registration key (`org.jacoco.agent.rt.internal_bac9136.Agent`) is a JaCoCo-shaded
+package name that changes across JaCoCo versions, which would have made that path
+version-coupled in a way Approach A is not.
+
+**Spec impact: §6.4 is not void.** It needs revising to specify the direct-call form
+(`RT.getAgent().getExecutionData(false)`) rather than the brief's original reflective form, and
+it should record the denominator caveat above. Coverage-guided exploration on native does not
+need the full redesign S1's REFUTED verdict would have triggered under §7.1.
+
+### Files in this directory (S1b additions)
+
+- `s1b-build-native.log` — the S1b native build (Approach A's `CoverageProbe`, plus the new
+  `Probe.unused()` route), `BUILD SUCCESS`.
+- `s1b-class_initialization_configuration.csv`, `s1b-class_initialization_report.csv` — copied
+  from this build's `.../native-image-source-jar/reports/`; `s1b-artifacts.txt` records the
+  `find` output.
+- `s1b-app.log` — the rebuilt native binary's stdout/stderr across the three dump points, ending
+  in a clean shutdown.
+- `s1b-t0-startup.exec`, `s1b-t1-after-ok.exec`, `s1b-t2-after-more.exec` — the three native
+  dump attempts, this time real JaCoCo execution data (magic header `01 C0 C0 10`), not HTTP
+  error bodies.
+- `s1b-t0-startup.csv`, `s1b-t1-after-ok.csv`, `s1b-t2-after-more.csv` — class-level
+  `jacoco-cli report` output against `target/generated-classes/jacoco`.
+- `s1b-t0-startup.xml`, `s1b-t1-after-ok.xml`, `s1b-t2-after-more.xml` — the same analysis at
+  XML/method granularity, used to isolate `Probe.unused()`'s counters for signature (ii).
+- `s1b-analysis.txt` — the three native analysis transcripts (CSV generation only; the XML runs
+  were not tee'd separately but are reproducible from the same `.exec`/classfiles inputs).

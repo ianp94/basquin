@@ -1,0 +1,1042 @@
+Class or Package Name, Initialization Kind, Reasons
+boolean, BUILD_TIME, primitive types are initialized at build time
+boolean[], BUILD_TIME, arrays are initialized at build time
+byte, BUILD_TIME, primitive types are initialized at build time
+byte[], BUILD_TIME, arrays are initialized at build time
+byte[][], BUILD_TIME, arrays are initialized at build time
+char, BUILD_TIME, primitive types are initialized at build time
+char[], BUILD_TIME, arrays are initialized at build time
+com.oracle.graal, BUILD_TIME, Native Image classes are always initialized at build time
+com.oracle.objectfile, BUILD_TIME, Native Image classes are always initialized at build time
+com.oracle.svm, BUILD_TIME, Native Image classes are always initialized at build time
+com.oracle.svm.core.IsolateArguments, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.SubstrateDiagnostics$ErrorContext, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.SubstrateUtil$Target_com_oracle_svm_core_SubstrateUtil, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.SubstrateUtil$Target_java_io_FileOutputStream, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.Target_java_io_FilterInputStream, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.Target_java_lang_Terminator, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.Target_sun_security_provider_NativePRNG, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.Target_sun_security_provider_NativePRNG_RandomIO, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.aarch64.AArch64LibCHelper$CPUFeatures, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.aarch64.AArch64LibCHelperDirectives, BUILD_TIME, CContext.Directives must be eagerly initialized
+com.oracle.svm.core.amd64.AMD64LibCHelper$CPUFeatures, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.amd64.AMD64LibCHelperDirectives, BUILD_TIME, CContext.Directives must be eagerly initialized
+com.oracle.svm.core.c.BooleanPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.core.c.Target_org_graalvm_nativeimage_c_function_CEntryPointLiteral, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.c.function.CEntryPointCreateIsolateParameters, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.c.function.CEntryPointNativeFunctions$IsolatePointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.core.c.function.CEntryPointNativeFunctions$IsolateThreadPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.core.c.locale.LocaleCHelper, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.c.locale.LocaleCHelper$LocaleProps, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.c.locale.LocaleDirectives, BUILD_TIME, CContext.Directives must be eagerly initialized
+com.oracle.svm.core.code.CodeInfo, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.code.CodeInfoImpl, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.code.CodeInfoPointer, BUILD_TIME, classes annotated with RawPointerTo are always initialized at image build time
+com.oracle.svm.core.code.InstalledCodeObserver$InstalledCodeObserverHandle, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.code.SimpleCodeInfoQueryResult, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.code.UntetheredCodeInfo, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.collections.GrowableWordArray, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.collections.UninterruptibleEntry, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.container.ContainerLibrary, BUILD_TIME, classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.container.ContainerLibraryDirectives, BUILD_TIME, CContext.Directives must be eagerly initialized
+com.oracle.svm.core.dcmd.Target_jdk_internal_vm_ThreadSnapshot, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.dcmd.Target_jdk_internal_vm_ThreadSnapshot_BlockerLockType, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.dcmd.Target_jdk_jfr_internal_dcmd_DCmdCheck, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.dcmd.Target_jdk_jfr_internal_dcmd_DCmdDump, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.dcmd.Target_jdk_jfr_internal_dcmd_DCmdStop, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.RuntimeSystemLookup, RUN_TIME, from feature com.oracle.svm.hosted.foreign.ForeignFunctionsFeature.beforeAnalysis with 'RuntimeSystemLookup.class'
+com.oracle.svm.core.foreign.Target_java_lang_foreign_SymbolLookup, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_java_nio_MappedMemoryUtils, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_foreign_MemorySessionImpl, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_foreign_SystemLookup, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_foreign_SystemLookup_WindowsFallbackSymbols, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_foreign_Utils_BaseAndScale, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_foreign_abi_AbstractLinker, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_foreign_abi_NativeEntryPoint, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_foreign_abi_SoftReferenceCache, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_foreign_abi_UpcallLinker, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_foreign_abi_UpcallLinker_CallRegs, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_foreign_abi_UpcallStubs, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_foreign_abi_aarch64_linux_LinuxAArch64Linker, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_foreign_abi_aarch64_macos_MacOsAArch64Linker, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_foreign_abi_x64_sysv_SysVx64Linker, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_foreign_abi_x64_windows_Windowsx64Linker, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_misc_ScopedMemoryAccess, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.foreign.Target_jdk_internal_misc_ScopedMemoryAccess_ScopedAccessError, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.genscavenge.AdaptiveWeightedAverageStruct$Data, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.genscavenge.AddressRangeCommittedMemoryProvider$FreeListNode, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.genscavenge.AlignedHeapChunk$AlignedHeader, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.genscavenge.GCImpl$CollectionVMOperationData, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.genscavenge.HeapChunk$Header, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.genscavenge.HeapChunk$HeaderPadding, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.genscavenge.Target_java_lang_Runtime, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.genscavenge.ThreadLocalAllocation$Descriptor, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.genscavenge.UnalignedHeapChunk$UnalignedHeader, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.genscavenge.compacting.MarkStack$Segment, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.graal.aarch64.AArch64InterpreterStubs$InterpreterDataAArch64, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.graal.amd64.AMD64InterpreterStubs$InterpreterDataAMD64, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.heap.StoredContinuationAccess$ContinuationStackFrameVisitorData, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.heap.Target_java_lang_ref_Cleaner, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.Target_java_lang_ref_Cleaner_Cleanable, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.Target_java_lang_ref_Finalizer, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.Target_java_lang_ref_Finalizer_FinalizerThread, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.Target_java_lang_ref_PhantomReference, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.Target_java_lang_ref_Reference, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.Target_java_lang_ref_ReferenceQueue, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.Target_java_lang_ref_Reference_ReferenceHandler, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.Target_java_lang_ref_SoftReference, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.Target_jdk_internal_ref_Cleaner, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.Target_jdk_internal_ref_CleanerFactory, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.Target_jdk_internal_ref_CleanerImpl, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.Target_jdk_internal_ref_CleanerImpl_CleanableList, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.Target_jdk_internal_ref_CleanerImpl_CleanableList_Node, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.Target_jdk_internal_ref_PhantomCleanable, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.heap.dump.HeapDumpMetadata$ClassInfo, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.heap.dump.HeapDumpMetadata$FieldInfo, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.heap.dump.HeapDumpMetadata$FieldInfoPointer, BUILD_TIME, classes annotated with RawPointerTo are always initialized at image build time
+com.oracle.svm.core.heap.dump.HeapDumpMetadata$FieldName, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.heap.dump.HeapDumpMetadata$FieldNamePointer, BUILD_TIME, classes annotated with RawPointerTo are always initialized at image build time
+com.oracle.svm.core.heap.dump.HeapDumpSupportImpl$HeapDumpVMOperationData, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.hub.DynamicHub, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.hub.Target_java_lang_Class_AnnotationData, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.hub.Target_java_lang_Class_Atomic, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.hub.Target_java_lang_Class_EnclosingMethodInfo, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.hub.Target_java_lang_Class_ReflectionData, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.hub.Target_java_lang_PublicMethods_MethodList, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.hub.Target_jdk_internal_reflect_DirectConstructorHandleAccessor, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.hub.Target_jdk_internal_reflect_ReflectionFactory, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.invoke.Target_java_lang_invoke_MemberName, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.invoke.Target_java_lang_invoke_MemberName_Factory, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.CompletableFutureFieldHolder, RUN_TIME, from feature com.oracle.svm.core.jdk.CompletableFutureFeature.duringSetup with 'CompletableFutureFieldHolder.class'
+com.oracle.svm.core.jdk.DelaySchedulerNanoTimeOffsetHolder, RUN_TIME, from feature com.oracle.svm.core.jdk.CompletableFutureFeature.duringSetup with 'DelaySchedulerNanoTimeOffsetHolder.class'
+com.oracle.svm.core.jdk.Target_com_oracle_svm_core_util_VMError, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_io_ClassCache, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_io_FileDescriptor, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_io_FileDescriptor_JNI, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_io_FileInputStream_JNI, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_io_FileOutputStream_JNI, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_io_ObjectStreamClass, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_io_ObjectStreamClass_Caches, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_AssertionStatusDirectives, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_ClassLoader, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_ClassLoader_ParallelLoaders, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_ClassValue, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_Enum, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_Math, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_Module, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_ModuleLayer, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_Module_ReflectionData, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_NamedPackage, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_NullPointerException, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_Object, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_Package, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_Runtime, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_SecurityManager, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_Shutdown, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_StackFrameInfo, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_StackStreamFactory, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_StackTraceElement, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_StackWalker, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_String, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_StringLatin1, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_StringUTF16, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_System, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_Throwable, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_WeakPairMap, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_foreign_MemorySegment, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_DirectMethodHandle_Accessor, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_DirectMethodHandle_StaticAccessor, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_LazyInitializingVarHandle, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleBooleans_Array, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleBooleans_FieldInstanceReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleBooleans_FieldStaticReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleBytes_Array, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleBytes_FieldInstanceReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleBytes_FieldStaticReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleChars_Array, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleChars_FieldInstanceReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleChars_FieldStaticReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleDoubles_Array, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleDoubles_FieldInstanceReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleDoubles_FieldStaticReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleFloats_Array, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleFloats_FieldInstanceReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleFloats_FieldStaticReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleInts_Array, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleInts_FieldInstanceReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleInts_FieldStaticReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleLongs_Array, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleLongs_FieldInstanceReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleLongs_FieldStaticReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleReferences_Array, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleReferences_FieldInstanceReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleReferences_FieldStaticReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleShorts_Array, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleShorts_FieldInstanceReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_invoke_VarHandleShorts_FieldStaticReadOnly, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_module_ModuleDescriptor, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_lang_reflect_Array, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_math_BigInteger, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_net_URL, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_net_URLClassLoader, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_nio_Bits, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_nio_Buffer, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_nio_DirectByteBuffer, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_nio_DirectByteBufferR, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_nio_channels_spi_SelectorProvider_Holder, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_nio_charset_CharsetEncoder, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_security_Provider, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_security_Provider_Service, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_security_Provider_ServiceKey, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_security_SecureClassLoader, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_security_SecureClassLoader_CodeSourceKey, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_time_ZoneOffset, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_time_zone_ZoneRules, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_AbstractMap, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_Calendar, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_Collections, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_Collections_SynchronizedMap, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_Collections_UnmodifiableMap, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_Currency, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_EnumMap, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_HashMap, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_Hashtable, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_IdentityHashMap, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_ImmutableCollections, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_Optional, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_ServiceLoader, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_SplittableRandom, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_TimeZone, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_TreeMap, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_TreeMap_EntrySet, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_TreeMap_KeySet, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_WeakHashMap, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_CompletableFuture, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_ConcurrentHashMap, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_ConcurrentHashMap_EntrySetView, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_ConcurrentHashMap_KeySetView, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_ConcurrentHashMap_ValuesView, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_ConcurrentSkipListMap, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_ConcurrentSkipListMap_EntrySet, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_ConcurrentSkipListMap_KeySet, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_ConcurrentSkipListMap_SubMap, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_ConcurrentSkipListMap_Values, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_DelayScheduler, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_ForkJoinPool, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_ForkJoinTask, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_ForkJoinTask_Aux, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_ForkJoinTask_InterruptibleTask, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_LinkedTransferQueue_DualNode, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_Phaser, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_ThreadLocalRandom, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_atomic_AtomicIntegerFieldUpdater_AtomicIntegerFieldUpdaterImpl, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_atomic_AtomicLongFieldUpdater_CASUpdater, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_atomic_AtomicReferenceFieldUpdater_AtomicReferenceFieldUpdaterImpl, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_concurrent_atomic_Striped64, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_logging_LogManager, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_logging_LogManager_Cleaner, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_logging_SimpleFormatter, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_zip_ZipFile_Source, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_java_util_zip_ZipFile_Source_Key, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_javax_crypto_CryptoAllPermission, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_javax_crypto_CryptoPermission, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_javax_crypto_JceSecurity, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_javax_crypto_JceSecurityManager, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_javax_crypto_JceSecurity_WeakIdentityWrapper, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_javax_crypto_ProviderVerifier, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_access_JavaAWTAccess, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_access_JavaIOAccess, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_access_SharedSecrets, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_jimage_BasicImageReader, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_jimage_ImageReader, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_jimage_NativeImageBuffer, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_jrtfs_JrtFileSystemProvider_JRTDisabled, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_loader_BootLoader, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_loader_BuiltinClassLoader, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_loader_ClassLoaderHelper, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_loader_ClassLoaders, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_loader_Loader, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_loader_Loader_LoadedModule, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_loader_NativeLibraries, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_loader_NativeLibraries_NativeLibraryContext, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_loader_NativeLibraries_NativeLibraryImpl, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_loader_NativeLibrary, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_loader_URLClassPath, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_misc_Signal, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_misc_Unsafe_Core, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_misc_VM, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_module_ServicesCatalog, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_module_SystemModuleFinders_SystemImage_JRTDisabled, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_platform_CgroupMetrics, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_platform_CgroupSubsystemFactory, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_platform_Metrics, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_platform_cgroupv1_CgroupV1Subsystem, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_platform_cgroupv2_CgroupV2Subsystem, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_reflect_Reflection, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_util_Exceptions, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_util_Preconditions, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_util_StaticProperty, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_util_SystemProps_Raw, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_util_random_RandomSupport, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_internal_vm_vector_VectorSupport, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_jfr_internal_JDKEvents, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_jfr_internal_periodic_JVMEventTask, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_nio_zipfs_ZipFileSystemProvider, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_vm_ci_amd64_AMD64, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_jdk_vm_ci_services_Services, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_sun_misc_Unsafe, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_sun_net_spi_DefaultProxySelector, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_sun_net_www_protocol_jrt_Handler_JRTDisabled, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_sun_nio_ch_Net, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_sun_nio_ch_UnixDomainSockets, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_sun_nio_ch_Util, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_sun_reflect_misc_MethodUtil, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_sun_rmi_transport_GC, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_sun_security_jca_ProviderConfig, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_sun_security_jca_ProviderConfig_ProviderLoader, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_sun_security_ssl_TrustStoreManager, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_sun_security_ssl_TrustStoreManager_TrustAnchorManager, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_sun_security_ssl_TrustStoreManager_TrustStoreDescriptor, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.Target_sun_util_calendar_CalendarSystem, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.buildtimeinit.Target_java_io_FileSystem_BuildTime, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.buildtimeinit.Target_java_io_UnixFileSystem_BuildTime, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.buildtimeinit.Target_java_nio_file_spi_FileSystemProvider_BuildTime, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.buildtimeinit.Target_sun_nio_fs_UnixFileSystemProvider_BuildTime, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.buildtimeinit.Target_sun_nio_fs_UnixFileSystem_BuildTime, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.buildtimeinit.Target_sun_nio_fs_UnixPath_BuildTime, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_java_nio_charset_Charset, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_java_text_BreakIterator, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_java_text_DateFormatSymbols, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_java_time_format_DateTimeTextProvider, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_java_util_ListResourceBundle_SubstituteLoadLookup, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_java_util_Locale, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_java_util_ResourceBundle, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_java_util_ResourceBundle_Control, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_sun_util_locale_InternalLocaleBuilder, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_sun_util_locale_provider_JRELocaleProviderAdapter, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_sun_util_locale_provider_LocaleResources, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_sun_util_locale_provider_LocaleServiceProviderPool_JvmLocaleMode, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_sun_util_locale_provider_TimeZoneNameUtility, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_sun_util_resources_Bundles, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_sun_util_resources_OpenListResourceBundle_SubstituteLoadLookup, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.localization.substitutions.Target_sun_util_resources_ParallelListResourceBundle_SubstituteLoadLookup, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.management.Target_com_sun_management_internal_OperatingSystemImpl, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.management.Target_java_lang_management_ManagementFactory, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.management.Target_javax_management_remote_JMXConnectorFactory, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.management.Target_jdk_internal_agent_Agent, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.management.Target_jdk_internal_vm_VMSupport, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.management.Target_jdk_management_jfr_FlightRecorderMXBeanImpl, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.management.Target_sun_management_BaseOperatingSystemImpl, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.management.Target_sun_management_ManagementFactoryHelper, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.proxy.Target_java_lang_reflect_Proxy, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.proxy.Target_jdk_internal_loader_AbstractClassLoaderValue_Sub, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.proxy.Target_jdk_internal_loader_ClassLoaderValue, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.resources.Target_jdk_nio_zipfs_ZipUtils, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.xml.Target_javax_xml_catalog_Catalog, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.xml.Target_javax_xml_catalog_CatalogImpl, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.xml.Target_javax_xml_parsers_SAXParser, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jdk.xml.Target_jdk_xml_internal_JdkXmlConfig_CatalogHolder, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jfr.JfrBuffer, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.jfr.JfrBufferNode, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.jfr.JfrNativeEventWriterData, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.jfr.JfrStackTraceRepository$JfrStackTraceTableEntry, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.jfr.JfrSymbolRepository$JfrSymbol, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.jfr.Target_jdk_jfr_internal_JVM, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jfr.Target_jdk_jfr_internal_JVMSupport, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jfr.Target_jdk_jfr_internal_dcmd_AbstractDCmd, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jfr.Target_jdk_jfr_internal_dcmd_ArgumentParser, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jfr.Target_jdk_jfr_internal_dcmd_DCmdStart, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jfr.Target_jdk_jfr_internal_event_EventConfiguration, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jfr.Target_jdk_jfr_internal_event_EventWriter, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jfr.Target_jdk_jfr_internal_settings_MethodSetting, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jfr.Target_jdk_jfr_internal_settings_Throttler, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jfr.Target_jdk_jfr_internal_tracing_PlatformTracer, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jfr.utils.JfrVisited, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.jni.functions.JNIFunctions$Target_java_nio_Buffer, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jni.headers.JNIArrayReleaseModes, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIEnvironment, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIEnvironmentPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIErrors, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIFieldId, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIFieldIdPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIFieldIdPointerPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIHeaderDirectives, BUILD_TIME, CContext.Directives must be eagerly initialized
+com.oracle.svm.core.jni.headers.JNIInvokeInterface, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIJavaVM, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIJavaVMAttachArgs, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIJavaVMInitArgs, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIJavaVMOption, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIJavaVMPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIMethodId, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIMethodIdPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIMethodIdPointerPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIMode, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNINativeInterface, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNINativeInterfacePointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNINativeMethod, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIObjectRefType, BUILD_TIME, classes annotated with CEnum are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIValue, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jni.headers.JNIVersion, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmstat.Target_jdk_internal_perf_Perf, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jvmstat.Target_jdk_internal_perf_PerfCounter, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.jvmti.JvmtiEnv, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.jvmti.JvmtiFunctions$CCharPointerPointerPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.core.jvmti.JvmtiFunctions$CLongPointerPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JRawMonitorId, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JRawMonitorIdPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiCapabilities, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiClassDefinition, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiDirectives, BUILD_TIME, CContext.Directives must be eagerly initialized
+com.oracle.svm.core.jvmti.headers.JvmtiError, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CEnum are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiEvent, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CEnum are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiEventCallbacks, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiEventMode, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiExtensionFunctionInfo, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiExtensionFunctionInfoPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiExternalEnv, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiFrameInfo, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiHeapCallbacks, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiHeapObjectFilter, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiHeapRootKind, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiInterface, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiIterationControl, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiLineNumberEntry, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiLineNumberEntryPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiLocalVariableEntry, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiLocalVariableEntryPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiMonitorStackDepthInfo, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiMonitorStackDepthInfoPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiMonitorUsage, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiObjectReferenceKind, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiPhase, BUILD_TIME, classes annotated with CEnum are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiStackInfo, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiStackInfoPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiThreadGroupInfo, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiThreadInfo, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiThreadState, BUILD_TIME, classes annotated with CEnum are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiTimerInfo, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiVerboseFlag, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.JvmtiVersion, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.jvmti.headers.VoidPointerPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_BoundMethodHandle, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_BoundMethodHandle_Specializer, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_BoundMethodHandle_SpeciesData, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_BoundMethodHandle_Species_L, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_ClassSpecializer, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_ClassSpecializer_Factory, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_ClassSpecializer_SpeciesData, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_DelegatingMethodHandle, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_DirectMethodHandle, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_InvokerBytecodeGenerator, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_Invokers, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_LambdaForm, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_LambdaForm_NamedFunction, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_MethodHandle, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_MethodHandleImpl, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_MethodHandleImpl_ArrayAccessor, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_MethodHandleImpl_IntrinsicMethodHandle, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_MethodHandleNatives, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_MethodHandleNatives_Constants, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_MethodHandleStatics, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_MethodHandles_Lookup, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_MethodType, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_MethodTypeForm, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_SimpleMethodHandle, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_VarHandle, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.methodhandles.Target_java_lang_invoke_VarHandle_AccessDescriptor, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.monitor.Target_jdk_internal_misc_Blocker, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.nmt.NmtMallocHeader, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.option.Target_jdk_graal_compiler_options_OptionKey, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.os.BufferedFileOperationSupport$BufferedFile, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.posix.PosixStat, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.PosixStat$stat, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.PosixUtils$Target_java_io_FileDescriptor, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.posix.PosixUtils$Target_java_lang_ProcessImpl, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.posix.Target_java_io_UnixFileSystem_JNI, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.posix.Target_java_lang_System_Posix, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.posix.headers.Dirent, BUILD_TIME, classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Dirent$dirent, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Dlfcn, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Dlfcn$Dl_info, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Dlfcn$GNUExtensions, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Dlfcn$GNUExtensions$Lmid_tPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.core.posix.headers.Errno, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Fcntl, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.LibMDependencies, BUILD_TIME, CContext.Directives must be eagerly initialized
+com.oracle.svm.core.posix.headers.Limits, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Locale, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Mman, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.PosixDirectives, BUILD_TIME, CContext.Directives must be eagerly initialized
+com.oracle.svm.core.posix.headers.PosixFile, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.PosixLibM, BUILD_TIME, classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Pthread, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Pthread$pthread_attr_t, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Pthread$pthread_cond_t, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Pthread$pthread_condattr_t, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Pthread$pthread_key_tPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.core.posix.headers.Pthread$pthread_mutex_t, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Pthread$pthread_tPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.core.posix.headers.Pwd, BUILD_TIME, classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Pwd$passwd, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Pwd$passwdPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.core.posix.headers.Resource, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Resource$rlimit, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Sched, BUILD_TIME, classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Semaphore, BUILD_TIME, classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Semaphore$sem_t, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Signal, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Signal$GregEnumLinuxAMD64, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Signal$GregsPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.core.posix.headers.Signal$LinuxSignalEnum, BUILD_TIME, classes annotated with CEnum are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Signal$SignalEnum, BUILD_TIME, classes annotated with CEnum are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Signal$sigaction, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Signal$sigevent, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Signal$siginfo_t, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Signal$sigset_tPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.core.posix.headers.Signal$ucontext_t, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Stdlib, BUILD_TIME, classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Sysctl, BUILD_TIME, classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Time, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and super type of com.oracle.svm.core.posix.headers.linux.LinuxTime and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Time$TimerTypeEnum, BUILD_TIME, classes annotated with CEnum are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Time$itimerval, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Time$timespec, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Time$timeval, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Time$tm, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Times, BUILD_TIME, classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Times$tms, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Unistd, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Utsname, BUILD_TIME, classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.Utsname$utsname, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.Wait, BUILD_TIME, classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.linux.LinuxPthread, BUILD_TIME, classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.linux.LinuxStat, BUILD_TIME, classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.linux.LinuxTime, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.headers.linux.LinuxTime$itimerspec, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.headers.linux.LinuxTime$timer_t, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+com.oracle.svm.core.posix.jdk.Target_jdk_internal_misc_Signal, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.posix.jdk.Target_jdk_internal_misc_VM, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.posix.linux.LinuxLibCHelper, BUILD_TIME, classes annotated with CConstant are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.posix.linux.Target_java_lang_System_Linux, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.posix.thread.Target_java_lang_Thread, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_java_lang_reflect_AccessibleObject, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_java_lang_reflect_Constructor, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_java_lang_reflect_Executable, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_java_lang_reflect_Executable_ParameterData, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_java_lang_reflect_Field, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_java_lang_reflect_Method, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_java_lang_reflect_Parameter, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_java_lang_reflect_RecordComponent, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_java_lang_reflect_ReflectAccess, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_jdk_internal_misc_Unsafe_Reflection, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_jdk_internal_reflect_ConstantPool, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_jdk_internal_reflect_ConstructorAccessor, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_jdk_internal_reflect_FieldAccessor, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_jdk_internal_reflect_MethodAccessor, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_jdk_internal_reflect_MethodHandleFieldAccessorImpl, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_sun_reflect_annotation_AnnotationInvocationHandler, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_sun_reflect_annotation_AnnotationParser, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.reflect.target.Target_sun_reflect_annotation_AnnotationTypeMismatchExceptionProxy, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.riscv64.RISCV64LibCHelper$CPUFeatures, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.core.riscv64.RISCV64LibCHelperDirectives, BUILD_TIME, CContext.Directives must be eagerly initialized
+com.oracle.svm.core.sampler.SamplerBuffer, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.sampler.SamplerSampleWriterData, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.stack.JavaFrame, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.stack.JavaFrameAnchor, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.stack.JavaFrameAnchorFields, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.stack.JavaFrameAnchorPreamble, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.stack.JavaStackWalk, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.stack.JavaStackWalkImpl, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.thread.NativeVMOperationData, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.thread.PlatformThreads$ThreadStartData, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.core.thread.Target_java_lang_BaseVirtualThread, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_lang_ScopedValue, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_lang_ScopedValue_Cache, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_lang_ScopedValue_CallableOp, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_lang_ScopedValue_Carrier, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_lang_ScopedValue_Snapshot, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_lang_Thread, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_lang_ThreadGroup, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_lang_ThreadLocal, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_lang_ThreadLocal_ThreadLocalMap, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_lang_Thread_Constants, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_lang_Thread_FieldHolder, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_lang_Thread_ThreadIdentifiers, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_lang_VirtualThread, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_util_concurrent_ForkJoinWorkerThread, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_java_util_concurrent_ThreadPoolExecutor_Worker, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_jdk_internal_misc_Unsafe_JavaThreads, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_jdk_internal_vm_Continuation, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_jdk_internal_vm_ContinuationScope, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_jdk_internal_vm_ContinuationSupport, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_jdk_internal_vm_ScopedValueContainer, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_jdk_internal_vm_StackChunk, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_jdk_internal_vm_ThreadContainer, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_jdk_internal_vm_ThreadContainers, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.thread.Target_sun_nio_ch_Interruptible, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.util.Target_com_oracle_svm_core_util_Counter, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.core.util.coder.ByteStream, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.graal.isolated.CodeInstallInfo, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.graal.isolated.ConstantData, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.graal.isolated.ForeignIsolateReferenceAdjusterData, BUILD_TIME, classes annotated with RawStructure are always initialized at image build time
+com.oracle.svm.graal.meta.Target_java_lang_Integer_IntegerCache, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.graal.substitutions.Target_jdk_graal_compiler_printer_NoDeadCodeVerifyHandler, BUILD_TIME, substitutions are always initialized
+com.oracle.svm.hosted.c.BuiltinDirectives, BUILD_TIME, CContext.Directives must be eagerly initialized
+com.oracle.svm.hosted.c.DirectivesExtension, BUILD_TIME, super type of com.oracle.svm.hosted.c.BuiltinDirectives
+com.oracle.svm.jdwp.bridge.jniutils.JNI$JNIEnv, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.jdwp.bridge.jniutils.JNI$JNIEnvPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.oracle.svm.jdwp.bridge.jniutils.JNI$JNIHeaderDirectives, BUILD_TIME, CContext.Directives must be eagerly initialized
+com.oracle.svm.jdwp.bridge.jniutils.JNI$JNIInvokeInterface, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.jdwp.bridge.jniutils.JNI$JNINativeInterface, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.jdwp.bridge.jniutils.JNI$JValue, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.jdwp.bridge.jniutils.JNI$JavaVM, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.jdwp.bridge.jniutils.JNI$JavaVMAttachArgs, BUILD_TIME, classes annotated with CStruct are always initialized at image build time and classes annotated with CContext are always initialized at image build time
+com.oracle.svm.jdwp.bridge.jniutils.JNI$JavaVMPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+com.sun.crypto.provider, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.crypto.provider.SunJCE$SecureRandomHolder, RUN_TIME, for substitutions
+com.sun.java.util.jar.pack, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.jmx.mbeanserver.DefaultMXBeanMappingFactory, BUILD_TIME, from feature com.oracle.svm.core.jdk.management.ManagementFeature.duringSetup with 'com.sun.jmx.mbeanserver.DefaultMXBeanMappingFactory'
+com.sun.jmx.mbeanserver.DefaultMXBeanMappingFactory$IdentityMapping, BUILD_TIME, from feature com.oracle.svm.core.jdk.management.ManagementFeature.duringSetup with 'com.sun.jmx.mbeanserver.DefaultMXBeanMappingFactory$IdentityMapping'
+com.sun.jmx.mbeanserver.DefaultMXBeanMappingFactory$Mappings, BUILD_TIME, from feature com.oracle.svm.core.jdk.management.ManagementFeature.duringSetup with 'com.sun.jmx.mbeanserver.DefaultMXBeanMappingFactory$Mappings'
+com.sun.jmx.mbeanserver.DefaultMXBeanMappingFactory$NonNullMXBeanMapping, BUILD_TIME, super type of com.sun.jmx.mbeanserver.DefaultMXBeanMappingFactory$IdentityMapping
+com.sun.jmx.mbeanserver.DescriptorCache, BUILD_TIME, from feature com.oracle.svm.core.jdk.management.ManagementFeature.duringSetup with 'com.sun.jmx.mbeanserver.DescriptorCache'
+com.sun.jmx.mbeanserver.MXBeanMapping, BUILD_TIME, super type of com.sun.jmx.mbeanserver.DefaultMXBeanMappingFactory$NonNullMXBeanMapping
+com.sun.jmx.mbeanserver.MXBeanMappingFactory, BUILD_TIME, super type of com.sun.jmx.mbeanserver.DefaultMXBeanMappingFactory
+com.sun.jmx.remote.util.ClassLogger, BUILD_TIME, from feature com.oracle.svm.core.jdk.management.ManagementFeature.duringSetup with 'com.sun.jmx.remote.util.ClassLogger'
+com.sun.jndi, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.jndi.dns.DnsClient, RUN_TIME, Contains Random references, therefore can't be included in the image heap.
+com.sun.jndi.ldap.ServiceLocator, RUN_TIME, Contains Random references, therefore can't be included in the image heap.
+com.sun.management, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.management.internal.OperatingSystemImpl, RUN_TIME, for JDK native code support via JNI
+com.sun.management.internal.PlatformMBeanProviderImpl, RUN_TIME, from feature com.oracle.svm.core.jdk.management.ManagementFeature.duringSetup with 'com.sun.management.internal.PlatformMBeanProviderImpl'
+com.sun.naming.internal, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.naming.internal.ResourceManager$AppletParameter, RUN_TIME, Initializes AWT
+com.sun.net.ssl, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.nio.file, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.nio.sctp, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.nio.zipfs, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.org.apache, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.org.apache.xml.internal.serialize.HTMLdtd, RUN_TIME, Fails build-time initialization
+com.sun.org.slf4j.internal, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.security.auth, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.security.cert.internal.x509, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.security.jgss, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.security.ntlm, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.security.sasl, BUILD_TIME, Core JDK classes are initialized at build time
+com.sun.xml, BUILD_TIME, Core JDK classes are initialized at build time
+double, BUILD_TIME, primitive types are initialized at build time
+double[], BUILD_TIME, arrays are initialized at build time
+float, BUILD_TIME, primitive types are initialized at build time
+float[], BUILD_TIME, arrays are initialized at build time
+int, BUILD_TIME, primitive types are initialized at build time
+int[], BUILD_TIME, arrays are initialized at build time
+io.netty, BUILD_TIME, from 'META-INF/native-image/io.netty/netty-codec-http/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-codec-http-4.1.135.Final.jar' with 'io.netty' and from 'META-INF/native-image/io.netty/netty-codec-http2/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-codec-http2-4.1.135.Final.jar' with 'io.netty'
+io.netty.buffer.AbstractReferenceCountedByteBuf, RUN_TIME, from 'META-INF/native-image/io.netty/netty-buffer/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-buffer-4.1.135.Final.jar' with 'io.netty.buffer.AbstractReferenceCountedByteBuf' and from feature io.quarkus.runner.Feature.beforeAnalysis with 'AbstractReferenceCountedByteBuf.class'
+io.netty.buffer.ByteBufAllocator, RUN_TIME, from 'META-INF/native-image/io.netty/netty-buffer/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-buffer-4.1.135.Final.jar' with 'io.netty.buffer.ByteBufAllocator' and from feature io.quarkus.runner.Feature.beforeAnalysis with 'ByteBufAllocator.class'
+io.netty.buffer.ByteBufUtil, RUN_TIME, from 'META-INF/native-image/io.netty/netty-buffer/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-buffer-4.1.135.Final.jar' with 'io.netty.buffer.ByteBufUtil' and from feature io.quarkus.runner.Feature.beforeAnalysis with 'ByteBufUtil.class'
+io.netty.buffer.ByteBufUtil$HexUtil, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'ByteBufUtil$HexUtil.class'
+io.netty.buffer.PooledByteBufAllocator, RUN_TIME, from 'META-INF/native-image/io.netty/netty-buffer/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-buffer-4.1.135.Final.jar' with 'io.netty.buffer.PooledByteBufAllocator' and from feature io.quarkus.runner.Feature.beforeAnalysis with 'PooledByteBufAllocator.class'
+io.netty.buffer.Unpooled, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'Unpooled.class'
+io.netty.buffer.UnpooledByteBufAllocator, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'UnpooledByteBufAllocator.class'
+io.netty.channel.DefaultChannelId, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'DefaultChannelId.class'
+io.netty.channel.unix.Errors, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'Errors.class'
+io.netty.channel.unix.FileDescriptor, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'FileDescriptor.class'
+io.netty.channel.unix.IovArray, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'IovArray.class'
+io.netty.channel.unix.Limits, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'Limits.class'
+io.netty.handler.codec.ReplayingDecoderByteBuf, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'ReplayingDecoderByteBuf.class'
+io.netty.handler.codec.compression.BrotliDecoder, RUN_TIME, from 'META-INF/native-image/io.netty/netty-codec/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-codec-4.1.135.Final.jar' with 'io.netty.handler.codec.compression.BrotliDecoder'
+io.netty.handler.codec.compression.BrotliOptions, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'BrotliOptions.class'
+io.netty.handler.codec.compression.ZstdConstants, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'ZstdConstants.class'
+io.netty.handler.codec.compression.ZstdOptions, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'ZstdOptions.class'
+io.netty.handler.codec.http.HttpObjectAggregator, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'HttpObjectAggregator.class'
+io.netty.handler.codec.http.HttpObjectEncoder, RUN_TIME, from 'META-INF/native-image/io.netty/netty-codec-http/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-codec-http-4.1.135.Final.jar' with 'io.netty.handler.codec.http.HttpObjectEncoder' and from feature io.quarkus.runner.Feature.beforeAnalysis with 'HttpObjectEncoder.class'
+io.netty.handler.codec.http.websocketx.WebSocket00FrameEncoder, RUN_TIME, from 'META-INF/native-image/io.netty/netty-codec-http/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-codec-http-4.1.135.Final.jar' with 'io.netty.handler.codec.http.websocketx.WebSocket00FrameEncoder' and from feature io.quarkus.runner.Feature.beforeAnalysis with 'WebSocket00FrameEncoder.class'
+io.netty.handler.codec.http.websocketx.extensions.compression.DeflateDecoder, RUN_TIME, from 'META-INF/native-image/io.netty/netty-codec-http/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-codec-http-4.1.135.Final.jar' with 'io.netty.handler.codec.http.websocketx.extensions.compression.DeflateDecoder' and from feature io.quarkus.runner.Feature.beforeAnalysis with 'DeflateDecoder.class'
+io.netty.handler.codec.http2.DefaultHttp2FrameWriter, RUN_TIME, from 'META-INF/native-image/io.netty/netty-codec-http2/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-codec-http2-4.1.135.Final.jar' with 'io.netty.handler.codec.http2.DefaultHttp2FrameWriter' and from feature io.quarkus.runner.Feature.beforeAnalysis with 'DefaultHttp2FrameWriter.class'
+io.netty.handler.codec.http2.Http2ClientUpgradeCodec, RUN_TIME, from 'META-INF/native-image/io.netty/netty-codec-http2/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-codec-http2-4.1.135.Final.jar' with 'io.netty.handler.codec.http2.Http2ClientUpgradeCodec' and from feature io.quarkus.runner.Feature.beforeAnalysis with 'Http2ClientUpgradeCodec.class'
+io.netty.handler.codec.http2.Http2CodecUtil, RUN_TIME, from 'META-INF/native-image/io.netty/netty-codec-http2/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-codec-http2-4.1.135.Final.jar' with 'io.netty.handler.codec.http2.Http2CodecUtil' and from feature io.quarkus.runner.Feature.beforeAnalysis with 'Http2CodecUtil.class'
+io.netty.handler.codec.http2.Http2ConnectionHandler, RUN_TIME, from 'META-INF/native-image/io.netty/netty-codec-http2/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-codec-http2-4.1.135.Final.jar' with 'io.netty.handler.codec.http2.Http2ConnectionHandler' and from feature io.quarkus.runner.Feature.beforeAnalysis with 'Http2ConnectionHandler.class'
+io.netty.handler.ssl.ConscryptAlpnSslEngine, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'ConscryptAlpnSslEngine.class'
+io.netty.handler.ssl.JdkSslServerContext, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'JdkSslServerContext.class'
+io.netty.handler.ssl.ReferenceCountedOpenSslContext, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'ReferenceCountedOpenSslContext.class'
+io.netty.handler.ssl.ReferenceCountedOpenSslEngine, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'ReferenceCountedOpenSslEngine.class'
+io.netty.handler.ssl.util.ThreadLocalInsecureRandom, RUN_TIME, from 'META-INF/native-image/io.netty/netty-handler/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-handler-4.1.135.Final.jar' with 'io.netty.handler.ssl.util.ThreadLocalInsecureRandom' and from feature io.quarkus.runner.Feature.beforeAnalysis with 'ThreadLocalInsecureRandom.class'
+io.netty.internal.tcnative.SSL, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'SSL.class'
+io.netty.resolver.HostsFileEntriesResolver, RUN_TIME, from 'META-INF/native-image/io.netty/netty-resolver-dns/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-resolver-dns-4.1.135.Final.jar' with 'io.netty.resolver.HostsFileEntriesResolver'
+io.netty.resolver.dns.DefaultDnsServerAddressStreamProvider, RUN_TIME, from 'META-INF/native-image/io.netty/netty-resolver-dns/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-resolver-dns-4.1.135.Final.jar' with 'io.netty.resolver.dns.DefaultDnsServerAddressStreamProvider'
+io.netty.resolver.dns.DnsNameResolver, RUN_TIME, from 'META-INF/native-image/io.netty/netty-resolver-dns/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-resolver-dns-4.1.135.Final.jar' with 'io.netty.resolver.dns.DnsNameResolver'
+io.netty.resolver.dns.DnsNameResolverBuilder, RUN_TIME, from 'META-INF/native-image/io.netty/netty-resolver-dns/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-resolver-dns-4.1.135.Final.jar' with 'io.netty.resolver.dns.DnsNameResolverBuilder'
+io.netty.resolver.dns.DnsServerAddressStreamProviders$DefaultProviderHolder, RUN_TIME, from 'META-INF/native-image/io.netty/netty-resolver-dns/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-resolver-dns-4.1.135.Final.jar' with 'io.netty.resolver.dns.DnsServerAddressStreamProviders$DefaultProviderHolder'
+io.netty.resolver.dns.ResolvConf$ResolvConfLazy, RUN_TIME, from 'META-INF/native-image/io.netty/netty-resolver-dns/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/io.netty.netty-resolver-dns-4.1.135.Final.jar' with 'io.netty.resolver.dns.ResolvConf$ResolvConfLazy'
+io.netty.util.AbstractReferenceCounted, RUN_TIME, from 'META-INF/native-image/io.netty/netty-common/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/modified-io.netty.netty-common-4.1.135.Final.jar' with 'io.netty.util.AbstractReferenceCounted' and from feature io.quarkus.runner.Feature.beforeAnalysis with 'AbstractReferenceCounted.class'
+io.netty.util.NetUtilSubstitutions, BUILD_TIME, substitutions are always initialized
+io.netty.util.NetUtilSubstitutions$NetUtilLocalhost4LazyHolder, RUN_TIME, from 'META-INF/native-image/io.netty/netty-common/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/modified-io.netty.netty-common-4.1.135.Final.jar' with 'io.netty.util.NetUtilSubstitutions$NetUtilLocalhost4LazyHolder'
+io.netty.util.NetUtilSubstitutions$NetUtilLocalhost6LazyHolder, RUN_TIME, from 'META-INF/native-image/io.netty/netty-common/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/modified-io.netty.netty-common-4.1.135.Final.jar' with 'io.netty.util.NetUtilSubstitutions$NetUtilLocalhost6LazyHolder'
+io.netty.util.NetUtilSubstitutions$NetUtilLocalhostLazyHolder, RUN_TIME, from 'META-INF/native-image/io.netty/netty-common/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/modified-io.netty.netty-common-4.1.135.Final.jar' with 'io.netty.util.NetUtilSubstitutions$NetUtilLocalhostLazyHolder'
+io.netty.util.NetUtilSubstitutions$NetUtilNetworkInterfacesLazyHolder, RUN_TIME, from 'META-INF/native-image/io.netty/netty-common/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/modified-io.netty.netty-common-4.1.135.Final.jar' with 'io.netty.util.NetUtilSubstitutions$NetUtilNetworkInterfacesLazyHolder'
+io.netty.util.concurrent.GlobalEventExecutor, RUN_TIME, from 'META-INF/native-image/io.netty/netty-common/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/modified-io.netty.netty-common-4.1.135.Final.jar' with 'io.netty.util.concurrent.GlobalEventExecutor'
+io.netty.util.concurrent.ImmediateEventExecutor, RUN_TIME, from 'META-INF/native-image/io.netty/netty-common/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/modified-io.netty.netty-common-4.1.135.Final.jar' with 'io.netty.util.concurrent.ImmediateEventExecutor'
+io.netty.util.concurrent.ScheduledFutureTask, RUN_TIME, from 'META-INF/native-image/io.netty/netty-common/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/modified-io.netty.netty-common-4.1.135.Final.jar' with 'io.netty.util.concurrent.ScheduledFutureTask'
+io.netty.util.internal.PlatformDependent, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'PlatformDependent.class'
+io.netty.util.internal.PlatformDependent0, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'PlatformDependent0.class'
+io.netty.util.internal.ThreadLocalRandom, RUN_TIME, from 'META-INF/native-image/io.netty/netty-common/native-image.properties' in 'file:///w/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/lib/modified-io.netty.netty-common-4.1.135.Final.jar' with 'io.netty.util.internal.ThreadLocalRandom'
+io.netty.util.internal.svm.CleanerJava6Substitution, BUILD_TIME, substitutions are always initialized
+io.netty.util.internal.svm.PlatformDependent0Substitution, BUILD_TIME, substitutions are always initialized
+io.netty.util.internal.svm.PlatformDependentSubstitution, BUILD_TIME, substitutions are always initialized
+io.netty.util.internal.svm.UnsafeRefArrayAccessSubstitution, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.EmptyByteBufStub, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'EmptyByteBufStub.class'
+io.quarkus.netty.runtime.graal.Alias_PemReader, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Holder_io_netty_util_concurrent_ScheduledFutureTask, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'Holder_io_netty_util_concurrent_ScheduledFutureTask.class'
+io.quarkus.netty.runtime.graal.Target_SslContext, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_SslHandler, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_bootstrap_AbstractBootstrap, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_buffer_EmptyByteBuf, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_channel_ChannelHandlerMask, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_codec_compression_ZlibCodecFactory, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_codec_compression_ZstdConstants, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_codec_compression_ZstdEncoder, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_codec_http2_DelegatingDecompressorFrameListener, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_codec_http_HttpContentDecompressor, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_ssl_JdkAlpnApplicationProtocolNegotiator, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_ssl_JdkAlpnApplicationProtocolNegotiator_AlpnWrapper, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_ssl_JdkAlpnSslEngine, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_ssl_JdkDefaultApplicationProtocolNegotiator, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_ssl_JdkSslClientContext, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_ssl_JdkSslContext, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_ssl_JdkSslServerContext, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_ssl_OpenSsl, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_ssl_ResumptionController, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_ssl_SslContext, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_ssl_SslHandler$SslEngineType, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_ssl_SslProvider, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_ssl_util_OpenJdkSelfSignedCertGenerator, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_handler_ssl_util_SelfSignedCertificate, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_util_concurrent_AbstractScheduledEventExecutor, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_util_internal_NativeLibraryLoader, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_util_internal_logging_InternalLoggerFactory, BUILD_TIME, substitutions are always initialized
+io.quarkus.netty.runtime.graal.Target_io_netty_util_internal_shaded_org_jctools_util_UnsafeRefArrayAccess, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.ExecutorRecorder, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'ExecutorRecorder.class'
+io.quarkus.runtime.configuration.RuntimeConfigBuilder$UuidConfigSource$Holder, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'RuntimeConfigBuilder$UuidConfigSource$Holder.class'
+io.quarkus.runtime.configuration.Substitutions$Target_ConfigMappingClass, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.configuration.Substitutions$Target_ConfigMappingInterface, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.configuration.Substitutions$Target_ConfigMappingLoader, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.configuration.Substitutions$Target_SystemPropertiesSupport_post_21, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.generated.Target_org_jboss_logging_Logger, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.generated.Target_org_jboss_logmanager_Logger, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.generated.Target_org_jboss_logmanager_LoggerNode, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.ClassDefinerSubstitutions$Target_io_smallrye_common_classloader_ClassDefiner, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.InetRunTime, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'InetRunTime.class'
+io.quarkus.runtime.graal.QuarkusSubstitution, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_io_quarkus_bootstrap_logging_InitialConfigurator, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_io_quarkus_runtime_configuration_QuarkusConfigFactory, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_io_quarkus_runtime_graal_GraalVM, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_io_quarkus_runtime_graal_GraalVM_Distribution, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_io_quarkus_runtime_graal_GraalVM_Version, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_io_quarkus_runtime_graal_GraalVM_VersionParseHelper, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_io_smallrye_common_net_CidrAddress, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_io_smallrye_common_net_Inet, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_io_smallrye_config_SmallRyeConfigProviderResolver, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_java_awt_Color, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_java_awt_GraphicsEnvironment, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_java_awt_Toolkit, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_java_awt_geom_AffineTransform, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_java_awt_geom_Path2D, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_java_awt_image_Kernel, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_java_util_logging_Logger, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_javax_imageio_ImageIO, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_javax_imageio_spi_IIORegistry, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_javax_imageio_spi_ServiceRegistry, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_javax_management_JMX, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_javax_net_ssl_SSLContext, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_org_jboss_logmanager_LogManager, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_org_jboss_logmanager_LoggerNode, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_org_slf4j_LoggerFactory, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_org_wildfly_common_net_CidrAddress, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_org_wildfly_common_net_Inet, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_sun_awt_FontConfiguration, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_sun_font_FontManagerNativeLibrary, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.Target_sun_security_jca_JCAUtil, BUILD_TIME, substitutions are always initialized
+io.quarkus.runtime.graal.TimingReplacement, BUILD_TIME, substitutions are always initialized
+io.quarkus.vertx.core.runtime.graal.TargetResolverProvider, BUILD_TIME, substitutions are always initialized
+io.quarkus.vertx.core.runtime.graal.Target_DefaultSslContextFactory, BUILD_TIME, substitutions are always initialized
+io.quarkus.vertx.core.runtime.graal.Target_URLClassPath$FileLoader, BUILD_TIME, substitutions are always initialized
+io.quarkus.vertx.core.runtime.graal.Target_URLClassPath$Loader, BUILD_TIME, substitutions are always initialized
+io.quarkus.vertx.core.runtime.graal.Target_io_vertx_core_eventbus_impl_clustered_ClusteredEventBusClusteredEventBus, BUILD_TIME, substitutions are always initialized
+io.quarkus.vertx.core.runtime.graal.Target_io_vertx_core_impl_VertxBuilder, BUILD_TIME, substitutions are always initialized
+io.quarkus.vertx.core.runtime.graal.Target_io_vertx_core_net_OpenSSLEngineOptions, BUILD_TIME, substitutions are always initialized
+io.quarkus.vertx.core.runtime.graal.Target_io_vertx_core_spi_tls_DefaultJDKCipherSuite, BUILD_TIME, substitutions are always initialized
+io.quarkus.vertx.core.runtime.graal.Target_jdk_internal_loader_URLClassPath, BUILD_TIME, substitutions are always initialized
+io.smallrye.common.net.HostName, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'HostName.class'
+io.smallrye.common.net.Substitutions$NativeInfo, BUILD_TIME, classes annotated with CContext are always initialized at image build time
+io.smallrye.common.net.Substitutions$NativeInfoDirectives, BUILD_TIME, CContext.Directives must be eagerly initialized
+io.smallrye.common.net.Substitutions$Target_io_smallrye_common_net_GetHostInfoAction, BUILD_TIME, substitutions are always initialized
+io.smallrye.common.os.Process, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'Process.class'
+io.smallrye.common.ref.References$ReaperThread, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'References$ReaperThread.class'
+io.vertx.core.buffer.impl.PartialPooledByteBufAllocator, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'PartialPooledByteBufAllocator.class'
+io.vertx.core.buffer.impl.VertxByteBufAllocator, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'VertxByteBufAllocator.class'
+io.vertx.core.eventbus.impl.clustered.ClusteredEventBus, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'ClusteredEventBus.class'
+io.vertx.core.http.impl.Http1xServerResponse, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'Http1xServerResponse.class'
+io.vertx.core.http.impl.VertxHttp2ClientUpgradeCodec, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'VertxHttp2ClientUpgradeCodec.class'
+io.vertx.core.parsetools.impl.RecordParserImpl, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'RecordParserImpl.class'
+io.vertx.ext.auth.impl.jose.JWT, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'JWT.class'
+io.vertx.ext.web.handler.sockjs.impl.XhrTransport, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'XhrTransport.class'
+java.awt.font.JavaAWTFontAccessImpl, BUILD_TIME, Required for sun.text.bidi.BidiBase.NumericShapings
+java.awt.font.NumericShaper, BUILD_TIME, Required for sun.text.bidi.BidiBase.NumericShapings
+java.awt.font.TextAttribute, BUILD_TIME, Required for sun.text.bidi.BidiBase.NumericShapings
+java.io, BUILD_TIME, Core JDK classes are initialized at build time
+java.io.Console, RUN_TIME, for JDK native code support via JNI
+java.io.DeleteOnExitHook, RUN_TIME, for JDK native code support via JNI
+java.io.File$TempDirectory, RUN_TIME, for JDK native code support via JNI
+java.io.FilePermission, RUN_TIME, for JDK native code support via JNI
+java.io.ObjectInputFilter$Config, RUN_TIME, Field filter have to be initialized at runtime
+java.io.RandomAccessFile, RUN_TIME, for JDK native code support via JNI
+java.io.Serializable[], BUILD_TIME, arrays are initialized at build time
+java.lang, BUILD_TIME, Core JDK classes are initialized at build time
+java.lang.ApplicationShutdownHooks, RUN_TIME, for JDK native code support via JNI
+java.lang.Boolean[], BUILD_TIME, arrays are initialized at build time
+java.lang.Byte[], BUILD_TIME, arrays are initialized at build time
+java.lang.CharSequence[], BUILD_TIME, arrays are initialized at build time
+java.lang.Character[], BUILD_TIME, arrays are initialized at build time
+java.lang.Cloneable[], BUILD_TIME, arrays are initialized at build time
+java.lang.Comparable[], BUILD_TIME, arrays are initialized at build time
+java.lang.Double[], BUILD_TIME, arrays are initialized at build time
+java.lang.Enum, BUILD_TIME, super type of com.oracle.svm.core.jvmti.headers.JvmtiError and super type of com.oracle.svm.core.jvmti.headers.JvmtiEvent and super type of com.oracle.svm.core.jni.headers.JNIObjectRefType and super type of com.oracle.svm.core.jvmti.headers.JvmtiPhase and super type of com.oracle.svm.core.jvmti.headers.JvmtiThreadState and super type of com.oracle.svm.core.posix.headers.Signal$SignalEnum and super type of com.oracle.svm.core.posix.headers.Signal$LinuxSignalEnum and super type of com.oracle.svm.core.posix.headers.Time$TimerTypeEnum
+java.lang.Exception, BUILD_TIME, super type of org.ietf.jgss.GSSException
+java.lang.Float[], BUILD_TIME, arrays are initialized at build time
+java.lang.Integer[], BUILD_TIME, arrays are initialized at build time
+java.lang.Long[], BUILD_TIME, arrays are initialized at build time
+java.lang.Math$RandomNumberGeneratorHolder, RUN_TIME, Contains random seeds
+java.lang.Number[], BUILD_TIME, arrays are initialized at build time
+java.lang.Object, BUILD_TIME, super type of sun.security.util.UntrustedCertificates and super type of java.util.Dictionary and super type of java.security.Provider$Service and super type of javax.security.auth.kerberos.KeyTab and super type of jdk.management.jfr.internal.FlightRecorderMXBeanProvider$SingleMBeanComponent and super type of jdk.xml.internal.JdkXmlUtils and super type of java.text.AttributedCharacterIterator$Attribute and super type of java.awt.font.NumericShaper and super type of java.awt.font.JavaAWTFontAccessImpl and super type of org.ietf.jgss.Oid and others
+java.lang.Object[], BUILD_TIME, arrays are initialized at build time
+java.lang.ProcessEnvironment, RUN_TIME, for JDK native code support via JNI
+java.lang.ProcessHandleImpl, RUN_TIME, for JDK native code support via JNI
+java.lang.ProcessHandleImpl$Info, RUN_TIME, for JDK native code support via JNI
+java.lang.ProcessImpl, RUN_TIME, for JDK native code support via JNI
+java.lang.ScopedValue, BUILD_TIME, from feature com.oracle.svm.hosted.thread.HostedJavaThreadsFeature.duringSetup with 'java.lang.ScopedValue'
+java.lang.ScopedValue$Cache, BUILD_TIME, from feature com.oracle.svm.hosted.thread.HostedJavaThreadsFeature.duringSetup with 'java.lang.ScopedValue$Cache'
+java.lang.Short[], BUILD_TIME, arrays are initialized at build time
+java.lang.StrictMath$RandomNumberGeneratorHolder, RUN_TIME, Contains random seeds
+java.lang.String[], BUILD_TIME, arrays are initialized at build time
+java.lang.System$Logger, BUILD_TIME, super type of com.sun.jmx.remote.util.ClassLogger
+java.lang.Terminator, RUN_TIME, for JDK native code support via JNI
+java.lang.Throwable, BUILD_TIME, super type of java.lang.Exception
+java.lang.constant.Constable[], BUILD_TIME, arrays are initialized at build time
+java.lang.constant.ConstantDesc[], BUILD_TIME, arrays are initialized at build time
+java.lang.reflect.AnnotatedElement, BUILD_TIME, super type of com.oracle.svm.core.hub.DynamicHub and super type of java.lang.reflect.GenericDeclaration
+java.lang.reflect.Type, BUILD_TIME, super type of com.oracle.svm.core.hub.DynamicHub
+java.math, BUILD_TIME, Core JDK classes are initialized at build time
+java.net, BUILD_TIME, Core JDK classes are initialized at build time
+java.net.DatagramPacket, RUN_TIME, for JDK native code support via JNI
+java.net.Inet4Address, RUN_TIME, for JDK native code support via JNI
+java.net.Inet6Address, RUN_TIME, for JDK native code support via JNI
+java.net.InetAddress, RUN_TIME, for JDK native code support via JNI
+java.net.NetworkInterface, RUN_TIME, for JDK native code support via JNI
+java.nio, BUILD_TIME, Core JDK classes are initialized at build time
+java.nio.MappedMemoryUtils, RUN_TIME, for JDK native code support via JNI
+java.nio.file.Files$FileTypeDetectors, RUN_TIME, for JDK native code support via JNI
+java.nio.file.TempFileHelper, RUN_TIME, for JDK native code support via JNI
+java.security, BUILD_TIME, Core JDK classes are initialized at build time
+java.security.Provider, BUILD_TIME, super type of org.jcp.xml.dsig.internal.dom.XMLDSigRI
+java.security.Provider$Service, BUILD_TIME, super type of org.jcp.xml.dsig.internal.dom.XMLDSigRI$ProviderService
+java.text, BUILD_TIME, Core JDK classes are initialized at build time
+java.text.AttributedCharacterIterator$Attribute, BUILD_TIME, super type of java.awt.font.TextAttribute
+java.time, BUILD_TIME, Core JDK classes are initialized at build time
+java.time.chrono.HijrahChronology, RUN_TIME, Reads java.home in class initializer.
+java.util, BUILD_TIME, Core JDK classes are initialized at build time
+java.util.AbstractMap, BUILD_TIME, super type of java.util.WeakHashMap
+java.util.Dictionary, BUILD_TIME, super type of java.util.Hashtable
+java.util.Hashtable, BUILD_TIME, super type of java.util.Properties
+java.util.Map, BUILD_TIME, super type of java.util.Hashtable and super type of java.util.AbstractMap and super type of java.util.WeakHashMap
+java.util.Properties, BUILD_TIME, super type of java.security.Provider
+java.util.UUID$Holder, RUN_TIME, for substitutions
+java.util.WeakHashMap, BUILD_TIME, super type of com.sun.jmx.mbeanserver.DefaultMXBeanMappingFactory$Mappings
+java.util.concurrent.ForkJoinWorkerThread$InnocuousForkJoinWorkerThread, RUN_TIME, innocuousThreadGroup must be initialized at run time
+java.util.concurrent.SubmissionPublisher, RUN_TIME, Executor service must be recomputed
+java.util.concurrent.ThreadLocalRandom$ThreadLocalRandomProxy, RUN_TIME, for JDK native code support via JNI
+java.util.logging.ConsoleHandler, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'ConsoleHandler.class'
+java.util.prefs.FileSystemPreferences, RUN_TIME, for JDK native code support via JNI
+java.util.zip.Adler32, RUN_TIME, for JDK native code support via JNI
+java.util.zip.CRC32, RUN_TIME, for JDK native code support via JNI
+java.util.zip.Deflater, RUN_TIME, for JDK native code support via JNI
+java.util.zip.Inflater, RUN_TIME, for JDK native code support via JNI
+javax.annotation.processing, BUILD_TIME, Core JDK classes are initialized at build time
+javax.crypto, BUILD_TIME, Core JDK classes are initialized at build time
+javax.lang.model, BUILD_TIME, Core JDK classes are initialized at build time
+javax.management, BUILD_TIME, Core JDK classes are initialized at build time
+javax.naming, BUILD_TIME, Core JDK classes are initialized at build time
+javax.net, BUILD_TIME, Core JDK classes are initialized at build time
+javax.net.ssl.SSLContext, RUN_TIME, for JDK native code support via JNI
+javax.security.auth, BUILD_TIME, Core JDK classes are initialized at build time
+javax.security.auth.kerberos.KeyTab, BUILD_TIME, Force initialization of sun.security.krb5.KerberosSecrets.javaxSecurityAuthKerberosAccess
+javax.security.cert, BUILD_TIME, Core JDK classes are initialized at build time
+javax.security.sasl, BUILD_TIME, Core JDK classes are initialized at build time
+javax.tools, BUILD_TIME, Core JDK classes are initialized at build time
+javax.xml, BUILD_TIME, Core JDK classes are initialized at build time
+jdk.graal.compiler, BUILD_TIME, Native Image classes are always initialized at build time
+jdk.internal, BUILD_TIME, Core JDK classes are initialized at build time
+jdk.internal.foreign.SystemLookup$WindowsFallbackSymbols, RUN_TIME, Does not work on non-Windows modular images
+jdk.internal.foreign.abi.fallback.FFIABI, RUN_TIME, Fails build-time initialization
+jdk.internal.foreign.abi.fallback.FFIType, RUN_TIME, Fails build-time initialization
+jdk.internal.foreign.abi.fallback.FallbackLinker$1Holder, RUN_TIME, Fails build-time initialization
+jdk.internal.foreign.abi.fallback.FallbackLinker$2Holder, RUN_TIME, Fails build-time initialization
+jdk.internal.foreign.abi.fallback.LibFallback$NativeConstants, RUN_TIME, Fails build-time initialization
+jdk.internal.jimage, RUN_TIME, Pulls in direct byte buffers
+jdk.internal.loader.NativeLibraries$LibraryPaths, RUN_TIME, for JDK native code support via JNI
+jdk.internal.logger.LoggerFinderLoader, RUN_TIME, Contains a static field with a FilePermission value
+jdk.internal.markdown.MarkdownTransformer, RUN_TIME, Contains a static field with a DocTreeScanner which is initialized at run time
+jdk.internal.misc.InnocuousThread, RUN_TIME, Contains a thread group INNOCUOUSTHREADGROUP.
+jdk.internal.net.http, RUN_TIME, for reading properties at run time
+jdk.internal.net.http.websocket.OpeningHandshake, RUN_TIME, contains a SecureRandom reference
+jdk.internal.util.StaticProperty, RUN_TIME, Contains run time specific values.
+jdk.jfr, BUILD_TIME, Needed for Native Image substitutions
+jdk.jfr.snippets.Snippets$HTTPGetRequest, RUN_TIME, Fails build-time initialization
+jdk.jfr.snippets.Snippets$HTTPPostRequest, RUN_TIME, Fails build-time initialization
+jdk.jfr.snippets.Snippets$HelloWorld, RUN_TIME, Fails build-time initialization
+jdk.jfr.snippets.Snippets$TransactionBlocked, RUN_TIME, Fails build-time initialization
+jdk.management.jfr.internal.FlightRecorderMXBeanProvider$SingleMBeanComponent, BUILD_TIME, Ends up in the image heap with -H:Preserve=all
+jdk.net, BUILD_TIME, Core JDK classes are initialized at build time
+jdk.net.ExtendedSocketOptions, RUN_TIME, for JDK native code support via JNI
+jdk.net.ExtendedSocketOptions$PlatformSocketOptions, RUN_TIME, for JDK native code support via JNI
+jdk.nio, BUILD_TIME, Core JDK classes are initialized at build time
+jdk.vm.ci, BUILD_TIME, Native Image classes are always initialized at build time
+jdk.xml, BUILD_TIME, Core JDK classes are initialized at build time
+jdk.xml.internal.JdkXmlUtils, BUILD_TIME, Core JDK classes are initialized at build time
+long, BUILD_TIME, primitive types are initialized at build time
+long[], BUILD_TIME, arrays are initialized at build time
+org.graalvm.collections, BUILD_TIME, Native Image classes are always initialized at build time
+org.graalvm.home, BUILD_TIME, Native Image classes are always initialized at build time
+org.graalvm.jniutils, BUILD_TIME, Native Image classes are always initialized at build time
+org.graalvm.nativebridge, BUILD_TIME, Native Image classes are always initialized at build time
+org.graalvm.nativeimage, BUILD_TIME, Native Image classes are always initialized at build time
+org.graalvm.nativeimage.Isolate, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+org.graalvm.nativeimage.IsolateThread, BUILD_TIME, classes annotated with CStruct are always initialized at image build time
+org.graalvm.nativeimage.c.CContext$Directives, BUILD_TIME, super type of com.oracle.svm.core.c.locale.LocaleDirectives and super type of com.oracle.svm.core.jni.headers.JNIHeaderDirectives and super type of com.oracle.svm.core.jvmti.headers.JvmtiDirectives and super type of com.oracle.svm.core.posix.headers.PosixDirectives and super type of com.oracle.svm.hosted.c.DirectivesExtension and super type of com.oracle.svm.core.container.ContainerLibraryDirectives and super type of com.oracle.svm.core.posix.headers.LibMDependencies and super type of io.smallrye.common.net.Substitutions$NativeInfoDirectives and super type of com.oracle.svm.core.aarch64.AArch64LibCHelperDirectives and super type of com.oracle.svm.core.amd64.AMD64LibCHelperDirectives and others
+org.graalvm.nativeimage.c.function.CFunctionPointer[], BUILD_TIME, arrays are initialized at build time
+org.graalvm.nativeimage.c.function.CodePointer[], BUILD_TIME, arrays are initialized at build time
+org.graalvm.nativeimage.c.function.RelocatedPointer[], BUILD_TIME, arrays are initialized at build time
+org.graalvm.nativeimage.c.type.CCharPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+org.graalvm.nativeimage.c.type.CCharPointerPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+org.graalvm.nativeimage.c.type.CDoublePointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+org.graalvm.nativeimage.c.type.CFloatPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+org.graalvm.nativeimage.c.type.CIntPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+org.graalvm.nativeimage.c.type.CIntPointerPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+org.graalvm.nativeimage.c.type.CLongPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+org.graalvm.nativeimage.c.type.CShortPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+org.graalvm.nativeimage.c.type.VoidPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+org.graalvm.nativeimage.c.type.WordPointer, BUILD_TIME, classes annotated with CPointerTo are always initialized at image build time
+org.graalvm.nativeimage.libgraal, BUILD_TIME, Native Image classes are always initialized at build time
+org.graalvm.options, BUILD_TIME, Native Image classes are always initialized at build time
+org.graalvm.polyglot, BUILD_TIME, Native Image classes are always initialized at build time
+org.graalvm.word, BUILD_TIME, Native Image classes are always initialized at build time
+org.graalvm.word.ComparableWord[], BUILD_TIME, arrays are initialized at build time
+org.graalvm.word.PointerBase[], BUILD_TIME, arrays are initialized at build time
+org.graalvm.word.WordBase[], BUILD_TIME, arrays are initialized at build time
+org.ietf.jgss.GSSException, BUILD_TIME, Core JDK classes are initialized at build time
+org.ietf.jgss.GSSName, BUILD_TIME, Core JDK classes are initialized at build time
+org.ietf.jgss.Oid, BUILD_TIME, Core JDK classes are initialized at build time
+org.jboss.threads.EnhancedQueueExecutor$RuntimeFields, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'EnhancedQueueExecutor$RuntimeFields.class'
+org.jboss.threads.Substitutions$Target_EnhancedQueueExecutor_MBeanRegisterAction, BUILD_TIME, substitutions are always initialized
+org.jcp.xml.dsig.internal.dom.XMLDSigRI, BUILD_TIME, Required for TrustStoreManager
+org.jcp.xml.dsig.internal.dom.XMLDSigRI$ProviderService, BUILD_TIME, Required for TrustStoreManager
+org.jline.nativ, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'org.jline.nativ'
+org.wildfly.common.net.HostName, RUN_TIME, from feature io.quarkus.runner.Feature.beforeAnalysis with 'HostName.class'
+short, BUILD_TIME, primitive types are initialized at build time
+short[], BUILD_TIME, arrays are initialized at build time
+sun.invoke, BUILD_TIME, Core JDK classes are initialized at build time
+sun.launcher, BUILD_TIME, Core JDK classes are initialized at build time
+sun.launcher.LauncherHelper, RUN_TIME, Pulls in jimage reader
+sun.management, BUILD_TIME, Core JDK classes are initialized at build time
+sun.management.ManagementFactoryHelper$PlatformLoggingImpl, RUN_TIME, Holds instances of LoggingMXBeanAccess
+sun.management.MemoryImpl, RUN_TIME, from feature com.oracle.svm.core.jdk.management.ManagementFeature.duringSetup with 'sun.management.MemoryImpl'
+sun.management.spi.PlatformMBeanProvider$PlatformComponent, BUILD_TIME, super type of jdk.management.jfr.internal.FlightRecorderMXBeanProvider$SingleMBeanComponent
+sun.misc, BUILD_TIME, Core JDK classes are initialized at build time
+sun.net, BUILD_TIME, Core JDK classes are initialized at build time
+sun.net.PortConfig, RUN_TIME, Calls PortConfig.getLower0() and PortConfig.getUpper0()
+sun.net.ext.ExtendedSocketOptions, RUN_TIME, for JDK native code support via JNI
+sun.net.httpserver.simpleserver, RUN_TIME, Allocates InetAddress in class initializers
+sun.net.www.protocol.http.DigestAuthentication$Parameters, RUN_TIME, Contains Random references, therefore can't be included in the image heap.
+sun.net.www.protocol.jar.JarFileFactory, RUN_TIME, for JDK native code support via JNI
+sun.net.www.protocol.jar.JarURLConnection, RUN_TIME, for JDK native code support via JNI
+sun.net.www.protocol.jrt.JavaRuntimeURLConnection, RUN_TIME, Pulls in jimage reader
+sun.nio, BUILD_TIME, Core JDK classes are initialized at build time
+sun.nio.ch.AsynchronousServerSocketChannelImpl$DefaultOptionsHolder, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.AsynchronousSocketChannelImpl$DefaultOptionsHolder, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.DatagramChannelImpl, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.DatagramChannelImpl$DefaultOptionsHolder, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.DevPollArrayWrapper, RUN_TIME, Calls IOUtil.fdLimit()
+sun.nio.ch.EPoll, RUN_TIME, Calls EPoll.eventSize(), EPoll.eventsOffset() and EPoll.dataOffset()
+sun.nio.ch.EPollSelectorImpl, RUN_TIME, Calls IOUtil.fdLimit()
+sun.nio.ch.EventPortSelectorImpl, RUN_TIME, Calls IOUtil.fdLimit()
+sun.nio.ch.FileChannelImpl, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.FileChannelImpl$Unmapper, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.FileDispatcherImpl, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.FileKey, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.IOUtil, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.InheritedChannel, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.NativeThread, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.Net, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.NioSocketImpl, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.Poller, RUN_TIME, Contains an InnocuousThread.
+sun.nio.ch.ServerSocketChannelImpl, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.ServerSocketChannelImpl$DefaultOptionsHolder, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.SimpleAsynchronousFileChannelImpl, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.SimpleAsynchronousFileChannelImpl$DefaultExecutorHolder, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.SinkChannelImpl, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.SocketChannelImpl$DefaultOptionsHolder, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.SocketOptionRegistry$LazyInitialization, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.SourceChannelImpl, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.UnixAsynchronousServerSocketChannelImpl, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.UnixDomainSockets, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.UnixDomainSockets$UnnamedHolder, RUN_TIME, for JDK native code support via JNI
+sun.nio.ch.sctp.SctpChannelImpl, RUN_TIME, for JDK native code support via JNI
+sun.nio.fs.LinuxWatchService$Poller, RUN_TIME, LinuxWatchService.eventSize() and LinuxWatchService.eventOffsets()
+sun.nio.fs.UnixNativeDispatcher, RUN_TIME, for JDK native code support via JNI
+sun.reflect, BUILD_TIME, Core JDK classes are initialized at build time
+sun.reflect.misc.Trampoline, RUN_TIME, Fails build-time initialization
+sun.rmi.transport.GC, BUILD_TIME, Loaded an unneeded library (rmi) in static initializer.
+sun.rmi.transport.GC$LatencyLock, BUILD_TIME, Loaded an unneeded library (rmi) in static initializer.
+sun.security.action, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.ec, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.internal.interfaces, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.internal.spec, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.jca, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.jca.JCAUtil, RUN_TIME, JCAUtil.def holds a SecureRandom.
+sun.security.jca.JCAUtil$CachedSecureRandomHolder, RUN_TIME, for substitutions
+sun.security.jgss, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.jgss.wrapper.Krb5Util, RUN_TIME, Holds the cleaner thread
+sun.security.krb5, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.krb5.Config, RUN_TIME, Reset the value of lazily initialized field sun.security.krb5.Config#singleton
+sun.security.krb5.Confounder, RUN_TIME, for substitutions
+sun.security.krb5.KrbServiceLocator, RUN_TIME, Contains Random references, therefore can't be included in the image heap.
+sun.security.mscapi, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.pkcs, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.pkcs10, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.pkcs11, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.pkcs11.P11Util, RUN_TIME, Cleaner reference
+sun.security.pkcs12, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.provider, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.provider.AbstractDrbg$SeederHolder, RUN_TIME, for substitutions
+sun.security.provider.FileInputStreamPool, RUN_TIME, for substitutions
+sun.security.provider.NativePRNG, RUN_TIME, for substitutions
+sun.security.provider.NativePRNG$Blocking, RUN_TIME, for substitutions
+sun.security.provider.NativePRNG$NonBlocking, RUN_TIME, for substitutions
+sun.security.provider.SecureRandom$SeederHolder, RUN_TIME, for substitutions
+sun.security.provider.SeedGenerator, RUN_TIME, for substitutions
+sun.security.provider.certpath.ssl.SSLServerCertStore, RUN_TIME, Stores secure random
+sun.security.rsa, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.smartcardio, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.ssl, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.ssl.SSLContextImpl$DefaultManagersHolder, RUN_TIME, for reading properties at run time
+sun.security.ssl.SSLContextImpl$DefaultSSLContextHolder, RUN_TIME, Stores secure random
+sun.security.ssl.SSLLogger, RUN_TIME, for reading properties at run time and from feature io.quarkus.runner.Feature.beforeAnalysis with 'SSLLogger.class'
+sun.security.ssl.SSLSocketFactoryImpl, RUN_TIME, Stores secure random
+sun.security.timestamp, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.tools, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.util, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.util.UntrustedCertificates, BUILD_TIME, Required for TrustStoreManager
+sun.security.validator, BUILD_TIME, Core JDK classes are initialized at build time
+sun.security.x509, BUILD_TIME, Core JDK classes are initialized at build time
+sun.text, BUILD_TIME, Core JDK classes are initialized at build time
+sun.util, BUILD_TIME, Core JDK classes are initialized at build time
+void, BUILD_TIME, primitive types are initialized at build time
+whole type hierarchy, BUILD_TIME, from feature io.quarkus.runner.Feature.duringSetup with ''

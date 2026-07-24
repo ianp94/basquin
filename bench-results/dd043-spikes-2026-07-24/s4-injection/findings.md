@@ -200,3 +200,129 @@ normal `groupId:artifactId:version` (this spike injects an already-published
 extension); it says nothing about injecting a *locally-built, unpublished*
 jar via the same mechanism, which would need either a local repository
 mount or an install-to-local-repo step the current mechanism doesn't cover.
+
+## Addendum: local-only artifact resolution
+
+### The gap this closes
+
+The result above injects `io.quarkus:quarkus-smallrye-openapi`, an artifact
+already published to Maven Central. The real artifact spec §5/§5.2 need
+injected (`com.basquin:basquin-quarkus`) will **not** be on Central, so the
+CONFIRMED verdict above does not automatically transfer to it: if an
+injected dependency only resolves when it is publicly published, §5 needs
+an additional mechanism (injecting a `<repository>` declaration alongside
+the dependency) that the spec currently does not mention.
+
+### Question
+
+Does an injected dependency that exists only in the build's local Maven
+repository resolve during a containerized Quarkus build — with no change
+to the fixture's `pom.xml` and no repository declaration injected?
+
+### Method
+
+1. **Installed a throwaway artifact under a groupId that certainly does not
+   exist on Central**: `com.basquin.spike.localonly:local-probe-dep:1.0`.
+   Confirmed absent from Central first (`curl` to
+   `repo.maven.apache.org/maven2/com/basquin/spike/localonly/...` → `404`).
+   Reused the existing `probe-participant/target/inject-probe-1.0.jar`
+   bytes as the jar payload (per the brief — its contents don't matter for
+   a pure resolution test), installed via `mvn install:install-file`
+   **inside the `maven:3.9-eclipse-temurin-17` container** (never on the
+   JDK-17 host), targeting the same `.m2` this spike's `env/build.sh`
+   mounts at `/m2`. First attempt let `install-file` pull the jar's
+   *embedded* pom (`META-INF/maven/.../pom.xml`, left over from when the
+   same bytes were built as `com.basquin.spike:inject-probe:1.0`) — that
+   produced a POM at the right repository path but with the wrong
+   coordinates declared inside it, which would have muddied interpretation
+   of any resolution failure. Re-ran with an explicit minimal
+   `-DpomFile` stub declaring the correct
+   `com.basquin.spike.localonly:local-probe-dep:1.0` GAV and no
+   dependencies, so the installed artifact is a clean, coordinate-correct,
+   dependency-free jar. Full command and output:
+   `addendum-install.log`.
+
+2. **Extended `InjectProbe.java`** (not a second participant — a system
+   property gate on the existing one, so Task 3's original behaviour is
+   preserved byte-for-byte): `-Dbasquin.inject.local=true` switches the
+   injected dependency from `io.quarkus:quarkus-smallrye-openapi:3.37.3` to
+   `com.basquin.spike.localonly:local-probe-dep:1.0`; with the property
+   unset (Task 3's original invocation), the code path, the injected GAV,
+   and the `[INJECT-PROBE] added quarkus-smallrye-openapi to fixture` log
+   line are all unchanged. Rebuilt the probe jar in the same
+   `maven:3.9-eclipse-temurin-17` container (`probe-rebuild.log`).
+
+3. **Built the fixture through the unmodified `env/build.sh`**, with the
+   probe jar mounted and both system properties on
+   `EXTRA_MAVEN_OPTS`:
+
+   ```
+   EXTRA_DOCKER_ARGS="-v $PROBE_ABS:/probe" \
+   EXTRA_MAVEN_OPTS="-Dmaven.ext.class.path=/probe/inject-probe-1.0.jar -Dbasquin.inject.local=true" \
+     env/build.sh package -DskipTests
+   ```
+
+   `fixture/pom.xml` was not touched, and no `<repository>` was declared
+   anywhere — the entire point is that the target app's build stays
+   untouched. Full transcript: `addendum-build.log`.
+
+### Raw result
+
+`addendum-build.log` line 2: participant ran —
+
+```
+[INJECT-PROBE] added local-probe-dep to fixture
+```
+
+No `Could not resolve dependencies`, `Could not find artifact`, `ERROR`, or
+`WARN` anywhere in the 35-line log (`grep -in "ERROR\|Could not resolve\|
+Could not find artifact\|WARN" addendum-build.log` → zero matches).
+Quarkus augmentation ran and completed (`[io.quarkus.deployment.
+QuarkusAugmentor] Quarkus augmentation completed in 10277ms`), and the
+build finished:
+
+```
+[INFO] BUILD SUCCESS
+[INFO] Total time:  44.136 s
+```
+
+Beyond the absence of an error, direct evidence the artifact reached the
+packaged runtime classpath — not just that resolution silently no-opped:
+
+```
+$ find fixture/target/quarkus-app -iname "*local-probe*"
+fixture/target/quarkus-app/lib/main/com.basquin.spike.localonly.local-probe-dep-1.0.jar
+```
+
+The jar is physically present in the augmented fast-jar's `lib/main/`
+directory, Quarkus's packaged-runtime-dependency location.
+
+### Verdict: CONFIRMED (for the local-repo case)
+
+The local Maven repository — the one `env/build.sh` mounts at `/m2` — is
+consulted for a dependency injected purely in memory by the Maven core
+extension, exactly as it is for any normal, disk-declared `pom.xml`
+dependency. No `<repository>` declaration, no publication anywhere, and no
+change to the fixture's `pom.xml` were needed. **Installing the future
+`com.basquin:basquin-quarkus` extension into the build's local repository
+is a sufficient deployment path** for the injection mechanism spec §5/§5.2
+describe — the repository-injection contingency this addendum was written
+to test for turned out not to be needed, at least for plain dependency
+resolution.
+
+### What this does and does not establish
+
+This tests *resolution* of a plain jar — that Maven's resolver (and, via
+Task 3's already-established result, Quarkus's bootstrap resolver riding on
+top of it) will find and package a dependency that exists only in the local
+repository, with no repository declaration anywhere. It does **not** test
+whether a locally-installed **Quarkus extension** is *discovered* by
+augmentation: extension discovery works by scanning the classpath for
+`META-INF/quarkus-extension.properties`, a mechanism this addendum's
+`local-probe-dep` (a plain jar with no such marker) does not exercise. Task
+3 already proved augmentation honours an injected dependency once resolved
+(in both JVM and native mode, for a real Quarkus extension), so combining
+that result with this one closes the specific gap this addendum targets —
+whether resolution itself survives when the artifact isn't on Central — but
+the two results were established separately, on two different jars, and
+should be read as complementary rather than as one combined experiment.

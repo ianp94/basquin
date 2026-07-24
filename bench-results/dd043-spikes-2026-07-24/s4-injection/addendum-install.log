@@ -1,0 +1,18 @@
++ docker run --rm -v $SPIKE_DIR/s4-injection/probe-participant/target:/w -w /w -v $SPIKE_DIR/.m2:/m2 -u $(id -u):$(id -g) -e MAVEN_OPTS="-Duser.home=/m2" maven:3.9-eclipse-temurin-17 mvn -B install:install-file -Dfile=/w/inject-probe-1.0.jar -DpomFile=/w/local-probe-dep-1.0.pom
+mkdir: cannot create directory ‘/root’: Permission denied
+Can not write to /root/.m2/copy_reference_file.log. Wrong volume permissions? Carrying on ...
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ------------------< org.apache.maven:standalone-pom >-------------------
+[INFO] Building Maven Stub Project (No POM) 1
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] --- install:3.1.4:install-file (default-cli) @ standalone-pom ---
+[INFO] Installing /w/inject-probe-1.0.jar to /m2/.m2/repository/com/basquin/spike/localonly/local-probe-dep/1.0/local-probe-dep-1.0.jar
+[INFO] Installing /w/local-probe-dep-1.0.pom to /m2/.m2/repository/com/basquin/spike/localonly/local-probe-dep/1.0/local-probe-dep-1.0.pom
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  1.217 s
+[INFO] Finished at: 2026-07-24T21:39:12Z
+[INFO] ------------------------------------------------------------------------

@@ -283,8 +283,15 @@ build finished:
 
 ```
 [INFO] BUILD SUCCESS
-[INFO] Total time:  44.136 s
+[INFO] Total time:  44.374 s
 ```
+
+> **Provenance note.** This excerpt was originally transcribed from the first addendum run
+> (`Total time: 44.136 s`). `addendum-build.log` was later **regenerated** by the `Dependency`-aliasing
+> fix round, which re-ran both injection scenarios and confirmed identical behaviour; the committed log
+> now reads `44.374 s` at line 33. The figure above is quoted from the log that is actually committed,
+> so the document and its artifact agree. Only the wall-clock duration differs — `BUILD SUCCESS` and
+> every load-bearing signal are unchanged between the two runs.
 
 Beyond the absence of an error, direct evidence the artifact reached the
 packaged runtime classpath — not just that resolution silently no-opped:

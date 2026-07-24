@@ -94,8 +94,15 @@ code, and it is what makes a wrong number localisable — §7.2.
 
 ### 3.1 Toolchain — the entire Maven build runs in a container
 
-**Verified 2026-07-24:** `rest-heroes/pom.xml` sets `maven.compiler.release=25` and pins Quarkus
-**3.37.3** (and `jacoco.version=0.8.15`, already present). This host has JDK 17 and Maven 3.6.3.
+**Evidence: `bench-results/dd043-target-pins-2026-07-24/`** — the upstream `pom.xml` files themselves,
+with provenance. `rest-heroes` **and** `rest-villains` both set `maven.compiler.release=25`, pin Quarkus
+**3.37.3**, and pin `jacoco.version=0.8.15`. That they pin *identically* matters: §7.2's 2×2 requires the
+blocking control and the reactive target to differ only in request model, and a toolchain difference
+between them would confound every cell. This host has JDK 17 and Maven 3.6.3.
+
+(An earlier draft asserted these as "Verified 2026-07-24" with nothing committed, while this same PR
+carries a review recording the Java-release claim as unverifiable — `reviews/2026-07-24-dd043-fable-review.md`
+NIT 19. The artifact supersedes that note and is the reason the claim now stands.)
 
 `./mvnw` is a bootstrap script: it downloads a Maven *distribution* and runs it **on the host JVM**.
 It supplies no JDK. With host JDK 17 and release 25, `javac` fails before Quarkus augmentation is
@@ -467,15 +474,27 @@ reusable for every future Quarkus target.
 | Invariant | Control | Assertion |
 |---|---|---|
 | latency | `/basquin/control/defect/slow` | violation **arrives in the driver-visible result** |
+| **5xx / crash** | `/basquin/control/defect/error5xx` returning a 500 | the crash is counted **and** attributed to the right iteration id — this signal reads from `getStatusCode()` at the end handler, so a boundary that skips error paths (§6.3, S3) would zero it silently |
 | event-loop blocking | `/basquin/control/defect/block-loop`, sleeping **comfortably above the pinned threshold** | store entry → finding → rendered row |
 | heap | `/basquin/control/defect/alloc` | delta recorded **and not tainted** (§6.1) |
 | heap, **positive-noise** | idle window, no driver request | must read ~zero or `UNMEASURED` — this is the control that catches probe pollution and the `heapDriftKb` class of error |
 | coverage | routes exercised progressively | must increase **and** a never-exercised class must read zero (§7.1 S1) |
 | **JFR cross-check** (§6.2) | `/basquin/control/defect/alloc` driven across a run alongside ordinary routes | the alloc route must rank **first** by aggregated `ObjectAllocationSample` totals. If it cannot be made to rank, the cross-check is demoted to **diagnostic-only, not published**, and §6.2 says so |
 
-The JFR row exists because the cross-check was otherwise the one signal in §6 with no control — silently
-exempt. It was demoted after review precisely because an undesigned signal renders as a clean column, so
-exempting it from the very rule that demoted it would reintroduce the defect one layer up.
+**This table is exhaustive over §6 by construction, and that property is load-bearing.** Two signals were
+found silently exempt from it in successive reviews — the JFR cross-check, then 5xx/crash — which is the
+same defect arriving twice by the same route: a signal named in §6 but never enumerated here reads as a
+clean column forever, and nothing in the process catches it.
+
+So the rule is stated as a closed set rather than a habit: **every signal named in §6 appears in the table
+above, or is listed in the paragraph below as explicitly unpublished.** Adding a signal to §6 without doing
+one or the other is a spec defect, not an oversight.
+
+**Explicitly unpublished (no control, therefore no published number):** §6.3's secondary reactive signals —
+worker-pool saturation, Hibernate Reactive connection-pool pending acquisitions, and file-descriptor count.
+They are sketched, not designed; none has a defined threshold or a transport to the result store. They may
+be collected as diagnostics and **must not** appear as an invariant column on the benchmark page until each
+earns a control row above. Promoting one is a spec change, not an implementation detail.
 
 Every control is verified **end-to-end at the reporting layer** (`render_page.py` input), not at the
 log line — otherwise the control validates the logger, not the invariant. An invariant without a

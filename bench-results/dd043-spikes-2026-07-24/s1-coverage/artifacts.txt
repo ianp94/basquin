@@ -1,0 +1,3 @@
+/mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/bench-results/dd043-spikes-2026-07-24/fixture/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/reports/class_initialization_configuration_20260724_221049.csv
+/mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/bench-results/dd043-spikes-2026-07-24/fixture/target/fixture-1.0.0-SNAPSHOT-native-image-source-jar/reports/class_initialization_report_20260724_221059.csv
+/mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/bench-results/dd043-spikes-2026-07-24/fixture/target/generated-classes

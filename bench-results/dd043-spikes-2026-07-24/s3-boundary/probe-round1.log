@@ -1,0 +1,4 @@
+[PROBE] id=probe-7604604051974 status=200 succeeded=true cause=- ms=74
+[PROBE] id=probe-7604690294044 status=500 succeeded=true cause=- ms=34
+[PROBE] id=probe-7604736827795 status=302 succeeded=true cause=- ms=28
+[PROBE] id=probe-7604772373312 status=200 succeeded=false cause=io.vertx.core.http.HttpClosedException: Connection was closed ms=1005

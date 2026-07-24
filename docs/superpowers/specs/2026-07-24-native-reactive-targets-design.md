@@ -422,7 +422,12 @@ is **pollution**: probes executed during image build read as covered forever, in
 inflated floor, and the benchmark's headline percentage is simply wrong. S1 must therefore assert that
 a **never-exercised class reads zero**, and record which classes Quarkus shifted to runtime init.
 
-S1–S4 share no state and **run as concurrent subagents**.
+S1–S4 share no state and are **driven by concurrent subagents — but they do not compile
+concurrently.** S1, S2 and S4 each require a native build of the fixture, and §7.2's mutex applies
+here in full: `native-image` wants ≥4 cores and several GB, this host has 8 cores / 15 GB, and three
+concurrent builds will exhaust it. Preparation, driving and analysis overlap freely; `native-image`
+invocations are serialized. (Stated inline rather than by reference, because §7.1 read on its own
+would otherwise invite exactly the failure it warns about.)
 
 **Phase 0 gates the rest of this spec.** If **S1** fails, §6.4 is void and coverage-guided exploration
 on native needs redesigning — which reopens the full-parity goal in §2, since coverage is what forces
@@ -466,6 +471,11 @@ reusable for every future Quarkus target.
 | heap | `/basquin/control/defect/alloc` | delta recorded **and not tainted** (§6.1) |
 | heap, **positive-noise** | idle window, no driver request | must read ~zero or `UNMEASURED` — this is the control that catches probe pollution and the `heapDriftKb` class of error |
 | coverage | routes exercised progressively | must increase **and** a never-exercised class must read zero (§7.1 S1) |
+| **JFR cross-check** (§6.2) | `/basquin/control/defect/alloc` driven across a run alongside ordinary routes | the alloc route must rank **first** by aggregated `ObjectAllocationSample` totals. If it cannot be made to rank, the cross-check is demoted to **diagnostic-only, not published**, and §6.2 says so |
+
+The JFR row exists because the cross-check was otherwise the one signal in §6 with no control — silently
+exempt. It was demoted after review precisely because an undesigned signal renders as a clean column, so
+exempting it from the very rule that demoted it would reintroduce the defect one layer up.
 
 Every control is verified **end-to-end at the reporting layer** (`render_page.py` input), not at the
 log line — otherwise the control validates the logger, not the invariant. An invariant without a

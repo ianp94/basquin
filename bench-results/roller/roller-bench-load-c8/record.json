@@ -5,40 +5,42 @@
   "driver": {
     "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
     "concurrency": 8,
-    "corpusConfigMap": "roller-bench2-explore-corpus-out",
-    "duration": "3m",
-    "warmup": "20s"
+    "corpusConfigMap": "roller-bench3-explore-corpus-out",
+    "duration": "5m",
+    "warmup": "30s"
   },
   "phase": "Completed",
-  "startTime": "2026-07-23T05:56:06Z",
-  "completionTime": "2026-07-23T05:59:30Z",
+  "startTime": "2026-07-23T23:06:12Z",
+  "completionTime": "2026-07-23T23:11:46Z",
   "coveragePct": null,
   "findingsCrdCorpusSize": null,
   "exploration": null,
   "iterations": null,
   "crashes": null,
   "corpusConfigMap": null,
-  "message": "load complete: 5184 requests, 28.7 rps, p99 514ms, 0 latency violations",
+  "message": "load complete: 4670 requests, 15.5 rps, p99 532ms, 0 latency violations",
   "load": {
-    "requests": 5184,
-    "throughputRps": "28.7",
+    "requests": 4670,
+    "throughputRps": "15.5",
     "latencyMs": {
-      "p50": 503,
-      "p90": 513,
-      "p99": 514,
-      "max": 535
+      "p50": 515,
+      "p90": 518,
+      "p99": 532,
+      "max": 558
     },
-    "heapDriftKb": 56900,
-    "threadDrift": -3,
+    "heapDriftKb": 63155,
+    "threadDrift": -2,
     "serverErrors": 0,
     "captureMisses": 0,
-    "clientErrors": 122,
+    "clientErrors": 0,
     "redirects": 0,
     "redirectTargets": {},
     "violations": {
-      "latency": 0,
-      "heap": 0,
-      "thread": 0
+      "notEvaluated": [
+        "latency",
+        "heap",
+        "thread"
+      ]
     }
   },
   "invariants": {

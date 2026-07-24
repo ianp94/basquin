@@ -206,9 +206,11 @@ iterations 1213 (6.74/s), crashes 0, leaks 0, invariant hits 0
 latency mean 86ms / max 1170ms, heap max 1343KB
 ```
 
-For comparison, from `bench-results/campaigns.json`: JSPWiki explore reached **27.0%**,
-JPetStore **23.1%**. (An earlier version of this line said 27.1 / 23.0 — numbers from a run that
-was later discarded and replaced. Corrected against the committed artifacts.) The emitted corpus is dominated by
+For comparison, from `bench-results/campaigns.json` (2026-07-23 trustworthy-channel run, after
+DD-040 + DD-039): JSPWiki explore reached **27.1%**, JPetStore **23.1%**, and Roller itself
+**30.5%** — the highest of the three now that authenticated write paths are reachable. Roller's
+`findInvariant` was **1,402** here, versus **0** on the pre-fix dropped-header run (its summary is preserved at git `5655c46:bench-results/roller/roller-bench2-explore/`, pruned from the tree by this run; the loss itself is recorded independently in the DD-040 decision record, where one explore window evaluated 1,906 violations and reported none). The earlier
+"underwhelming" reading was an artifact of the reporting loss, not the target. The emitted corpus is dominated by
 `/basquin/search?q=…` and the comment POSTs — i.e. the fuzzer independently rediscovered the two
 paths the grammar was aimed at.
 

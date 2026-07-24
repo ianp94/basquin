@@ -1,30 +1,31 @@
 {
   "load": {
-    "requests": 14535,
-    "throughputRps": "80.7",
+    "requests": 16599,
+    "throughputRps": "55.2",
     "latencyMs": {
       "p50": 2,
-      "p90": 238,
-      "p99": 743,
-      "max": 8854
+      "p90": 315,
+      "p99": 6780,
+      "max": 9568
     },
-    "heapDriftKb": 153324,
-    "threadDrift": 3,
-    "serverErrors": 249,
-    "captureMisses": 260,
-    "clientErrors": 723,
-    "redirects": 4280,
+    "heapDriftKb": -10941,
+    "threadDrift": -1,
+    "serverErrors": 398,
+    "captureMisses": 340,
+    "clientErrors": 0,
+    "redirects": 3887,
     "redirectTargets": {
-      "Wiki.jsp": 1747,
-      "Login.jsp": 1485,
-      "Forbidden.html": 793,
-      "Main": 251,
-      "PageModified.jsp": 4
+      "Wiki.jsp": 2820,
+      "Login.jsp": 680,
+      "Forbidden.html": 386,
+      "PageModified.jsp": 1
     },
     "violations": {
-      "latency": 0,
-      "heap": 0,
-      "thread": 0
+      "notEvaluated": [
+        "latency",
+        "heap",
+        "thread"
+      ]
     }
   }
 }

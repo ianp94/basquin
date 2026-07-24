@@ -797,6 +797,16 @@ touching the tip would have put it outside what was reviewed.
       matched-version driver, but the asymmetry means an omitted `findingsLowerBound` reads as
       `false` ("not a lower bound") rather than as absent — the defect class DD-040 exists to remove.
 
+### Follow-ups from PR #97 review (benchmark re-run, approved with these outstanding)
+
+Three non-blocking wording notes from the round-3 approval — the numbers all trace to artifacts; these
+are prose tidies in `deploy/bench/render_page.py`, batch on the next bench touch.
+
+- [ ] "`violations.latency` is structurally 0" describes the pre-DD-040 field shape; the artifacts
+      now carry the `notEvaluated` marker the same sentence names — reword to match.
+- [ ] The callout's "those two apps" forward-references Roller/JSPWiki before the em-dash names them.
+- [ ] "the same explore runs" would be exact as "re-runs of the same campaigns".
+
 ### Follow-ups from PR #96 review (DD-039, approved with these outstanding)
 
 Two minor, non-blocking notes from the round-2 approval. Neither is a token-to-disk path — the

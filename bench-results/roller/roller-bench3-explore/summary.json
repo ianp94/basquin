@@ -1,0 +1,60 @@
+{
+  "elapsedSec": 300,
+  "iterations": 1966,
+  "rate": 6.55,
+  "crashes": 0,
+  "leaks": 0,
+  "resets": 0,
+  "invariants": {
+    "notEvaluated": [
+      "latency",
+      "heap",
+      "thread"
+    ]
+  },
+  "latencyMs": {
+    "last": 575,
+    "mean": 91,
+    "max": 587
+  },
+  "heapKb": {
+    "last": 4005,
+    "max": 4577
+  },
+  "threads": 12,
+  "exploration": {
+    "corpus": 1443,
+    "findCrash": 0,
+    "findInvariant": 1402,
+    "rejected": 0,
+    "reportMisses": 0,
+    "findingsLowerBound": false,
+    "targetViolations": 1542,
+    "coverage": {
+      "covered": 29433,
+      "total": 96536,
+      "pct": 30.5,
+      "sourcesResponded": 1,
+      "sourcesExpected": 1
+    }
+  },
+  "mode": "explore",
+  "replayCorpus": [
+    "/basquin/search?q=lucene",
+    "/basquin/search?q=render",
+    "POST /basquin/entry/bench-entry-05 method=post&name=Fuzz+${{@nonce}}&email=fuzz@example.com&url=&content=Comment+${{@nonce}}+azxprqtvphane fjrzs pstbj kzjgubvrefxsmssdbpvxbnrxllxtinbssx tlsipzxlcyipqrjmbusejuvwgiwupkhq gnvrsxtlslddanmzhcjqjlzppqzrbxjmrjdl&post=Post",
+    "/basquin/search?q=analyzer",
+    "/basquin/search?q=xnfmqgee&page=332",
+    "/basquin/search?q=velocity&page=65535",
+    "/basquin/search?q=bench",
+    "/basquin/search?q=chew",
+    "/basquin/search?q=entry",
+    "/basquin/search?q=basquin",
+    "/basquin/search?q=lucene&page=8919",
+    "/basquin/search?q=velocity",
+    "POST /basquin/entry/bench-entry-12 method=post&name=Fuzz+${{@nonce}}&email=fuzz@example.com&url=&content=Comment+${{@nonce}}+..asx..et&post=Post",
+    "POST /basquin/entry/bench-entry-09 method=post&name=Fuzz+${{@nonce}}&email=fuzz@example.com&url=&content=Comment+${{@nonce}}+kqm0o&post=Post",
+    "/basquin/search?q=velocity&cat=Rnoepfv",
+    "/basquin/search?q=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  ]
+}

@@ -3,23 +3,23 @@
   "kind": "BasquinCampaign",
   "metadata": {
     "annotations": {
-      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"basquin.dev/v1alpha1\",\"kind\":\"BasquinCampaign\",\"metadata\":{\"annotations\":{},\"name\":\"jpetstore-bench-load-c8\",\"namespace\":\"basquin-system\"},\"spec\":{\"baseURL\":\"http://jpetstore-app.basquin-system.svc.cluster.local:8080\",\"driver\":{\"classesPath\":\"/usr/local/tomcat/webapps/ROOT/WEB-INF/classes\",\"concurrency\":8,\"corpusConfigMap\":\"jpetstore-regress-explore-corpus-out\",\"duration\":\"3m\",\"warmup\":\"20s\"},\"mode\":\"load\",\"targetRef\":{\"name\":\"jpetstore\"}}}\n"
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"basquin.dev/v1alpha1\",\"kind\":\"BasquinCampaign\",\"metadata\":{\"annotations\":{},\"name\":\"jpetstore-bench-load-c8\",\"namespace\":\"basquin-system\"},\"spec\":{\"baseURL\":\"http://jpetstore-app.basquin-system.svc.cluster.local:8080\",\"driver\":{\"classesPath\":\"/usr/local/tomcat/webapps/ROOT/WEB-INF/classes\",\"concurrency\":8,\"corpusConfigMap\":\"jpetstore-bench3-explore-corpus-out\",\"duration\":\"5m\",\"warmup\":\"30s\"},\"mode\":\"load\",\"targetRef\":{\"name\":\"jpetstore\"}}}\n"
     },
-    "creationTimestamp": "2026-07-23T09:22:05Z",
+    "creationTimestamp": "2026-07-23T22:49:29Z",
     "generation": 1,
     "name": "jpetstore-bench-load-c8",
     "namespace": "basquin-system",
-    "resourceVersion": "275370",
-    "uid": "65324a09-270f-406a-a2a9-b58e582d5c48"
+    "resourceVersion": "390577",
+    "uid": "bc0e7d27-120e-421e-8bff-2fc67d598939"
   },
   "spec": {
     "baseURL": "http://jpetstore-app.basquin-system.svc.cluster.local:8080",
     "driver": {
       "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
       "concurrency": 8,
-      "corpusConfigMap": "jpetstore-regress-explore-corpus-out",
-      "duration": "3m",
-      "warmup": "20s"
+      "corpusConfigMap": "jpetstore-bench3-explore-corpus-out",
+      "duration": "5m",
+      "warmup": "30s"
     },
     "mode": "load",
     "targetRef": {
@@ -27,11 +27,11 @@
     }
   },
   "status": {
-    "completionTime": "2026-07-23T09:25:29Z",
+    "completionTime": "2026-07-23T22:55:03Z",
     "conditions": [
       {
-        "lastTransitionTime": "2026-07-23T09:25:29Z",
-        "message": "load complete: 1154025 requests, 6411.2 rps, p99 5ms, 0 latency violations",
+        "lastTransitionTime": "2026-07-23T22:55:03Z",
+        "message": "load complete: 1053561 requests, 3511.8 rps, p99 9ms, 0 latency violations",
         "reason": "Completed",
         "status": "True",
         "type": "Ready"
@@ -40,19 +40,19 @@
     "dashboardURL": "http://jpetstore-bench-load-c8-dashboard.basquin-system.svc.cluster.local:7070",
     "driverJob": "jpetstore-bench-load-c8-driver",
     "load": {
-      "heapDriftKb": 187851,
+      "heapDriftKb": -8891,
       "latencyMs": {
-        "max": 22,
-        "p90": 2,
-        "p99": 5
+        "max": 35,
+        "p50": 1,
+        "p90": 5,
+        "p99": 9
       },
-      "requests": 1154025,
-      "threadDrift": 1,
-      "throughputRps": "6411.2",
+      "requests": 1053561,
+      "throughputRps": "3511.8",
       "violations": {}
     },
     "observedGeneration": 1,
     "phase": "Completed",
-    "startTime": "2026-07-23T09:22:05Z"
+    "startTime": "2026-07-23T22:49:30Z"
   }
 }

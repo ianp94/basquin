@@ -5,40 +5,44 @@
   "driver": {
     "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
     "concurrency": 1,
-    "corpusConfigMap": "jpetstore-regress-explore-corpus-out",
-    "duration": "3m",
-    "warmup": "20s"
+    "corpusConfigMap": "jpetstore-bench3-explore-corpus-out",
+    "duration": "5m",
+    "warmup": "30s"
   },
   "phase": "Completed",
-  "startTime": "2026-07-23T09:18:32Z",
-  "completionTime": "2026-07-23T09:21:55Z",
+  "startTime": "2026-07-23T22:43:40Z",
+  "completionTime": "2026-07-23T22:49:14Z",
   "coveragePct": null,
   "findingsCrdCorpusSize": null,
   "exploration": null,
   "iterations": null,
   "crashes": null,
   "corpusConfigMap": null,
-  "message": "load complete: 240059 requests, 1333.6 rps, p99 1ms, 0 latency violations",
+  "message": "load complete: 245792 requests, 819.3 rps, p99 3ms, 0 latency violations",
   "load": {
-    "requests": 240059,
-    "throughputRps": "1333.6",
+    "requests": 245792,
+    "throughputRps": "819.3",
     "latencyMs": {
       "p50": 0,
-      "p90": 1,
-      "p99": 1,
-      "max": 7
+      "p90": 2,
+      "p99": 3,
+      "max": 8
     },
-    "heapDriftKb": -65360,
+    "heapDriftKb": 17237,
     "threadDrift": 0,
-    "serverErrors": 0,
+    "serverErrors": 9216,
     "captureMisses": 0,
     "clientErrors": 0,
-    "redirects": 0,
-    "redirectTargets": {},
+    "redirects": 4499,
+    "redirectTargets": {
+      "Catalog.action": 4499
+    },
     "violations": {
-      "latency": 0,
-      "heap": 0,
-      "thread": 0
+      "notEvaluated": [
+        "latency",
+        "heap",
+        "thread"
+      ]
     }
   },
   "invariants": {

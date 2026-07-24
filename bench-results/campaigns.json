@@ -1,6 +1,6 @@
 [
   {
-    "campaign": "jpetstore-regress-explore",
+    "campaign": "jpetstore-bench3-explore",
     "app": "jpetstore",
     "mode": "explore",
     "driver": {
@@ -10,15 +10,18 @@
       "grammarConfigMap": "jpetstore-grammar"
     },
     "phase": "Completed",
-    "startTime": "2026-07-23T09:13:14Z",
-    "completionTime": "2026-07-23T09:18:19Z",
+    "startTime": "2026-07-23T22:38:21Z",
+    "completionTime": "2026-07-23T22:43:26Z",
     "coveragePct": "23.1",
-    "findingsCrdCorpusSize": 946,
+    "findingsCrdCorpusSize": 907,
     "exploration": {
-      "corpus": 946,
-      "findCrash": 603,
-      "findInvariant": 342,
+      "corpus": 907,
+      "findCrash": 470,
+      "findInvariant": 421,
       "rejected": 0,
+      "reportMisses": 0,
+      "findingsLowerBound": false,
+      "targetViolations": 424,
       "coverage": {
         "covered": 1469,
         "total": 6368,
@@ -27,17 +30,17 @@
         "sourcesExpected": 1
       }
     },
-    "iterations": 3860,
-    "crashes": 603,
-    "corpusConfigMap": "jpetstore-regress-explore-corpus-out",
-    "message": "run complete: coverage 23.1%, 946 findings",
+    "iterations": 3825,
+    "crashes": 470,
+    "corpusConfigMap": "jpetstore-bench3-explore-corpus-out",
+    "message": "run complete: coverage 23.1%, 907 findings",
     "load": null,
     "invariants": {
       "heapDeltaMaxKb": 512,
       "latencyMaxMs": 50,
       "mode": "soft"
     },
-    "artifacts": "bench-results/jpetstore/jpetstore-regress-explore"
+    "artifacts": "bench-results/jpetstore/jpetstore-bench3-explore"
   },
   {
     "campaign": "jpetstore-bench-load-c1",
@@ -46,40 +49,44 @@
     "driver": {
       "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
       "concurrency": 1,
-      "corpusConfigMap": "jpetstore-regress-explore-corpus-out",
-      "duration": "3m",
-      "warmup": "20s"
+      "corpusConfigMap": "jpetstore-bench3-explore-corpus-out",
+      "duration": "5m",
+      "warmup": "30s"
     },
     "phase": "Completed",
-    "startTime": "2026-07-23T09:18:32Z",
-    "completionTime": "2026-07-23T09:21:55Z",
+    "startTime": "2026-07-23T22:43:40Z",
+    "completionTime": "2026-07-23T22:49:14Z",
     "coveragePct": null,
     "findingsCrdCorpusSize": null,
     "exploration": null,
     "iterations": null,
     "crashes": null,
     "corpusConfigMap": null,
-    "message": "load complete: 240059 requests, 1333.6 rps, p99 1ms, 0 latency violations",
+    "message": "load complete: 245792 requests, 819.3 rps, p99 3ms, 0 latency violations",
     "load": {
-      "requests": 240059,
-      "throughputRps": "1333.6",
+      "requests": 245792,
+      "throughputRps": "819.3",
       "latencyMs": {
         "p50": 0,
-        "p90": 1,
-        "p99": 1,
-        "max": 7
+        "p90": 2,
+        "p99": 3,
+        "max": 8
       },
-      "heapDriftKb": -65360,
+      "heapDriftKb": 17237,
       "threadDrift": 0,
-      "serverErrors": 0,
+      "serverErrors": 9216,
       "captureMisses": 0,
       "clientErrors": 0,
-      "redirects": 0,
-      "redirectTargets": {},
+      "redirects": 4499,
+      "redirectTargets": {
+        "Catalog.action": 4499
+      },
       "violations": {
-        "latency": 0,
-        "heap": 0,
-        "thread": 0
+        "notEvaluated": [
+          "latency",
+          "heap",
+          "thread"
+        ]
       }
     },
     "invariants": {
@@ -96,40 +103,44 @@
     "driver": {
       "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
       "concurrency": 8,
-      "corpusConfigMap": "jpetstore-regress-explore-corpus-out",
-      "duration": "3m",
-      "warmup": "20s"
+      "corpusConfigMap": "jpetstore-bench3-explore-corpus-out",
+      "duration": "5m",
+      "warmup": "30s"
     },
     "phase": "Completed",
-    "startTime": "2026-07-23T09:22:05Z",
-    "completionTime": "2026-07-23T09:25:29Z",
+    "startTime": "2026-07-23T22:49:30Z",
+    "completionTime": "2026-07-23T22:55:03Z",
     "coveragePct": null,
     "findingsCrdCorpusSize": null,
     "exploration": null,
     "iterations": null,
     "crashes": null,
     "corpusConfigMap": null,
-    "message": "load complete: 1154025 requests, 6411.2 rps, p99 5ms, 0 latency violations",
+    "message": "load complete: 1053561 requests, 3511.8 rps, p99 9ms, 0 latency violations",
     "load": {
-      "requests": 1154025,
-      "throughputRps": "6411.2",
+      "requests": 1053561,
+      "throughputRps": "3511.8",
       "latencyMs": {
-        "p50": 0,
-        "p90": 2,
-        "p99": 5,
-        "max": 22
+        "p50": 1,
+        "p90": 5,
+        "p99": 9,
+        "max": 35
       },
-      "heapDriftKb": 187851,
-      "threadDrift": 1,
-      "serverErrors": 0,
+      "heapDriftKb": -8891,
+      "threadDrift": 0,
+      "serverErrors": 39047,
       "captureMisses": 0,
       "clientErrors": 0,
-      "redirects": 0,
-      "redirectTargets": {},
+      "redirects": 19378,
+      "redirectTargets": {
+        "Catalog.action": 19378
+      },
       "violations": {
-        "latency": 0,
-        "heap": 0,
-        "thread": 0
+        "notEvaluated": [
+          "latency",
+          "heap",
+          "thread"
+        ]
       }
     },
     "invariants": {
@@ -140,7 +151,7 @@
     "artifacts": "bench-results/jpetstore/jpetstore-bench-load-c8"
   },
   {
-    "campaign": "jspwiki-bench2-explore",
+    "campaign": "jspwiki-bench3-explore",
     "app": "jspwiki",
     "mode": "explore",
     "driver": {
@@ -150,34 +161,37 @@
       "grammarConfigMap": "jspwiki-grammar"
     },
     "phase": "Completed",
-    "startTime": "2026-07-23T05:22:26Z",
-    "completionTime": "2026-07-23T05:27:30Z",
-    "coveragePct": "27.0",
-    "findingsCrdCorpusSize": 57,
+    "startTime": "2026-07-23T22:21:25Z",
+    "completionTime": "2026-07-23T22:26:29Z",
+    "coveragePct": "27.1",
+    "findingsCrdCorpusSize": 2979,
     "exploration": {
-      "corpus": 57,
-      "findCrash": 26,
-      "findInvariant": 1,
+      "corpus": 2979,
+      "findCrash": 17,
+      "findInvariant": 2918,
       "rejected": 0,
+      "reportMisses": 0,
+      "findingsLowerBound": false,
+      "targetViolations": 2933,
       "coverage": {
-        "covered": 24267,
+        "covered": 24304,
         "total": 89732,
-        "pct": 27.0,
+        "pct": 27.1,
         "sourcesResponded": 1,
         "sourcesExpected": 1
       }
     },
-    "iterations": 3436,
-    "crashes": 26,
-    "corpusConfigMap": "jspwiki-bench2-explore-corpus-out",
-    "message": "run complete: coverage 27.0%, 57 findings",
+    "iterations": 2624,
+    "crashes": 17,
+    "corpusConfigMap": "jspwiki-bench3-explore-corpus-out",
+    "message": "run complete: coverage 27.1%, 2979 findings",
     "load": null,
     "invariants": {
       "heapDeltaMaxKb": 512,
       "latencyMaxMs": 25,
       "mode": "soft"
     },
-    "artifacts": "bench-results/jspwiki/jspwiki-bench2-explore"
+    "artifacts": "bench-results/jspwiki/jspwiki-bench3-explore"
   },
   {
     "campaign": "jspwiki-bench-load-c1",
@@ -186,45 +200,46 @@
     "driver": {
       "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
       "concurrency": 1,
-      "corpusConfigMap": "jspwiki-bench2-explore-corpus-out",
-      "duration": "3m",
-      "warmup": "20s"
+      "corpusConfigMap": "jspwiki-bench3-explore-corpus-out",
+      "duration": "5m",
+      "warmup": "30s"
     },
     "phase": "Completed",
-    "startTime": "2026-07-23T05:27:44Z",
-    "completionTime": "2026-07-23T05:31:07Z",
+    "startTime": "2026-07-23T22:26:43Z",
+    "completionTime": "2026-07-23T22:32:17Z",
     "coveragePct": null,
     "findingsCrdCorpusSize": null,
     "exploration": null,
     "iterations": null,
     "crashes": null,
     "corpusConfigMap": null,
-    "message": "load complete: 14522 requests, 80.7 rps, p99 57ms, 0 latency violations",
+    "message": "load complete: 14630 requests, 48.8 rps, p99 61ms, 0 latency violations",
     "load": {
-      "requests": 14522,
-      "throughputRps": "80.7",
+      "requests": 14630,
+      "throughputRps": "48.8",
       "latencyMs": {
         "p50": 2,
-        "p90": 24,
-        "p99": 57,
-        "max": 6085
+        "p90": 41,
+        "p99": 61,
+        "max": 9777
       },
-      "heapDriftKb": 256925,
-      "threadDrift": -1,
-      "serverErrors": 271,
-      "captureMisses": 240,
-      "clientErrors": 734,
-      "redirects": 4319,
+      "heapDriftKb": 471668,
+      "threadDrift": 0,
+      "serverErrors": 314,
+      "captureMisses": 325,
+      "clientErrors": 0,
+      "redirects": 3526,
       "redirectTargets": {
-        "Wiki.jsp": 1778,
-        "Login.jsp": 1548,
-        "Forbidden.html": 736,
-        "Main": 257
+        "Wiki.jsp": 2529,
+        "Login.jsp": 650,
+        "Forbidden.html": 347
       },
       "violations": {
-        "latency": 0,
-        "heap": 0,
-        "thread": 0
+        "notEvaluated": [
+          "latency",
+          "heap",
+          "thread"
+        ]
       }
     },
     "invariants": {
@@ -241,46 +256,47 @@
     "driver": {
       "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
       "concurrency": 8,
-      "corpusConfigMap": "jspwiki-bench2-explore-corpus-out",
-      "duration": "3m",
-      "warmup": "20s"
+      "corpusConfigMap": "jspwiki-bench3-explore-corpus-out",
+      "duration": "5m",
+      "warmup": "30s"
     },
     "phase": "Completed",
-    "startTime": "2026-07-23T05:31:17Z",
-    "completionTime": "2026-07-23T05:34:41Z",
+    "startTime": "2026-07-23T22:32:32Z",
+    "completionTime": "2026-07-23T22:38:06Z",
     "coveragePct": null,
     "findingsCrdCorpusSize": null,
     "exploration": null,
     "iterations": null,
     "crashes": null,
     "corpusConfigMap": null,
-    "message": "load complete: 14535 requests, 80.7 rps, p99 743ms, 0 latency violations",
+    "message": "load complete: 16599 requests, 55.2 rps, p99 6780ms, 0 latency violations",
     "load": {
-      "requests": 14535,
-      "throughputRps": "80.7",
+      "requests": 16599,
+      "throughputRps": "55.2",
       "latencyMs": {
         "p50": 2,
-        "p90": 238,
-        "p99": 743,
-        "max": 8854
+        "p90": 315,
+        "p99": 6780,
+        "max": 9568
       },
-      "heapDriftKb": 153324,
-      "threadDrift": 3,
-      "serverErrors": 249,
-      "captureMisses": 260,
-      "clientErrors": 723,
-      "redirects": 4280,
+      "heapDriftKb": -10941,
+      "threadDrift": -1,
+      "serverErrors": 398,
+      "captureMisses": 340,
+      "clientErrors": 0,
+      "redirects": 3887,
       "redirectTargets": {
-        "Wiki.jsp": 1747,
-        "Login.jsp": 1485,
-        "Forbidden.html": 793,
-        "Main": 251,
-        "PageModified.jsp": 4
+        "Wiki.jsp": 2820,
+        "Login.jsp": 680,
+        "Forbidden.html": 386,
+        "PageModified.jsp": 1
       },
       "violations": {
-        "latency": 0,
-        "heap": 0,
-        "thread": 0
+        "notEvaluated": [
+          "latency",
+          "heap",
+          "thread"
+        ]
       }
     },
     "invariants": {
@@ -291,7 +307,7 @@
     "artifacts": "bench-results/jspwiki/jspwiki-bench-load-c8"
   },
   {
-    "campaign": "roller-bench2-explore",
+    "campaign": "roller-bench3-explore",
     "app": "roller",
     "mode": "explore",
     "driver": {
@@ -301,34 +317,37 @@
       "grammarConfigMap": "roller-grammar"
     },
     "phase": "Completed",
-    "startTime": "2026-07-23T05:47:15Z",
-    "completionTime": "2026-07-23T05:52:19Z",
-    "coveragePct": "25.2",
-    "findingsCrdCorpusSize": 2,
+    "startTime": "2026-07-23T22:55:04Z",
+    "completionTime": "2026-07-23T23:00:09Z",
+    "coveragePct": "30.5",
+    "findingsCrdCorpusSize": 1443,
     "exploration": {
-      "corpus": 2,
+      "corpus": 1443,
       "findCrash": 0,
-      "findInvariant": 0,
+      "findInvariant": 1402,
       "rejected": 0,
+      "reportMisses": 0,
+      "findingsLowerBound": false,
+      "targetViolations": 1542,
       "coverage": {
-        "covered": 24296,
+        "covered": 29433,
         "total": 96536,
-        "pct": 25.2,
+        "pct": 30.5,
         "sourcesResponded": 1,
         "sourcesExpected": 1
       }
     },
-    "iterations": 1786,
+    "iterations": 1966,
     "crashes": 0,
-    "corpusConfigMap": "roller-bench2-explore-corpus-out",
-    "message": "run complete: coverage 25.2%, 2 findings",
+    "corpusConfigMap": "roller-bench3-explore-corpus-out",
+    "message": "run complete: coverage 30.5%, 1443 findings",
     "load": null,
     "invariants": {
       "heapDeltaMaxKb": 512,
       "latencyMaxMs": 250,
       "mode": "soft"
     },
-    "artifacts": "bench-results/roller/roller-bench2-explore"
+    "artifacts": "bench-results/roller/roller-bench3-explore"
   },
   {
     "campaign": "roller-bench-load-c1",
@@ -337,40 +356,42 @@
     "driver": {
       "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
       "concurrency": 1,
-      "corpusConfigMap": "roller-bench2-explore-corpus-out",
-      "duration": "3m",
-      "warmup": "20s"
+      "corpusConfigMap": "roller-bench3-explore-corpus-out",
+      "duration": "5m",
+      "warmup": "30s"
     },
     "phase": "Completed",
-    "startTime": "2026-07-23T05:52:33Z",
-    "completionTime": "2026-07-23T05:55:57Z",
+    "startTime": "2026-07-23T23:00:23Z",
+    "completionTime": "2026-07-23T23:05:57Z",
     "coveragePct": null,
     "findingsCrdCorpusSize": null,
     "exploration": null,
     "iterations": null,
     "crashes": null,
     "corpusConfigMap": null,
-    "message": "load complete: 610 requests, 3.4 rps, p99 515ms, 0 latency violations",
+    "message": "load complete: 584 requests, 1.9 rps, p99 526ms, 0 latency violations",
     "load": {
-      "requests": 610,
-      "throughputRps": "3.4",
+      "requests": 584,
+      "throughputRps": "1.9",
       "latencyMs": {
-        "p50": 504,
-        "p90": 513,
-        "p99": 515,
-        "max": 519
+        "p50": 515,
+        "p90": 517,
+        "p99": 526,
+        "max": 532
       },
-      "heapDriftKb": -20900,
+      "heapDriftKb": -90792,
       "threadDrift": 0,
       "serverErrors": 0,
       "captureMisses": 0,
-      "clientErrors": 15,
+      "clientErrors": 0,
       "redirects": 0,
       "redirectTargets": {},
       "violations": {
-        "latency": 0,
-        "heap": 0,
-        "thread": 0
+        "notEvaluated": [
+          "latency",
+          "heap",
+          "thread"
+        ]
       }
     },
     "invariants": {
@@ -387,40 +408,42 @@
     "driver": {
       "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
       "concurrency": 8,
-      "corpusConfigMap": "roller-bench2-explore-corpus-out",
-      "duration": "3m",
-      "warmup": "20s"
+      "corpusConfigMap": "roller-bench3-explore-corpus-out",
+      "duration": "5m",
+      "warmup": "30s"
     },
     "phase": "Completed",
-    "startTime": "2026-07-23T05:56:06Z",
-    "completionTime": "2026-07-23T05:59:30Z",
+    "startTime": "2026-07-23T23:06:12Z",
+    "completionTime": "2026-07-23T23:11:46Z",
     "coveragePct": null,
     "findingsCrdCorpusSize": null,
     "exploration": null,
     "iterations": null,
     "crashes": null,
     "corpusConfigMap": null,
-    "message": "load complete: 5184 requests, 28.7 rps, p99 514ms, 0 latency violations",
+    "message": "load complete: 4670 requests, 15.5 rps, p99 532ms, 0 latency violations",
     "load": {
-      "requests": 5184,
-      "throughputRps": "28.7",
+      "requests": 4670,
+      "throughputRps": "15.5",
       "latencyMs": {
-        "p50": 503,
-        "p90": 513,
-        "p99": 514,
-        "max": 535
+        "p50": 515,
+        "p90": 518,
+        "p99": 532,
+        "max": 558
       },
-      "heapDriftKb": 56900,
-      "threadDrift": -3,
+      "heapDriftKb": 63155,
+      "threadDrift": -2,
       "serverErrors": 0,
       "captureMisses": 0,
-      "clientErrors": 122,
+      "clientErrors": 0,
       "redirects": 0,
       "redirectTargets": {},
       "violations": {
-        "latency": 0,
-        "heap": 0,
-        "thread": 0
+        "notEvaluated": [
+          "latency",
+          "heap",
+          "thread"
+        ]
       }
     },
     "invariants": {

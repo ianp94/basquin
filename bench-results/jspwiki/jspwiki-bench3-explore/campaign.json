@@ -1,0 +1,48 @@
+{
+  "apiVersion": "basquin.dev/v1alpha1",
+  "kind": "BasquinCampaign",
+  "metadata": {
+    "annotations": {
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"basquin.dev/v1alpha1\",\"kind\":\"BasquinCampaign\",\"metadata\":{\"annotations\":{},\"name\":\"jspwiki-bench3-explore\",\"namespace\":\"basquin-system\"},\"spec\":{\"baseURL\":\"http://jspwiki-app.basquin-system.svc.cluster.local:8080\",\"driver\":{\"classesPath\":\"/basquin-app-classes\",\"corpusConfigMap\":\"jspwiki-corpus\",\"duration\":\"5m\",\"grammarConfigMap\":\"jspwiki-grammar\"},\"mode\":\"explore\",\"targetRef\":{\"name\":\"jspwiki\"}}}\n"
+    },
+    "creationTimestamp": "2026-07-23T22:21:24Z",
+    "generation": 1,
+    "name": "jspwiki-bench3-explore",
+    "namespace": "basquin-system",
+    "resourceVersion": "386381",
+    "uid": "c0478175-98db-4b50-9740-b071d7c09861"
+  },
+  "spec": {
+    "baseURL": "http://jspwiki-app.basquin-system.svc.cluster.local:8080",
+    "driver": {
+      "classesPath": "/basquin-app-classes",
+      "corpusConfigMap": "jspwiki-corpus",
+      "duration": "5m",
+      "grammarConfigMap": "jspwiki-grammar"
+    },
+    "mode": "explore",
+    "targetRef": {
+      "name": "jspwiki"
+    }
+  },
+  "status": {
+    "completionTime": "2026-07-23T22:26:29Z",
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-07-23T22:26:29Z",
+        "message": "run complete: coverage 27.1%, 2979 findings",
+        "reason": "Completed",
+        "status": "True",
+        "type": "Ready"
+      }
+    ],
+    "corpusConfigMap": "jspwiki-bench3-explore-corpus-out",
+    "coveragePct": "27.1",
+    "dashboardURL": "http://jspwiki-bench3-explore-dashboard.basquin-system.svc.cluster.local:7070",
+    "driverJob": "jspwiki-bench3-explore-driver",
+    "findings": 2979,
+    "observedGeneration": 1,
+    "phase": "Completed",
+    "startTime": "2026-07-23T22:21:25Z"
+  }
+}

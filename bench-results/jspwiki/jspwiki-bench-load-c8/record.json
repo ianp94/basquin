@@ -5,46 +5,47 @@
   "driver": {
     "classesPath": "/usr/local/tomcat/webapps/ROOT/WEB-INF/classes",
     "concurrency": 8,
-    "corpusConfigMap": "jspwiki-bench2-explore-corpus-out",
-    "duration": "3m",
-    "warmup": "20s"
+    "corpusConfigMap": "jspwiki-bench3-explore-corpus-out",
+    "duration": "5m",
+    "warmup": "30s"
   },
   "phase": "Completed",
-  "startTime": "2026-07-23T05:31:17Z",
-  "completionTime": "2026-07-23T05:34:41Z",
+  "startTime": "2026-07-23T22:32:32Z",
+  "completionTime": "2026-07-23T22:38:06Z",
   "coveragePct": null,
   "findingsCrdCorpusSize": null,
   "exploration": null,
   "iterations": null,
   "crashes": null,
   "corpusConfigMap": null,
-  "message": "load complete: 14535 requests, 80.7 rps, p99 743ms, 0 latency violations",
+  "message": "load complete: 16599 requests, 55.2 rps, p99 6780ms, 0 latency violations",
   "load": {
-    "requests": 14535,
-    "throughputRps": "80.7",
+    "requests": 16599,
+    "throughputRps": "55.2",
     "latencyMs": {
       "p50": 2,
-      "p90": 238,
-      "p99": 743,
-      "max": 8854
+      "p90": 315,
+      "p99": 6780,
+      "max": 9568
     },
-    "heapDriftKb": 153324,
-    "threadDrift": 3,
-    "serverErrors": 249,
-    "captureMisses": 260,
-    "clientErrors": 723,
-    "redirects": 4280,
+    "heapDriftKb": -10941,
+    "threadDrift": -1,
+    "serverErrors": 398,
+    "captureMisses": 340,
+    "clientErrors": 0,
+    "redirects": 3887,
     "redirectTargets": {
-      "Wiki.jsp": 1747,
-      "Login.jsp": 1485,
-      "Forbidden.html": 793,
-      "Main": 251,
-      "PageModified.jsp": 4
+      "Wiki.jsp": 2820,
+      "Login.jsp": 680,
+      "Forbidden.html": 386,
+      "PageModified.jsp": 1
     },
     "violations": {
-      "latency": 0,
-      "heap": 0,
-      "thread": 0
+      "notEvaluated": [
+        "latency",
+        "heap",
+        "thread"
+      ]
     }
   },
   "invariants": {

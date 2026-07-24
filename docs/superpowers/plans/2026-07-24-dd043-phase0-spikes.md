@@ -352,11 +352,21 @@ Expected: the jar exists.
 
 - [ ] **Step 3: Baseline — confirm the extension is absent without injection**
 
+**`Installed features:` is a *runtime startup banner*, not build output** — grepping the Maven log for it returns nothing, always. The signal only appears when the built artifact is actually run. (An earlier draft of this plan grepped the build log here and in Step 4; both were unrunnable as written.)
+
 ```bash
 SPIKE=bench-results/dd043-spikes-2026-07-24
-"$SPIKE/env/build.sh" package -DskipTests 2>&1 | grep -i "Installed features" \
-  | tee "$SPIKE/s4-injection/banner-baseline.txt"
+"$SPIKE/env/build.sh" package -DskipTests 2>&1 | tee "$SPIKE/s4-injection/build-baseline-full.log"
+docker run --rm -d --name spike-baseline -p 8080:8080 \
+  --entrypoint java \
+  -v "$PWD/$SPIKE/fixture/target/quarkus-app":/app \
+  quay.io/quarkus/ubi9-quarkus-mandrel-builder-image@sha256:c1d52b8ac781c2b7cf6f0cb3ed366ee3ea5ea4e5e34014eaf060ca6841afd6e5 \
+  -jar /app/quarkus-run.jar
+sleep 8; docker logs spike-baseline 2>&1 | tee "$SPIKE/s4-injection/banner-baseline.txt" | grep -i "Installed features"
+docker rm -f spike-baseline
 ```
+
+Note `--entrypoint java`: the image's own ENTRYPOINT is `native-image`, so without the override this silently starts a native-image build instead of the app.
 
 Expected: an `Installed features:` line **without** `smallrye-openapi`. If it is already present, pick a different probe extension — the test is meaningless otherwise.
 

@@ -1,0 +1,7 @@
+# mvnw is a POSIX shell script with no extension, so the repo root's
+# `*.sh text eol=lf` rule (see /.gitattributes) doesn't catch it. Without
+# this, a CRLF checkout (this repo is developed under WSL on a Windows-
+# mounted path with core.autocrlf=true) rewrites its shebang to
+# `#!/bin/sh\r`, and every container invocation of ./mvnw fails on line 1 —
+# the same failure mode /.gitattributes already documents for gradlew.
+mvnw text eol=lf

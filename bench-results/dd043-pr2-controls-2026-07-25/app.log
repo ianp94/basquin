@@ -1,0 +1,37 @@
+__  ____  __  _____   ___  __ ____  ______ 
+ --/ __ \/ / / / _ | / _ \/ //_/ / / / __/ 
+ -/ /_/ / /_/ / __ |/ , _/ ,< / /_/ /\ \   
+--\___\_\____/_/ |_/_/|_/_/|_|\____/___/   
+2026-07-25 20:36:05,184 INFO  [io.quarkus] (main) fixture 1.0.0-SNAPSHOT on JVM (powered by Quarkus 3.37.3) started in 1.537s. Listening on: http://0.0.0.0:8080
+2026-07-25 20:36:05,185 INFO  [io.quarkus] (main) Profile prod activated. 
+2026-07-25 20:36:05,185 INFO  [io.quarkus] (main) Installed features: [basquin, cdi, rest, smallrye-context-propagation, vertx]
+[PROBE] id=probe-92938102047525 path=/__basquin/control/defect/slow status=200 succeeded=true cause=- ms=3015
+[PROBE] id=probe-92941136481574 path=/__basquin/result status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92941143435084 path=/__basquin/control/defect/alloc status=200 succeeded=true cause=- ms=1
+[PROBE] id=probe-92941151845089 path=/__basquin/result status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92941158726520 path=/__basquin/control/defect/error5xx status=500 succeeded=true cause=- ms=0
+[PROBE] id=probe-92941165234412 path=/__basquin/result status=200 succeeded=true cause=- ms=0
+[Basquin][defect] block-loop blocking thread=vert.x-eventloop-thread-6 for ms=2000
+[Basquin][defect] block-loop released thread=vert.x-eventloop-thread-6
+[PROBE] id=probe-92941171977226 path=/__basquin/control/defect/block-loop status=200 succeeded=true cause=- ms=2003
+[PROBE] id=probe-92943183408477 path=/__basquin/result status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954511650289 path=/__basquin/control/defect/alloc status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954518072527 path=/__basquin/result status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954523183084 path=/__basquin/control/defect/alloc status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954529372765 path=/__basquin/result status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954534071966 path=/__basquin/control/defect/alloc status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954540198022 path=/__basquin/result status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954545103082 path=/__basquin/control/defect/alloc status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954551228104 path=/__basquin/result status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954556243901 path=/__basquin/control/defect/alloc status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954562077325 path=/__basquin/result status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954566987682 path=/__basquin/control/defect/alloc status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954571989858 path=/__basquin/result status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954576898735 path=/__basquin/control/defect/alloc status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954582262333 path=/__basquin/result status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954586913578 path=/__basquin/control/defect/alloc status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954592117775 path=/__basquin/result status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954596708254 path=/__basquin/control/defect/alloc status=200 succeeded=true cause=- ms=4
+[PROBE] id=probe-92954606476897 path=/__basquin/result status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954611414588 path=/__basquin/control/defect/alloc status=200 succeeded=true cause=- ms=0
+[PROBE] id=probe-92954616966177 path=/__basquin/result status=200 succeeded=true cause=- ms=0

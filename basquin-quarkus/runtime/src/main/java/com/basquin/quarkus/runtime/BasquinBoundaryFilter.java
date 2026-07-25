@@ -48,6 +48,19 @@ import java.util.List;
  * <h2>No {@code ThreadLocal}</h2>
  * Requests interleave on the event loop, so per-request state rides the {@link RoutingContext}
  * (spec §4.1/§4.4) rather than a static {@code ThreadLocal}.
+ *
+ * <h2>The control surface is exempt from measurement — except the defect routes, which ARE the
+ * measurement (spec §7.3)</h2>
+ * {@code /__basquin/result} and {@code /__basquin/violations} are meta-queries about the
+ * measurement system itself, not requests to measure: wrapping the result poll in its own
+ * measurement window would be nonsensical (it can block for up to 2s waiting on itself) and
+ * republishing under the SAME driver-issued id it is busy answering makes no sense either. But
+ * {@code /__basquin/control/defect/*} is the opposite case — those routes exist specifically TO
+ * be measured, since that is how a negative control demonstrates an invariant can fire. So this
+ * filter reads {@link BasquinControlHandler#DEFECT_PREFIX} through, only skipping the narrower
+ * {@link BasquinControlHandler#PREFIX} for everything else under it — "driving a control route
+ * with an inbound {@code X-Basquin-Req} header produces a measurable iteration" is exactly this
+ * distinction.
  */
 public final class BasquinBoundaryFilter implements Handler<RoutingContext> {
 
@@ -65,9 +78,13 @@ public final class BasquinBoundaryFilter implements Handler<RoutingContext> {
     public void handle(RoutingContext ctx) {
         // Control traffic (/__basquin/*) is not explore traffic; never wrap it in a measurement
         // window. Mirrors RequestBoundary.onEnter checking the control surface before any
-        // explore-branch stamping happens on the Tomcat path.
+        // explore-branch stamping happens on the Tomcat path. The negative-control defect routes
+        // (spec §7.3) are the deliberate exception — see class javadoc — so they fall through to
+        // the same instrumentation as an ordinary app route instead of returning here.
         String path = ctx.request().path();
-        if (path != null && path.startsWith(BasquinControlHandler.PREFIX)) {
+        boolean isControlSurface = path != null && path.startsWith(BasquinControlHandler.PREFIX);
+        boolean isDefectRoute = path != null && path.startsWith(BasquinControlHandler.DEFECT_PREFIX);
+        if (isControlSurface && !isDefectRoute) {
             ctx.next();
             return;
         }

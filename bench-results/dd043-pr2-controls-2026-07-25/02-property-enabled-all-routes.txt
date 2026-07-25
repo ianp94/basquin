@@ -1,0 +1,46 @@
+=== STEP 2 (acceptance #2): property SET to true ===
+
+--- slow: GET /__basquin/control/defect/slow?ms=3000  (X-Basquin-Req: ctrl-slow) ---
+HTTP/1.1 200 OK
+Content-Type: text/plain
+content-length: 19
+X-Basquin-Req: probe-92938102047525
+
+body: defect:slow ms=3000
+
+--- poll: GET /__basquin/result?id=ctrl-slow ---
+body: 3021,2052,0|0||  (format: elapsedMs,heapDeltaKb,threadsDelta|invariantCount|detail|leak)
+
+--- alloc (well above the 524,288 B quantum): GET /__basquin/control/defect/alloc?bytes=4194304 (X-Basquin-Req: ctrl-alloc-hi) ---
+HTTP/1.1 200 OK
+Content-Type: text/plain
+content-length: 26
+X-Basquin-Req: probe-92941143435084
+
+body: defect:alloc bytes=4194304
+
+--- poll: GET /__basquin/result?id=ctrl-alloc-hi ---
+body: 1,6144,0|0||
+
+--- error5xx: GET /__basquin/control/defect/error5xx (X-Basquin-Req: ctrl-error5xx) ---
+HTTP/1.1 500 Internal Server Error
+Content-Type: text/plain
+content-length: 15
+X-Basquin-Req: probe-92941158726520
+
+body: defect:error5xx
+
+--- poll: GET /__basquin/result?id=ctrl-error5xx  (must NOT be 'miss' despite the 500) ---
+body: 0,0,0|0||
+
+--- block-loop: GET /__basquin/control/defect/block-loop?ms=2000 (X-Basquin-Req: ctrl-blockloop) ---
+HTTP/1.1 200 OK
+Content-Type: text/plain
+content-length: 58
+X-Basquin-Req: probe-92941171977226
+
+body: defect:block-loop ms=2000 thread=vert.x-eventloop-thread-6
+
+--- poll: GET /__basquin/result?id=ctrl-blockloop ---
+body: 2003,0,0|0||
+

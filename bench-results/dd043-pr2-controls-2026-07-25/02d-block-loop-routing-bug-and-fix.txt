@@ -1,0 +1,46 @@
+=== block-loop routing debugging trail: an order value one order of magnitude too aggressive ===
+(kept as evidence of the bug found + fixed during this task; see BasquinProcessor.BLOCK_LOOP_ROUTE_ORDER's
+ javadoc for the root-cause writeup — Quarkus installs FilterBuildItems as router.route().order(-priority),
+ so an order of -10_000 ran BEFORE BasquinBoundaryFilter (order -100), silently skipping instrumentation.)
+
+--- FIRST attempt: BLOCK_LOOP_ROUTE_ORDER = -10_000 (WRONG) ---
+--- block-loop: GET /__basquin/control/defect/block-loop?ms=2000 with X-Basquin-Req: ctrl-blockloop-1 ---
+HTTP/1.1 200 OK
+Content-Type: text/plain
+content-length: 58
+
+body: defect:block-loop ms=2000 thread=vert.x-eventloop-thread-5
+
+--- poll: GET /__basquin/result?id=ctrl-blockloop-1 ---
+HTTP/1.1 200 OK
+Content-Type: text/plain
+content-length: 4
+X-Basquin-Req: probe-92574757918503
+
+body: miss
+
+
+--- Corresponding app log evidence: no boundary-filter/probe line at all for this one route ---
+[Basquin][defect] block-loop blocking thread=vert.x-eventloop-thread-5 for ms=2000
+[Basquin][defect] block-loop released thread=vert.x-eventloop-thread-5
+[PROBE] id=probe-92574757918503 path=/__basquin/result status=200 succeeded=true cause=- ms=2010
+(note: no "[PROBE] ... path=/__basquin/control/defect/block-loop ..." line preceded it —
+ every OTHER route produces one; this route did not, because it ran before ANY router-wide filter.)
+
+--- FIXED attempt: BLOCK_LOOP_ROUTE_ORDER = -1 ---
+--- block-loop (fixed routing): GET /__basquin/control/defect/block-loop?ms=2000 with X-Basquin-Req: ctrl-blockloop-2 ---
+HTTP/1.1 200 OK
+Content-Type: text/plain
+content-length: 58
+X-Basquin-Req: probe-92866904191053
+
+body: defect:block-loop ms=2000 thread=vert.x-eventloop-thread-1
+
+--- poll: GET /__basquin/result?id=ctrl-blockloop-2 ---
+HTTP/1.1 200 OK
+Content-Type: text/plain
+content-length: 15
+X-Basquin-Req: probe-92868951156159
+
+body: 2033,1966,0|0||
+

@@ -494,6 +494,6 @@ question, not because a spike answered it badly:
   that the `jfr,nmt` *build flag* is accepted and compiles.
 
 Both are recorded in the spec rather than only here, since the spec is what PR-1…PR-5 are implemented
-from. A whole-branch review (`.superpowers/sdd/final-review-pr98.md`) found several such scopes present
-in this report and missing there; that round of fixes is logged in the spec's amendment ledger under
-"Round 2".
+from. A whole-branch review found several such scopes present in this report and missing there; that
+round of fixes is logged in the spec's amendment ledger under "Round 2", which reproduces each finding
+— the review's own report was session-local scratch and is not committed, so the ledger is the record.

@@ -77,9 +77,9 @@ unchecked section:
 
 ### Round 2 — final-review fixes (2026-07-24)
 
-A whole-branch review (`.superpowers/sdd/final-review-pr98.md`, 1 Critical / 6 Important / 4 Minor)
-found that round 1 rewrote the sections the evidence contradicted **but not the sections that depend on
-them**. Every finding is an instance of this branch's defining defect class: *a reported zero that means
+A whole-branch review (1 Critical / 6 Important / 4 Minor; its report was session-local scratch and is
+not committed, so the findings are reproduced in the table below rather than cited) found that round 1
+rewrote the sections the evidence contradicted **but not the sections that depend on them**. Every finding is an instance of this branch's defining defect class: *a reported zero that means
 "never measured" rather than "checked and clean"*. Round 2 is those follow-throughs. No committed spike
 evidence was altered.
 

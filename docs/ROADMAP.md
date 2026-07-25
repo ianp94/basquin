@@ -120,8 +120,9 @@ no product code) merged 2026-07-24 as `6aa16fc`. It was a **squash** merge, so t
 commits are not ancestors of `main` — checking for them by SHA reports "not in main" and is the wrong
 test; verify by content. Its durable record is the spec's own amendment ledger plus
 [`REPORT.md`](../bench-results/dd043-spikes-2026-07-24/REPORT.md); the review artifacts that drove its
-round-2 fix pass lived in `.superpowers/sdd/`, which is git-ignored scratch and therefore **not**
-citable from here.
+round-2 fix pass lived in `.superpowers/sdd/`, which is **untracked session scratch** — its ignore rule
+is a nested `.gitignore` containing `*`, which ignores itself, so a fresh clone has no rule *and* no
+directory. Nothing under that path is citable from any committed file.
 
 The prior session shipped #92–#97 (DD-038 classifier fix, Roller target + generated page, DD-040,
 DD-039, the two follow-up PRs, and the benchmark re-run).

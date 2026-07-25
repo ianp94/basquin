@@ -1,0 +1,45 @@
+// basquin-quarkus-deployment — build-time/augmentation module for the basquin-quarkus extension.
+//
+// DD-043 PR-2 decision spike (.superpowers/sdd/pr2-spike-report.md). Deliberately trivial: the
+// only build step (BasquinProcessor) emits FeatureBuildItem("basquin") and nothing else — no
+// boundary filter, no routes, no basquin-core dependency. This module is not deployed to
+// application runtime classpaths; Quarkus's bootstrap resolver pulls it in only during
+// augmentation, via the deployment-artifact coordinate that ../runtime's
+// META-INF/quarkus-extension.properties records.
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+group = 'com.basquin'
+version = '0.3.0'
+description = 'Basquin request boundary for Quarkus — deployment/build-time module (DD-043 PR-2 decision spike scaffolding)'
+sourceCompatibility = '17'
+targetCompatibility = '17'
+
+repositories { mavenCentral() }
+
+dependencies {
+    implementation project(':basquin-quarkus:runtime')
+    implementation 'io.quarkus:quarkus-core-deployment:3.37.3'
+}
+
+jar {
+    archiveBaseName = 'basquin-quarkus-deployment'
+}
+
+// Same target repo as ../runtime — see that build.gradle's publishing block comment.
+publishing {
+    publications {
+        deployment(MavenPublication) {
+            from components.java
+            artifactId = 'basquin-quarkus-deployment'
+        }
+    }
+    repositories {
+        maven {
+            name = 'dd043Spike'
+            url = rootProject.layout.projectDirectory.dir('bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository')
+        }
+    }
+}

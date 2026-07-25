@@ -50,6 +50,15 @@
             <version>0.8.15</version>
             <classifier>runtime</classifier>
         </dependency>
+        <!-- DD-043 PR-2 decision spike: does a Gradle-built io.quarkus.extension artifact get
+             honoured by this Maven-built app at augmentation? Resolves from the local repo this
+             build's Maven runs against (bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository),
+             where basquin-quarkus was gradle-published. See ../../.superpowers/sdd/pr2-spike-report.md -->
+        <dependency>
+            <groupId>com.basquin</groupId>
+            <artifactId>basquin-quarkus</artifactId>
+            <version>0.3.0</version>
+        </dependency>
     </dependencies>
 
     <build>

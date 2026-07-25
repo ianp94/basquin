@@ -1,0 +1,63 @@
+// basquin-quarkus (runtime) — DD-043 PR-2 decision spike.
+//
+// Question this module exists to answer: does the io.quarkus.extension Gradle plugin at 3.37.3
+// produce an extension artifact that a MAVEN-built Quarkus application actually picks up at
+// augmentation? See .superpowers/sdd/pr2-spike-report.md for the full spike and verdict.
+//
+// Content is deliberately trivial: no boundary filter, no routes, no basquin-core dependency —
+// those are PR-2 proper, gated on this spike's outcome. This module carries no runtime classes
+// at all; the only code is BasquinProcessor in ../deployment, whose one @BuildStep emits
+// FeatureBuildItem("basquin"). The io.quarkus.extension plugin is what turns this jar into
+// something Quarkus's bootstrap resolver recognises as an extension (via the
+// META-INF/quarkus-extension.properties it generates, pointing at the deployment artifact below).
+plugins {
+    id 'java'
+    id 'io.quarkus.extension' version '3.37.3'
+    id 'maven-publish'
+}
+
+group = 'com.basquin'
+version = '0.3.0'
+description = 'Basquin request boundary for Quarkus (DD-043 PR-2 decision spike scaffolding)'
+sourceCompatibility = '17'
+targetCompatibility = '17'
+
+repositories { mavenCentral() }
+
+// Explicit rather than relying on the plugin's "runtime"-named-project convention (see
+// QuarkusExtensionConfiguration#getDefaultDeployementArtifactName in the plugin source) — this
+// spike is exactly the place to not lean on an unverified naming default.
+quarkusExtension {
+    deploymentModule = ':basquin-quarkus:deployment'
+    deploymentArtifact = 'com.basquin:basquin-quarkus-deployment:0.3.0'
+}
+
+dependencies {
+    // Pinned directly rather than importing the quarkus-bom platform: this module has exactly
+    // one Quarkus dependency, so a BOM import would add indirection without adding safety.
+    implementation 'io.quarkus:quarkus-core:3.37.3'
+}
+
+jar {
+    archiveBaseName = 'basquin-quarkus'
+}
+
+// Published into the Phase-0 fixture's OWN local Maven repository
+// (bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository), not ~/.m2 / mavenLocal() — the
+// fixture's containerized build runs Maven with -Duser.home=/m2, bind-mounted from that directory
+// (see bench-results/dd043-spikes-2026-07-24/env/build.sh), so mavenLocal() would be invisible to
+// it. S4's addendum already proved an artifact present only in that local repo resolves.
+publishing {
+    publications {
+        runtime(MavenPublication) {
+            from components.java
+            artifactId = 'basquin-quarkus'
+        }
+    }
+    repositories {
+        maven {
+            name = 'dd043Spike'
+            url = rootProject.layout.projectDirectory.dir('bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository')
+        }
+    }
+}

@@ -1,0 +1,6 @@
+# Published jars must not be line-ending-mangled on a CRLF-prone checkout. Parity with
+# docs/charts/.gitattributes, which exists because this repo has already been bitten by exactly
+# that (see the root .gitattributes note about the Windows-mounted-path history). Git's
+# content-based binary detection would probably cope, but "probably" is not worth a corrupt
+# artifact served to a consumer.
+*.jar binary

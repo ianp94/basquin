@@ -10,6 +10,7 @@
 // ResultStore per reset.
 plugins {
     id 'java'
+    id 'maven-publish'
 }
 
 group = 'com.basquin'
@@ -21,4 +22,60 @@ repositories { mavenCentral() }
 
 jar {
     archiveBaseName = 'basquin-core'
+}
+
+// Sources travel with the artifact: a consumer debugging an invariant threshold or the DD-040 id
+// scheme needs to read this code, and it is small enough that shipping it costs nothing.
+java {
+    withSourcesJar()
+}
+
+// DD-043: basquin-core is the one module consumed from OUTSIDE this Gradle build — by a Maven-built
+// Quarkus extension (PR-2). Two publication targets, one configuration:
+//
+//   * publishToMavenLocal            -> ~/.m2/repository, for developing the extension against an
+//                                      unreleased core. Spike S4's addendum proved an artifact
+//                                      present only in the local repo resolves through the injected
+//                                      dependency, so this is a verified path, not an assumed one.
+//   * publishAllPublicationsToPagesRepository
+//                                    -> docs/maven/, which GitHub Pages serves at
+//                                      https://ianp94.github.io/basquin/maven/ (Pages source is
+//                                      main//docs). Consumers add that one <repository> and need no
+//                                      credentials — unlike GitHub Packages, which requires a token
+//                                      even for public artifacts. Same mechanism as the Helm repo
+//                                      already published from docs/charts/.
+//
+// Maven has no native git-dependency form, so a static repo committed to this repository and served
+// over HTTPS is the closest equivalent to depending on the source directly.
+publishing {
+    publications {
+        core(MavenPublication) {
+            from components.java
+            pom {
+                name = 'basquin-core'
+                description = 'Framework-neutral measurement core for Basquin: availability-invariant ' +
+                        'evaluation and the per-request result store. No dependencies, by design.'
+                url = 'https://github.com/ianp94/basquin'
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                scm {
+                    url = 'https://github.com/ianp94/basquin'
+                    connection = 'scm:git:https://github.com/ianp94/basquin.git'
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            // A plain directory in the repo. `helm repo index` has an equivalent for charts; Maven
+            // needs no index step, only the standard group/artifact/version layout, which Gradle
+            // writes here along with maven-metadata.xml.
+            name = 'pages'
+            url = rootProject.layout.projectDirectory.dir('docs/maven')
+        }
+    }
 }

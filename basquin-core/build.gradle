@@ -1,0 +1,24 @@
+// basquin-core — the framework-neutral measurement core (DD-043 §4.1).
+//
+// Deliberately dependency-free: it must be consumable by the agent (bootclasspath),
+// the driver, the Tomcat valve, and later a Maven-built Quarkus extension. Anything
+// added here has to be available in all four, so add nothing without checking.
+//
+// The Java package is `agent`, not `com.basquin.core`. See the Package Decision in
+// docs/superpowers/plans/2026-07-25-dd043-pr1-basquin-core.md: renaming it would make
+// these classes child-first in GenericRunner's reset loader and yield a fresh
+// ResultStore per reset.
+plugins {
+    id 'java'
+}
+
+group = 'com.basquin'
+version = '0.3.0'
+sourceCompatibility = '17'
+targetCompatibility = '17'
+
+repositories { mavenCentral() }
+
+jar {
+    archiveBaseName = 'basquin-core'
+}

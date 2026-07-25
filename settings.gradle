@@ -1,3 +1,4 @@
 rootProject.name = 'basquin'
 include 'tomcat-war'
 include 'tomcat-valve'
+include 'basquin-core'

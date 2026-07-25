@@ -1,6 +1,7 @@
 // Build configuration for Basquin
 plugins {
     id 'java'
+    id 'java-library'
     id 'application'
 }
 
@@ -93,6 +94,10 @@ sourceSets {
 
 // Add compile dependencies for the fuzz source set after it is defined
 dependencies {
+    // DD-043 PR-1: the framework-neutral measurement core (Invariants, ResultStore).
+    // `api` rather than `implementation` so the valve's `compileOnly project(':')` still
+    // resolves these types transitively at compile time.
+    api project(':basquin-core')
     fuzzImplementation 'junit:junit:4.13.2'
     fuzzImplementation 'edu.berkeley.cs.jqf:jqf-fuzz:1.9'
     fuzzImplementation 'edu.berkeley.cs.jqf:jqf-instrument:1.9'

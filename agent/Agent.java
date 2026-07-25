@@ -141,9 +141,15 @@ public class Agent {
         }
 
         // Configurable invariants (v0.2): thresholds checked here. Defaults disabled unless props set.
-        try {
-            Invariants.evaluateAndMaybeFail(ctx, elapsedMs, heapDeltaBytes, threadsNow, threadsDelta);
-        } catch (IllegalStateException e) {
+        // DD-043 PR-1: Invariants now lives in basquin-core, a separate compilation unit that
+        // cannot call back into Agent (that would be a circular project dependency), so it
+        // returns a Result instead of mutating ctx or throwing. Recording evidence and deciding
+        // whether to throw happens here instead — same point, same order, same messages as
+        // before the split. See Invariants' class javadoc for the full explanation.
+        Invariants.Result invariantResult =
+                Invariants.evaluateAndMaybeFail(ctx.iterationNumber, elapsedMs, heapDeltaBytes, threadsNow, threadsDelta);
+        recordInvariantEvidence(ctx, invariantResult.violations);
+        if (invariantResult.hardFailureMessage != null) {
             // Publish evidence before the throw propagates so servlet integrations can read it.
             publishInvariantEvidence(ctx);
             cancelLatencySample(ctx);
@@ -153,7 +159,7 @@ public class Agent {
                 System.err.println("[Basquin] Forcing process exit due to invariant violation (basquin.forceExitOnLeak=true)");
                 System.exit(2);
             }
-            throw e;
+            throw new IllegalStateException(invariantResult.hardFailureMessage);
         }
         publishInvariantEvidence(ctx);
         cancelLatencySample(ctx);

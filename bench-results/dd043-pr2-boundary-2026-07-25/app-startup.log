@@ -1,0 +1,7 @@
+__  ____  __  _____   ___  __ ____  ______ 
+ --/ __ \/ / / / _ | / _ \/ //_/ / / / __/ 
+ -/ /_/ / /_/ / __ |/ , _/ ,< / /_/ /\ \   
+--\___\_\____/_/ |_/_/|_/_/|_|\____/___/   
+2026-07-25 20:02:52,142 INFO  [io.quarkus] (main) fixture 1.0.0-SNAPSHOT on JVM (powered by Quarkus 3.37.3) started in 1.492s. Listening on: http://0.0.0.0:8080
+2026-07-25 20:02:52,143 INFO  [io.quarkus] (main) Profile prod activated. 
+2026-07-25 20:02:52,143 INFO  [io.quarkus] (main) Installed features: [basquin, cdi, rest, smallrye-context-propagation, vertx]

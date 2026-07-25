@@ -1,0 +1,40 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ---------------------< com.basquin.spike:fixture >----------------------
+[INFO] Building fixture 1.0.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] ------------------------------[ quarkus ]-------------------------------
+[INFO] 
+[INFO] --- clean:3.2.0:clean (default-clean) @ fixture ---
+[INFO] Deleting /w/target
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ fixture ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- quarkus:3.37.3:generate-code (default-generate-code) @ fixture ---
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ fixture ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 5 source files with javac [debug parameters release 25] to target/classes
+[INFO] 
+[INFO] --- jacoco:0.8.15:instrument (offline-instrument) @ fixture ---
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ fixture ---
+[INFO] skip non existing resourceDirectory /w/src/test/resources
+[INFO] 
+[INFO] --- quarkus:3.37.3:generate-code-tests (default-generate-code-tests) @ fixture ---
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ fixture ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.6:test (default-test) @ fixture ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- quarkus:3.37.3:build (default-build) @ fixture ---
+[INFO] [io.quarkus.deployment.QuarkusAugmentor] Quarkus augmentation completed in 10576ms
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  01:00 min
+[INFO] Finished at: 2026-07-25T20:02:40Z
+[INFO] ------------------------------------------------------------------------

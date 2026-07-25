@@ -1,0 +1,30 @@
+=== 1. curl a fixture route WITH X-Basquin-Req header ===
+$ curl -s -D - -H "X-Basquin-Req: probe-1" http://localhost:8080/ok
+HTTP/1.1 200 OK
+content-length: 2
+Content-Type: text/plain;charset=UTF-8
+X-Basquin-Req: probe-90941930367935
+
+ok
+=== 2. poll the result for that id ===
+$ curl -s "http://localhost:8080/__basquin/result?id=probe-1"
+82,3084,0|0||
+
+=== 3. a request WITHOUT the header stores nothing: poll a made-up id ===
+$ curl -s -D - http://localhost:8080/ok   (no X-Basquin-Req header)
+HTTP/1.1 200 OK
+content-length: 2
+Content-Type: text/plain;charset=UTF-8
+X-Basquin-Req: probe-90942031510458
+
+ok
+$ curl -s "http://localhost:8080/__basquin/result?id=never-sent-this-id"
+miss
+
+=== 4. violations counter ===
+$ curl -s "http://localhost:8080/__basquin/violations"
+0
+
+=== 5. unknown control path ===
+$ curl -s "http://localhost:8080/__basquin/mode?to=load"
+err:unknown

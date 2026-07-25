@@ -1,15 +1,10 @@
-// basquin-quarkus (runtime) — DD-043 PR-2 decision spike.
+// basquin-quarkus (runtime) — DD-043 PR-2: the request boundary + control surface.
 //
-// Question this module exists to answer: does the io.quarkus.extension Gradle plugin at 3.37.3
-// produce an extension artifact that a MAVEN-built Quarkus application actually picks up at
-// augmentation? See bench-results/dd043-pr2-spike-2026-07-25/ for the full spike and verdict.
-//
-// Content is deliberately trivial: no boundary filter, no routes, no basquin-core dependency —
-// those are PR-2 proper, gated on this spike's outcome. This module carries no runtime classes
-// at all; the only code is BasquinProcessor in ../deployment, whose one @BuildStep emits
-// FeatureBuildItem("basquin"). The io.quarkus.extension plugin is what turns this jar into
-// something Quarkus's bootstrap resolver recognises as an extension (via the
-// META-INF/quarkus-extension.properties it generates, pointing at the deployment artifact below).
+// The Gradle-extension toolchain question this module started as
+// (bench-results/dd043-pr2-spike-2026-07-25/) is settled: CONFIRMED. This module now carries
+// PR-2's first real increment — BasquinBoundaryFilter (the Vert.x-level request boundary, spec
+// §4.3/§4.4) and BasquinControlHandler (the /__basquin/* control surface, spec §4.4a) — on top of
+// basquin-core (agent.Invariants / agent.ResultStore) and Quarkus's Vert.x HTTP runtime.
 plugins {
     id 'java'
     id 'io.quarkus.extension' version '3.37.3'
@@ -18,7 +13,7 @@ plugins {
 
 group = 'com.basquin'
 version = '0.3.0'
-description = 'Basquin request boundary for Quarkus (DD-043 PR-2 decision spike scaffolding)'
+description = 'Basquin request boundary for Quarkus (DD-043 PR-2)'
 sourceCompatibility = '17'
 targetCompatibility = '17'
 
@@ -33,9 +28,23 @@ quarkusExtension {
 }
 
 dependencies {
-    // Pinned directly rather than importing the quarkus-bom platform: this module has exactly
-    // one Quarkus dependency, so a BOM import would add indirection without adding safety.
-    implementation 'io.quarkus:quarkus-core:3.37.3'
+    // DD-043 §4.1: the framework-neutral measurement core (Invariants, ResultStore), moved here
+    // rather than duplicated. `implementation` (not `api`): callers of basquin-quarkus never need
+    // to compile against agent.* directly, only to have it on the runtime classpath.
+    implementation project(':basquin-core')
+    // Quarkus's Vert.x HTTP runtime: RoutingContext/Handler/AsyncResult (transitively vertx-web +
+    // vertx-core) plus quarkus-core. Pinned directly rather than importing the quarkus-bom
+    // platform, matching this module's existing convention of one explicit Quarkus coordinate.
+    implementation 'io.quarkus:quarkus-vertx-http:3.37.3'
+
+    testImplementation 'junit:junit:4.13.2'
+}
+
+// The io.quarkus.extension plugin's own conventions default the test task to JUnit Platform (no
+// engine present here, since this module's tests are plain JUnit4, matching the rest of the repo)
+// — without this, `test` fails with "Cannot create Launcher without at least one TestEngine".
+test {
+    useJUnit()
 }
 
 jar {

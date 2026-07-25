@@ -2,9 +2,9 @@ rootProject.name = 'basquin'
 include 'tomcat-war'
 include 'tomcat-valve'
 include 'basquin-core'
-// DD-043 PR-2 decision spike (evidence: bench-results/dd043-pr2-spike-2026-07-25/):
-// does a Gradle-built io.quarkus.extension artifact get honoured by a Maven-built Quarkus app
-// at augmentation? Deliberately trivial content — see basquin-quarkus/*/build.gradle.
+// DD-043 PR-2: the Quarkus extension (request boundary + /__basquin/* control surface). The
+// Gradle-vs-Maven toolchain question this pair of modules started as was resolved CONFIRMED
+// (evidence: bench-results/dd043-pr2-spike-2026-07-25/) — see basquin-quarkus/*/build.gradle.
 include 'basquin-quarkus:runtime'
 include 'basquin-quarkus:deployment'
 // NOTE: renaming the runtime project's Gradle `.name` to match its published artifactId

@@ -80,8 +80,14 @@ unchecked section:
 A whole-branch review (1 Critical / 6 Important / 4 Minor; its report was session-local scratch and is
 not committed, so the findings are reproduced in the table below rather than cited) found that round 1
 rewrote the sections the evidence contradicted **but not the sections that depend on them**. Every finding is an instance of this branch's defining defect class: *a reported zero that means
-"never measured" rather than "checked and clean"*. Round 2 is those follow-throughs. No committed spike
-evidence was altered.
+"never measured" rather than "checked and clean"*. Round 2 is those follow-throughs.
+
+**What was and was not touched, stated precisely.** No **raw** spike artifact was altered — every
+`.exec`, `.csv`, `.xml`, `.log`, `probe.log` and `series.txt` under
+`bench-results/dd043-spikes-2026-07-24/` is exactly as its run produced it. `REPORT.md` *was* edited: it
+is a derived document, not evidence, and several findings were about its prose drifting from the
+artifacts it cites. An earlier wording here said only "no committed spike evidence was altered", which
+read as though nothing under `bench-results/` changed at all.
 
 | # | Finding | Sections changed |
 |---|---|---|

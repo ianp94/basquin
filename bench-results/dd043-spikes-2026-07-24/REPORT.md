@@ -495,5 +495,7 @@ question, not because a spike answered it badly:
 
 Both are recorded in the spec rather than only here, since the spec is what PR-1…PR-5 are implemented
 from. A whole-branch review found several such scopes present in this report and missing there; that
-round of fixes is logged in the spec's amendment ledger under "Round 2", which reproduces each finding
-— the review's own report was session-local scratch and is not committed, so the ledger is the record.
+round of fixes is logged in the spec's amendment ledger under "Round 2", which records **each finding
+and the sections it changed**. It does not carry the review's reasoning or its per-finding failure
+scenarios: that report was session-local scratch and is not committed, so it is unavailable rather than
+summarised. The ledger is the record *of what was found and fixed*, not of the review itself.

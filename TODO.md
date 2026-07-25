@@ -592,6 +592,46 @@ the P1–P4 injection work (a campaign needs a working instrumented target). Des
 - [ ] **Multi-runtime profiles** (`runtimeProfile: jvm | node | …`) — the forward reason for Go: the CR/reconcile/inject/revert control plane is runtime-agnostic; a new profile supplies different agents/flags without touching the machinery
 
 ### Project workflow / repo infra
+
+#### Committed docs cite untracked scratch — six dangling citations across five files
+
+*(found 2026-07-24 while syncing the roadmap after #98; approver of #99 established the real scope.)*
+
+`.superpowers/sdd/` is **untracked session scratch**. Its ignore rule is a nested `.gitignore`
+containing `*`, which ignores itself — so the rule file is untracked too, and a fresh clone gets no
+rule **and** no directory. Anything committed that cites a path under it resolves to nothing for
+anyone but the machine that wrote it.
+
+Audited with `git grep -n "\.superpowers/sdd/[A-Za-z0-9]"` — **six citations in five committed files**:
+
+| File | Cites |
+|---|---|
+| `docs/DESIGN-DECISIONS.md` | `dd039-spike-report.md`, `jspwiki-save-rootcause.md` |
+| `docs/superpowers/plans/2026-07-22-inputpair-capture.md` | `jspwiki-save-rootcause.md` |
+| `docs/superpowers/plans/2026-07-23-redirect-session-carry.md` | `dd039-spike-report.md` |
+| `docs/superpowers/specs/2026-07-22-inputpair-capture-design.md` | `jspwiki-save-rootcause.md` |
+| `docs/superpowers/specs/2026-07-22-nonce-and-3xx-design.md` | `jspwiki-runner-save-rootcause.md` |
+
+Two of the three targets still exist on the authoring machine; `dd039-spike-report.md` is gone even
+there. None are in the repo.
+
+**Why this is not a mechanical find-and-replace.** Two of the citations are load-bearing rather than
+decorative: in the `inputpair-capture` and `nonce-and-3xx` specs the dead pointer *is* the stated
+"Motivation source", and one plan carries a bare "Proven by throwaway spike" whose proof is the
+missing file. Deleting those citations removes the only stated provenance for a design decision;
+keeping them promises evidence the reader cannot obtain. The real fix is per-site: restate what the
+spike actually established, inline, from whatever survives — the DD record, the committed benchmark
+artifacts, or the code the spike was reasoning about.
+
+- [ ] Restate the two load-bearing citations (`inputpair-capture-design`, `nonce-and-3xx-design`) with
+      inline evidence rather than a path
+- [ ] Decide the remaining four: inline the finding, or drop the pointer and say the spike was
+      throwaway so no provenance is implied
+- [ ] Consider whether `.superpowers/sdd/` should be ignored by a **tracked** rule instead, so the
+      convention is visible in a clone rather than inferred from a file that ignores itself
+
+DD-043's own documents were cleaned in #99 and cite nothing under that path.
+
 - [ ] **Bot profile as a GitHub App** (user, 2026-07-21 — tackle 2026-07-22): PRs are currently
       authored by the owner's token, so the owner can't approve them and every merge needs an admin
       bypass. Decision: a **full GitHub App** (not a machine-user account) — cleaner `app[bot]`
@@ -984,45 +1024,6 @@ is *already* multi-source and union-merged (`JacocoCoverageProvider` aggregates
 — which also cuts against the operator's "instrument any app, minimal footprint" story. Redis earns its
 place if the pull model wins and the aggregator turns out to be the wrong shape for atomic work-stealing;
 that is a DD-041 spec decision, with this measurement as its input.
-
-### Committed docs cite untracked scratch — six dangling citations across five files
-
-*(found 2026-07-24 while syncing the roadmap after #98; approver of #99 established the real scope.)*
-
-`.superpowers/sdd/` is **untracked session scratch**. Its ignore rule is a nested `.gitignore`
-containing `*`, which ignores itself — so the rule file is untracked too, and a fresh clone gets no
-rule **and** no directory. Anything committed that cites a path under it resolves to nothing for
-anyone but the machine that wrote it.
-
-Audited with `git grep -n "\.superpowers/sdd/[A-Za-z0-9]"` — **six citations in five committed files**:
-
-| File | Cites |
-|---|---|
-| `docs/DESIGN-DECISIONS.md` | `dd039-spike-report.md`, `jspwiki-save-rootcause.md` |
-| `docs/superpowers/plans/2026-07-22-inputpair-capture.md` | `jspwiki-save-rootcause.md` |
-| `docs/superpowers/plans/2026-07-23-redirect-session-carry.md` | `dd039-spike-report.md` |
-| `docs/superpowers/specs/2026-07-22-inputpair-capture-design.md` | `jspwiki-save-rootcause.md` |
-| `docs/superpowers/specs/2026-07-22-nonce-and-3xx-design.md` | `jspwiki-runner-save-rootcause.md` |
-
-Two of the three targets still exist on the authoring machine; `dd039-spike-report.md` is gone even
-there. None are in the repo.
-
-**Why this is not a mechanical find-and-replace.** Two of the citations are load-bearing rather than
-decorative: in the `inputpair-capture` and `nonce-and-3xx` specs the dead pointer *is* the stated
-"Motivation source", and one plan carries a bare "Proven by throwaway spike" whose proof is the
-missing file. Deleting those citations removes the only stated provenance for a design decision;
-keeping them promises evidence the reader cannot obtain. The real fix is per-site: restate what the
-spike actually established, inline, from whatever survives — the DD record, the committed benchmark
-artifacts, or the code the spike was reasoning about.
-
-- [ ] Restate the two load-bearing citations (`inputpair-capture-design`, `nonce-and-3xx-design`) with
-      inline evidence rather than a path
-- [ ] Decide the remaining four: inline the finding, or drop the pointer and say the spike was
-      throwaway so no provenance is implied
-- [ ] Consider whether `.superpowers/sdd/` should be ignored by a **tracked** rule instead, so the
-      convention is visible in a clone rather than inferred from a file that ignores itself
-
-DD-043's own documents were cleaned in #99 and cite nothing under that path.
 
 ### Bench targets
 

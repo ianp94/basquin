@@ -114,8 +114,11 @@ time, nothing CPU-heavy during a run.
 
 ## Open PRs
 
-**[#99](https://github.com/ianp94/basquin/pull/99) — this file's post-merge sync** (docs-only: this
-roadmap, the DD-043 spec's Round-2 ledger, and `REPORT.md`). Everything else is merged to `main`.
+**[#99](https://github.com/ianp94/basquin/pull/99) — this file's post-merge sync.** Four files: this
+roadmap, the DD-043 spec's Round-2 ledger, `bench-results/dd043-spikes-2026-07-24/REPORT.md`, and
+`TODO.md` (the citation debt recorded below). Not strictly "docs-only" — `REPORT.md` sits under
+`bench-results/`, though it is a derived report and no raw spike artifact is touched. Everything else is
+merged to `main`.
 
 [#98](https://github.com/ianp94/basquin/pull/98) (DD-043 spec + Phase-0 spike evidence, evidence-only,
 no product code) merged 2026-07-24 as `6aa16fc`. It was a **squash** merge, so the branch's individual

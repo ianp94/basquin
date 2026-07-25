@@ -41,7 +41,7 @@ work, not cleanup of this thread.
 | **Benchmark re-run** | All three apps re-measured on the trustworthy channel | **merged** as [#97](https://github.com/ianp94/basquin/pull/97) (2026-07-23). This is the payoff — first benchmarks whose finding counts are real | — | `docs/benchmarks.html` (generated), `bench-results/*/‌*-bench3-explore/` |
 | **DD-041** | Clustered exploration across replicas — the one you asked for (service-backed apps) | **next up**, not specced. DD-039 leaves it a clean seam (the same-method-hop merge) | nothing (DD-040/039 merged) | `TODO.md` "Next after DD-040" |
 | **DD-042** | A load-mode concurrency oracle — load counts but never *asserts* | designed, not specced; independent, can precede or follow DD-041 | nothing | `TODO.md` "Future: DD-042" |
-| **DD-043** | Native + reactive targets — build-time instrumentation of a GraalVM-native Quarkus app | **Phase 0 done, gate PASSED** (2026-07-24, PR [#98](https://github.com/ianp94/basquin/pull/98)). All four spikes resolved; S1 REFUTED as specified then CONFIRMED via S1b; 8 spec amendments forced, none voiding a section, plus a round-2 fix pass from the whole-branch review (spec ledger, "Round 2"). **PR-1 (`basquin-core` extraction) done** — `Invariants` and `ResultStore` moved into a new `:basquin-core` Gradle subproject, 324 → 326 tests, 0 failures, on branch `dd043-pr1-basquin-core` (not yet merged). **PR-2 is cleared to start, subject to one entry requirement spec §4.1 records**: `Invariants` is package-private and must be widened, or its caller moved into `package agent`, before the extension's boundary filter can call it. PR-3…PR-5 still carry the two entry gates Phase 0 did not settle — **§8.2** (plugin-execution injection, PR-4) and **§6.2** (native JFR streaming, PR-5) | nothing (Phase 0 cleared it) | [spec](superpowers/specs/2026-07-24-native-reactive-targets-design.md) · [plan](superpowers/plans/2026-07-24-dd043-phase0-spikes.md) · [evidence](../bench-results/dd043-spikes-2026-07-24/REPORT.md) |
+| **DD-043** | Native + reactive targets — build-time instrumentation of a GraalVM-native Quarkus app | **Phase 0 done, gate PASSED** (2026-07-24, PR [#98](https://github.com/ianp94/basquin/pull/98)). All four spikes resolved; S1 REFUTED as specified then CONFIRMED via S1b; 8 spec amendments forced, none voiding a section, plus a round-2 fix pass from the whole-branch review (spec ledger, "Round 2"). **PR-1 (`basquin-core` extraction) done** — `Invariants` and `ResultStore` moved into a new `:basquin-core` Gradle subproject, 324 → 326 tests, 0 failures, on branch `dd043-pr1-basquin-core` (not yet merged). **PR-2 is cleared to start, subject to the entry requirement spec §4.1 records**: `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private and must be widened together — widening `Invariants` alone leaves the call unusable, since `Result` and `Violation`'s fields stay inaccessible — and `basquin-core` has no `maven-publish` path yet, so nothing Maven-built can depend on it either. Both must be resolved before the extension's boundary filter can call it. PR-3…PR-5 still carry the two entry gates Phase 0 did not settle — **§8.2** (plugin-execution injection, PR-4) and **§6.2** (native JFR streaming, PR-5) | nothing (Phase 0 cleared it) | [spec](superpowers/specs/2026-07-24-native-reactive-targets-design.md) · [plan](superpowers/plans/2026-07-24-dd043-phase0-spikes.md) · [evidence](../bench-results/dd043-spikes-2026-07-24/REPORT.md) |
 
 ### Why that order
 
@@ -83,9 +83,11 @@ priority:
    `Agent.begin/end` composition and everything `ThreadLocal`-backed stayed behind. Zero behaviour
    change confirmed (324 → 326 tests, 0 failures), on branch `dd043-pr1-basquin-core`, not yet merged.
    Spec §4.1 records why the package stays `agent` and the PR-2 entry requirement that follows from it.
-   **Next: PR-2** (`basquin-quarkus` MVP) — cleared to start, but must first resolve `Invariants` being
-   package-private (spec §4.1): widen its surface, or place the caller inside `package agent`, before
-   the boundary filter can call it.
+   **Next: PR-2** (`basquin-quarkus` MVP) — cleared to start, but must first resolve two gaps spec
+   §4.1 records: `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields
+   are all package-private (widening `Invariants` alone is not enough), and `basquin-core` has no
+   `maven-publish` path yet, so nothing Maven-built can depend on it. Both must be resolved before the
+   boundary filter can call it.
 
 1. **DD-041 — clustered exploration across replicas (the one the user asked for, for service-backed
    apps).** Not specced yet — so the next step is *brainstorm → spec → plan*, NOT code. DD-039 leaves

@@ -95,8 +95,14 @@ sourceSets {
 // Add compile dependencies for the fuzz source set after it is defined
 dependencies {
     // DD-043 PR-1: the framework-neutral measurement core (Invariants, ResultStore).
-    // `api` rather than `implementation` so the valve's `compileOnly project(':')` still
-    // resolves these types transitively at compile time.
+    // `api` (not `implementation`) is a chosen default, not a forced one: no current consumer
+    // of `project(':')` references these types (verified — zero references across
+    // tomcat-valve/, tomcat-war/, examples/), so `implementation` would compile identically
+    // today. `api` is picked so the valve's `compileOnly project(':')`, and any future
+    // consumer of `project(':')`, resolve these types transitively at compile time without a
+    // separate declaration. Mechanism verified, not assumed: `./gradlew :tomcat-valve:dependencies
+    // --configuration compileClasspath` shows `project :basquin-core` reachable transitively
+    // through `project :`.
     api project(':basquin-core')
     fuzzImplementation 'junit:junit:4.13.2'
     fuzzImplementation 'edu.berkeley.cs.jqf:jqf-fuzz:1.9'
@@ -112,6 +118,16 @@ dependencies {
     // JaCoCo is declared just below, is the fix: it flows into both coverageCompileClasspath and
     // coverageRuntimeClasspath the same way any other coverage-only dependency would.
     coverageImplementation project(':basquin-core')
+    // Note the asymmetry: `fuzz` and `server` (sourceSets block above, lines 73/81) only splice
+    // in `sourceSets.main.output`, not main's dependency configurations, so they never picked up
+    // an equivalent of the `coverageImplementation` line just above — a fuzz/server source file
+    // referencing `Invariants`/`ResultStore` fails to compile even though `coverage` can see them.
+    // Harmless today (neither source set has such a reference) and runtime-safe regardless: every
+    // JavaExec task built from `fuzz`/`server`/`coverage` (see the nine `runFuzz*`/`runTomcat*`
+    // tasks below) appends `sourceSets.main.runtimeClasspath`, which carries basquin-core, so the
+    // gap is compile-time only. Add `fuzzImplementation project(':basquin-core')` /
+    // `serverImplementation project(':basquin-core')` if either set ever needs to compile against
+    // the core types.
     coverageImplementation "org.jacoco:org.jacoco.core:${jacocoVersion}"
     // Let unit tests reach the coverage source set (RequestGrammar et al). Without this the
     // grammar/sequence logic would stay untestable purely because of where it lives.
@@ -172,23 +188,42 @@ tasks.register('runnerJar', Jar) {
 // the glob, `unzip` treats the extra filenames as in-archive member filters rather than additional
 // archives to list, and silently prints nothing instead of failing. Each jar is inspected by its
 // exact archive file (from the task that built it), via java.util.jar.JarFile.
+//
+// Whole-branch review (final-review-pr100.md, I3): a prior version of this task hand-typed the six
+// entries basquin-core happened to produce at review time. That list could not notice a seventh
+// class PR-2 adds — the guard would report success while the new class shipped nowhere. The set
+// checked against is now read from `basquin-core`'s own built jar (`project(':basquin-core')`'s
+// `jar` task output) every run, so the guard tracks the module instead of a comment.
 tasks.register('verifyShippedJarsContainCore') {
     group = 'verification'
     description = 'Fail if a shipped jar (agent fat jar, runnerJar) is missing the basquin-core classes.'
-    dependsOn 'jar', 'runnerJar'
-    // The exact entries basquin-core produces (basquin-core/build.gradle ships nothing else) —
-    // see the review's confirmation that basquin-core-*.jar contains precisely these six.
-    def coreClassEntries = [
-        'agent/Invariants.class',
-        'agent/Invariants$Result.class',
-        'agent/Invariants$Violation.class',
-        'agent/ResultStore.class',
-        'agent/ResultStore$Entry.class',
-        'agent/ResultStore$1.class',
-    ]
+    def coreJarTaskProvider = project(':basquin-core').tasks.named('jar', Jar)
+    dependsOn 'jar', 'runnerJar', coreJarTaskProvider
     def jarTasksToCheck = [tasks.named('jar', Jar), tasks.named('runnerJar', Jar)]
+    inputs.files(coreJarTaskProvider.flatMap { it.archiveFile })
     inputs.files(jarTasksToCheck.collect { it.flatMap { t -> t.archiveFile } })
     doLast {
+        File coreJarFile = coreJarTaskProvider.get().archiveFile.get().asFile
+        if (!coreJarFile.isFile()) {
+            throw new GradleException(
+                "verifyShippedJarsContainCore: basquin-core's own jar does not exist at ${coreJarFile} "
+                + "— cannot derive the class entries to check shipped jars against.")
+        }
+        // Derive the expected set from basquin-core's actual output rather than a hand-typed list:
+        // every .class entry the module's own jar produces.
+        def coreClassEntries = []
+        new java.util.jar.JarFile(coreJarFile).withCloseable { jf ->
+            jf.entries().each { entry ->
+                if (!entry.directory && entry.name.endsWith('.class')) {
+                    coreClassEntries << entry.name
+                }
+            }
+        }
+        if (coreClassEntries.isEmpty()) {
+            throw new GradleException(
+                "verifyShippedJarsContainCore: basquin-core's jar (${coreJarFile}) contains no .class "
+                + "entries — nothing to check shipped jars against. Is the module empty?")
+        }
         def failures = []
         jarTasksToCheck.each { jarTaskProvider ->
             File jarFile = jarTaskProvider.get().archiveFile.get().asFile
@@ -215,6 +250,20 @@ tasks.register('verifyShippedJarsContainCore') {
 
 tasks.named('check') {
     dependsOn 'verifyShippedJarsContainCore'
+}
+
+// DD-043 fix-round-2 (Important I4): the guard above was wired only into `check`, but the release
+// pipeline (release.yml -> deploy/*/build.sh) invokes `runnerJar`/`jar`/`stageAgents` directly and
+// never runs `check` — so a core-only regression could ship through release with the guard never
+// executing. `finalizedBy` (not `dependsOn`) on the two jar-producing tasks themselves means the
+// guard runs after either jar is built, however it's invoked — directly, via `assemble`/`build`,
+// via `check`, or via a deploy script — with no change to `deploy/**` required. It also still
+// depends on `jar`+`runnerJar` (above), so invoking either one alone still verifies both.
+tasks.named('jar') {
+    finalizedBy 'verifyShippedJarsContainCore'
+}
+tasks.named('runnerJar') {
+    finalizedBy 'verifyShippedJarsContainCore'
 }
 
 // Convenience run tasks

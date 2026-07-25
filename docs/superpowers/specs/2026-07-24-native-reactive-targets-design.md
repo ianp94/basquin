@@ -295,7 +295,7 @@ natural place to want to "tidy" the split package into something like `com.basqu
 until `GenericRunner`'s parent-first predicate (or its replacement) is taught the new prefix in the
 same change.
 
-#### PR-2 entry requirement: `Invariants` is package-private and cannot be called from `com.basquin.quarkus.*`
+#### PR-2 entry requirement: `Invariants`' API surface is package-private, and there is no publish path yet
 
 `Invariants` is `final class Invariants` with `static Invariants.Result evaluateAndMaybeFail(...)` —
 package-private, and it already was before the move, so this is pre-existing, not something the
@@ -303,10 +303,29 @@ extraction introduced. It defeats the extraction's purpose as written: a Quarkus
 `com.basquin.quarkus.*` cannot call a package-private class in `package agent`. `ResultStore` has no
 such problem — `public final class ResultStore` with public members throughout.
 
-**PR-2 cannot start its boundary filter until this is resolved.** Either widen `Invariants`' surface
-(make the class and `evaluateAndMaybeFail` public) or place the caller inside `package agent` itself
-to reach it. Recorded here as an entry requirement (§9's PR-2 row) rather than left to be discovered
-mid-build, the way the packaging gap below was.
+**Widening `Invariants` alone is not sufficient** (whole-branch review, final-review-pr100.md, I5).
+Making the class and `evaluateAndMaybeFail` public still leaves the call unusable from
+`com.basquin.quarkus.*`: the return type, `Invariants.Result`
+(`basquin-core/src/main/java/agent/Invariants.java:55`, `static final class Result`), is itself
+package-private with package-private fields `violations`/`hardFailureMessage` (`:56-57`), and
+`Violation`'s fields `name`/`detail` are package-private (`:44-45`) even though `Violation` itself is
+already `public static class` (`:43`). A public method that returns an inaccessible type, or a public
+type whose fields a cross-package caller can't read, is unusable either way. **PR-2 must widen all
+four**: the `Invariants` class, `evaluateAndMaybeFail`, `Result` (plus accessors for `violations` and
+`hardFailureMessage` — the fields can stay package-private if accessors are added instead), and
+`Violation`'s `name`/`detail` (as public fields or accessors).
+
+**There is also no publish path.** `basquin-core/build.gradle` applies only the `java` plugin — no
+`maven-publish`, no `publishing {}` block, `publishToMavenLocal`, or repository declaration exists
+anywhere in the repo for this module. §3.1's Maven build runs inside a container; nothing it invokes
+can resolve `com.basquin:basquin-core:0.3.0` from any repository. This is the extraction's headline
+purpose ("so the Maven-built Quarkus extension in PR-2 can depend on it") — until a publish path
+exists, PR-2 cannot compile against this artifact at all, independent of the visibility question
+above.
+
+**PR-2 cannot start its boundary filter until both are resolved.** Recorded here as an entry
+requirement (§9's PR-2 row) rather than left to be discovered mid-build, the way the packaging gap
+below was.
 
 #### One exception to "zero behaviour change": the invariant stack's top frame moved
 
@@ -325,6 +344,13 @@ throwing it. `ctx.invariantStack` is built from the current call stack at the po
 recorded (`agent/Agent.java:479`, called from `Agent.end()`), so it now loses the
 `Invariants.evaluateAndMaybeFail` frame, and the thrown exception's top frame moves from `Invariants`
 to `Agent.end()`.
+
+That is not the whole delta, though: the capture is frame-windowed, capped by default at 15 frames
+(`agent/Agent.java:513`, `Integer.getInteger("basquin.invariant.stack.maxFrames", 15)`). Losing a
+frame near the top doesn't just drop it — it slides the entire window, so one additional deeper
+caller frame now enters the snapshot and the trailing `"...N more"` count changes too. Cosmetic (the
+suite asserts on none of this), but "loses one frame" understates the effect at the far end of the
+window.
 
 This surfaces via `getLastInvariantStack()` (`runner/CorpusRunner.java:86`,
 `tomcat-war/src/main/java/com/basquin/examples/StatusServlet.java:19`). Nothing in the test suite
@@ -1104,7 +1130,7 @@ history says this repo needs.
 |---|---|---|
 | **PR-0** | Phase-0 spikes S1–S4 → `bench-results/dd043-spikes-2026-07-24/`, plus the spec amendments they forced. **No product code.** — **DONE, gate PASSED** | Gates everything below |
 | **PR-1** | `basquin-core` extraction (§4.1) — pure refactor, zero behaviour change, existing tests green, no Quarkus code — **DONE** (324 → 326 tests, 0 failures; branch `dd043-pr1-basquin-core`, not yet merged) | PR-0 — cleared |
-| **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + parking poll (§4.4), `/basquin/status\|result`, control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants` is package-private; widen its surface or place the caller in `package agent` before the boundary filter can call it |
+| **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + parking poll (§4.4), `/basquin/status\|result`, control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private, and `basquin-core` has no `maven-publish` path yet; both must be resolved before the boundary filter can call this artifact |
 | **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits | PR-2 |
 | **PR-4** | Coverage — offline-JaCoCo execution injection, `/basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 · **entry gate: §8.2** (plugin-execution injection is unmeasured); the native cells additionally carry §7.2's S3 re-check |
 | **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |

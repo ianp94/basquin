@@ -31,18 +31,26 @@ public class ResetLoaderParentFirstTest {
 
     @Test
     public void coreClassesLoadParentFirst() throws Exception {
+        // Derived from the classes themselves, not typed as string literals: a rename of
+        // either class's package changes what .class.getName() returns, so this assertion
+        // tracks the actual class and fails on the rename it exists to catch. A hand-typed
+        // literal like "agent.ResultStore" would keep matching "agent." forever, even after
+        // the class itself moved to a different package — see the mutation evidence recorded
+        // in .superpowers/sdd/task-3-report.md.
         assertTrue("agent.ResultStore must be parent-first or the reset loader forks the store",
-                isParentFirst("agent.ResultStore"));
+                isParentFirst(ResultStore.class.getName()));
         assertTrue("agent.Invariants must be parent-first",
-                isParentFirst("agent.Invariants"));
+                isParentFirst(Invariants.class.getName()));
     }
 
     @Test
     public void aRenamedCorePackageWouldNotBeParentFirst() throws Exception {
-        // Pins WHY the package is not renamed. If this ever passes, the predicate has been
-        // taught about the new prefix and the rename is safe to do. A failure here means
-        // "the rename is now safe", not "the test is broken" — do not "fix" it by reverting
-        // parentFirst; update this test's expectation instead once that happens deliberately.
+        // Pins WHY the package is not renamed. This literal is deliberate, not a mistake like
+        // the ones above: it documents a hypothetical renamed name that does not exist as a
+        // class today, so there is nothing to derive it from. A failure here means "the rename
+        // is now safe" — the predicate has been taught about the new prefix — not "the test is
+        // broken". Do not "fix" it by reverting parentFirst; update this test's expectation
+        // instead once that happens deliberately.
         assertFalse("com.basquin.core.* is not covered by parentFirst with an empty targetPrefix",
                 isParentFirst("com.basquin.core.ResultStore"));
     }

@@ -12,11 +12,13 @@ on:
     paths:
       - 'native/**'
       - 'agent/**'
+      - 'basquin-core/**'
       - '.github/workflows/arm64-smoke.yml'
   pull_request:
     paths:
       - 'native/**'
       - 'agent/**'
+      - 'basquin-core/**'
       - '.github/workflows/arm64-smoke.yml'
   workflow_dispatch:
 

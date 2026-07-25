@@ -36,13 +36,13 @@ import java.util.List;
  * the "record evidence" / "throw" side effects moved, and it moved to the same synchronous call
  * stack frame, one level up.
  */
-final class Invariants {
+public final class Invariants {
 
     private Invariants() {}
 
     public static class Violation {
-        final String name;
-        final String detail;
+        public final String name;
+        public final String detail;
         Violation(String name, String detail) { this.name = name; this.detail = detail; }
     }
 
@@ -52,16 +52,16 @@ final class Invariants {
      * throw as an {@code IllegalStateException}. {@code hardFailureMessage == null} means the
      * caller must NOT throw (soft mode, or no violations).
      */
-    static final class Result {
-        final List<Violation> violations;
-        final String hardFailureMessage;
+    public static final class Result {
+        public final List<Violation> violations;
+        public final String hardFailureMessage;
         private Result(List<Violation> violations, String hardFailureMessage) {
             this.violations = violations;
             this.hardFailureMessage = hardFailureMessage;
         }
     }
 
-    static Result evaluateAndMaybeFail(int iterationNumber,
+    public static Result evaluateAndMaybeFail(int iterationNumber,
                                      long elapsedMs,
                                      long heapDeltaBytes,
                                      int threadsNow,

@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'agent/**'
+      - 'basquin-core/**'
       - 'runner/**'
       - 'examples/**'
       - 'test/**'
@@ -19,6 +20,7 @@ on:
   pull_request:
     paths:
       - 'agent/**'
+      - 'basquin-core/**'
       - 'runner/**'
       - 'examples/**'
       - 'test/**'

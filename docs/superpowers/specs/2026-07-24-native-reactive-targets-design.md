@@ -263,6 +263,90 @@ Two reasons this boundary is drawn exactly here:
 The reactive equivalent of the leak-snapshot grace period is **decided, not inherited**: there is
 none at the boundary. Any deferred re-check happens off-loop on a scheduled task, or not at all.
 
+#### The package stays `agent` — a constraint on PR-2, not a decision PR-2 revisits
+
+`Invariants` and `ResultStore` keep `package agent` after the move into `basquin-core`, producing a
+split package across two artifacts. That is deliberate.
+
+`runner/GenericRunner.java:218-221` decides which classes its reset ClassLoader loads
+**parent-first**, by literal string prefix:
+
+```java
+private boolean parentFirst(String name) {
+    return name.startsWith("java.") || name.startsWith("javax.") || name.startsWith("jdk.") || name.startsWith("sun.")
+            || name.startsWith("agent.") || name.startsWith("runner.") || (!targetPrefix.isEmpty() && !name.startsWith(targetPrefix));
+}
+```
+
+`targetPrefix` defaults to `""` (`runner/GenericRunner.java:195`), which makes the trailing clause
+`(!targetPrefix.isEmpty() && !name.startsWith(targetPrefix))` false. A class renamed to
+`com.basquin.core.*` therefore matches **no** clause: it loads child-first, and the reset loader
+hands out a **fresh `ResultStore` per reset** — per-request results written to one instance and
+polled from another. Silent data loss, DD-040's defect class, arriving through a refactor whose
+contract is "no behaviour change".
+
+The guard is `test/agent/ResetLoaderParentFirstTest.java`. Its second method,
+`aRenamedCorePackageWouldNotBeParentFirst`, asserts the renamed form is *not* covered — a rename
+becomes safe only once `parentFirst` is taught the new prefix, at which point that method flips
+from passing to failing. That failure is the signal the rename is now safe, not a broken test.
+
+**Constraint on PR-2:** PR-2 builds `basquin-quarkus` against this artifact, which makes it the
+natural place to want to "tidy" the split package into something like `com.basquin.core`. Do not,
+until `GenericRunner`'s parent-first predicate (or its replacement) is taught the new prefix in the
+same change.
+
+#### PR-2 entry requirement: `Invariants` is package-private and cannot be called from `com.basquin.quarkus.*`
+
+`Invariants` is `final class Invariants` with `static Invariants.Result evaluateAndMaybeFail(...)` —
+package-private, and it already was before the move, so this is pre-existing, not something the
+extraction introduced. It defeats the extraction's purpose as written: a Quarkus extension living in
+`com.basquin.quarkus.*` cannot call a package-private class in `package agent`. `ResultStore` has no
+such problem — `public final class ResultStore` with public members throughout.
+
+**PR-2 cannot start its boundary filter until this is resolved.** Either widen `Invariants`' surface
+(make the class and `evaluateAndMaybeFail` public) or place the caller inside `package agent` itself
+to reach it. Recorded here as an entry requirement (§9's PR-2 row) rather than left to be discovered
+mid-build, the way the packaging gap below was.
+
+#### One exception to "zero behaviour change": the invariant stack's top frame moved
+
+Everything observable about `Invariants` is unchanged by the move — call counts per path,
+side-effect ordering, the `basquin.forceExitOnLeak` → `System.exit(2)` path, short-circuit on the
+first hard violation, and byte-identical exception messages — all verified against the pre-refactor
+commit.
+
+One thing did change, because the move required inverting a dependency: `Invariants` cannot call
+back into `agent.Agent` (that would be the circular project dependency the package split exists to
+avoid), so `evaluateAndMaybeFail` now takes `int iterationNumber` and returns an
+`Invariants.Result(violations, hardFailureMessage)` instead of taking an `IterationContext` and
+throwing directly. The caller, `Agent.end()`, records evidence and constructs the
+`IllegalStateException` itself (`agent/Agent.java:162`) rather than `Invariants` constructing and
+throwing it. `ctx.invariantStack` is built from the current call stack at the point evidence is
+recorded (`agent/Agent.java:479`, called from `Agent.end()`), so it now loses the
+`Invariants.evaluateAndMaybeFail` frame, and the thrown exception's top frame moves from `Invariants`
+to `Agent.end()`.
+
+This surfaces via `getLastInvariantStack()` (`runner/CorpusRunner.java:86`,
+`tomcat-war/src/main/java/com/basquin/examples/StatusServlet.java:19`). Nothing in the test suite
+asserts on stack-frame contents, so nothing broke — but "zero behaviour change" should be read as
+covering messages, ordering and exit codes, not stack-trace shape.
+
+#### The packaging lesson: a green `check` does not prove the shipped jar is complete
+
+Moving classes out of `sourceSets.main.output` silently emptied `runnerJar` — the jar
+`deploy/runner-image/Dockerfile:16` ships as the campaign driver's `ENTRYPOINT` — while all 324
+tests and every `check` task stayed green, because both run on `main.runtimeClasspath`, and
+`runnerJar` is built from the `coverage` source set's own, separate runtime classpath. The shipped
+driver crashed on iteration 1 with `NoClassDefFoundError: agent/Invariants`.
+
+**No JUnit test can catch this class of defect** — it is a property of the built artifact, not of
+the classpath tests run against. The fix is a permanent Gradle guard,
+`verifyShippedJarsContainCore` (`build.gradle:175`), wired into `check` (`build.gradle:217`), which
+opens every shipped jar (the agent fat jar and `runnerJar`) via `java.util.jar.JarFile` and fails,
+naming the exact missing entries, if either is short the core classes. It exists because the classes
+will move again when `package agent` is eventually renamed, and that move will recreate exactly this
+risk.
+
 ### 4.2 `basquin-quarkus` — the extension
 
 Standard two-module Quarkus extension shape:
@@ -471,7 +555,7 @@ native row publishes a crash count.
 
 **All invariants on this path are soft by structure.** `Invariants.evaluateAndMaybeFail` throwing at
 the end handler can fail nothing — the response is fully written by definition of the hook. Tomcat
-targets default to **hard** (`basquin.invariant.mode`, `agent/Invariants.java:85`). That is a real
+targets default to **hard** (`basquin.invariant.mode`, `basquin-core/src/main/java/agent/Invariants.java:116`). That is a real
 semantic difference from the existing rows and belongs in the per-target notes on the benchmark page,
 or §2's comparability claim quietly overstates.
 
@@ -1019,8 +1103,8 @@ history says this repo needs.
 | PR | Contents | Gate |
 |---|---|---|
 | **PR-0** | Phase-0 spikes S1–S4 → `bench-results/dd043-spikes-2026-07-24/`, plus the spec amendments they forced. **No product code.** — **DONE, gate PASSED** | Gates everything below |
-| **PR-1** | `basquin-core` extraction (§4.1) — pure refactor, zero behaviour change, existing tests green, no Quarkus code | PR-0 — **cleared** |
-| **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + parking poll (§4.4), `/basquin/status\|result`, control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 |
+| **PR-1** | `basquin-core` extraction (§4.1) — pure refactor, zero behaviour change, existing tests green, no Quarkus code — **DONE** (324 → 326 tests, 0 failures; branch `dd043-pr1-basquin-core`, not yet merged) | PR-0 — cleared |
+| **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + parking poll (§4.4), `/basquin/status\|result`, control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants` is package-private; widen its surface or place the caller in `package agent` before the boundary filter can call it |
 | **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits | PR-2 |
 | **PR-4** | Coverage — offline-JaCoCo execution injection, `/basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 · **entry gate: §8.2** (plugin-execution injection is unmeasured); the native cells additionally carry §7.2's S3 re-check |
 | **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |

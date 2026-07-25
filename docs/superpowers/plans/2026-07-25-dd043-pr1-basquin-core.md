@@ -34,18 +34,37 @@ private boolean parentFirst(String name) {
 
 The rename may still be worth doing later. It is deferred to its own change, with the guard from Task 2 already in place, so the failure mode is caught by a test rather than by a benchmark that under-reports.
 
+## Dependency Inversion — read before Task 1
+
+`Invariants` cannot move to `basquin-core` unchanged. It calls
+`agent.Agent.recordInvariantEvidence(ctx, violations)` and takes an `agent.IterationContext`
+parameter — both types stay in the root project. Since the root project depends on `basquin-core`
+(Task 1 Step 4), a `basquin-core` class that calls back into the root creates a circular Gradle
+project dependency (`basquin-core -> root -> basquin-core`), which Gradle refuses to build.
+
+The 14 consumers named in File Structure below are the *inbound* direction — code that calls
+`Invariants`/`ResultStore` — and grepping only that direction misses this: `Invariants`' own
+*outbound* call into `Agent` is invisible to an inbound grep.
+
+The fix is a dependency inversion, done as part of the move, not after it: `evaluateAndMaybeFail`
+takes `int iterationNumber` and returns an `Invariants.Result(violations, hardFailureMessage)`
+rather than mutating an `IterationContext` or throwing. The caller (`Agent.end()`) records evidence
+onto the context and decides whether to throw. Task 1 Step 4 below assumes this inversion is already
+in place.
+
 ## File Structure
 
 | Path | Responsibility |
 |---|---|
 | `settings.gradle` | gains `include 'basquin-core'` |
 | `basquin-core/build.gradle` | new: plain `java` library, no dependencies beyond the JDK |
-| `basquin-core/src/main/java/agent/Invariants.java` | moved from `agent/Invariants.java` |
+| `basquin-core/src/main/java/agent/Invariants.java` | moved from `agent/Invariants.java`, with the dependency inversion above |
 | `basquin-core/src/main/java/agent/ResultStore.java` | moved from `agent/ResultStore.java` |
-| `build.gradle` | root depends on `project(':basquin-core')`; fat jar keeps bundling it |
+| `build.gradle` | root depends on `project(':basquin-core')`; fat jar and `runnerJar` both keep bundling it |
+| `.gitignore` | gains `basquin-core/build` — a new subproject gets its own build directory, alongside the existing `tomcat-war/build`/`tomcat-valve/build` entries |
 | `test/agent/ResetLoaderParentFirstTest.java` | new: pins the hazard above |
 
-Consumers that must keep compiling unchanged (verified by `grep`, 14 files): `agent/Agent.java`, `agent/LoadModeControl.java`, `agent/RequestBoundary.java`, `runner/coverage/CoverageGuidedRun.java`, `runner/coverage/PodPollTargets.java`, `runner/util/StatusReporter.java`, and 6 test files. **Because they stay in `package agent`, none of their imports change** — that is the point of the Package Decision.
+Consumers that must keep compiling unchanged (verified by `grep`, 14 files): `agent/Agent.java`, `agent/LoadModeControl.java`, `agent/RequestBoundary.java`, `runner/coverage/CoverageGuidedRun.java`, `runner/coverage/PodPollTargets.java`, `runner/util/StatusReporter.java`, and 6 test files. **Because they stay in `package agent`, none of their imports change** — that is the point of the Package Decision. This is the *inbound* direction only; see Dependency Inversion above for the *outbound* one.
 
 ---
 
@@ -109,9 +128,11 @@ jar {
 EOF
 printf "include 'basquin-core'\n" >> settings.gradle
 tail -4 settings.gradle
+printf "basquin-core/build\n" >> .gitignore
+tail -1 .gitignore
 ```
 
-Expected: `settings.gradle` now includes `basquin-core` alongside `tomcat-war` and `tomcat-valve`.
+Expected: `settings.gradle` now includes `basquin-core` alongside `tomcat-war` and `tomcat-valve`, and `.gitignore` gains `basquin-core/build` alongside the existing `tomcat-war/build`/`tomcat-valve/build` entries — a new subproject gets its own build directory.
 
 - [ ] **Step 3: Move the two classes with `git mv` so history follows**
 
@@ -143,16 +164,31 @@ grep -n "^plugins" -A6 build.gradle
 
 If it applies `java` but not `java-library`, add `id 'java-library'` to that block. If adding `java-library` changes any other configuration's behaviour, prefer `implementation project(':basquin-core')` plus an explicit `compileOnly project(':basquin-core')` in `tomcat-valve/build.gradle`, and record which you chose in the report.
 
-- [ ] **Step 5: Verify the fat jar still bundles the core classes**
+- [ ] **Step 5: Verify every shipped jar bundles the core classes — there are two, not one**
 
-`build.gradle:120-124` builds the agent jar from `configurations.runtimeClasspath`. A project dependency arrives as a directory or a jar and that block handles both, but verify rather than assume:
+`build.gradle` builds **two** jars that ship to operators: the agent fat jar (`jar` task,
+`Premain-Class: agent.Agent`) from `configurations.runtimeClasspath`, and `runnerJar` — the campaign
+driver's `ENTRYPOINT` (`deploy/runner-image/Dockerfile:16`) — built from the `coverage` source set's
+own, **separate** runtime classpath, which does not automatically inherit a dependency added to the
+root project's main `dependencies { }` block. Verifying only the first jar proves nothing about the
+second, and the second is what actually ships to the campaign driver.
+
+Verify both jars by exact filename, not by glob. `unzip -l` treats extra command-line arguments as
+in-archive member filters, not additional archives, so `unzip -l build/libs/basquin-*.jar` silently
+prints nothing once the glob expands to two or more files, instead of failing loudly:
 
 ```bash
-./gradlew jar --console=plain 2>&1 | tail -3
-unzip -l build/libs/basquin-*.jar | grep -E "agent/(Invariants|ResultStore)\.class"
+./gradlew jar runnerJar --console=plain 2>&1 | tail -3
+unzip -l build/libs/basquin-0.3.0.jar        | grep -E "agent/(Invariants|ResultStore)\.class"
+unzip -l build/libs/basquin-0.3.0-runner.jar | grep -E "agent/(Invariants|ResultStore)\.class"
 ```
 
-Expected: both class entries present. **If they are absent the agent will `NoClassDefFoundError` at runtime while every test passes**, because tests use the classpath rather than the jar. This step is the only thing that catches it.
+Expected: both class entries present in **both** jars. If either is absent, that jar's consumer will
+`NoClassDefFoundError` at runtime while every test passes, because tests run on the classpath, not on
+the jar. This manual check is necessarily incomplete — it is easy to verify one jar and forget the
+second exists — which is why the shipped implementation also adds a permanent Gradle task,
+`verifyShippedJarsContainCore` (`build.gradle:175`, wired into `check` at `:217`), that asserts this
+on every build rather than only when someone remembers to run this step by hand.
 
 - [ ] **Step 6: Verify the valve still compiles and tests still pass**
 
@@ -173,7 +209,7 @@ Expected: `BUILD SUCCESSFUL`, and `AFTER 324 tests, 0 failures, 0 errors, 0 skip
 - [ ] **Step 7: Commit**
 
 ```bash
-git add -A settings.gradle build.gradle basquin-core
+git add -A settings.gradle build.gradle .gitignore basquin-core
 git commit -m "refactor(dd043): extract basquin-core — Invariants + ResultStore into their own artifact
 
 Creates the :basquin-core subproject so a Maven-built Quarkus extension (PR-2) can

@@ -19,22 +19,22 @@ import java.util.List;
  *   and lives in Agent, but resolves its mode through {@link #isHard(String)} like every other
  *   invariant, so one global switch covers all of them.
  *
- * <p>DD-043 PR-1: this class lives in {@code basquin-core}, a separate compilation unit from
- * {@code agent.Agent} and {@code agent.IterationContext} (both stay in the root project — see
- * the Package Decision in docs/superpowers/plans/2026-07-25-dd043-pr1-basquin-core.md). Before
- * the split, {@link #evaluateAndMaybeFail} took an {@code IterationContext} and called back into
- * {@code Agent.recordInvariantEvidence} before throwing; that direct call is now a circular
- * project dependency (basquin-core -> root -> basquin-core), which Gradle cannot build. The
- * brief that authored this extraction did not anticipate this back-reference (it only tracked
- * classes that call INTO Invariants/ResultStore, not what Invariants itself calls out to).
+ * <p>This class lives in {@code basquin-core}, a separate compilation unit from {@code agent.Agent}
+ * and {@code agent.IterationContext} (both stay in the root project). It keeps {@code package agent}
+ * rather than moving to a package of its own — see the Package Decision in
+ * docs/superpowers/plans/2026-07-25-dd043-pr1-basquin-core.md: {@code GenericRunner}'s reset
+ * ClassLoader loads anything matching {@code "agent."} parent-first, so a rename would make this
+ * class load child-first instead and produce a fresh {@link ResultStore} per reset. {@code
+ * Invariants} cannot call back into {@code Agent} to record evidence or throw — that would be a
+ * circular project dependency (basquin-core -> root -> basquin-core), which Gradle cannot build.
  *
- * <p>Fix: {@link #evaluateAndMaybeFail} now takes only primitives and returns a {@link Result}
- * instead of mutating a context or throwing. The caller ({@code Agent.end()}) records evidence
- * and decides whether to throw, at the exact same point and in the exact same order as before —
- * see the call site there for the one-line justification. Evaluation order, per-invariant
- * early-exit, log lines and exception messages are byte-for-byte unchanged; only which method
- * physically executes the "record evidence" / "throw" side effects moved, and it moved to the
- * same synchronous call stack frame, one level up.
+ * <p>So {@link #evaluateAndMaybeFail} takes only primitives and returns a {@link Result} instead
+ * of mutating a context or throwing. The caller ({@code Agent.end()}) records evidence and decides
+ * whether to throw, at the exact same point and in the exact same order as before — see the call
+ * site there for the one-line justification. Evaluation order, per-invariant early-exit, log
+ * lines and exception messages are byte-for-byte unchanged; only which method physically executes
+ * the "record evidence" / "throw" side effects moved, and it moved to the same synchronous call
+ * stack frame, one level up.
  */
 final class Invariants {
 

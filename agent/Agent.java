@@ -464,7 +464,8 @@ public class Agent {
         return lastLatencyMs + "," + lastHeapDeltaKb + "," + lastThreadDelta;
     }
 
-    /** Called by {@link Invariants} during evaluation to record evidence onto the context. */
+    /** Called by {@link #end(IterationContext)}, after {@link Invariants#evaluateAndMaybeFail}
+     *  returns, to record evidence onto the context. */
     static void recordInvariantEvidence(IterationContext ctx, List<Invariants.Violation> violations) {
         if (violations == null || violations.isEmpty()) {
             ctx.invariantViolations = Collections.emptyList();

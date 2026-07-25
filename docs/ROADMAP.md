@@ -74,7 +74,8 @@ work, not cleanup of this thread.
 
 ## Start here next
 
-`main` is clean, no open PRs. Four threads are ready to pick up, in rough priority:
+One PR is open ([#99](https://github.com/ianp94/basquin/pull/99) — this file's own post-merge sync,
+docs-only). Four threads are ready to pick up, in rough priority:
 
 0. **DD-043 PR-1 — the `basquin-core` extraction.** Phase 0 passed its gate, so this is the one thread
    whose next step is *code*, not a spec. Pure refactor: move `Invariants` evaluation, `ResultStore`
@@ -113,7 +114,8 @@ time, nothing CPU-heavy during a run.
 
 ## Open PRs
 
-**None.** Everything is merged to `main`.
+**[#99](https://github.com/ianp94/basquin/pull/99) — this file's post-merge sync** (docs-only: this
+roadmap, the DD-043 spec's Round-2 ledger, and `REPORT.md`). Everything else is merged to `main`.
 
 [#98](https://github.com/ianp94/basquin/pull/98) (DD-043 spec + Phase-0 spike evidence, evidence-only,
 no product code) merged 2026-07-24 as `6aa16fc`. It was a **squash** merge, so the branch's individual
@@ -122,7 +124,10 @@ test; verify by content. Its durable record is the spec's own amendment ledger p
 [`REPORT.md`](../bench-results/dd043-spikes-2026-07-24/REPORT.md); the review artifacts that drove its
 round-2 fix pass lived in `.superpowers/sdd/`, which is **untracked session scratch** — its ignore rule
 is a nested `.gitignore` containing `*`, which ignores itself, so a fresh clone has no rule *and* no
-directory. Nothing under that path is citable from any committed file.
+directory. **DD-043's own documents therefore cite nothing under that path.** Five other committed files
+still do (six citations, audited); that debt is recorded in `TODO.md` — an earlier draft of this
+paragraph claimed no committed file cited the path at all, which was an overclaim from grepping only
+DD-043's own docs.
 
 The prior session shipped #92–#97 (DD-038 classifier fix, Roller target + generated page, DD-040,
 DD-039, the two follow-up PRs, and the benchmark re-run).

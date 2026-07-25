@@ -92,7 +92,9 @@ evidence was altered.
 | **I4** | Amendment 8's replacement instrument had no §1.1-compatible home — a planted JAX-RS route means editing app source, and an extension-owned one is not in the app's coverage denominator | §7.1, §7.3 |
 | **I5** | S3's JVM-only scope was in `REPORT.md` and the spike findings but nowhere in the spec, which is what PR-2…PR-5 are implemented from | ledger §4.3 bullet, §6, §7.2 |
 | **I6** | "§5's mechanism holds" covered both injections; S4 exercised only the dependency half | ledger, §5, §5.1, §7.1 gate, §8.2 (new), §9 |
-| **M1–M3** | `REPORT.md` prose drifts from the artifacts it cites | `REPORT.md` only |
+| **M1** | `REPORT.md`'s S2 narration described the startup gap as "3 seconds"; the `[PROBE]` timestamps in `app.log` give **9.454 s**, and `s2-memory/findings.md:29-30` carries the same wrong figure | `REPORT.md` (the findings-file drift is recorded, not edited — committed spike evidence is not rewritten) |
+| **M2** | "Maven 3.6.3" was asserted as the host toolchain with no artifact behind it | `REPORT.md` **and spec §3.1** — the claim appeared in both, so this row is *not* `REPORT.md`-only |
+| **M3** | `REPORT.md` implied `banner-native.txt` is a one-line banner; it is a 9-line run log | `REPORT.md` |
 | **M4** | §6.2's `com.sun.management`/SubstrateVM claim is uncited and underpins the 2×2 split | §6.2 |
 
 **Judged not worth changing, and why:**

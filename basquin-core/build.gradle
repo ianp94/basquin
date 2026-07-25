@@ -77,5 +77,15 @@ publishing {
             name = 'pages'
             url = rootProject.layout.projectDirectory.dir('docs/maven')
         }
+        maven {
+            // The Phase-0 fixture's Maven repository. The fixture builds in a container with
+            // -Duser.home=/m2, so its local repo is this path and NOT ~/.m2 — publishing to
+            // mavenLocal() is invisible to it. basquin-quarkus/* publish here too, so the whole
+            // extension chain reaches the fixture in one command. Without this, consuming
+            // basquin-core from the fixture needs a manual publish-and-copy, which is a
+            // reproducibility gap rather than a build step.
+            name = 'dd043Spike'
+            url = rootProject.layout.projectDirectory.dir('bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository')
+        }
     }
 }

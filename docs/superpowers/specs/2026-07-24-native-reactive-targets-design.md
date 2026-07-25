@@ -464,8 +464,13 @@ Per request:
 
 1. Filter **reads** the driver's id from the inbound `X-Basquin-Req` **request** header, stamps start
    time, stashes both on the `RoutingContext`, and increments the in-flight counter (§6.1).
-2. `addEndHandler` computes the measurement, records disposition (`completed|disconnected`), and puts
-   the result into the store under that id.
+2. `addEndHandler` computes the measurement and puts the result into the store under that id — **but
+   only for a completed response**. `ResultStore.Entry` carries no disposition field
+   (`costCsv, invariantCount, detail, leakDetected`), so "records disposition" is not literally
+   implementable against it. A disconnected request (`ar.succeeded()` false) is simply **not
+   published**, which is what §6.5 actually requires: its elapsed time is time-to-abort, not
+   latency, so it must not enter the distribution. Explicit disconnect *accounting* — as opposed to
+   exclusion — would need a new `Entry` field and is deliberately not in PR-2.
 3. The driver polls `/__basquin/result?id=<id>`.
 
 **Corrected 2026-07-25 against the code; an earlier draft of this list was wrong in a way that would
@@ -906,7 +911,7 @@ change: "strictly better" is withdrawn in favour of *"differently scoped — inc
 excludes nothing the valve measured."*
 
 And on a **failed** `AsyncResult` (client disconnect), elapsed-until-abort is not a latency sample at
-all. The boundary records disposition and keeps `disconnected` samples out of the latency distribution,
+all. The boundary keeps `disconnected` samples out of the latency distribution by not publishing them,
 or a flaky driver connection manufactures latency findings.
 
 ## 7. Validation

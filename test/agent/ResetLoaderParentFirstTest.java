@@ -35,8 +35,9 @@ public class ResetLoaderParentFirstTest {
         // either class's package changes what .class.getName() returns, so this assertion
         // tracks the actual class and fails on the rename it exists to catch. A hand-typed
         // literal like "agent.ResultStore" would keep matching "agent." forever, even after
-        // the class itself moved to a different package — see the mutation evidence recorded
-        // in .superpowers/sdd/task-3-report.md.
+        // the class itself moved to a different package. Verified by moving a class out of
+        // `package agent` and watching this assertion fail; repeat that mutation, not a change
+        // of the literal, if you need to re-confirm the guard bites.
         assertTrue("agent.ResultStore must be parent-first or the reset loader forks the store",
                 isParentFirst(ResultStore.class.getName()));
         assertTrue("agent.Invariants must be parent-first",

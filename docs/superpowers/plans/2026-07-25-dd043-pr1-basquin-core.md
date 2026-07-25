@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- **Zero behaviour change.** The measured baseline on `main` (commit `f6d143a`, run 2026-07-25) is **324 tests across 52 suites, 0 failures, 0 errors, 0 skipped**. Any task that ends with a different failure/error count has changed behaviour and is not done.
+- **Zero behaviour change.** The measured baseline at this branch's base — `main` at `6aa16fc`, run 2026-07-25 — is **324 tests across 52 suites, 0 failures, 0 errors, 0 skipped**. Any task that ends with a different failure/error count has changed behaviour and is not done.
 - **No Quarkus code in this PR.** No Maven project, no extension module, no `quarkus-*` dependency. PR-2 owns that.
 - **The Java package of the moved classes stays `agent`.** Not negotiable in this PR (Package Decision below).
 - **Do not touch** `agent/Agent.java`'s `Thread.sleep(25)` (`:118`), its thread enumerations, its `System.gc()` calls (`:96`, `:126`), or anything `ThreadLocal`-backed. Spec §4.1 draws that line and this PR does not cross it.

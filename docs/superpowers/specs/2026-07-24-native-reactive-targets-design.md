@@ -367,9 +367,13 @@ driver crashed on iteration 1 with `NoClassDefFoundError: agent/Invariants`.
 
 **No JUnit test can catch this class of defect** — it is a property of the built artifact, not of
 the classpath tests run against. The fix is a permanent Gradle guard,
-`verifyShippedJarsContainCore` (`build.gradle:175`), wired into `check` (`build.gradle:217`), which
-opens every shipped jar (the agent fat jar and `runnerJar`) via `java.util.jar.JarFile` and fails,
-naming the exact missing entries, if either is short the core classes. It exists because the classes
+the `verifyShippedJarsContainCore` task in the root `build.gradle`. It opens every shipped jar (the
+agent fat jar and `runnerJar`) via `java.util.jar.JarFile` and fails, naming the exact missing
+entries, if either is short the core classes. Its expected entry set is **derived from
+`basquin-core`'s own jar**, not hand-listed, so a class added to that module is guarded
+automatically. It is attached with `finalizedBy` on the jar-producing tasks themselves rather than
+to `check`, because the release path (`release.yml`, `deploy/*/build.sh`) invokes `jar`/`runnerJar`
+directly and never runs `check` — so `./gradlew runnerJar` alone still runs the guard. It exists because the classes
 will move again when `package agent` is eventually renamed, and that move will recreate exactly this
 risk.
 

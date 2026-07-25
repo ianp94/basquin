@@ -323,13 +323,25 @@ four**: the `Invariants` class, `evaluateAndMaybeFail`, `Result` (plus accessors
 `hardFailureMessage` — the fields can stay package-private if accessors are added instead), and
 `Violation`'s `name`/`detail` (as public fields or accessors).
 
-**There is also no publish path.** `basquin-core/build.gradle` applies only the `java` plugin — no
-`maven-publish`, no `publishing {}` block, `publishToMavenLocal`, or repository declaration exists
-anywhere in the repo for this module. §3.1's Maven build runs inside a container; nothing it invokes
-can resolve `com.basquin:basquin-core:0.3.0` from any repository. This is the extraction's headline
-purpose ("so the Maven-built Quarkus extension in PR-2 can depend on it") — until a publish path
-exists, PR-2 cannot compile against this artifact at all, independent of the visibility question
-above.
+**Publishing — resolved, no longer an entry requirement.** `basquin-core` now applies `maven-publish`
+with two targets from one configuration. `publishToMavenLocal` puts it in `~/.m2/repository` for
+developing the extension against an unreleased core — the path spike S4's addendum proved, since an
+artifact present only in the local repo resolves through the injected dependency.
+`publishAllPublicationsToPagesRepository` writes it to `docs/maven/`, which GitHub Pages serves at
+`https://ianp94.github.io/basquin/maven/`; the release workflow's existing `pages` job publishes and
+commits it exactly as it already does for `docs/charts/`. Consumers add that one `<repository>` and
+need **no credentials**, unlike GitHub Packages, which requires a token even for public artifacts.
+Maven has no native git-dependency form, so a static repo committed here and served over HTTPS is the
+closest equivalent to depending on the source directly.
+
+Verified rather than assumed: a throwaway Maven project declaring
+`com.basquin:basquin-core:0.3.0` against a `file://` copy of that layout resolved it —
+`BUILD SUCCESS`, `com.basquin:basquin-core:jar:0.3.0:compile`. The correct layout is not the same as
+a resolvable one, so the resolution was run.
+
+**What remains of PR-2's entry requirement is visibility only:** `Invariants`,
+`evaluateAndMaybeFail`, `Result` (and its accessors) and `Violation`'s fields are package-private and
+must be widened together — widening `Invariants` alone leaves the call unusable.
 
 **PR-2 cannot start its boundary filter until both are resolved.** Recorded here as an entry
 requirement (§9's PR-2 row) rather than left to be discovered mid-build, the way the packaging gap
@@ -1142,7 +1154,7 @@ history says this repo needs.
 |---|---|---|
 | **PR-0** | Phase-0 spikes S1–S4 → `bench-results/dd043-spikes-2026-07-24/`, plus the spec amendments they forced. **No product code.** — **DONE, gate PASSED** | Gates everything below |
 | **PR-1** | `basquin-core` extraction (§4.1) — pure refactor, zero behaviour change, existing tests green, no Quarkus code — **DONE** (324 → 326 tests, 0 failures; branch `dd043-pr1-basquin-core`, not yet merged) | PR-0 — cleared |
-| **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + parking poll (§4.4), `/basquin/status\|result`, control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private, and `basquin-core` has no `maven-publish` path yet; both must be resolved before the boundary filter can call this artifact |
+| **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + parking poll (§4.4), `/basquin/status\|result`, control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private and must be widened together before the boundary filter can call this artifact. The publishing half is resolved: `maven-publish` ships both a local and a Pages-served Maven repo |
 | **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits | PR-2 |
 | **PR-4** | Coverage — offline-JaCoCo execution injection, `/basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 · **entry gate: §8.2** (plugin-execution injection is unmeasured); the native cells additionally carry §7.2's S3 re-check |
 | **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |

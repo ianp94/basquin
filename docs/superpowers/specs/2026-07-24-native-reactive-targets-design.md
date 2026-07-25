@@ -329,15 +329,24 @@ developing the extension against an unreleased core — the path spike S4's adde
 artifact present only in the local repo resolves through the injected dependency.
 `publishAllPublicationsToPagesRepository` writes it to `docs/maven/`, which GitHub Pages serves at
 `https://ianp94.github.io/basquin/maven/`; the release workflow's existing `pages` job publishes and
-commits it exactly as it already does for `docs/charts/`. Consumers add that one `<repository>` and
+commits it exactly as it already does for `docs/charts/`. **That URL serves nothing until the next `v*`
+tag** — v0.3.0 shipped before `basquin-core` existed and no artifacts are committed here — so until then
+the consumable path is `publishToMavenLocal`. Consumers add that one `<repository>` and
 need **no credentials**, unlike GitHub Packages, which requires a token even for public artifacts.
 Maven has no native git-dependency form, so a static repo committed here and served over HTTPS is the
 closest equivalent to depending on the source directly.
 
-Verified rather than assumed: a throwaway Maven project declaring
-`com.basquin:basquin-core:0.3.0` against a `file://` copy of that layout resolved it —
-`BUILD SUCCESS`, `com.basquin:basquin-core:jar:0.3.0:compile`. The correct layout is not the same as
-a resolvable one, so the resolution was run.
+Verified rather than assumed, with the evidence committed: **`bench-results/dd043-publish-2026-07-25/`**
+holds the consumer POM, the full `mvn dependency:resolve` log from a clean local repository, and the
+serving HTTP request log. A correct layout is not the same as a resolvable one, so the resolution was
+run — over **HTTP**, not `file://`, because Pages serves over HTTPS and `file://` exercises none of that
+transport behaviour. The request log also settles §6.2's `.module` question empirically: Maven requested
+only the `.pom`, `.jar` and their `.sha1` sidecars and **never asked for the Gradle Module Metadata
+file**, so it cannot cause a variant mismatch for a Maven consumer.
+
+What that does *not* establish is a real Pages deploy, which cannot be tested before the first `v*` tag
+populates `docs/maven/`. The supporting argument there is precedent, not evidence: the same `pages` job
+publishes `docs/charts/`, which serves over HTTPS today, and `docs/.nojekyll` disables Jekyll repo-wide.
 
 **What remains of PR-2's entry requirement is visibility only:** `Invariants`,
 `evaluateAndMaybeFail`, `Result` (and its accessors) and `Violation`'s fields are package-private and

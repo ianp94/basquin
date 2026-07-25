@@ -288,7 +288,7 @@ preceding them sits **9.454 s** before the first idle sample. `s2-memory/finding
 same gap as "**3 seconds** before sample 1" — a specific figure, and the wrong one, against the
 9.454 s the `[PROBE]` ids in `app.log` give. No published number depends on the gap; the exact
 divergence is stated here rather than paraphrased so a re-runner can check the narration against the
-timestamps directly. Committed evidence is left as-is.
+`[PROBE]` ids directly. Committed evidence is left as-is.
 
 Every sample in this series is itself an HTTP request, so part of what drifts is the cost of the poll.
 

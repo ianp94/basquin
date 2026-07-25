@@ -128,9 +128,7 @@ test; verify by content. Its durable record is the spec's own amendment ledger p
 round-2 fix pass lived in `.superpowers/sdd/`, which is **untracked session scratch** — its ignore rule
 is a nested `.gitignore` containing `*`, which ignores itself, so a fresh clone has no rule *and* no
 directory. **DD-043's own documents therefore cite nothing under that path.** Five other committed files
-still do (six citations, audited); that debt is recorded in `TODO.md` — an earlier draft of this
-paragraph claimed no committed file cited the path at all, which was an overclaim from grepping only
-DD-043's own docs.
+still do (six citations, audited); that debt is recorded in `TODO.md`.
 
 The prior session shipped #92–#97 (DD-038 classifier fix, Roller target + generated page, DD-040,
 DD-039, the two follow-up PRs, and the benchmark re-run).

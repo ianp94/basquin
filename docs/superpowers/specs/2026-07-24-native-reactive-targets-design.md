@@ -486,25 +486,36 @@ So *every* iteration polls, doubling requests per iteration. DD-040 rejected "pi
 result on request N" for complicating a path that mostly did not need it; here the poll is universal,
 so that alternative deserves re-evaluation. Deferred to PR-2, flagged, not silently inherited.
 
-### 4.4a The control surface is `LoadModeControl`, reused — not reimplemented
+### 4.4a The control surface: share the wire format, not the handler
 
-`agent/LoadModeControl.java` already is the control surface, and it is framework-neutral by
-construction: **zero imports**, pure JDK, deliberately kept out of the valve so it is unit-testable
-without a Tomcat. Its entire public API is `PREFIX` (`/__basquin/`) and
-`handle(String path, String query) → String`, and it already resolves `/__basquin/result?id=…` by
-calling `ResultStore.format(ResultStore.take(id))` *including the waiting poll* §4.4 describes.
+**Corrected against the code the same day it was written.** An earlier version of this section said the
+extension would "intercept `/__basquin/*`, call `LoadModeControl.handle(path, query)`, write the string
+back", on the grounds that `LoadModeControl` has zero imports and is therefore framework-neutral. Zero
+imports does not mean zero dependencies: same-package types need none. `handle` references `LoadMode`
+(three times) and `RequestBoundary.awaitQuiescence` (once), both of which stay in `agent/`. Moving it
+wholesale would recreate the circular dependency that broke the `Invariants` move — and
+`awaitQuiescence` is `ITERATION_LOCK.tryLock(...)`, lock-based machinery that has no meaning on the
+lock-free reactive path this whole spec exists to support.
 
-So the extension's control surface is: intercept `/__basquin/*`, call `handle(path, query)`, write the
-returned string back. It writes no endpoint logic and no wire format of its own.
+**What is genuinely shared, and it is the part that matters.** The drift risk was never the routing —
+it is the **wire format**, and that already lives in `basquin-core` as `ResultStore.format(...)` /
+`ResultStore.take(id)`, public and reused verbatim. The Quarkus and Tomcat paths cannot disagree about
+what a result looks like, which is the whole anti-drift argument. Also worth extracting into
+`basquin-core`, being tiny and pure: the `PREFIX` constant and the query-parameter parser, so both
+paths agree on `/__basquin/` and on how `?id=` is read.
 
-**Why reuse rather than reimplement.** A second implementation of the same wire format is a second
-thing that can drift from the driver's parser — precisely the argument that produced `basquin-core`.
-One implementation means the Quarkus and Tomcat paths cannot disagree about what a result looks like.
+**What the extension implements itself**, because it cannot be shared:
 
-**Consequence for PR-2:** `LoadModeControl` moves into `basquin-core` alongside `Invariants` and
-`ResultStore`. It cannot stay in `agent/` — depending on that module from `basquin-quarkus` would drag
-the Tomcat and JVMTI surface into a native-targeted artifact, which is the coupling the extraction
-exists to prevent. The move keeps `package agent` for the same reason §4.1 gives.
+| `/__basquin/…` | PR-2 | Why |
+|---|---|---|
+| `result?id=` | yes — `ResultStore.format(ResultStore.take(id))` behind a **bounded wait of its own** | `awaitQuiescence` is lock-based; the reactive path has no lock. §4.4's bound (2 s) applies, and a timeout records a **miss**, never a zero |
+| `violations` | yes — `ResultStore.totalViolations()` | no coupling |
+| `mode`, `drift` | **no** | both are `LoadMode`, the DD-029 valve strategy flag. Load mode against native targets is a §2 non-goal and DD-042's business |
+
+**`LoadModeControl` therefore does not move.** It stays in `agent/` as the Tomcat path's handler. Only
+`PREFIX` and the parameter parser are extracted, and only if that extraction is behaviour-preserving —
+otherwise the extension carries its own copies of two trivial pure functions, which is a smaller cost
+than a bad refactor of a shipped control path.
 
 ## 5. Injection without source modification
 
@@ -1196,7 +1207,7 @@ history says this repo needs.
 |---|---|---|
 | **PR-0** | Phase-0 spikes S1–S4 → `bench-results/dd043-spikes-2026-07-24/`, plus the spec amendments they forced. **No product code.** — **DONE, gate PASSED** | Gates everything below |
 | **PR-1** | `basquin-core` extraction (§4.1) — pure refactor, zero behaviour change, existing tests green, no Quarkus code — **DONE** (324 → 326 tests, 0 failures; branch `dd043-pr1-basquin-core`, not yet merged) | PR-0 — cleared |
-| **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + reused `LoadModeControl` control surface (§4.4a), control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private and must be widened together before the boundary filter can call this artifact. The publishing half is resolved: `maven-publish` ships both a local and a Pages-served Maven repo |
+| **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + a `/__basquin/{result,violations}` control surface sharing `ResultStore`'s wire format (§4.4a), control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private and must be widened together before the boundary filter can call this artifact. The publishing half is resolved: `maven-publish` ships both a local and a Pages-served Maven repo |
 | **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits | PR-2 |
 | **PR-4** | Coverage — offline-JaCoCo execution injection, `/__basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 · **entry gate: §8.2** (plugin-execution injection is unmeasured); the native cells additionally carry §7.2's S3 re-check |
 | **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |

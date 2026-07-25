@@ -286,9 +286,9 @@ Window timing, derived from the `[PROBE]` ids in `app.log`: the 30 analyzed idle
 **29.185 s** at **1.006 s** spacing (29 gaps, min 1.00606 s, max 1.00684 s) — clean. The liveness check
 preceding them sits **9.454 s** before the first idle sample. `s2-memory/findings.md:29-30` names that
 same gap as "**3 seconds** before sample 1" — a specific figure, and the wrong one, against the
-9.454 s the `[PROBE]` timestamps in `app.log` give. No published number depends on the gap; the exact
+9.454 s the `[PROBE]` ids in `app.log` give. No published number depends on the gap; the exact
 divergence is stated here rather than paraphrased so a re-runner can check the narration against the
-timestamps directly. Committed evidence is left as-is.
+`[PROBE]` ids directly. Committed evidence is left as-is.
 
 Every sample in this series is itself an HTTP request, so part of what drifts is the cost of the poll.
 
@@ -494,6 +494,8 @@ question, not because a spike answered it badly:
   that the `jfr,nmt` *build flag* is accepted and compiles.
 
 Both are recorded in the spec rather than only here, since the spec is what PR-1…PR-5 are implemented
-from. A whole-branch review (`.superpowers/sdd/final-review-pr98.md`) found several such scopes present
-in this report and missing there; that round of fixes is logged in the spec's amendment ledger under
-"Round 2".
+from. A whole-branch review found several such scopes present in this report and missing there; that
+round of fixes is logged in the spec's amendment ledger under "Round 2", which records **each finding
+and the sections it changed**. It does not carry the review's reasoning or its per-finding failure
+scenarios: that report was session-local scratch and is not committed, so it is unavailable rather than
+summarised. The ledger is the record *of what was found and fixed*, not of the review itself.

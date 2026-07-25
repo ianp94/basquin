@@ -77,11 +77,17 @@ unchecked section:
 
 ### Round 2 — final-review fixes (2026-07-24)
 
-A whole-branch review (`.superpowers/sdd/final-review-pr98.md`, 1 Critical / 6 Important / 4 Minor)
-found that round 1 rewrote the sections the evidence contradicted **but not the sections that depend on
-them**. Every finding is an instance of this branch's defining defect class: *a reported zero that means
-"never measured" rather than "checked and clean"*. Round 2 is those follow-throughs. No committed spike
-evidence was altered.
+A whole-branch review (1 Critical / 6 Important / 4 Minor; its report was session-local scratch and is
+not committed, so the findings are reproduced in the table below rather than cited) found that round 1
+rewrote the sections the evidence contradicted **but not the sections that depend on them**. Every finding is an instance of this branch's defining defect class: *a reported zero that means
+"never measured" rather than "checked and clean"*. Round 2 is those follow-throughs.
+
+**Scope of Round 2.** It edited this spec, `bench-results/dd043-spikes-2026-07-24/REPORT.md`, and
+`docs/ROADMAP.md`. `REPORT.md` is a derived report rather than evidence — several findings concerned
+its prose drifting from the artifacts it cites. No raw spike artifact was edited.
+
+#98 was squashed into `6aa16fc`, so per-round diffs are not recoverable from `main`: this paragraph
+is a description of the round, not something a reader can reconstruct from history.
 
 | # | Finding | Sections changed |
 |---|---|---|
@@ -92,7 +98,9 @@ evidence was altered.
 | **I4** | Amendment 8's replacement instrument had no §1.1-compatible home — a planted JAX-RS route means editing app source, and an extension-owned one is not in the app's coverage denominator | §7.1, §7.3 |
 | **I5** | S3's JVM-only scope was in `REPORT.md` and the spike findings but nowhere in the spec, which is what PR-2…PR-5 are implemented from | ledger §4.3 bullet, §6, §7.2 |
 | **I6** | "§5's mechanism holds" covered both injections; S4 exercised only the dependency half | ledger, §5, §5.1, §7.1 gate, §8.2 (new), §9 |
-| **M1–M3** | `REPORT.md` prose drifts from the artifacts it cites | `REPORT.md` only |
+| **M1** | `REPORT.md` paraphrased the S2 startup gap as "near-contiguous", which concealed that `s2-memory/findings.md:29` states a **wrong figure** ("3 seconds") against the **9.454 s** the `[PROBE]` ids in `app.log` give. The wrong figure was never in `REPORT.md` — it is in the findings file, and `REPORT.md` merely declined to name it | `REPORT.md`, which now names and attributes the discrepancy. `s2-memory/findings.md` is committed spike evidence and was deliberately **not** rewritten; the drift is recorded instead |
+| **M2** | "Maven 3.6.3" was asserted as the host toolchain with no artifact behind it | `REPORT.md` **and spec §3.1** — the claim appeared in both, so this row is *not* `REPORT.md`-only |
+| **M3** | `REPORT.md` implied `banner-native.txt` is a one-line banner; it is a 9-line run log | `REPORT.md` |
 | **M4** | §6.2's `com.sun.management`/SubstrateVM claim is uncited and underpins the 2×2 split | §6.2 |
 
 **Judged not worth changing, and why:**

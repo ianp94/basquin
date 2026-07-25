@@ -286,7 +286,7 @@ Window timing, derived from the `[PROBE]` ids in `app.log`: the 30 analyzed idle
 **29.185 s** at **1.006 s** spacing (29 gaps, min 1.00606 s, max 1.00684 s) — clean. The liveness check
 preceding them sits **9.454 s** before the first idle sample. `s2-memory/findings.md:29-30` names that
 same gap as "**3 seconds** before sample 1" — a specific figure, and the wrong one, against the
-9.454 s the `[PROBE]` timestamps in `app.log` give. No published number depends on the gap; the exact
+9.454 s the `[PROBE]` ids in `app.log` give. No published number depends on the gap; the exact
 divergence is stated here rather than paraphrased so a re-runner can check the narration against the
 timestamps directly. Committed evidence is left as-is.
 

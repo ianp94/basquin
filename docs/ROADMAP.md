@@ -74,8 +74,8 @@ work, not cleanup of this thread.
 
 ## Start here next
 
-One PR is open ([#99](https://github.com/ianp94/basquin/pull/99) — this file's own post-merge sync,
-docs-only). Four threads are ready to pick up, in rough priority:
+One PR is open ([#99](https://github.com/ianp94/basquin/pull/99) — this file's own post-merge sync;
+scope under "Open PRs" below). Four threads are ready to pick up, in rough priority:
 
 0. **DD-043 PR-1 — the `basquin-core` extraction.** Phase 0 passed its gate, so this is the one thread
    whose next step is *code*, not a spec. Pure refactor: move `Invariants` evaluation, `ResultStore`

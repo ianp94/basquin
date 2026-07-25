@@ -615,18 +615,26 @@ Audited with `git grep -n "\.superpowers/sdd/[A-Za-z0-9]"` — **six citations i
 Two of the three targets still exist on the authoring machine; `dd039-spike-report.md` is gone even
 there. None are in the repo.
 
-**Why this is not a mechanical find-and-replace.** Two of the citations are load-bearing rather than
-decorative: in the `inputpair-capture` and `nonce-and-3xx` specs the dead pointer *is* the stated
-"Motivation source", and one plan carries a bare "Proven by throwaway spike" whose proof is the
-missing file. Deleting those citations removes the only stated provenance for a design decision;
-keeping them promises evidence the reader cannot obtain. The real fix is per-site: restate what the
-spike actually established, inline, from whatever survives — the DD record, the committed benchmark
-artifacts, or the code the spike was reasoning about.
+**Why this is not a mechanical find-and-replace.** **Three** of the six are load-bearing rather than
+decorative — in each, the dead pointer is the only stated provenance for a design decision:
 
-- [ ] Restate the two load-bearing citations (`inputpair-capture-design`, `nonce-and-3xx-design`) with
-      inline evidence rather than a path
-- [ ] Decide the remaining four: inline the finding, or drop the pointer and say the spike was
-      throwaway so no provenance is implied
+| Site | What the pointer is doing |
+|---|---|
+| `specs/2026-07-22-inputpair-capture-design.md` | the stated "Motivation source" |
+| `specs/2026-07-22-nonce-and-3xx-design.md` | the stated "Motivation source" |
+| `plans/2026-07-23-redirect-session-carry.md` | a bare "Proven by throwaway spike" — the spike *is* the proof |
+
+Deleting these removes the only stated provenance; keeping them promises evidence the reader cannot
+obtain. The fix is per-site: restate what the spike actually established, inline, from whatever
+survives — the DD record, the committed benchmark artifacts, or the code it was reasoning about.
+
+The other three (both `DESIGN-DECISIONS.md` sites and the `inputpair-capture` *plan*) are
+parenthetical receipts whose surrounding prose already carries the claim.
+
+- [ ] Restate the **three** load-bearing citations (the two specs above plus
+      `redirect-session-carry.md`) with inline evidence rather than a path
+- [ ] Decide the remaining **three** parenthetical receipts: inline the finding, or drop the pointer
+      and say the spike was throwaway so no provenance is implied
 - [ ] Consider whether `.superpowers/sdd/` should be ignored by a **tracked** rule instead, so the
       convention is visible in a clone rather than inferred from a file that ignores itself
 

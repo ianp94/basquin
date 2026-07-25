@@ -82,17 +82,12 @@ not committed, so the findings are reproduced in the table below rather than cit
 rewrote the sections the evidence contradicted **but not the sections that depend on them**. Every finding is an instance of this branch's defining defect class: *a reported zero that means
 "never measured" rather than "checked and clean"*. Round 2 is those follow-throughs.
 
-**What was and was not touched, stated exhaustively rather than by example.** Round 2 is commit
-`496311c`, which changed **3 files in total**, of which exactly **one** lies under
-`bench-results/dd043-spikes-2026-07-24/` — `REPORT.md`. The other **87** committed files in that
-directory are untouched (`git show --name-only 496311c` against `git ls-files` on the directory
-confirms both halves). `REPORT.md` is a derived document rather than evidence, and several findings
-were about its prose drifting from the artifacts it cites.
+**Scope of Round 2.** It edited this spec, `bench-results/dd043-spikes-2026-07-24/REPORT.md`, and
+`docs/ROADMAP.md`. `REPORT.md` is a derived report rather than evidence — several findings concerned
+its prose drifting from the artifacts it cites. No raw spike artifact was edited.
 
-Two earlier wordings of this paragraph were both wrong in the same direction: "no committed spike
-evidence was altered" read as though nothing under `bench-results/` changed, and the replacement
-enumerated file extensions, which named ~60 of the 88 files and silently omitted the rest. A count is
-checkable; an enumeration invites exactly the gap it papers over.
+#98 was squashed into `6aa16fc`, so per-round diffs are not recoverable from `main`: this paragraph
+is a description of the round, not something a reader can reconstruct from history.
 
 | # | Finding | Sections changed |
 |---|---|---|
@@ -103,7 +98,7 @@ checkable; an enumeration invites exactly the gap it papers over.
 | **I4** | Amendment 8's replacement instrument had no §1.1-compatible home — a planted JAX-RS route means editing app source, and an extension-owned one is not in the app's coverage denominator | §7.1, §7.3 |
 | **I5** | S3's JVM-only scope was in `REPORT.md` and the spike findings but nowhere in the spec, which is what PR-2…PR-5 are implemented from | ledger §4.3 bullet, §6, §7.2 |
 | **I6** | "§5's mechanism holds" covered both injections; S4 exercised only the dependency half | ledger, §5, §5.1, §7.1 gate, §8.2 (new), §9 |
-| **M1** | `REPORT.md` paraphrased the S2 startup gap as "near-contiguous", which concealed that `s2-memory/findings.md:29` states a **wrong figure** ("3 seconds") against the **9.454 s** the `[PROBE]` timestamps in `app.log` give. The wrong figure was never in `REPORT.md` — it is in the findings file, and `REPORT.md` merely declined to name it | `REPORT.md`, which now names and attributes the discrepancy. `s2-memory/findings.md` is committed spike evidence and was deliberately **not** rewritten; the drift is recorded instead |
+| **M1** | `REPORT.md` paraphrased the S2 startup gap as "near-contiguous", which concealed that `s2-memory/findings.md:29` states a **wrong figure** ("3 seconds") against the **9.454 s** the `[PROBE]` ids in `app.log` give. The wrong figure was never in `REPORT.md` — it is in the findings file, and `REPORT.md` merely declined to name it | `REPORT.md`, which now names and attributes the discrepancy. `s2-memory/findings.md` is committed spike evidence and was deliberately **not** rewritten; the drift is recorded instead |
 | **M2** | "Maven 3.6.3" was asserted as the host toolchain with no artifact behind it | `REPORT.md` **and spec §3.1** — the claim appeared in both, so this row is *not* `REPORT.md`-only |
 | **M3** | `REPORT.md` implied `banner-native.txt` is a one-line banner; it is a 9-line run log | `REPORT.md` |
 | **M4** | §6.2's `com.sun.management`/SubstrateVM claim is uncited and underpins the 2×2 split | §6.2 |

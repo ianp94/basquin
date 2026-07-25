@@ -1,6 +1,6 @@
 // basquin-quarkus-deployment — build-time/augmentation module for the basquin-quarkus extension.
 //
-// DD-043 PR-2 decision spike (.superpowers/sdd/pr2-spike-report.md). Deliberately trivial: the
+// DD-043 PR-2 decision spike (bench-results/dd043-pr2-spike-2026-07-25/). Deliberately trivial: the
 // only build step (BasquinProcessor) emits FeatureBuildItem("basquin") and nothing else — no
 // boundary filter, no routes, no basquin-core dependency. This module is not deployed to
 // application runtime classpaths; Quarkus's bootstrap resolver pulls it in only during

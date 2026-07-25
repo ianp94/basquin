@@ -2,7 +2,7 @@
 //
 // Question this module exists to answer: does the io.quarkus.extension Gradle plugin at 3.37.3
 // produce an extension artifact that a MAVEN-built Quarkus application actually picks up at
-// augmentation? See .superpowers/sdd/pr2-spike-report.md for the full spike and verdict.
+// augmentation? See bench-results/dd043-pr2-spike-2026-07-25/ for the full spike and verdict.
 //
 // Content is deliberately trivial: no boundary filter, no routes, no basquin-core dependency —
 // those are PR-2 proper, gated on this spike's outcome. This module carries no runtime classes

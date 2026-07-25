@@ -2,7 +2,7 @@ rootProject.name = 'basquin'
 include 'tomcat-war'
 include 'tomcat-valve'
 include 'basquin-core'
-// DD-043 PR-2 decision spike (docs/superpowers/... / .superpowers/sdd/pr2-spike-report.md):
+// DD-043 PR-2 decision spike (evidence: bench-results/dd043-pr2-spike-2026-07-25/):
 // does a Gradle-built io.quarkus.extension artifact get honoured by a Maven-built Quarkus app
 // at augmentation? Deliberately trivial content — see basquin-quarkus/*/build.gradle.
 include 'basquin-quarkus:runtime'

@@ -340,7 +340,7 @@ Verified rather than assumed, with the evidence committed: **`bench-results/dd04
 holds the consumer POM, the full `mvn dependency:resolve` log from a clean local repository, and the
 serving HTTP request log. A correct layout is not the same as a resolvable one, so the resolution was
 run — over **HTTP**, not `file://`, because Pages serves over HTTPS and `file://` exercises none of that
-transport behaviour. The request log also settles §6.2's `.module` question empirically: Maven requested
+transport behaviour. The request log also settles the Gradle Module Metadata question raised in this PR's review empirically: Maven requested
 only the `.pom`, `.jar` and their `.sha1` sidecars and **never asked for the Gradle Module Metadata
 file**, so it cannot cause a variant mismatch for a Maven consumer.
 

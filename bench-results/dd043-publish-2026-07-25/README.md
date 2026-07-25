@@ -32,6 +32,10 @@ it tests what the claim is actually about.
 | `mvn-resolve.log` | full `mvn -B dependency:resolve` output, clean `-Dmaven.repo.local` |
 | `http-server-requests.log` | the server's request log — what Maven actually asked for |
 
+Run with **Apache Maven 3.6.3** on **OpenJDK 17.0.19** (the host toolchain). Recorded because a
+resolution result without its resolver version is not reproducible — resolver behaviour is exactly the
+kind of thing that differs across Maven versions.
+
 ## Result
 
 ```
@@ -50,8 +54,10 @@ GET /com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.jar.sha1
 
 Two things that request log settles, which reasoning alone had only argued:
 
-1. **Checksum sidecars are fetched and honoured** (`.pom.sha1`, `.jar.sha1`), so the checksums Gradle
-   writes are load-bearing rather than decoration.
+1. **Checksum sidecars are fetched** (`.pom.sha1`, `.jar.sha1`) — they are part of the retrieval flow,
+   so the checksums Gradle writes are reachable and correctly named. The log shows *retrieval only*: it
+   does **not** show they are validated, and Maven's default `checksumPolicy` is `warn`, so a mismatched
+   checksum would log a warning rather than fail the build. Do not read this as checksum enforcement.
 2. **The Gradle Module Metadata file is never requested.** `basquin-core-0.3.0.module` is published
    alongside the POM (Gradle's default), and the concern was whether it could cause a variant mismatch
    for a Maven consumer. It cannot: Maven does not ask for it. That was previously an argument from

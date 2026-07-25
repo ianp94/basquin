@@ -418,7 +418,7 @@ Standard two-module Quarkus extension shape:
 | Build step | Purpose |
 |---|---|
 | `FeatureBuildItem("basquin")` | Prints in the `Installed features` banner — the deploy signal, and §5.2's injection proof |
-| **`FilterBuildItem`** | Installs the request boundary. *Not* `RouteBuildItem` — `FilterBuildItem` (handler + priority) is Quarkus's idiomatic router-wide filter; `RouteBuildItem` registers routes |
+| **`FilterBuildItem`** | Installs the request boundary. *Not* `RouteBuildItem` — `FilterBuildItem` (handler + priority) is Quarkus's idiomatic router-wide filter; `RouteBuildItem` registers routes. **Ordering trap:** Quarkus installs a `FilterBuildItem` as `router.route().order(-priority)`, so a `RouteBuildItem` with a *more negative* order runs **before the boundary** and is silently uninstrumented. Found in PR-2: a control route at order `-10_000` bypassed the filter at order `-100` entirely, producing no measurement and no error. Any route added under `/__basquin/` must sit **after** the boundary |
 | `RouteBuildItem` | The control surface at **`/__basquin/*`** — the prefix the driver actually calls (`LoadModeControl.PREFIX`), served as Vert.x routes so they exist in native without JAX-RS scanning. **Do not invent endpoints here:** delegate to `LoadModeControl.handle(path, query)`, which already resolves `/__basquin/result?id=…`, `/drift` and `/violations`. See §4.4a |
 | `@Recorder` | Wires runtime state at application startup |
 
@@ -1138,6 +1138,23 @@ All of the above may be collected as diagnostics and **must not** appear as an i
 benchmark page until each earns a control row above. Promoting one is a spec change, not an implementation
 detail.
 
+**Control status as of PR-2 (2026-07-25) — two rows cannot be claimed, and one has already failed.**
+
+- **`UNMEASURED` (sub-quantum heap): FAILED, measured.** Driving
+  `/__basquin/control/defect/alloc?bytes=100` — far below §6.1's 524,288 B quantum — the polled result is
+  `0,0,0|0||` on every trial (`bench-results/dd043-pr2-controls-2026-07-25/03-alloc-below-quantum.txt`).
+  That is a plain numeric zero, not an `UNMEASURED` disposition. By this table's own rule a number here
+  fails the control, because the instrument cannot resolve that allocation and any figure it prints is
+  manufactured. **The heap invariant is therefore not publishable**, and this is not a bug in the control
+  route — the 4 MiB case proves the route honours `bytes` faithfully. The gap is that neither the
+  `UNMEASURED` disposition nor §6.1's in-flight taint exists below the boundary: `ResultStore.Entry` is
+  `(costCsv, invariantCount, detail, leakDetected)` and carries no disposition field at all — the same
+  structural gap that makes disconnect *accounting* impossible in §4.4. Both need an `Entry` field.
+  **Assigned to PR-5**, which owns the reactive invariant set and the per-target reporting.
+- **Event-loop blocking: not claimable yet.** `/__basquin/control/defect/block-loop` plants the defect
+  correctly — the response and app log both show a genuine `vert.x-eventloop-thread-N` — but §6.3's
+  watchdog, which would *detect* it, is PR-5. A planted defect with no detector is not a passing control.
+
 Every control is verified **end-to-end at the reporting layer** (`render_page.py` input), not at the
 log line — otherwise the control validates the logger, not the invariant. An invariant without a
 passing control is **not published**, matching the discipline that keeps `heapDriftKb` off the page.
@@ -1215,7 +1232,7 @@ history says this repo needs.
 | **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + a `/__basquin/{result,violations}` control surface sharing `ResultStore`'s wire format (§4.4a), control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private and must be widened together before the boundary filter can call this artifact. The publishing half is resolved: `maven-publish` ships both a local and a Pages-served Maven repo |
 | **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits | PR-2 |
 | **PR-4** | Coverage — offline-JaCoCo execution injection, `/__basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 · **entry gate: §8.2** (plugin-execution injection is unmeasured); the native cells additionally carry §7.2's S3 re-check |
-| **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |
+| **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs. **Also owns two gaps PR-2 measured:** the `UNMEASURED` disposition and §6.1's in-flight taint — both need a `ResultStore.Entry` field, and until they land §7.3's sub-quantum control **fails** and the heap invariant is **not publishable**; and the watchdog, without which `block-loop`'s control cannot be claimed | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |
 
 Docs land with their PR: `THIRD-PARTY-APPS.md` gains a build-time-injection section, `ARCHITECTURE.md`
 gains the build-vs-runtime injection symmetry.

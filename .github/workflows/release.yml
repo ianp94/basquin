@@ -176,9 +176,29 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      # This PR made `version` in basquin-core/build.gradle load-bearing. It was decorative before —
+      # nothing in the build read it, and the workflow stamps images/CLI/chart straight from the tag —
+      # so a release-prep commit that bumps the tag but forgets this field is a very plausible miss.
+      # The failure would be silent: Gradle would republish the OLD coordinate, `git diff --cached`
+      # would still see changed checksums and commit, and nobody would notice until a consumer 404s
+      # on the new version. Assert instead of overriding with -Pversion: the repo's convention is that
+      # the release commit bumps the file, and a guard enforces that convention where an override
+      # would hide its violation.
+      - name: Assert basquin-core's version matches the release tag
+        run: |
+          set -euo pipefail
+          CORE="$(./gradlew -q :basquin-core:properties --no-daemon | awk -F': ' '/^version:/{print $2}')"
+          TAG='${{ steps.v.outputs.tag }}'
+          echo "basquin-core version=$CORE  release tag=$TAG"
+          if [ "$CORE" != "$TAG" ]; then
+            echo "::error::basquin-core/build.gradle has version '$CORE' but this release is '$TAG'." \
+                 "Bump it in the release commit, or the Pages Maven repo will advertise the wrong" \
+                 "coordinate for this release."
+            exit 1
+          fi
       - name: Publish basquin-core into the Pages Maven repo
         run: ./gradlew :basquin-core:publishAllPublicationsToPagesRepository --no-daemon
-      - name: Commit the updated Helm repo to main
+      - name: Commit the updated Helm + Maven repos to main
         run: |
           git config user.name  "basquin-bot[bot]"
           git config user.email "307641014+basquin-bot[bot]@users.noreply.github.com"

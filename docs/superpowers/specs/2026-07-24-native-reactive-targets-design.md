@@ -303,7 +303,7 @@ natural place to want to "tidy" the split package into something like `com.basqu
 until `GenericRunner`'s parent-first predicate (or its replacement) is taught the new prefix in the
 same change.
 
-#### PR-2 entry requirement: `Invariants`' API surface is package-private, and there is no publish path yet
+#### PR-2 entry requirement: `Invariants`' API surface is package-private
 
 `Invariants` is `final class Invariants` with `static Invariants.Result evaluateAndMaybeFail(...)` —
 package-private, and it already was before the move, so this is pre-existing, not something the
@@ -343,7 +343,7 @@ a resolvable one, so the resolution was run.
 `evaluateAndMaybeFail`, `Result` (and its accessors) and `Violation`'s fields are package-private and
 must be widened together — widening `Invariants` alone leaves the call unusable.
 
-**PR-2 cannot start its boundary filter until both are resolved.** Recorded here as an entry
+**PR-2 cannot start its boundary filter until the visibility widening is done.** Recorded here as an entry
 requirement (§9's PR-2 row) rather than left to be discovered mid-build, the way the packaging gap
 below was.
 

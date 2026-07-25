@@ -419,7 +419,7 @@ Standard two-module Quarkus extension shape:
 |---|---|
 | `FeatureBuildItem("basquin")` | Prints in the `Installed features` banner — the deploy signal, and §5.2's injection proof |
 | **`FilterBuildItem`** | Installs the request boundary. *Not* `RouteBuildItem` — `FilterBuildItem` (handler + priority) is Quarkus's idiomatic router-wide filter; `RouteBuildItem` registers routes |
-| `RouteBuildItem` | `/basquin/status`, `/basquin/result/<id>`, `/basquin/coverage`, `/basquin/control/*` — Vert.x routes, so they exist in native without JAX-RS scanning |
+| `RouteBuildItem` | The control surface at **`/__basquin/*`** — the prefix the driver actually calls (`LoadModeControl.PREFIX`), served as Vert.x routes so they exist in native without JAX-RS scanning. **Do not invent endpoints here:** delegate to `LoadModeControl.handle(path, query)`, which already resolves `/__basquin/result?id=…`, `/drift` and `/violations`. See §4.4a |
 | `@Recorder` | Wires runtime state at application startup |
 
 The boundary sees only router traffic. Anything bypassing the router — a separate management
@@ -453,25 +453,58 @@ construction.
 **What transplants:** the result store, the salted `<RUN_SALT>-<n>` id scheme, and DD-040's
 first-class miss accounting.
 
-**What is replaced:** lock-based quiescence becomes a **completion-parking poll**. The
-`/basquin/result/<id>` handler, on a miss, returns a `Uni` completed by the store's `put` for that id,
+**What is replaced:** lock-based quiescence becomes a **completion-parking poll** — which
+`LoadModeControl.handle` already implements for the Tomcat path, so the extension reuses it rather
+than writing a second one (§4.4a). Conceptually, the handler on a miss waits for the store's `put`
+for that id,
 bounded at **2 s** (mirroring DD-040's bound), with the driver's read timeout above it at **4 s**
 (same reasoning). A timeout is a recorded miss, never a zero.
 
 Per request:
 
-1. Filter assigns `<RUN_SALT>-<n>`, stamps start time, stashes both on the `RoutingContext`, and
-   increments the in-flight counter (§6.1).
-2. `addHeadersEndHandler` writes `X-Basquin-Req: <id>` at the last moment before commit.
-3. `addEndHandler` computes the measurement, records disposition (`completed|disconnected`), and puts
-   the result into the store — completing any parked poll.
-4. The driver polls `/basquin/result/<id>`.
+1. Filter **reads** the driver's id from the inbound `X-Basquin-Req` **request** header, stamps start
+   time, stashes both on the `RoutingContext`, and increments the in-flight counter (§6.1).
+2. `addEndHandler` computes the measurement, records disposition (`completed|disconnected`), and puts
+   the result into the store under that id.
+3. The driver polls `/__basquin/result?id=<id>`.
+
+**Corrected 2026-07-25 against the code; an earlier draft of this list was wrong in a way that would
+have shipped a broken extension.** It said the filter *assigns* `<RUN_SALT>-<n>` and writes
+`X-Basquin-Req` as a **response** header. The driver assigns it — `CoverageGuidedRun.java:1031`,
+`RUN_SALT + "-" + REQ_SEQ.getAndIncrement()` — and sends it **inbound** (`:1056`); both existing
+boundaries read it (`BasquinValve.java:62`, `TomcatBoundaryAdvice.java:30`). An extension that minted
+its own ids would publish results under ids the driver never sent, so every poll would miss — DD-040's
+exact failure mode, rebuilt from a spec sentence.
+
+**Stamp only on the explore branch.** `BasquinValve.java:58-63` stamps the id *only* when
+`decision.phase == EXPLORE_BEGAN`, so the load path reads no header at all. Stamping unconditionally
+would leak explore's behaviour into the lock-free load path, which is a binding project invariant.
 
 **A consequence worth stating plainly:** DD-040's opportunistic `X-Basquin-Cost` header fast path
 **cannot exist on this path at all** — the measurement is only known after the last byte is written.
 So *every* iteration polls, doubling requests per iteration. DD-040 rejected "piggyback request N−1's
 result on request N" for complicating a path that mostly did not need it; here the poll is universal,
 so that alternative deserves re-evaluation. Deferred to PR-2, flagged, not silently inherited.
+
+### 4.4a The control surface is `LoadModeControl`, reused — not reimplemented
+
+`agent/LoadModeControl.java` already is the control surface, and it is framework-neutral by
+construction: **zero imports**, pure JDK, deliberately kept out of the valve so it is unit-testable
+without a Tomcat. Its entire public API is `PREFIX` (`/__basquin/`) and
+`handle(String path, String query) → String`, and it already resolves `/__basquin/result?id=…` by
+calling `ResultStore.format(ResultStore.take(id))` *including the waiting poll* §4.4 describes.
+
+So the extension's control surface is: intercept `/__basquin/*`, call `handle(path, query)`, write the
+returned string back. It writes no endpoint logic and no wire format of its own.
+
+**Why reuse rather than reimplement.** A second implementation of the same wire format is a second
+thing that can drift from the driver's parser — precisely the argument that produced `basquin-core`.
+One implementation means the Quarkus and Tomcat paths cannot disagree about what a result looks like.
+
+**Consequence for PR-2:** `LoadModeControl` moves into `basquin-core` alongside `Invariants` and
+`ResultStore`. It cannot stay in `agent/` — depending on that module from `basquin-quarkus` would drag
+the Tomcat and JVMTI surface into a native-targeted artifact, which is the coupling the extraction
+exists to prevent. The move keeps `package agent` for the same reason §4.1 gives.
 
 ## 5. Injection without source modification
 
@@ -716,7 +749,7 @@ same document whose ledger called §6.2 unverified; that is precisely the failur
 `bench-results/dd043-target-pins-2026-07-24/README.md:3-8` records the approver rejecting once already.
 
 **What would verify it:** on the pinned Mandrel 25.0.3 image, open a `RecordingStream` in-process,
-enable `jdk.ObjectAllocationSample`, drive `/basquin/control/defect/alloc`, and show non-zero sampled
+enable `jdk.ObjectAllocationSample`, drive `/__basquin/control/defect/alloc`, and show non-zero sampled
 bytes attributed to that route — i.e. §7.3's JFR row, run and passing, with the recording committed as
 an artifact. Until that exists §6.2 produces **no published figure**, and §7.3's row already prescribes
 the fallback: demote the cross-check to diagnostic-only. **This is a PR-5 entry gate (§9), not a PR-5
@@ -779,7 +812,7 @@ page must say so rather than print a thread-leak column of zeros.
 Native mode has no runtime coverage agent: Quarkus documents coverage as unsupported in native mode,
 and `quarkus-jacoco` requires a jar artifact, explicitly not a native binary. The working path is
 **offline instrumentation** between compile and `native-image`, so the JaCoCo runtime lives in the
-image as ordinary code. Our extension serves the execution data on `/basquin/coverage`;
+image as ordinary code. Our extension serves the execution data on `/__basquin/coverage`;
 `JacocoCoverageProvider` (DD-012/DD-023) changes **transport only** — tcpserver becomes HTTP — and
 union-merge across replicas keeps working.
 
@@ -788,7 +821,7 @@ Two mechanics the injector must respect, because they are how this silently prod
 - The driver's `Analyzer` must run against the **original, pre-instrumentation classes** (offline
   instrumentation embeds the pre-instrumentation class id). The injector must therefore preserve them
   — JaCoCo's own backup directory, `target/generated-classes/jacoco`.
-- `/basquin/coverage` reads `RuntimeData` **directly**, not via the `jacoco-agent.properties`
+- `/__basquin/coverage` reads `RuntimeData` **directly**, not via the `jacoco-agent.properties`
   agent-boot path (shutdown hooks, file output), which may not survive native.
 
 #### The read must be a direct, compile-time-typed call. Never reflection.
@@ -1034,7 +1067,7 @@ unmodified-app claim. Running controls only on the Phase-0 `todo` quickstart pro
 in a *different app on a different stack cell* than the ones published.
 
 **Resolution: negative-control defect routes ship in the extension's own runtime** —
-`/basquin/control/defect/{slow,alloc,error5xx,block-loop}`, with `alloc` taking a size parameter so it
+`/__basquin/control/defect/{slow,alloc,error5xx,block-loop}`, with `alloc` taking a size parameter so it
 can be driven both far above and deliberately below §6.1's quantum — disabled by default, enabled by a
 system property only during Phase-2 control runs. The extension is injected tooling, not app source, so
 the thesis holds; the controls run in the *same* process and stack cell as the published rows; and they
@@ -1049,16 +1082,16 @@ zero live rather than structural.
 
 | Invariant | Control | Assertion |
 |---|---|---|
-| latency | `/basquin/control/defect/slow` | violation **arrives in the driver-visible result** |
-| **5xx / crash** | `/basquin/control/defect/error5xx` returning a 500 | the crash is counted **and** attributed to the right iteration id — a boundary that skips error paths (§6.3, S3) would zero it silently |
+| latency | `/__basquin/control/defect/slow` | violation **arrives in the driver-visible result** |
+| **5xx / crash** | `/__basquin/control/defect/error5xx` returning a 500 | the crash is counted **and** attributed to the right iteration id — a boundary that skips error paths (§6.3, S3) would zero it silently |
 | **5xx / crash, negative half** | a **client disconnect** mid-response (driver aborts before the body is written) | the crash counter does **not** increment, and the iteration is recorded as `disconnected` — S3 measured `getStatusCode()` returning `200` on exactly this disposition, so a control that only proves the counter *can* fire leaves the counter free to fire wrongly (§6) |
-| event-loop blocking | `/basquin/control/defect/block-loop`, sleeping **comfortably above the pinned threshold** | store entry → finding → rendered row |
-| heap | `/basquin/control/defect/alloc`, sized well above the quantum | delta recorded **and not tainted** (§6.1) |
-| **heap, taint — the firing half** | a **deliberately overlapping request**: a second connection sent against any route while `/basquin/control/defect/slow` is in flight on the driver's connection | the in-flight counter must exceed 1; the overlapped iteration must be **counted as tainted** and dispositioned `UNMEASURED`; and the run summary's **taint rate must come back strictly greater than zero**. A run that reports `0%` with the overlap injected **fails** — the counter is per-request, or its decrement is unreachable, and `0%` then means "never detected", not "clean" (§6.1) |
-| **heap, `UNMEASURED` — the firing half** | `/basquin/control/defect/alloc` sized **below one quantum** (≪ 524,288 B) | the sample must be recorded as `UNMEASURED` and **must not** appear as a number anywhere downstream of the boundary. A numeric delta here **fails** the control: the instrument cannot resolve that allocation, so any number it prints is manufactured (§6.1) |
+| event-loop blocking | `/__basquin/control/defect/block-loop`, sleeping **comfortably above the pinned threshold** | store entry → finding → rendered row |
+| heap | `/__basquin/control/defect/alloc`, sized well above the quantum | delta recorded **and not tainted** (§6.1) |
+| **heap, taint — the firing half** | a **deliberately overlapping request**: a second connection sent against any route while `/__basquin/control/defect/slow` is in flight on the driver's connection | the in-flight counter must exceed 1; the overlapped iteration must be **counted as tainted** and dispositioned `UNMEASURED`; and the run summary's **taint rate must come back strictly greater than zero**. A run that reports `0%` with the overlap injected **fails** — the counter is per-request, or its decrement is unreachable, and `0%` then means "never detected", not "clean" (§6.1) |
+| **heap, `UNMEASURED` — the firing half** | `/__basquin/control/defect/alloc` sized **below one quantum** (≪ 524,288 B) | the sample must be recorded as `UNMEASURED` and **must not** appear as a number anywhere downstream of the boundary. A numeric delta here **fails** the control: the instrument cannot resolve that allocation, so any number it prints is manufactured (§6.1) |
 | heap, **positive-noise** | idle window, no driver request | the sample must be recorded — as exactly `0` or as `UNMEASURED` — and **any reading at or above §6.1's practical minimum (1,048,576 B) with no request in flight fails the control.** Stated as a threshold rather than "~zero or `UNMEASURED`", which passed on either branch and so could not fail. This is the control that catches probe pollution and the `heapDriftKb` class of error |
 | coverage | routes exercised progressively, with **one pre-registered application route withheld** from the driver (§7.1) | the total must increase **and** the withheld route's *method* must read `0 covered` **against a live execution-data record for its own class** — i.e. at a dump point where at least one sibling method of that class has already flipped to covered. Two ways to fail rather than pass vacuously: if no sibling has flipped, the class has no record and the zero measures nothing; if the withheld method's invoker class is absent from the build's `-H:+PrintClassInitialization` report, reachability analysis deleted it and the zero is a structural absence (§7.1). **A never-exercised *class* reading zero is not this control** — amendment 8 disproved that instrument, and using it would admit the coverage percentage on a measurement that never happened |
-| **JFR cross-check** (§6.2) | `/basquin/control/defect/alloc` driven across a run alongside ordinary routes | first, the transport must exist at all: a `RecordingStream` opens in the native image and `jdk.ObjectAllocationSample` events arrive (§6.2 — **unverified**, so this is a precondition, not an assumption). Then the alloc route must rank **first** by aggregated sample totals. If either half cannot be made to hold, the cross-check is demoted to **diagnostic-only, not published**, and §6.2 says so |
+| **JFR cross-check** (§6.2) | `/__basquin/control/defect/alloc` driven across a run alongside ordinary routes | first, the transport must exist at all: a `RecordingStream` opens in the native image and `jdk.ObjectAllocationSample` events arrive (§6.2 — **unverified**, so this is a precondition, not an assumption). Then the alloc route must rank **first** by aggregated sample totals. If either half cannot be made to hold, the cross-check is demoted to **diagnostic-only, not published**, and §6.2 says so |
 
 **This table is exhaustive over §6 by construction, and that property is load-bearing.** Three signals were
 found silently exempt from it in successive reviews — the JFR cross-check, then 5xx/crash, then **thread
@@ -1163,9 +1196,9 @@ history says this repo needs.
 |---|---|---|
 | **PR-0** | Phase-0 spikes S1–S4 → `bench-results/dd043-spikes-2026-07-24/`, plus the spec amendments they forced. **No product code.** — **DONE, gate PASSED** | Gates everything below |
 | **PR-1** | `basquin-core` extraction (§4.1) — pure refactor, zero behaviour change, existing tests green, no Quarkus code — **DONE** (324 → 326 tests, 0 failures; branch `dd043-pr1-basquin-core`, not yet merged) | PR-0 — cleared |
-| **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + parking poll (§4.4), `/basquin/status\|result`, control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private and must be widened together before the boundary filter can call this artifact. The publishing half is resolved: `maven-publish` ships both a local and a Pages-served Maven repo |
+| **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + reused `LoadModeControl` control surface (§4.4a), control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private and must be widened together before the boundary filter can call this artifact. The publishing half is resolved: `maven-publish` ships both a local and a Pages-served Maven repo |
 | **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits | PR-2 |
-| **PR-4** | Coverage — offline-JaCoCo execution injection, `/basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 · **entry gate: §8.2** (plugin-execution injection is unmeasured); the native cells additionally carry §7.2's S3 re-check |
+| **PR-4** | Coverage — offline-JaCoCo execution injection, `/__basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 · **entry gate: §8.2** (plugin-execution injection is unmeasured); the native cells additionally carry §7.2's S3 re-check |
 | **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |
 
 Docs land with their PR: `THIRD-PARTY-APPS.md` gains a build-time-injection section, `ARCHITECTURE.md`

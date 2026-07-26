@@ -304,10 +304,12 @@ run_jvm() {
   grep -q "basquin-quarkus-deployment" "$OUT/http-access.log" \
     && ok "jvm:deployment-from-injected-repo" "$(grep -c 'basquin-quarkus-deployment' "$OUT/http-access.log") GET(s)" \
     || bad "jvm:deployment-from-injected-repo" "not fetched from the injected repo"
-  # Sentinel is "Downloading from", which proves Maven attempted remote resolution in this log at all.
-  # Without it, an empty log would have reported "nothing came from central" as a PASS.
-  assert_absent "$OUT/jvm-build.log" "Downloaded from central.*com/basquin" "Downloading from" \
-    "jvm:not-from-central" "no com/basquin artifact came from central"
+  # The sentinel must bind to THIS claim, not merely prove the log is non-trivial. An earlier version
+  # used "Downloading from", which only shows Maven fetched something — a build where the injector never
+  # ran would satisfy it and still print PASS, leaving the invariant-1 hole this helper exists to close.
+  # The binding sentinel is evidence that com/basquin resolution was attempted at all.
+  assert_absent "$OUT/jvm-build.log" "Downloaded from central.*com/basquin" "com/basquin|com\.basquin" \
+    "jvm:not-from-central" "com/basquin resolution happened and none of it came from central"
 
   APP_CONTAINER=verify-pr3-app DB_CONTAINER=verify-pr3-db DB_NETWORK=verify-pr3-net APP_DIR="$app" \
     bash bench-results/dd043-pr2-restvillains-2026-07-26/run-app.sh > "$OUT/jvm-run-app.log" 2>&1

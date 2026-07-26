@@ -9,6 +9,14 @@ target CR is applied.
 
 **Verdict: it starts, serves, and stays instrumented. The flags are inert on SubstrateVM.**
 
+> **Read `rerun.md` for the evidence that actually supports this.** PR #103's approver found the first
+> run's artifacts could not carry the claim: an 8-line startup log shows nothing about whether
+> `JAVA_TOOL_OPTIONS` was applied at all, and the flag string omitted **`-agentpath`** — which
+> `threadTracker` defaults to `true`, so it is in the operator's *default* injection. The re-run captures
+> `env | grep JAVA_TOOL_OPTIONS` as proof of application and includes `-agentpath`. Same outcome:
+> HTTP 200, process alive, `basquin` in the banner. The conclusion held; the first attempt's evidence for
+> it did not.
+
 ## Result
 
 Run with the exact string the operator would inject, not a placeholder:

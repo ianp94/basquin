@@ -237,6 +237,22 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
             if (!GROUP_ID.equals(managed.getGroupId())) {
                 continue;
             }
+            // Sixth shape, found by PR #103's approver: a MANAGED entry carrying <exclusions> strips
+            // basquin-core from the injector's own dependency, and — like the declared-path case — it
+            // passes §5.2's banner, because the extension still loads. I had closed exclusions on the
+            // declared path only. The same usability test must apply here or the fix was half a fix.
+            if (managed.getExclusions() != null && !managed.getExclusions().isEmpty()) {
+                throw new MavenExecutionException(
+                        "basquin-injector: " + p.getArtifactId() + "'s dependencyManagement declares "
+                                + GROUP_ID + ":" + managed.getArtifactId() + " with "
+                                + managed.getExclusions().size() + " exclusion(s). Managed exclusions apply"
+                                + " to the dependency this injector adds, so they can strip basquin-core and"
+                                + " leave the extension present but unusable — and the Installed features"
+                                + " banner still lists it, so no acceptance run would catch it. Remove the"
+                                + " managed exclusions, or pass -D" + PROP_SKIP + "=true to leave this"
+                                + " build uninstrumented deliberately.",
+                        p.getFile());
+            }
             String managedVersion = managed.getVersion();
             if (managedVersion != null && !managedVersion.equals(version)) {
                 throw new MavenExecutionException(

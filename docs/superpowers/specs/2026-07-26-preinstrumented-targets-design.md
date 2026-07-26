@@ -317,7 +317,10 @@ target for reasons unrelated to this feature. Whether the extension should grow 
 
 ### 8.1 Does a native image actually ignore an injected `-javaagent`, or fail to start? — **RESOLVED: it ignores them**
 
-**Resolved 2026-07-26 — measured, evidence `bench-results/dd044-native-jto-2026-07-26/`.** The native
+**Resolved 2026-07-26 — measured, evidence `bench-results/dd044-native-jto-2026-07-26/` (see that
+directory's `rerun.md`, not the first attempt: PR #103's approver correctly found the original artifacts
+could not support the claim — no proof the env var applied, and `-agentpath` untested despite
+`threadTracker` defaulting to true).** The native
 binary starts, serves, and stays instrumented; the flags are inert on SubstrateVM, so the current operator
 does **not** hard-break native targets. §1's consequence 1 has been narrowed accordingly, and the primary
 motivation for this feature is now (a) double instrumentation on **JVM-mode** pre-instrumented targets and

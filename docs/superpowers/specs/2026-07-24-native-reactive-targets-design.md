@@ -61,7 +61,10 @@ unchecked section:
   that `addHeadersEndHandler` reaches the client on every completed response including the 500 —
   measured against **S3's probe fixture**, which wrote a response header. The shipped extension does
   not use that hook at all (§4.3), so only the `addEndHandler` half of this bears on it. The table
-  is correct as written; only the *consumer* of that signal in §6 was wrong. **Scope: S3 ran in JVM
+  was correct **for the question Phase 0 asked**, and only the *consumer* of that signal in §6 was wrong
+  at the time. The table has since been amended anyway: PR-2 found its `addHeadersEndHandler` row still
+  instructed writing `X-Basquin-Req` as a response header, which §4.4 had already refuted. Read this
+  entry as a Phase-0 verdict, not as a claim the table stands unedited. **Scope: S3 ran in JVM
   mode only** (`s3-boundary/findings.md:5-6,162-163`; `REPORT.md:48-49`). The table is therefore
   *unamended*, not *verified under AOT* — and S1 is this branch's standing proof that a JVM-mode
   result does not transfer to native on this toolchain. §7.2's native cells carry the re-check.
@@ -422,7 +425,7 @@ Standard two-module Quarkus extension shape:
 | `FeatureBuildItem("basquin")` | Prints in the `Installed features` banner — the deploy signal, and §5.2's injection proof |
 | **`FilterBuildItem`** | Installs the request boundary. *Not* `RouteBuildItem` — `FilterBuildItem` (handler + priority) is Quarkus's idiomatic router-wide filter; `RouteBuildItem` registers routes. **Ordering trap:** Quarkus installs a `FilterBuildItem` as `router.route().order(-priority)`, so a `RouteBuildItem` with a *more negative* order runs **before the boundary** and is silently uninstrumented. Found in PR-2: a control route at order `-10_000` bypassed the filter at order `-100` entirely, producing no measurement and no error. Any route added under `/__basquin/` must sit **after** the boundary |
 | `RouteBuildItem` | The control surface at **`/__basquin/*`** — the prefix the driver actually calls (`LoadModeControl.PREFIX`), served as Vert.x routes so they exist in native without JAX-RS scanning. **Do NOT delegate to `LoadModeControl.handle`** — it calls `RequestBoundary.awaitQuiescence`, which is `ITERATION_LOCK.tryLock(...)`, and importing explore's serialization lock into the lock-free reactive path is a binding-invariant violation. The extension serves `result` and `violations` itself, sharing only `ResultStore`'s wire format; `mode` and `drift` are out of scope and answer `err:unknown`. See §4.4a |
-| `@Recorder` | Wires runtime state at application startup |
+| `@Recorder` | Wires runtime state at application startup. **None in PR-2** — the boundary filter and control handler hold no startup-time state, so no recorder was needed. Listed as the design target for when one is |
 
 The boundary sees only router traffic. Anything bypassing the router — a separate management
 interface port, gRPC, raw socket handlers — is invisible to it. Irrelevant for these two targets;

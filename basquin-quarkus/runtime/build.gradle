@@ -65,6 +65,17 @@ publishing {
     }
     repositories {
         maven {
+            // DD-043 PR-3: the injector's default repository URL is the Pages repo, so the whole
+            // extension chain must live there — not just basquin-core. Spike S5 surfaced this gap:
+            // resolution needs basquin-quarkus, basquin-quarkus-deployment AND basquin-core, and the
+            // deployment artifact is named only by the runtime jar's quarkus-extension.properties,
+            // so nothing in a consumer's pom would ever pull it from elsewhere.
+            // basquinPagesDir is overridable so a test publish need not write into docs/maven.
+            name = 'pages'
+            url = rootProject.layout.projectDirectory.dir(
+                    providers.gradleProperty('basquinPagesDir').getOrElse('docs/maven'))
+        }
+        maven {
             name = 'dd043Spike'
             url = rootProject.layout.projectDirectory.dir('bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository')
         }

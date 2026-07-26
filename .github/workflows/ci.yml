@@ -5,6 +5,12 @@ on:
     paths:
       - 'agent/**'
       - 'basquin-core/**'
+      # DD-043: without these two, a change confined to the Quarkus extension or the Maven injector
+      # triggers NO CI at all — their tests are part of `./gradlew check` but nothing would run it.
+      # That is the defect PR-1 shipped when the extracted core fell outside every filter; PR #102
+      # ran only because it incidentally also touched basquin-core/, settings.gradle and test/**.
+      - 'basquin-quarkus/**'
+      - 'basquin-maven-injector/**'
       - 'runner/**'
       - 'examples/**'
       - 'test/**'
@@ -21,6 +27,9 @@ on:
     paths:
       - 'agent/**'
       - 'basquin-core/**'
+      # See the push block above — both lists must carry these or the gap persists on one trigger.
+      - 'basquin-quarkus/**'
+      - 'basquin-maven-injector/**'
       - 'runner/**'
       - 'examples/**'
       - 'test/**'

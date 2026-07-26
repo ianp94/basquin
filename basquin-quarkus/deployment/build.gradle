@@ -1,0 +1,47 @@
+// basquin-quarkus-deployment — build-time/augmentation module for the basquin-quarkus extension.
+//
+// DD-043 PR-2: BasquinProcessor emits FeatureBuildItem("basquin") (the deploy signal, spec §5.2),
+// a FilterBuildItem installing BasquinBoundaryFilter as the request boundary (spec §4.3), and a
+// RouteBuildItem mounting BasquinControlHandler at /__basquin/* (spec §4.4a). This module is not
+// deployed to application runtime classpaths; Quarkus's bootstrap resolver pulls it in only during
+// augmentation, via the deployment-artifact coordinate that ../runtime's
+// META-INF/quarkus-extension.properties records.
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+group = 'com.basquin'
+version = '0.3.0'
+description = 'Basquin request boundary for Quarkus — deployment/build-time module (DD-043 PR-2)'
+sourceCompatibility = '17'
+targetCompatibility = '17'
+
+repositories { mavenCentral() }
+
+dependencies {
+    implementation project(':basquin-quarkus:runtime')
+    implementation 'io.quarkus:quarkus-core-deployment:3.37.3'
+    // FilterBuildItem / RouteBuildItem live here, not in quarkus-core-deployment.
+    implementation 'io.quarkus:quarkus-vertx-http-deployment:3.37.3'
+}
+
+jar {
+    archiveBaseName = 'basquin-quarkus-deployment'
+}
+
+// Same target repo as ../runtime — see that build.gradle's publishing block comment.
+publishing {
+    publications {
+        deployment(MavenPublication) {
+            from components.java
+            artifactId = 'basquin-quarkus-deployment'
+        }
+    }
+    repositories {
+        maven {
+            name = 'dd043Spike'
+            url = rootProject.layout.projectDirectory.dir('bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository')
+        }
+    }
+}

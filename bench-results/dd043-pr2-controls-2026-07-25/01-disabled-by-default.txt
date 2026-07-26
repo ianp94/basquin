@@ -1,0 +1,51 @@
+=== DD-043 PR-2 §7.3 negative-control defect routes — evidence transcript (FINAL) ===
+Generated: 2026-07-25
+Fixture: Quarkus 3.37.3 'todo' quickstart (bench-results/dd043-spikes-2026-07-24/fixture), JVM mode only, no native build.
+Container: quay.io/quarkus/ubi9-quarkus-mandrel-builder-image@sha256:c1d52b8ac781c2b7cf6f0cb3ed366ee3ea5ea4e5e34014eaf060ca6841afd6e5, --entrypoint java, -jar quarkus-run.jar
+Build: bench-results/dd043-spikes-2026-07-24/env/build.sh clean package -DskipTests (clean is required, see bench-results/dd043-pr2-spike-2026-07-25/README.md)
+
+NOTE ON A RED HERRING IN THIS TRANSCRIPT: every response below carries its own
+'X-Basquin-Req: probe-<nanotime>' RESPONSE header. That is NOT this extension's doing —
+it comes from bench-results/dd043-spikes-2026-07-24/fixture/src/main/java/com/basquin/spike/BoundaryProbe.java,
+pre-existing Phase-0 spike scaffolding left in the fixture's OWN app source (S3's addHeadersEndHandler check),
+which echoes ITS OWN probe id under the same header name coincidentally. basquin-quarkus's
+X-Basquin-Req usage is REQUEST-header-only (BasquinBoundaryFilter reads it inbound; it never
+writes a response header). The ids we drive and poll below (ctrl-*) are ours, sent inbound,
+distinct from the probe-* ids that show up reflected in response headers.
+
+--- Startup banner: basquin feature installed, property UNSET ---
+2026-07-25 20:35:33,100 INFO  [io.quarkus] (main) Installed features: [basquin, cdi, rest, smallrye-context-propagation, vertx]
+
+=== STEP 1 (acceptance #1): property basquin.quarkus.control.defectsEnabled UNSET -- every route must refuse, not 404 ===
+--- GET /__basquin/control/defect/slow (X-Basquin-Req: ctrl-disabled-check) ---
+HTTP/1.1 403 Forbidden
+Content-Type: text/plain
+content-length: 26
+X-Basquin-Req: probe-92908344079023
+
+body: err:defect-routes-disabled
+
+--- GET /__basquin/control/defect/alloc?bytes=4194304 (X-Basquin-Req: ctrl-disabled-check) ---
+HTTP/1.1 403 Forbidden
+Content-Type: text/plain
+content-length: 26
+X-Basquin-Req: probe-92908375841389
+
+body: err:defect-routes-disabled
+
+--- GET /__basquin/control/defect/error5xx (X-Basquin-Req: ctrl-disabled-check) ---
+HTTP/1.1 403 Forbidden
+Content-Type: text/plain
+content-length: 26
+X-Basquin-Req: probe-92908383071930
+
+body: err:defect-routes-disabled
+
+--- GET /__basquin/control/defect/block-loop (X-Basquin-Req: ctrl-disabled-check) ---
+HTTP/1.1 403 Forbidden
+Content-Type: text/plain
+content-length: 26
+X-Basquin-Req: probe-92908389935410
+
+body: err:defect-routes-disabled
+

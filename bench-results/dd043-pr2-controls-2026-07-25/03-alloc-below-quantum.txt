@@ -1,0 +1,22 @@
+=== STEP 3 (acceptance #3): alloc?bytes= deliberately BELOW the 524,288 B quantum ===
+§6.1 quantum: Runtime.freeMemory() quantizes at 524,288 B under SubstrateVM; practical minimum
+per-request delta is ~1,048,576 B (2 quanta). This step drives bytes=100 (far below either).
+
+route body: defect:alloc bytes=100
+  poll id=ctrl-alloc-lo-1 -> 0,0,0|0||
+route body: defect:alloc bytes=100
+  poll id=ctrl-alloc-lo-2 -> 0,0,0|0||
+route body: defect:alloc bytes=100
+  poll id=ctrl-alloc-lo-3 -> 0,0,0|0||
+route body: defect:alloc bytes=100
+  poll id=ctrl-alloc-lo-4 -> 0,0,0|0||
+route body: defect:alloc bytes=100
+  poll id=ctrl-alloc-lo-5 -> 0,0,0|0||
+
+--- Supplementary data point: bytes=600000 (ABOVE one quantum 524288 B, BELOW the practical
+    minimum 1,048,576 B) x5, to show the quantization/noise interplay the spec describes ---
+  poll id=ctrl-alloc-1q-1 (bytes=600000) -> 0,651,0|0||
+  poll id=ctrl-alloc-1q-2 (bytes=600000) -> 0,585,0|0||
+  poll id=ctrl-alloc-1q-3 (bytes=600000) -> 0,585,0|0||
+  poll id=ctrl-alloc-1q-4 (bytes=600000) -> 5,-39534,0|0||
+  poll id=ctrl-alloc-1q-5 (bytes=600000) -> 0,585,0|0||

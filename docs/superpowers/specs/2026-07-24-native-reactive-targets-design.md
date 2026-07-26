@@ -57,9 +57,14 @@ retained because it is why S4 existed, but it no longer reads as a live unmeasur
 **Where no amendment was needed, stated explicitly** so a silent absence is not mistaken for an
 unchecked section:
 
-- **§4.3** (which end hook to use) — S3 confirmed `addEndHandler` fires on all four dispositions and
-  `addHeadersEndHandler` reaches the client on every completed response, including the 500. The table
-  is correct as written; only the *consumer* of that signal in §6 was wrong. **Scope: S3 ran in JVM
+- **§4.3** (which end hook to use) — S3 confirmed `addEndHandler` fires on all four dispositions, and
+  that `addHeadersEndHandler` reaches the client on every completed response including the 500 —
+  measured against **S3's probe fixture**, which wrote a response header. The shipped extension does
+  not use that hook at all (§4.3), so only the `addEndHandler` half of this bears on it. The table
+  was correct **for the question Phase 0 asked**, and only the *consumer* of that signal in §6 was wrong
+  at the time. The table has since been amended anyway: PR-2 found its `addHeadersEndHandler` row still
+  instructed writing `X-Basquin-Req` as a response header, which §4.4 had already refuted. Read this
+  entry as a Phase-0 verdict, not as a claim the table stands unedited. **Scope: S3 ran in JVM
   mode only** (`s3-boundary/findings.md:5-6,162-163`; `REPORT.md:48-49`). The table is therefore
   *unamended*, not *verified under AOT* — and S1 is this branch's standing proof that a JVM-mode
   result does not transfer to native on this toolchain. §7.2's native cells carry the re-check.
@@ -418,9 +423,9 @@ Standard two-module Quarkus extension shape:
 | Build step | Purpose |
 |---|---|
 | `FeatureBuildItem("basquin")` | Prints in the `Installed features` banner — the deploy signal, and §5.2's injection proof |
-| **`FilterBuildItem`** | Installs the request boundary. *Not* `RouteBuildItem` — `FilterBuildItem` (handler + priority) is Quarkus's idiomatic router-wide filter; `RouteBuildItem` registers routes |
-| `RouteBuildItem` | `/basquin/status`, `/basquin/result/<id>`, `/basquin/coverage`, `/basquin/control/*` — Vert.x routes, so they exist in native without JAX-RS scanning |
-| `@Recorder` | Wires runtime state at application startup |
+| **`FilterBuildItem`** | Installs the request boundary. *Not* `RouteBuildItem` — `FilterBuildItem` (handler + priority) is Quarkus's idiomatic router-wide filter; `RouteBuildItem` registers routes. **Ordering trap:** Quarkus installs a `FilterBuildItem` as `router.route().order(-priority)`, so a `RouteBuildItem` with a *more negative* order runs **before the boundary** and is silently uninstrumented. Found in PR-2: a control route at order `-10_000` bypassed the filter at order `-100` entirely, producing no measurement and no error. Any route added under `/__basquin/` must sit **after** the boundary |
+| `RouteBuildItem` | The control surface at **`/__basquin/*`** — the prefix the driver actually calls (`LoadModeControl.PREFIX`), served as Vert.x routes so they exist in native without JAX-RS scanning. **Do NOT delegate to `LoadModeControl.handle`** — it calls `RequestBoundary.awaitQuiescence`, which is `ITERATION_LOCK.tryLock(...)`, and importing explore's serialization lock into the lock-free reactive path is a binding-invariant violation. The extension serves `result` and `violations` itself, sharing only `ResultStore`'s wire format; `mode` and `drift` are out of scope and answer `err:unknown`. See §4.4a |
+| `@Recorder` | Wires runtime state at application startup. **None in PR-2** — the boundary filter and control handler hold no startup-time state, so no recorder was needed. Listed as the design target for when one is |
 
 The boundary sees only router traffic. Anything bypassing the router — a separate management
 interface port, gRPC, raw socket handlers — is invisible to it. Irrelevant for these two targets;
@@ -436,7 +441,7 @@ Which end hook matters:
 
 | Hook | Semantics | Use |
 |---|---|---|
-| `addHeadersEndHandler` | last moment **before** headers commit | write `X-Basquin-Req` here |
+| `addHeadersEndHandler` | last moment **before** headers commit | **not used.** An earlier draft had the boundary write `X-Basquin-Req` here as a *response* header; §4.4 refuted that — the driver sends the id **inbound** and the boundary only reads it. The shipped extension has no `addHeadersEndHandler` at all. Only the S3 probe fixture ever wrote it, which is why S3's evidence mentions it |
 | `addEndHandler` | response fully written; `AsyncResult` reports **success or failure** (incl. client disconnect) | record the measurement here |
 | `addBodyEndHandler` | **may never fire** on connection reset — Vert.x docs say do not use for cleanup | not used |
 
@@ -453,25 +458,89 @@ construction.
 **What transplants:** the result store, the salted `<RUN_SALT>-<n>` id scheme, and DD-040's
 first-class miss accounting.
 
-**What is replaced:** lock-based quiescence becomes a **completion-parking poll**. The
-`/basquin/result/<id>` handler, on a miss, returns a `Uni` completed by the store's `put` for that id,
+**What is replaced:** lock-based quiescence becomes a **completion-parking poll**, which the extension
+**writes itself** (`BasquinControlHandler.pollResult`). It cannot reuse the Tomcat path's:
+`LoadModeControl.handle`'s `result` case is `awaitQuiescence` plus a single `take`, and
+`awaitQuiescence` IS the lock-based wait this sentence replaces (§4.4a). The handler on a miss waits
+for the store's `put` for that id,
 bounded at **2 s** (mirroring DD-040's bound), with the driver's read timeout above it at **4 s**
 (same reasoning). A timeout is a recorded miss, never a zero.
 
 Per request:
 
-1. Filter assigns `<RUN_SALT>-<n>`, stamps start time, stashes both on the `RoutingContext`, and
-   increments the in-flight counter (§6.1).
-2. `addHeadersEndHandler` writes `X-Basquin-Req: <id>` at the last moment before commit.
-3. `addEndHandler` computes the measurement, records disposition (`completed|disconnected`), and puts
-   the result into the store — completing any parked poll.
-4. The driver polls `/basquin/result/<id>`.
+1. Filter **reads** the driver's id from the inbound `X-Basquin-Req` **request** header, stamps start
+   time, baseline heap and baseline thread count, and stashes them on the `RoutingContext`
+   (`BasquinBoundaryFilter.handle`). **No in-flight counter exists here.** An earlier draft of this
+   step said the filter increments one; the actual PR-2 filter has no counter field, so nothing in
+   `basquin-quarkus` today implements §6.1's taint mechanism. That counter is **PR-5's** — see PR-5's
+   roadmap entry: §6.1's in-flight taint needs a `ResultStore.Entry` field and does not exist until
+   PR-5 lands it.
+2. `addEndHandler` computes the measurement and puts the result into the store under that id — **but
+   only for a completed response**. `ResultStore.Entry` carries no disposition field
+   (`costCsv, invariantCount, detail, leakDetected`), so "records disposition" is not literally
+   implementable against it. A disconnected request (`ar.succeeded()` false) is simply **not
+   published**, which is what §6.5 actually requires: its elapsed time is time-to-abort, not
+   latency, so it must not enter the distribution. Explicit disconnect *accounting* — as opposed to
+   exclusion — would need a new `Entry` field and is deliberately not in PR-2.
+3. The driver polls `/__basquin/result?id=<id>`.
+
+**Corrected 2026-07-25 against the code; an earlier draft of this list was wrong in a way that would
+have shipped a broken extension.** It said the filter *assigns* `<RUN_SALT>-<n>` and writes
+`X-Basquin-Req` as a **response** header. The driver assigns it — `CoverageGuidedRun.java:1031`,
+`RUN_SALT + "-" + REQ_SEQ.getAndIncrement()` — and sends it **inbound** (`:1056`); both existing
+boundaries read it (`BasquinValve.java:62`, `TomcatBoundaryAdvice.java:30`). An extension that minted
+its own ids would publish results under ids the driver never sent, so every poll would miss — DD-040's
+exact failure mode, rebuilt from a spec sentence.
+
+**Stamp only on the explore branch.** `BasquinValve.java:58-63` stamps the id *only* when
+`decision.phase == EXPLORE_BEGAN`, so the load path reads no header at all. Stamping unconditionally
+would leak explore's behaviour into the lock-free load path, which is a binding project invariant.
 
 **A consequence worth stating plainly:** DD-040's opportunistic `X-Basquin-Cost` header fast path
 **cannot exist on this path at all** — the measurement is only known after the last byte is written.
 So *every* iteration polls, doubling requests per iteration. DD-040 rejected "piggyback request N−1's
 result on request N" for complicating a path that mostly did not need it; here the poll is universal,
 so that alternative deserves re-evaluation. Deferred to PR-2, flagged, not silently inherited.
+
+### 4.4a The control surface: share the wire format, not the handler
+
+**Corrected against the code the same day it was written.** An earlier version of this section said the
+extension would "intercept `/__basquin/*`, call `LoadModeControl.handle(path, query)`, write the string
+back", on the grounds that `LoadModeControl` has zero imports and is therefore framework-neutral. Zero
+imports does not mean zero dependencies: same-package types need none. `handle` references `LoadMode`
+(three times) and `RequestBoundary.awaitQuiescence` (once), both of which stay in `agent/`. Moving it
+wholesale would recreate the circular dependency that broke the `Invariants` move — and
+`awaitQuiescence` is `ITERATION_LOCK.tryLock(...)`, lock-based machinery that has no meaning on the
+lock-free reactive path this whole spec exists to support.
+
+**What is genuinely shared — and what that actually guarantees.** The drift risk was never the
+routing — it is the **wire format**, and that already lives in `basquin-core` as
+`ResultStore.format(...)` / `ResultStore.take(id)`, public and reused verbatim. Sharing that
+formatter guarantees the Quarkus and Tomcat paths cannot disagree about the wire **shape** — four
+`|`-separated fields, one line per hop. It does **not** guarantee they cannot disagree about
+**content**: what goes INTO an `Entry` is decided per-boundary, at each boundary's own call site, and
+the two had already diverged there. PR-2 briefly shipped `BasquinBoundaryFilter.publish` writing a
+bare `detail` (just the violated invariant's own message) where the Tomcat path publishes
+`name + ": " + detail` (`Agent.java:475`), silently losing *which* invariant fired, since
+`ResultStore.Entry` stores the field opaquely. Fixed, and now pinned by
+`BasquinBoundaryFilterTest#publishFormatsDetailAsNameColonDetailMatchingTomcat` — but the general
+lesson stands: content alignment across boundaries is a per-boundary obligation that has to be
+tested, not a property the shared formatter hands you for free. Also worth extracting into
+`basquin-core`, being tiny and pure: the `PREFIX` constant and the query-parameter parser, so both
+paths agree on `/__basquin/` and on how `?id=` is read.
+
+**What the extension implements itself**, because it cannot be shared:
+
+| `/__basquin/…` | PR-2 | Why |
+|---|---|---|
+| `result?id=` | yes — `ResultStore.format(ResultStore.take(id))` behind a **bounded wait of its own** | `awaitQuiescence` is lock-based; the reactive path has no lock. §4.4's bound (2 s) applies, and a timeout records a **miss**, never a zero |
+| `violations` | yes — `ResultStore.totalViolations()` | no coupling |
+| `mode`, `drift` | **no** | both are `LoadMode`, the DD-029 valve strategy flag. Load mode against native targets is a §2 non-goal and DD-042's business |
+
+**`LoadModeControl` therefore does not move.** It stays in `agent/` as the Tomcat path's handler. Only
+`PREFIX` and the parameter parser are extracted, and only if that extraction is behaviour-preserving —
+otherwise the extension carries its own copies of two trivial pure functions, which is a smaller cost
+than a bad refactor of a shipped control path.
 
 ## 5. Injection without source modification
 
@@ -660,6 +729,55 @@ from "checked and clean" while meaning "never detected". So taint is not a self-
 §7.3 carries a control that forces it positive; without that control passing, the taint rate is not
 published and neither is the heap column that rests on it.
 
+**A negative delta is a third failure the in-flight counter cannot see — measured on a real app.**
+PR-2's `rest-villains` acceptance polled `47,-16456,0|0||`: a claimed heap delta of **−16,456 KB** for a
+single Hibernate/Postgres GET (`bench-results/dd043-pr2-restvillains-2026-07-26/curl-transcript.txt`).
+A request does not free 16 MB; that is a GC cycle inside the measurement window — the phenomenon behind
+the standing `heapDriftKb` debt (+381 MB one run, −194 MB another, deliberately never published).
+
+The taint rule does **not** catch it. The in-flight counter detects *overlapping requests*, and a GC is
+not a request, so the window looks clean by that test while the number is meaningless. Left as is, PR-5
+could implement taint and `UNMEASURED` in full and this figure would still be published.
+
+**The sign is itself a disposition signal, and it is free.** A negative per-request heap delta is
+*definitionally* unattributable: allocation cannot be negative, so the window contained a collection.
+Record it `UNMEASURED`, never as a number — and unlike the overlap case it needs no counter and no GC
+introspection to detect. Whatever PR-5 builds for `UNMEASURED` must cover **four** producers — overlap, sub-quantum, negative, and the
+GC-contaminated positive case described immediately below, which subsumes the third.
+
+**A fourth producer, and it subsumes the third.** Raised in PR-2's review: the sign argument only works
+in one direction. A window where a GC reclaims 2 MB while the request allocates 3 MB nets to **+1 MB** —
+above the quantum, positive, no overlapping request — so all three checks pass and the figure is
+published as a clean measurement. It is exactly as GC-contaminated as the −16,456 KB case, and *nothing
+currently names it*.
+
+The general detector is not the sign but **whether a collection ran at all**: sample
+`java.lang.management.GarbageCollectorMXBean.getCollectionCount()` at boundary entry and at
+`addEndHandler`, and disposition `UNMEASURED` if it moved. That subsumes the negative rule (a negative
+delta is just the case where the GC reclaimed more than the request allocated) and catches the
+positive-but-contaminated case the sign rule cannot see.
+
+Two caveats before PR-5 builds it. It is `java.lang.management`, **not** `com.sun.management` — so it
+avoids the exclusion §6.2 records for `getThreadAllocatedBytes`, and the extension already uses
+`java.lang.management.ThreadMXBean` — but **whether it works under SubstrateVM is unverified** and is a
+PR-5 precondition, not an assumption. And a collection-count check makes the heap invariant strictly
+*more* conservative: on a busy target many windows will contain a GC and go `UNMEASURED`, which is
+honest but may leave few measurable samples. That trade — fewer numbers, all of them real — is the one
+this project has consistently chosen.
+
+**A fifth candidate, unconfirmed and design-shaping.** A response that never triggers `addEndHandler`
+at all — a protocol upgrade, an indefinitely streaming response, a connection that never sees FIN/RST.
+§6.1's counter model assumes the decrement runs on every disposition; a request class where it never
+fires would leave the counter permanently elevated and taint **every subsequent measurement**. Not
+reachable on `rest-villains`' plain REST routes, and PR-2 implements no counter, so it cannot manifest
+yet — but PR-5 should test it deliberately (a WebSocket upgrade route) rather than meet it on a real
+target.
+
+Also observed on the same run: `6,477,4|0||` — a **thread delta of 4** on a reactive app, which is
+Vert.x growing its worker pool rather than the request leaking threads. §6.3 already replaces thread
+leak as an invariant for this target class, and this is a concrete reason why: the figure is real but
+not attributable to the request.
+
 #### The instrument is quantized, not continuous — state the floor
 
 Everything above treats the heap reading as a continuous number that noise perturbs. It is not.
@@ -716,7 +834,7 @@ same document whose ledger called §6.2 unverified; that is precisely the failur
 `bench-results/dd043-target-pins-2026-07-24/README.md:3-8` records the approver rejecting once already.
 
 **What would verify it:** on the pinned Mandrel 25.0.3 image, open a `RecordingStream` in-process,
-enable `jdk.ObjectAllocationSample`, drive `/basquin/control/defect/alloc`, and show non-zero sampled
+enable `jdk.ObjectAllocationSample`, drive `/__basquin/control/defect/alloc`, and show non-zero sampled
 bytes attributed to that route — i.e. §7.3's JFR row, run and passing, with the recording committed as
 an artifact. Until that exists §6.2 produces **no published figure**, and §7.3's row already prescribes
 the fallback: demote the cross-check to diagnostic-only. **This is a PR-5 entry gate (§9), not a PR-5
@@ -779,7 +897,7 @@ page must say so rather than print a thread-leak column of zeros.
 Native mode has no runtime coverage agent: Quarkus documents coverage as unsupported in native mode,
 and `quarkus-jacoco` requires a jar artifact, explicitly not a native binary. The working path is
 **offline instrumentation** between compile and `native-image`, so the JaCoCo runtime lives in the
-image as ordinary code. Our extension serves the execution data on `/basquin/coverage`;
+image as ordinary code. Our extension serves the execution data on `/__basquin/coverage`;
 `JacocoCoverageProvider` (DD-012/DD-023) changes **transport only** — tcpserver becomes HTTP — and
 union-merge across replicas keeps working.
 
@@ -788,7 +906,7 @@ Two mechanics the injector must respect, because they are how this silently prod
 - The driver's `Analyzer` must run against the **original, pre-instrumentation classes** (offline
   instrumentation embeds the pre-instrumentation class id). The injector must therefore preserve them
   — JaCoCo's own backup directory, `target/generated-classes/jacoco`.
-- `/basquin/coverage` reads `RuntimeData` **directly**, not via the `jacoco-agent.properties`
+- `/__basquin/coverage` reads `RuntimeData` **directly**, not via the `jacoco-agent.properties`
   agent-boot path (shutdown hooks, file output), which may not survive native.
 
 #### The read must be a direct, compile-time-typed call. Never reflection.
@@ -862,7 +980,7 @@ change: "strictly better" is withdrawn in favour of *"differently scoped — inc
 excludes nothing the valve measured."*
 
 And on a **failed** `AsyncResult` (client disconnect), elapsed-until-abort is not a latency sample at
-all. The boundary records disposition and keeps `disconnected` samples out of the latency distribution,
+all. The boundary keeps `disconnected` samples out of the latency distribution by not publishing them,
 or a flaky driver connection manufactures latency findings.
 
 ## 7. Validation
@@ -1011,8 +1129,9 @@ disposition table in **JVM mode only**, and S1 is this branch's proof that a JVM
 survive AOT. So before a native cell publishes any crash count or latency distribution, it must
 reproduce S3's four dispositions under SubstrateVM — `/ok` 200, an app 500, a 3xx, and a mid-response
 client disconnect — and confirm that `addEndHandler` fires on each, that `ar.succeeded()` is `false`
-on the disconnect, and that `addHeadersEndHandler`'s `X-Basquin-Req` still reaches the client on the
-500. If `addEndHandler` does not fire on native close detection, the boundary records nothing for that
+on the disconnect. **Do not gate on `addHeadersEndHandler`'s `X-Basquin-Req` reaching the client** — an
+earlier draft did, and that criterion can never pass: the extension never writes that header (§4.3),
+only S3's probe fixture did. Gating a native cell on it would block PR-4 on an impossible check. If `addEndHandler` does not fire on native close detection, the boundary records nothing for that
 disposition and the crash counter silently reverts to the `getStatusCode()`-reads-200 behaviour
 amendment 3 exists to prevent. The check is cheap — the extension's own control routes (§7.3) already
 provide three of the four dispositions.
@@ -1034,7 +1153,7 @@ unmodified-app claim. Running controls only on the Phase-0 `todo` quickstart pro
 in a *different app on a different stack cell* than the ones published.
 
 **Resolution: negative-control defect routes ship in the extension's own runtime** —
-`/basquin/control/defect/{slow,alloc,error5xx,block-loop}`, with `alloc` taking a size parameter so it
+`/__basquin/control/defect/{slow,alloc,error5xx,block-loop}`, with `alloc` taking a size parameter so it
 can be driven both far above and deliberately below §6.1's quantum — disabled by default, enabled by a
 system property only during Phase-2 control runs. The extension is injected tooling, not app source, so
 the thesis holds; the controls run in the *same* process and stack cell as the published rows; and they
@@ -1049,16 +1168,16 @@ zero live rather than structural.
 
 | Invariant | Control | Assertion |
 |---|---|---|
-| latency | `/basquin/control/defect/slow` | violation **arrives in the driver-visible result** |
-| **5xx / crash** | `/basquin/control/defect/error5xx` returning a 500 | the crash is counted **and** attributed to the right iteration id — a boundary that skips error paths (§6.3, S3) would zero it silently |
+| latency | `/__basquin/control/defect/slow` | violation **arrives in the driver-visible result** |
+| **5xx / crash** | `/__basquin/control/defect/error5xx` returning a 500 | the crash is counted **and** attributed to the right iteration id — a boundary that skips error paths (§6.3, S3) would zero it silently |
 | **5xx / crash, negative half** | a **client disconnect** mid-response (driver aborts before the body is written) | the crash counter does **not** increment, and the iteration is recorded as `disconnected` — S3 measured `getStatusCode()` returning `200` on exactly this disposition, so a control that only proves the counter *can* fire leaves the counter free to fire wrongly (§6) |
-| event-loop blocking | `/basquin/control/defect/block-loop`, sleeping **comfortably above the pinned threshold** | store entry → finding → rendered row |
-| heap | `/basquin/control/defect/alloc`, sized well above the quantum | delta recorded **and not tainted** (§6.1) |
-| **heap, taint — the firing half** | a **deliberately overlapping request**: a second connection sent against any route while `/basquin/control/defect/slow` is in flight on the driver's connection | the in-flight counter must exceed 1; the overlapped iteration must be **counted as tainted** and dispositioned `UNMEASURED`; and the run summary's **taint rate must come back strictly greater than zero**. A run that reports `0%` with the overlap injected **fails** — the counter is per-request, or its decrement is unreachable, and `0%` then means "never detected", not "clean" (§6.1) |
-| **heap, `UNMEASURED` — the firing half** | `/basquin/control/defect/alloc` sized **below one quantum** (≪ 524,288 B) | the sample must be recorded as `UNMEASURED` and **must not** appear as a number anywhere downstream of the boundary. A numeric delta here **fails** the control: the instrument cannot resolve that allocation, so any number it prints is manufactured (§6.1) |
+| event-loop blocking | `/__basquin/control/defect/block-loop`, sleeping **comfortably above the pinned threshold** | store entry → finding → rendered row |
+| heap | `/__basquin/control/defect/alloc`, sized well above the quantum | delta recorded **and not tainted** (§6.1) |
+| **heap, taint — the firing half** | a **deliberately overlapping request**: a second connection sent against any route while `/__basquin/control/defect/slow` is in flight on the driver's connection | the in-flight counter must exceed 1; the overlapped iteration must be **counted as tainted** and dispositioned `UNMEASURED`; and the run summary's **taint rate must come back strictly greater than zero**. A run that reports `0%` with the overlap injected **fails** — the counter is per-request, or its decrement is unreachable, and `0%` then means "never detected", not "clean" (§6.1) |
+| **heap, `UNMEASURED` — the firing half** | `/__basquin/control/defect/alloc` sized **below one quantum** (≪ 524,288 B) | the sample must be recorded as `UNMEASURED` and **must not** appear as a number anywhere downstream of the boundary. A numeric delta here **fails** the control: the instrument cannot resolve that allocation, so any number it prints is manufactured (§6.1) |
 | heap, **positive-noise** | idle window, no driver request | the sample must be recorded — as exactly `0` or as `UNMEASURED` — and **any reading at or above §6.1's practical minimum (1,048,576 B) with no request in flight fails the control.** Stated as a threshold rather than "~zero or `UNMEASURED`", which passed on either branch and so could not fail. This is the control that catches probe pollution and the `heapDriftKb` class of error |
 | coverage | routes exercised progressively, with **one pre-registered application route withheld** from the driver (§7.1) | the total must increase **and** the withheld route's *method* must read `0 covered` **against a live execution-data record for its own class** — i.e. at a dump point where at least one sibling method of that class has already flipped to covered. Two ways to fail rather than pass vacuously: if no sibling has flipped, the class has no record and the zero measures nothing; if the withheld method's invoker class is absent from the build's `-H:+PrintClassInitialization` report, reachability analysis deleted it and the zero is a structural absence (§7.1). **A never-exercised *class* reading zero is not this control** — amendment 8 disproved that instrument, and using it would admit the coverage percentage on a measurement that never happened |
-| **JFR cross-check** (§6.2) | `/basquin/control/defect/alloc` driven across a run alongside ordinary routes | first, the transport must exist at all: a `RecordingStream` opens in the native image and `jdk.ObjectAllocationSample` events arrive (§6.2 — **unverified**, so this is a precondition, not an assumption). Then the alloc route must rank **first** by aggregated sample totals. If either half cannot be made to hold, the cross-check is demoted to **diagnostic-only, not published**, and §6.2 says so |
+| **JFR cross-check** (§6.2) | `/__basquin/control/defect/alloc` driven across a run alongside ordinary routes | first, the transport must exist at all: a `RecordingStream` opens in the native image and `jdk.ObjectAllocationSample` events arrive (§6.2 — **unverified**, so this is a precondition, not an assumption). Then the alloc route must rank **first** by aggregated sample totals. If either half cannot be made to hold, the cross-check is demoted to **diagnostic-only, not published**, and §6.2 says so |
 
 **This table is exhaustive over §6 by construction, and that property is load-bearing.** Three signals were
 found silently exempt from it in successive reviews — the JFR cross-check, then 5xx/crash, then **thread
@@ -1088,6 +1207,23 @@ did not increment is compatible with a counter that cannot increment.
 All of the above may be collected as diagnostics and **must not** appear as an invariant column on the
 benchmark page until each earns a control row above. Promoting one is a spec change, not an implementation
 detail.
+
+**Control status as of PR-2 (2026-07-25) — two rows cannot be claimed, and one has already failed.**
+
+- **`UNMEASURED` (sub-quantum heap): FAILED, measured.** Driving
+  `/__basquin/control/defect/alloc?bytes=100` — far below §6.1's 524,288 B quantum — the polled result is
+  `0,0,0|0||` on every trial (`bench-results/dd043-pr2-controls-2026-07-25/03-alloc-below-quantum.txt`).
+  That is a plain numeric zero, not an `UNMEASURED` disposition. By this table's own rule a number here
+  fails the control, because the instrument cannot resolve that allocation and any figure it prints is
+  manufactured. **The heap invariant is therefore not publishable**, and this is not a bug in the control
+  route — the 4 MiB case proves the route honours `bytes` faithfully. The gap is that neither the
+  `UNMEASURED` disposition nor §6.1's in-flight taint exists below the boundary: `ResultStore.Entry` is
+  `(costCsv, invariantCount, detail, leakDetected)` and carries no disposition field at all — the same
+  structural gap that makes disconnect *accounting* impossible in §4.4. Both need an `Entry` field.
+  **Assigned to PR-5**, which owns the reactive invariant set and the per-target reporting.
+- **Event-loop blocking: not claimable yet.** `/__basquin/control/defect/block-loop` plants the defect
+  correctly — the response and app log both show a genuine `vert.x-eventloop-thread-N` — but §6.3's
+  watchdog, which would *detect* it, is PR-5. A planted defect with no detector is not a passing control.
 
 Every control is verified **end-to-end at the reporting layer** (`render_page.py` input), not at the
 log line — otherwise the control validates the logger, not the invariant. An invariant without a
@@ -1163,10 +1299,10 @@ history says this repo needs.
 |---|---|---|
 | **PR-0** | Phase-0 spikes S1–S4 → `bench-results/dd043-spikes-2026-07-24/`, plus the spec amendments they forced. **No product code.** — **DONE, gate PASSED** | Gates everything below |
 | **PR-1** | `basquin-core` extraction (§4.1) — pure refactor, zero behaviour change, existing tests green, no Quarkus code — **DONE** (324 → 326 tests, 0 failures; branch `dd043-pr1-basquin-core`, not yet merged) | PR-0 — cleared |
-| **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + parking poll (§4.4), `/basquin/status\|result`, control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private and must be widened together before the boundary filter can call this artifact. The publishing half is resolved: `maven-publish` ships both a local and a Pages-served Maven repo |
+| **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + a `/__basquin/{result,violations}` control surface sharing `ResultStore`'s wire format (§4.4a), control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private and must be widened together before the boundary filter can call this artifact. The publishing half is resolved: `maven-publish` ships both a local and a Pages-served Maven repo |
 | **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits | PR-2 |
-| **PR-4** | Coverage — offline-JaCoCo execution injection, `/basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 · **entry gate: §8.2** (plugin-execution injection is unmeasured); the native cells additionally carry §7.2's S3 re-check |
-| **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |
+| **PR-4** | Coverage — offline-JaCoCo execution injection, `/__basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 · **entry gate: §8.2** (plugin-execution injection is unmeasured); the native cells additionally carry §7.2's S3 re-check |
+| **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs. **Entry condition:** §7.4's rule that the heap column, taint rate and `UNMEASURED` count render only when §7.3's firing controls passed is today **documented discipline, not enforced code** — nothing reads control-pass state, and it holds only because no renderer exists yet. PR-5 must make it a checkable gate in `render_page.py`, not a convention. **Also owns four gaps PR-2 measured:** the `UNMEASURED` disposition and §6.1's in-flight taint — both need a `ResultStore.Entry` field, and until they land §7.3's sub-quantum control **fails** and the heap invariant is **not publishable**; the watchdog, without which `block-loop`'s control cannot be claimed; **negative** heap deltas (measured `-16,456 KB` on `rest-villains`), which the in-flight counter structurally cannot detect because a GC is not a request; and **GC-contaminated positive** deltas, which the sign rule cannot see either — the general detector is a `GarbageCollectorMXBean.getCollectionCount()` delta across the window, whose SubstrateVM support is itself a PR-5 precondition | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |
 
 Docs land with their PR: `THIRD-PARTY-APPS.md` gains a build-time-injection section, `ARCHITECTURE.md`
 gains the build-vs-runtime injection symmetry.

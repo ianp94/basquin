@@ -1,0 +1,19 @@
+diff --git a/rest-villains/pom.xml b/rest-villains/pom.xml
+index 2121b01..c0a6388 100644
+--- a/rest-villains/pom.xml
++++ b/rest-villains/pom.xml
+@@ -38,6 +38,14 @@
+     </dependencies>
+   </dependencyManagement>
+   <dependencies>
++    <!-- DD-043 PR-2 acceptance (basquin-quarkus): manual pom edit, not zero-pom-edit injection.
++         PR-3 owns the Maven lifecycle participant that injects this without touching pom.xml;
++         see bench-results/dd043-pr2-restvillains-2026-07-26/README.md. -->
++    <dependency>
++      <groupId>com.basquin</groupId>
++      <artifactId>basquin-quarkus</artifactId>
++      <version>0.3.0</version>
++    </dependency>
+     <dependency>
+       <groupId>io.quarkus</groupId>
+       <artifactId>quarkus-rest-jackson</artifactId>

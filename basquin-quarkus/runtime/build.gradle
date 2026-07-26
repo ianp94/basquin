@@ -1,0 +1,72 @@
+// basquin-quarkus (runtime) — DD-043 PR-2: the request boundary + control surface.
+//
+// The Gradle-extension toolchain question this module started as
+// (bench-results/dd043-pr2-spike-2026-07-25/) is settled: CONFIRMED. This module now carries
+// PR-2's first real increment — BasquinBoundaryFilter (the Vert.x-level request boundary, spec
+// §4.3/§4.4) and BasquinControlHandler (the /__basquin/* control surface, spec §4.4a) — on top of
+// basquin-core (agent.Invariants / agent.ResultStore) and Quarkus's Vert.x HTTP runtime.
+plugins {
+    id 'java'
+    id 'io.quarkus.extension' version '3.37.3'
+    id 'maven-publish'
+}
+
+group = 'com.basquin'
+version = '0.3.0'
+description = 'Basquin request boundary for Quarkus (DD-043 PR-2)'
+sourceCompatibility = '17'
+targetCompatibility = '17'
+
+repositories { mavenCentral() }
+
+// Explicit rather than relying on the plugin's "runtime"-named-project convention (see
+// QuarkusExtensionConfiguration#getDefaultDeployementArtifactName in the plugin source) — this
+// spike is exactly the place to not lean on an unverified naming default.
+quarkusExtension {
+    deploymentModule = ':basquin-quarkus:deployment'
+    deploymentArtifact = 'com.basquin:basquin-quarkus-deployment:0.3.0'
+}
+
+dependencies {
+    // DD-043 §4.1: the framework-neutral measurement core (Invariants, ResultStore), moved here
+    // rather than duplicated. `implementation` (not `api`): callers of basquin-quarkus never need
+    // to compile against agent.* directly, only to have it on the runtime classpath.
+    implementation project(':basquin-core')
+    // Quarkus's Vert.x HTTP runtime: RoutingContext/Handler/AsyncResult (transitively vertx-web +
+    // vertx-core) plus quarkus-core. Pinned directly rather than importing the quarkus-bom
+    // platform, matching this module's existing convention of one explicit Quarkus coordinate.
+    implementation 'io.quarkus:quarkus-vertx-http:3.37.3'
+
+    testImplementation 'junit:junit:4.13.2'
+}
+
+// The io.quarkus.extension plugin's own conventions default the test task to JUnit Platform (no
+// engine present here, since this module's tests are plain JUnit4, matching the rest of the repo)
+// — without this, `test` fails with "Cannot create Launcher without at least one TestEngine".
+test {
+    useJUnit()
+}
+
+jar {
+    archiveBaseName = 'basquin-quarkus'
+}
+
+// Published into the Phase-0 fixture's OWN local Maven repository
+// (bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository), not ~/.m2 / mavenLocal() — the
+// fixture's containerized build runs Maven with -Duser.home=/m2, bind-mounted from that directory
+// (see bench-results/dd043-spikes-2026-07-24/env/build.sh), so mavenLocal() would be invisible to
+// it. S4's addendum already proved an artifact present only in that local repo resolves.
+publishing {
+    publications {
+        runtime(MavenPublication) {
+            from components.java
+            artifactId = 'basquin-quarkus'
+        }
+    }
+    repositories {
+        maven {
+            name = 'dd043Spike'
+            url = rootProject.layout.projectDirectory.dir('bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository')
+        }
+    }
+}

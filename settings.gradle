@@ -2,3 +2,16 @@ rootProject.name = 'basquin'
 include 'tomcat-war'
 include 'tomcat-valve'
 include 'basquin-core'
+// DD-043 PR-2: the Quarkus extension (request boundary + /__basquin/* control surface). The
+// Gradle-vs-Maven toolchain question this pair of modules started as was resolved CONFIRMED
+// (evidence: bench-results/dd043-pr2-spike-2026-07-25/) — see basquin-quarkus/*/build.gradle.
+include 'basquin-quarkus:runtime'
+include 'basquin-quarkus:deployment'
+// NOTE: renaming the runtime project's Gradle `.name` to match its published artifactId
+// (basquin-quarkus) was tried and reverted — it also changes the project PATH used by
+// project(':basquin-quarkus:runtime') elsewhere (confirmed: Gradle failed to resolve the
+// deployment module's project dependency afterwards), which is more fragility than this spike's
+// question warrants. Left as a known cosmetic quirk: quarkus-extension.yaml's self-reported
+// "name"/"artifact" fields say "runtime" rather than "basquin-quarkus". This does not affect
+// augmentation — that reads META-INF/quarkus-extension.properties' deployment-artifact key,
+// which is set explicitly below and unaffected by the project's Gradle name.

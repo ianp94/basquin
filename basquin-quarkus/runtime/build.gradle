@@ -22,9 +22,19 @@ repositories { mavenCentral() }
 // Explicit rather than relying on the plugin's "runtime"-named-project convention (see
 // QuarkusExtensionConfiguration#getDefaultDeployementArtifactName in the plugin source) — this
 // spike is exactly the place to not lean on an unverified naming default.
+// The version is INTERPOLATED, never typed here. This string becomes the `deployment-artifact` key in
+// quarkus-extension.properties, which is the coordinate augmentation resolves — so a literal that
+// drifts from `version` above points augmentation at an artifact nobody published, and the failure
+// lands in a CONSUMER's build, not ours. DD-043 PR-3 makes that materially worse: the injector puts
+// this coordinate into third-party applications, where the symptom reads as "Basquin broke my build".
+//
+// The release workflow's version-vs-tag assertion cannot catch it — that checks each module's `version`
+// property, which would still match the tag while this literal lagged behind. Interpolation removes the
+// second place a version can be wrong, and the assertion then keeps the three modules in the lockstep
+// this interpolation assumes.
 quarkusExtension {
     deploymentModule = ':basquin-quarkus:deployment'
-    deploymentArtifact = 'com.basquin:basquin-quarkus-deployment:0.3.0'
+    deploymentArtifact = "com.basquin:basquin-quarkus-deployment:${version}"
 }
 
 dependencies {

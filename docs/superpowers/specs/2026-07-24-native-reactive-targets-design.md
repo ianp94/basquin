@@ -723,7 +723,35 @@ could implement taint and `UNMEASURED` in full and this figure would still be pu
 *definitionally* unattributable: allocation cannot be negative, so the window contained a collection.
 Record it `UNMEASURED`, never as a number — and unlike the overlap case it needs no counter and no GC
 introspection to detect. Whatever PR-5 builds for `UNMEASURED` must therefore cover **three** producers:
-overlap, sub-quantum, and negative.
+ overlap, sub-quantum, and negative.
+
+**A fourth producer, and it subsumes the third.** Raised in PR-2's review: the sign argument only works
+in one direction. A window where a GC reclaims 2 MB while the request allocates 3 MB nets to **+1 MB** —
+above the quantum, positive, no overlapping request — so all three checks pass and the figure is
+published as a clean measurement. It is exactly as GC-contaminated as the −16,456 KB case, and *nothing
+currently names it*.
+
+The general detector is not the sign but **whether a collection ran at all**: sample
+`java.lang.management.GarbageCollectorMXBean.getCollectionCount()` at boundary entry and at
+`addEndHandler`, and disposition `UNMEASURED` if it moved. That subsumes the negative rule (a negative
+delta is just the case where the GC reclaimed more than the request allocated) and catches the
+positive-but-contaminated case the sign rule cannot see.
+
+Two caveats before PR-5 builds it. It is `java.lang.management`, **not** `com.sun.management` — so it
+avoids the exclusion §6.2 records for `getThreadAllocatedBytes`, and the extension already uses
+`java.lang.management.ThreadMXBean` — but **whether it works under SubstrateVM is unverified** and is a
+PR-5 precondition, not an assumption. And a collection-count check makes the heap invariant strictly
+*more* conservative: on a busy target many windows will contain a GC and go `UNMEASURED`, which is
+honest but may leave few measurable samples. That trade — fewer numbers, all of them real — is the one
+this project has consistently chosen.
+
+**A fifth candidate, unconfirmed and design-shaping.** A response that never triggers `addEndHandler`
+at all — a protocol upgrade, an indefinitely streaming response, a connection that never sees FIN/RST.
+§6.1's counter model assumes the decrement runs on every disposition; a request class where it never
+fires would leave the counter permanently elevated and taint **every subsequent measurement**. Not
+reachable on `rest-villains`' plain REST routes, and PR-2 implements no counter, so it cannot manifest
+yet — but PR-5 should test it deliberately (a WebSocket upgrade route) rather than meet it on a real
+target.
 
 Also observed on the same run: `6,477,4|0||` — a **thread delta of 4** on a reactive app, which is
 Vert.x growing its worker pool rather than the request leaking threads. §6.3 already replaces thread
@@ -1253,7 +1281,7 @@ history says this repo needs.
 | **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + a `/__basquin/{result,violations}` control surface sharing `ResultStore`'s wire format (§4.4a), control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private and must be widened together before the boundary filter can call this artifact. The publishing half is resolved: `maven-publish` ships both a local and a Pages-served Maven repo |
 | **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits | PR-2 |
 | **PR-4** | Coverage — offline-JaCoCo execution injection, `/__basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 · **entry gate: §8.2** (plugin-execution injection is unmeasured); the native cells additionally carry §7.2's S3 re-check |
-| **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs. **Also owns three gaps PR-2 measured:** the `UNMEASURED` disposition and §6.1's in-flight taint — both need a `ResultStore.Entry` field, and until they land §7.3's sub-quantum control **fails** and the heap invariant is **not publishable**; the watchdog, without which `block-loop`'s control cannot be claimed; and **negative** heap deltas (measured `-16,456 KB` on `rest-villains`), which the in-flight counter structurally cannot detect because a GC is not a request | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |
+| **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs. **Entry condition:** §7.4's rule that the heap column, taint rate and `UNMEASURED` count render only when §7.3's firing controls passed is today **documented discipline, not enforced code** — nothing reads control-pass state, and it holds only because no renderer exists yet. PR-5 must make it a checkable gate in `render_page.py`, not a convention. **Also owns four gaps PR-2 measured:** the `UNMEASURED` disposition and §6.1's in-flight taint — both need a `ResultStore.Entry` field, and until they land §7.3's sub-quantum control **fails** and the heap invariant is **not publishable**; the watchdog, without which `block-loop`'s control cannot be claimed; **negative** heap deltas (measured `-16,456 KB` on `rest-villains`), which the in-flight counter structurally cannot detect because a GC is not a request; and **GC-contaminated positive** deltas, which the sign rule cannot see either — the general detector is a `GarbageCollectorMXBean.getCollectionCount()` delta across the window, whose SubstrateVM support is itself a PR-5 precondition | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |
 
 Docs land with their PR: `THIRD-PARTY-APPS.md` gains a build-time-injection section, `ARCHITECTURE.md`
 gains the build-vs-runtime injection symmetry.

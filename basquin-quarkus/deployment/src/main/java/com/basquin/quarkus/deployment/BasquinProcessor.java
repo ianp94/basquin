@@ -51,6 +51,20 @@ public class BasquinProcessor {
      * <p>{@code control/defect/block-loop} is deliberately NOT served by this route — see {@link
      * #blockLoopRoute()}.
      */
+    /**
+     * <b>No ordering guarantee against an arbitrary target app.</b> This route is mounted at Vert.x's
+     * default (positive, auto-incrementing) order, so a target that registers its own catch-all or
+     * wildcard route at a <em>more negative</em> order would shadow {@code /__basquin/*} and the control
+     * handler would never see the request — the driver's polls would then hit the app instead of the
+     * control surface. That is the same ordering trap {@link #BLOCK_LOOP_ROUTE_ORDER} documents, in a
+     * different place: {@code order()} is global across every route the app installs, not just ours.
+     *
+     * <p>{@code rest-villains} has no such route, so PR-2's acceptance does not exercise this, and it is
+     * recorded rather than defended against: pinning a very negative order here would win the match but
+     * would also run this route before the boundary filter, which is precisely the bug
+     * {@code BLOCK_LOOP_ROUTE_ORDER} exists to avoid. A future target that shadows the prefix needs a
+     * deliberate fix, not a guessed constant.
+     */
     @BuildStep
     RouteBuildItem controlRoute() {
         return RouteBuildItem.builder()

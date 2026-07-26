@@ -122,7 +122,7 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
      * application whose {@code /__basquin/result} polls return {@code "miss"}. The version guards cannot
      * fire, because the version does not conflict — it may even match exactly.
      *
-     * <p><b>Three shapes, found one at a time, which is why this is written as a whitelist rather than a
+     * <p><b>Four shapes, found one at a time, which is why this is written as a whitelist rather than a
      * list of known-bad cases:</b>
      * <ul>
      *   <li>{@code scope} — {@code test}/{@code provided}/{@code system}/{@code import} never reach the
@@ -131,6 +131,12 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
      *       PR #103's approver, which reproduced it against {@code inject()} and confirmed all four
      *       then-existing guards stayed silent.</li>
      *   <li>{@code classifier} — a classified artifact is not the extension jar.</li>
+     *   <li>{@code exclusions} — can strip the extension's own transitive dependencies, notably
+     *       {@code basquin-core}, leaving the jar present but unusable. Found by PR #103's independent
+     *       approver, and it is the <b>only</b> shape §5.2's banner acceptance cannot detect: the feature
+     *       still appears in {@code Installed features}, so no acceptance run would fail. An earlier
+     *       self-review had judged exclusions harmless on the reasoning that "the extension jar still
+     *       delivers" — true, and beside the point.</li>
      * </ul>
      *
      * <p>Each was found after the previous one was fixed, so enumerating bad values would have shipped the
@@ -151,6 +157,11 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
                     + "resolves the POM and never the jar)";
         } else if (classifier != null && !classifier.isBlank()) {
             problem = "classifier '" + classifier + "' (a classified artifact is not the extension jar)";
+        } else if (d.getExclusions() != null && !d.getExclusions().isEmpty()) {
+            problem = "exclusions (" + d.getExclusions().size() + "), which can strip the extension's own"
+                    + " transitive dependencies — notably basquin-core — leaving the extension jar present"
+                    + " but unusable. This is the ONE shape §5.2's banner acceptance cannot detect: the"
+                    + " feature still appears in Installed features, so only this guard can catch it";
         }
         if (problem == null) {
             return;

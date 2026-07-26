@@ -11,6 +11,7 @@ import java.util.Properties;
 import org.apache.maven.MavenExecutionException;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
+import org.apache.maven.model.Exclusion;
 import org.apache.maven.project.MavenProject;
 import org.junit.Test;
 
@@ -239,6 +240,36 @@ public class BasquinInjectorGuardsTest {
                 assertTrue("message must say the build would be uninstrumented: " + e.getMessage(),
                         e.getMessage().contains("UNINSTRUMENTED"));
             }
+        }
+    }
+
+    /**
+     * The shape §5.2's banner acceptance CANNOT detect, found by PR #103's independent approver. Exclusions
+     * can strip the extension's own transitive dependencies — notably basquin-core — leaving the extension
+     * jar present and the feature still listed in Installed features, while the boundary cannot work. No
+     * acceptance run would fail, so this guard is the only thing standing in front of it.
+     */
+    @Test
+    public void failsLoudlyWhenTheDeclarationCarriesExclusions() {
+        MavenProject p = project("app");
+        Dependency d = new Dependency();
+        d.setGroupId(BasquinInjector.GROUP_ID);
+        d.setArtifactId(BasquinInjector.ARTIFACT_ID);
+        d.setVersion(InjectorVersion.value());   // matching version, usable scope/type: only this can fire
+        Exclusion ex = new Exclusion();
+        ex.setGroupId(BasquinInjector.GROUP_ID);
+        ex.setArtifactId("basquin-core");
+        d.addExclusion(ex);
+        p.getModel().getDependencies().add(d);
+
+        try {
+            new BasquinInjector().inject(Arrays.asList(p), new Properties());
+            fail("a declaration carrying exclusions can strip basquin-core, so it must not be accepted");
+        } catch (MavenExecutionException e) {
+            assertTrue("message must name exclusions: " + e.getMessage(),
+                    e.getMessage().contains("exclusions"));
+            assertTrue("message must say the banner cannot detect this: " + e.getMessage(),
+                    e.getMessage().contains("banner"));
         }
     }
 

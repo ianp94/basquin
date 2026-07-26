@@ -94,6 +94,28 @@ for p in glob.glob("basquin-maven-injector/build/test-results/**/*.xml", recursi
 PY
 }
 
+# A PASS from an ABSENCE check must first prove the check actually ran. `grep -q X file || ok` reports a
+# clean result when the file is missing or empty — the grep simply fails to match, and "X is absent" holds
+# vacuously. That is this project's most serious defect class (a reported zero that does not mean "checked
+# and clean"), and PR #103's approver found it here, in the script whose whole job is verifying claims.
+#
+# So an absence claim requires a SENTINEL: positive evidence in the same file that the relevant activity
+# happened at all. No sentinel, no PASS — it reports UNMEASURED instead, which is the honest outcome.
+assert_absent() {  # $1=file  $2=must-be-absent regex  $3=sentinel regex  $4=label  $5=pass message
+  local f="$1" bad_re="$2" sentinel="$3" label="$4" msg="$5"
+  if [ ! -s "$f" ]; then
+    bad "$label" "UNMEASURED: $(basename "$f") is missing or empty, so absence proves nothing"; return
+  fi
+  if ! grep -qE "$sentinel" "$f"; then
+    bad "$label" "UNMEASURED: no sentinel (/$sentinel/) in $(basename "$f") — cannot tell 'checked and clean' from 'never ran'"; return
+  fi
+  if grep -qE "$bad_re" "$f"; then
+    bad "$label" "found what must be absent (/$bad_re/)"
+  else
+    ok "$label" "$msg"
+  fi
+}
+
 purge_basquin() {  # $1 = a local maven repository root
   local repo="$1" proof="$OUT/$2"
   { echo "# purge proof — $(date -u +%FT%TZ)"; echo "# repository: $repo"; echo
@@ -282,9 +304,10 @@ run_jvm() {
   grep -q "basquin-quarkus-deployment" "$OUT/http-access.log" \
     && ok "jvm:deployment-from-injected-repo" "$(grep -c 'basquin-quarkus-deployment' "$OUT/http-access.log") GET(s)" \
     || bad "jvm:deployment-from-injected-repo" "not fetched from the injected repo"
-  grep -q "Downloaded from central.*com/basquin" "$OUT/jvm-build.log" \
-    && bad "jvm:not-from-central" "a com/basquin artifact came from central — the result is confounded" \
-    || ok "jvm:not-from-central" "no com/basquin artifact came from central"
+  # Sentinel is "Downloading from", which proves Maven attempted remote resolution in this log at all.
+  # Without it, an empty log would have reported "nothing came from central" as a PASS.
+  assert_absent "$OUT/jvm-build.log" "Downloaded from central.*com/basquin" "Downloading from" \
+    "jvm:not-from-central" "no com/basquin artifact came from central"
 
   APP_CONTAINER=verify-pr3-app DB_CONTAINER=verify-pr3-db DB_NETWORK=verify-pr3-net APP_DIR="$app" \
     bash bench-results/dd043-pr2-restvillains-2026-07-26/run-app.sh > "$OUT/jvm-run-app.log" 2>&1

@@ -1577,7 +1577,7 @@ injector itself). Update it to match.
 - [ ] **Step 5: Resolve §8.1 — Apicurio's server does not build native**
 
 Replace the open question with the finding and its consequence. Source:
-`.superpowers/sdd/dd043-apicurio-native.md`. The verified facts: current `main` (`23159df`) has **zero**
+`bench-results/dd043-apicurio-native-2026-07-26/README.md`. The verified facts: current `main` (`23159df`) has **zero**
 occurrences of `native` in `app/pom.xml`; the only native profiles are in `cli/`, `examples/` and
 `support-chat/`; `-DcliSkipNative` is defined in `cli/pom.xml` and governs the CLI only; the secondary
 source described the **2.6.x** line, which did build the server native (`app/pom.xml:590`,
@@ -1675,7 +1675,7 @@ Task 7 calls `env/build.sh` **directly**, because it already has both hooks at l
 spikes used them. Both are called out in the steps rather than left implicit.
 
 **Round-1 review corrections applied.** An adversarial review
-(`.superpowers/sdd/plan-review-pr3-round1.md`) returned eight blocking findings; seven were real and
+returned eight blocking findings; seven were real and
 are fixed above. The two that would have cost the most:
 - **No Sisu index** — the jar would build, all 13 tests pass, and Maven never discover the
   participant, producing a green build of an *uninstrumented* application. That is spec §5.1's exact

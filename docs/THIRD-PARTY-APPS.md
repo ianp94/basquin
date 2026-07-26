@@ -1,4 +1,10 @@
-# Running Basquin against a third-party WAR (Tomcat valve)
+# Running Basquin against third-party apps
+
+Third-party apps can't be modified, so Basquin injects its instrumentation instead: a **Tomcat
+valve** at runtime for servlet WARs (this page, first), and a **Maven core extension** at build time
+for Quarkus/native targets (the build-time-injection section at the end).
+
+## Tomcat valve (runtime attachment, servlet WARs)
 
 Our own demo WAR bundles `IterationFilter` in its `web.xml`. Third-party apps
 (JPetStore, JSPWiki, …) can't be modified, so Basquin attaches iteration
@@ -94,3 +100,95 @@ unmodified third-party app with no code changes.
 - [x] Deploy scaffolding (`docker-compose.valve.yml`, `docker-compose.valve9.yml`, context.xml).
 - [x] Live run against a real JPetStore WAR on Tomcat 9 with server-side invariants captured.
 - [ ] Next: an HTTP driver target + seed corpus to explore routes automatically (vs. manual curls).
+
+## Quarkus targets — build-time injection (no source modification)
+
+The valve above attaches at **runtime**. A GraalVM-native Quarkus app has no runtime attachment
+point, so Basquin attaches at **build time** instead: a Maven core extension
+(`basquin-maven-injector`) injects the `basquin-quarkus` extension — the dependency *and* the
+repository that resolves it — into the target's build, with **zero edits to any file in the
+application tree**. Design and evidence: DD-043 spec §5
+(`docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md`), spikes S4/S5, and the PR-3
+acceptance runs (`bench-results/dd043-pr3-restvillains-2026-07-26/`,
+`bench-results/dd043-pr3-native-2026-07-26/`).
+
+### One command
+
+Build the injector jar (`./gradlew :basquin-maven-injector:jar`), then run the target's own build
+with the jar on `maven.ext.class.path`. The measured form is the containerised build the spec's §3.1
+prescribes (the acceptance runs used exactly this shape):
+
+```
+docker run --rm -v "$PWD":/w -w /w \
+  -v /path/to/injector-dir:/inj \
+  -e MAVEN_OPTS="-Dmaven.ext.class.path=/inj/basquin-maven-injector-0.3.0.jar" \
+  maven:3.9-eclipse-temurin-25 ./mvnw -B package [-Dnative]
+```
+
+Any invocation works as long as the property reaches the Maven JVM. No pre-populate step exists:
+the injector supplies the repository too, so the command above is complete on its own.
+
+**Verify it ran, every time.** Maven ignores a bad `maven.ext.class.path` **silently** — the build
+succeeds and ships uninstrumented. Two checks, both required:
+
+1. The build log contains `[basquin-injector] instrumented <artifactId> (…)` per module. Missing?
+   Check the jar path is valid *inside* the container, and that the jar carries
+   `META-INF/sisu/javax.inject.Named` (Maven discovers the participant through that index;
+   `scripts/verify-dd043-pr3.sh`'s `jar` stage asserts it).
+2. The built artifact's startup banner lists `basquin` under `Installed features` — the injection
+   proof the spec's §5.2 requires. Anything less cannot distinguish "instrumented" from "silently
+   uninstrumented".
+
+### The three system properties
+
+| Property | Default | Meaning |
+|---|---|---|
+| `basquin.inject.skip` | `false` | `true` injects nothing — the baseline/control build |
+| `basquin.inject.repo.url` | `https://ianp94.github.io/basquin/maven/` | the repository the injected artifacts resolve from |
+| `basquin.inject.version` | the injector's own version (baked at build time) | the injected extension version |
+
+**The default repo URL serves nothing until the first `v*` release tag populates `docs/maven/`.**
+Until then, publish the chain to a directory, serve it locally, and pass
+`-Dbasquin.inject.repo.url=http://localhost:8000/` (the shape `scripts/verify-dd043-pr3.sh` and both
+acceptance runs use) — or use the offline fallback below. No run so far has exercised the real Pages
+HTTPS repository.
+
+### Fail-loudly behaviours, and what to do about each
+
+The injector hard-fails the build (`MavenExecutionException`) rather than ever proceeding silently
+wrong:
+
+- **`dependencyManagement` pins `com.basquin:*` to a different version.** A managed version governs
+  transitively resolved Basquin artifacts, so the build would pair the extension with a different
+  `basquin-core` than it was compiled against. Fix: align the versions, or pass
+  `-Dbasquin.inject.version=<managed>` if the pin is genuinely intended.
+- **The pom already declares `com.basquin:basquin-quarkus` at a different version.** An explicit
+  declared version wins over anything injected, so the build would use it while the driver expects
+  ours — a wire-format skew that surfaces as `/__basquin/result` polls returning `miss`, not as a
+  build error. Fix: align the versions, pass `-Dbasquin.inject.version=<declared>` to inject the
+  declared version deliberately, or `-Dbasquin.inject.skip=true` to leave the build uninstrumented.
+- **Same-version declaration is not a failure:** the injector logs
+  `already declares basquin-quarkus:<v>; adding the repository only` and adds just the repository —
+  a declared dependency is not necessarily a resolvable one.
+
+### Gradle targets — init script, unverified
+
+`basquin-init.gradle` (repository root) is the Gradle counterpart, honouring the same three system
+properties:
+
+```
+./gradlew -I /path/to/basquin-init.gradle build
+```
+
+**Caveat: it is a stub in the delivery sense.** PR-3 never exercised it against a Gradle-built
+Quarkus application — both acceptance targets are Maven-built. Treat a Gradle target as unverified
+until the §5.2 banner check passes on one.
+
+### Offline fallback — `publishToMavenLocal`
+
+Where the build host cannot reach any repository URL, pre-populate the local repository instead:
+`./gradlew publishToMavenLocal` from the Basquin repo publishes all four artifacts (`basquin-core`,
+`basquin-quarkus`, `basquin-quarkus-deployment`, `basquin-maven-injector`) into `~/.m2/repository`;
+a containerised build then needs that directory mounted. This is a documented **fallback**, not the
+mechanism — the injector's repository injection makes it unnecessary whenever the URL is reachable
+(spike S5, `bench-results/dd043-s5-repo-injection-2026-07-26/`).

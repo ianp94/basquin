@@ -78,6 +78,25 @@ a *runtime-agnostic* control plane — the CR/reconcile/inject/revert machinery 
 the injected flags and the agents image are JVM-specific — so it can grow other runtime profiles later.
 Full design: [OPERATOR-DESIGN.md](OPERATOR-DESIGN.md); usage: [USAGE.md](USAGE.md#kubernetes-instrument-any-app-with-the-operator).
 
+### Build-time injection (Quarkus / GraalVM-native targets) — the symmetry with runtime attachment
+
+Everything above attaches at **runtime**. A GraalVM-native binary has no runtime attachment point, so
+for Quarkus targets Basquin's instrumentation (`basquin-quarkus`, a Quarkus extension) is compiled in
+at **build time** by a Maven core extension, `basquin-maven-injector` — the same
+never-modify-the-source thesis, met by a different mechanism (DD-043 spec §1.1, §5):
+
+| | Injection point | Mechanism |
+|---|---|---|
+| **Runtime** (Tomcat, JVM) | `CATALINA_OPTS` / `JAVA_TOOL_OPTIONS` | operator patches the pod template |
+| **Build** (Quarkus, native) | `MAVEN_OPTS` / `-Dmaven.ext.class.path` | lifecycle participant mutates the project model |
+
+In both rows no file in the application's source tree is created or modified. What changes is where
+the failure mode lives: a runtime agent can silently detach, while a build-time injection can
+silently *not happen* — so its presence is proven per build by the `basquin` entry in the startup
+banner's `Installed features`, never assumed. Operator guide:
+[THIRD-PARTY-APPS.md](THIRD-PARTY-APPS.md); full design:
+`docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md` §5.
+
 ## Early Usage Pattern (preview)
 
 Call the target entrypoint per iteration, within begin/end boundaries:

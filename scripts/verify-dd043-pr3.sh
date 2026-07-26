@@ -9,7 +9,8 @@
 #
 # Stages:
 #   unit    ./gradlew check — whole-suite test count and failures, read from the JUnit XML
-#   jar     the injector jar's two integrity properties (see below)
+#   jar     the injector jar's three integrity properties: the Sisu index exists, it names a
+#           class actually present in the jar, and the baked version matches build.gradle
 #   guards  mutation-checks each fail-loudly guard: neuter it, confirm ITS OWN test fails, revert
 #   jvm     spec §5.2 half 1 — rest-villains instrumented with ZERO edits to its source, JVM mode
 #   native  spec §5.2 half 2 — the Phase-0 fixture instrumented and built as a native image
@@ -216,6 +217,12 @@ PY
           "failsLoudlyWhenDependencyManagementPinsOurGroupToADifferentVersion" "managed-version"
   _mutate '("if (declared == null || declared.equals(version))", "if (true)")' \
           "failsLoudlyWhenTheProjectDeclaresOurArtifactAtADifferentVersion" "declared-version"
+  # The fourth guard. PR #103's approver found the header comment claimed to mutation-check "each"
+  # fail-loudly guard while only three of the four had a _mutate call — the usability guard was added
+  # after the script and never wired in. A claim wider than its check, in the script whose whole job is
+  # checking claims.
+  _mutate '("        if (problem == null) {", "        if (true) {")' \
+          "failsLoudlyWhenOurArtifactIsDeclaredAtAnUnusableScope" "declaration-usability"
 
   ./gradlew :basquin-maven-injector:test --no-daemon -q > "$OUT/guard-restore.log" 2>&1 \
     && ok "guards:restored" "source restored, module suite green" \

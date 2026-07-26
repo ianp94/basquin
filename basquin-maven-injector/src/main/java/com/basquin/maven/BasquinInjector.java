@@ -86,12 +86,13 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
             // mutable; hoisting an allocation would alias one instance across the whole reactor, so a
             // later in-place mutation on one module would bleed into all the others. A single-module
             // build cannot detect that, which is why this is a written constraint and not taste.
-            String declared = declaredVersion(p);
+            Dependency existing = declaredDependency(p);
+            String declared = (existing == null) ? null : existing.getVersion();
             String effective = version;
-            if (declared != null) {
-                // Scope first: a test/provided-scoped declaration is unusable regardless of its version,
-                // so checking the version before the scope would report the less serious problem.
-                failOnUnusableDeclaredScope(p, declaredScope(p));
+            if (existing != null) {
+                // Usability before version: a declaration that cannot carry the extension is unusable
+                // whatever its version, so checking the version first would report the lesser problem.
+                failOnUnusableDeclaration(p, existing);
                 failOnConflictingDeclaredVersion(p, declared, version);
                 // Not a duplicate — but the repository is still required: a declared dependency is
                 // not necessarily a resolvable one.
@@ -108,63 +109,71 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
         }
     }
 
-    /** The version this project already declares for our artifact, or {@code null} if it declares none. */
-    private String declaredVersion(MavenProject p) {
-        for (Dependency d : p.getModel().getDependencies()) {
-            if (GROUP_ID.equals(d.getGroupId()) && ARTIFACT_ID.equals(d.getArtifactId())) {
-                return d.getVersion();
-            }
-        }
-        return null;
-    }
+
 
     /**
-     * The scope of an existing declaration of our artifact, or {@code null} if there is none.
+     * A declaration that cannot carry the extension into the application is a whole *class* of silent
+     * bypass, and no version check can see any of it.
      *
-     * <p>Maven's default when {@code <scope>} is absent is {@code compile}, which this returns as
-     * {@code "compile"} so callers need not repeat the defaulting.
+     * <p>{@link #declaredDependency} matches on groupId and artifactId alone, so a project declaring
+     * {@code com.basquin:basquin-quarkus} in any unusable shape reads as "already declared": the
+     * dependency is not injected, only the repository is added, the extension never reaches the module's
+     * classpath, augmentation excludes it, and the build <b>succeeds</b> producing an uninstrumented
+     * application whose {@code /__basquin/result} polls return {@code "miss"}. The version guards cannot
+     * fire, because the version does not conflict — it may even match exactly.
+     *
+     * <p><b>Three shapes, found one at a time, which is why this is written as a whitelist rather than a
+     * list of known-bad cases:</b>
+     * <ul>
+     *   <li>{@code scope} — {@code test}/{@code provided}/{@code system}/{@code import} never reach the
+     *       application. Found by PR #103's Claude review.</li>
+     *   <li>{@code type} — {@code pom} resolves the POM and never the jar, so no classes arrive. Found by
+     *       PR #103's approver, which reproduced it against {@code inject()} and confirmed all four
+     *       then-existing guards stayed silent.</li>
+     *   <li>{@code classifier} — a classified artifact is not the extension jar.</li>
+     * </ul>
+     *
+     * <p>Each was found after the previous one was fixed, so enumerating bad values would have shipped the
+     * next variant. This requires the declaration to be positively equivalent to what the injector would
+     * add — a plain {@code compile}/{@code runtime}, {@code jar}-type, unclassified dependency — and fails
+     * loudly on anything else per spec §5.1.
      */
-    private String declaredScope(MavenProject p) {
-        for (Dependency d : p.getModel().getDependencies()) {
-            if (GROUP_ID.equals(d.getGroupId()) && ARTIFACT_ID.equals(d.getArtifactId())) {
-                String s = d.getScope();
-                return (s == null || s.isBlank()) ? "compile" : s;
-            }
-        }
-        return null;
-    }
+    private void failOnUnusableDeclaration(MavenProject p, Dependency d) throws MavenExecutionException {
+        String scope = (d.getScope() == null || d.getScope().isBlank()) ? "compile" : d.getScope();
+        String type = (d.getType() == null || d.getType().isBlank()) ? "jar" : d.getType();
+        String classifier = d.getClassifier();
 
-    /**
-     * A declaration at a scope that cannot carry the extension into the application is a **fourth** way
-     * injection can be defeated silently, and it is the one no version check can see.
-     *
-     * <p>{@link #declaredVersion} matches on groupId and artifactId alone. A project declaring
-     * {@code com.basquin:basquin-quarkus} at {@code test} or {@code provided} scope — a leftover from
-     * experimentation is the likely cause — therefore reads as "already declared", so the dependency is
-     * not injected and only the repository is added. The extension never reaches the module's
-     * compile/runtime classpath, augmentation does not include it, and the build **succeeds** producing an
-     * uninstrumented application whose {@code /__basquin/result} polls return {@code "miss"}. None of the
-     * version guards fire, because the version does not conflict — it may even match.
-     *
-     * <p>Only {@code compile} and {@code runtime} put the artifact where augmentation needs it, so
-     * anything else fails loudly per spec §5.1 rather than being silently accepted or silently duplicated.
-     * Found by review of PR #103, which was asked to look for exactly this shape after two similar
-     * asymmetries had already been fixed on the branch.
-     */
-    private void failOnUnusableDeclaredScope(MavenProject p, String scope)
-            throws MavenExecutionException {
-        if (scope == null || "compile".equals(scope) || "runtime".equals(scope)) {
+        String problem = null;
+        if (!"compile".equals(scope) && !"runtime".equals(scope)) {
+            problem = "scope '" + scope + "' (only 'compile' and 'runtime' reach the application)";
+        } else if (!"jar".equals(type)) {
+            problem = "type '" + type + "' (only 'jar' brings the extension's classes; a 'pom' type "
+                    + "resolves the POM and never the jar)";
+        } else if (classifier != null && !classifier.isBlank()) {
+            problem = "classifier '" + classifier + "' (a classified artifact is not the extension jar)";
+        }
+        if (problem == null) {
             return;
         }
         throw new MavenExecutionException(
                 "basquin-injector: " + p.getArtifactId() + " already declares " + GROUP_ID + ":"
-                        + ARTIFACT_ID + " at scope '" + scope + "', which cannot carry the extension onto"
-                        + " the application's classpath — augmentation would not include it and the build"
-                        + " would succeed UNINSTRUMENTED, with /__basquin/result returning \"miss\"."
-                        + " Only 'compile' and 'runtime' are usable. Change that declaration's scope,"
-                        + " remove it and let this injector add it, or pass -D" + PROP_SKIP
-                        + "=true to leave this build uninstrumented deliberately.",
+                        + ARTIFACT_ID + " with " + problem + ". That declaration cannot carry the extension"
+                        + " onto the application's classpath, so augmentation would not include it and the"
+                        + " build would succeed UNINSTRUMENTED, with /__basquin/result returning \"miss\"."
+                        + " Make the declaration a plain compile/runtime jar dependency, remove it and let"
+                        + " this injector add it, or pass -D" + PROP_SKIP + "=true to leave this build"
+                        + " uninstrumented deliberately.",
                 p.getFile());
+    }
+
+    /** The existing declaration of our artifact, or {@code null} if there is none. */
+    private Dependency declaredDependency(MavenProject p) {
+        for (Dependency d : p.getModel().getDependencies()) {
+            if (GROUP_ID.equals(d.getGroupId()) && ARTIFACT_ID.equals(d.getArtifactId())) {
+                return d;
+            }
+        }
+        return null;
     }
 
     /**

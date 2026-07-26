@@ -202,6 +202,63 @@ public class BasquinInjectorGuardsTest {
         }
     }
 
+    /**
+     * The FIFTH bypass, found by PR #103's approver, which reproduced it against inject() and confirmed
+     * all four then-existing guards stayed silent. A <type>pom</type> declaration at the matching version
+     * has a usable scope, so the scope guard passes — but Maven resolves the POM and never the jar, so no
+     * extension classes arrive and the build succeeds UNINSTRUMENTED. A classifier is the same hole.
+     */
+    @Test
+    public void failsLoudlyWhenOurArtifactIsDeclaredWithAnUnusableTypeOrClassifier() {
+        Object[][] cases = {
+            {"pom", null, "type"},
+            {"test-jar", null, "type"},
+            {null, "sources", "classifier"},
+            {null, "tests", "classifier"},
+        };
+        for (Object[] c : cases) {
+            MavenProject p = project("app");
+            Dependency d = new Dependency();
+            d.setGroupId(BasquinInjector.GROUP_ID);
+            d.setArtifactId(BasquinInjector.ARTIFACT_ID);
+            d.setVersion(InjectorVersion.value());   // matching version: the version guards cannot fire
+            if (c[0] != null) {
+                d.setType((String) c[0]);
+            }
+            if (c[1] != null) {
+                d.setClassifier((String) c[1]);
+            }
+            p.getModel().getDependencies().add(d);
+            try {
+                new BasquinInjector().inject(Arrays.asList(p), new Properties());
+                fail("type=" + c[0] + " classifier=" + c[1] + " cannot carry the extension, so it must "
+                        + "not be accepted as an existing declaration");
+            } catch (MavenExecutionException e) {
+                assertTrue("message must name the offending attribute (" + c[2] + "): " + e.getMessage(),
+                        e.getMessage().contains((String) c[2]));
+                assertTrue("message must say the build would be uninstrumented: " + e.getMessage(),
+                        e.getMessage().contains("UNINSTRUMENTED"));
+            }
+        }
+    }
+
+    /** A plain jar-type, unclassified declaration is what the injector itself would add — accept it. */
+    @Test
+    public void acceptsAPlainJarTypeUnclassifiedDeclaration() throws Exception {
+        MavenProject p = project("app");
+        Dependency d = new Dependency();
+        d.setGroupId(BasquinInjector.GROUP_ID);
+        d.setArtifactId(BasquinInjector.ARTIFACT_ID);
+        d.setVersion(InjectorVersion.value());
+        d.setType("jar");
+        p.getModel().getDependencies().add(d);
+
+        new BasquinInjector().inject(Arrays.asList(p), new Properties());
+
+        assertEquals(1, p.getModel().getDependencies().size());
+        assertEquals(1, p.getRemoteArtifactRepositories().size());
+    }
+
     /** The two usable scopes must still be accepted, or the guard breaks legitimate targets. */
     @Test
     public void acceptsCompileAndRuntimeScopedDeclarations() throws Exception {

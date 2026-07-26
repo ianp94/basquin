@@ -1,0 +1,12 @@
+# Purge proof — fixture local repo (bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin), 2026-07-26T12:01:35Z
+
+$ ls -d bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin/*
+bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin/basquin-core
+bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin/basquin-quarkus
+bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin/basquin-quarkus-deployment
+
+$ rm -rf bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin
+
+$ find bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin -type f
+bfs: error: bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin: No such file or directory.
+(exit 1)

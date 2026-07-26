@@ -1,0 +1,1 @@
+2026-07-26 08:06:18,988 INFO  [io.quarkus] (main) Installed features: [basquin, cdi, rest, smallrye-context-propagation, vertx]

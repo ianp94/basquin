@@ -57,8 +57,10 @@ retained because it is why S4 existed, but it no longer reads as a live unmeasur
 **Where no amendment was needed, stated explicitly** so a silent absence is not mistaken for an
 unchecked section:
 
-- **§4.3** (which end hook to use) — S3 confirmed `addEndHandler` fires on all four dispositions and
-  `addHeadersEndHandler` reaches the client on every completed response, including the 500. The table
+- **§4.3** (which end hook to use) — S3 confirmed `addEndHandler` fires on all four dispositions, and
+  that `addHeadersEndHandler` reaches the client on every completed response including the 500 —
+  measured against **S3's probe fixture**, which wrote a response header. The shipped extension does
+  not use that hook at all (§4.3), so only the `addEndHandler` half of this bears on it. The table
   is correct as written; only the *consumer* of that signal in §6 was wrong. **Scope: S3 ran in JVM
   mode only** (`s3-boundary/findings.md:5-6,162-163`; `REPORT.md:48-49`). The table is therefore
   *unamended*, not *verified under AOT* — and S1 is this branch's standing proof that a JVM-mode
@@ -436,7 +438,7 @@ Which end hook matters:
 
 | Hook | Semantics | Use |
 |---|---|---|
-| `addHeadersEndHandler` | last moment **before** headers commit | write `X-Basquin-Req` here |
+| `addHeadersEndHandler` | last moment **before** headers commit | **not used.** An earlier draft had the boundary write `X-Basquin-Req` here as a *response* header; §4.4 refuted that — the driver sends the id **inbound** and the boundary only reads it. The shipped extension has no `addHeadersEndHandler` at all. Only the S3 probe fixture ever wrote it, which is why S3's evidence mentions it |
 | `addEndHandler` | response fully written; `AsyncResult` reports **success or failure** (incl. client disconnect) | record the measurement here |
 | `addBodyEndHandler` | **may never fire** on connection reset — Vert.x docs say do not use for cleanup | not used |
 
@@ -468,7 +470,7 @@ Per request:
    (`BasquinBoundaryFilter.handle`). **No in-flight counter exists here.** An earlier draft of this
    step said the filter increments one; the actual PR-2 filter has no counter field, so nothing in
    `basquin-quarkus` today implements §6.1's taint mechanism. That counter is **PR-5's** — see PR-5's
-   roadmap entry: §6.1's in-flight taint "needs a `ResultStore.Entry` field" and does not exist until
+   roadmap entry: §6.1's in-flight taint needs a `ResultStore.Entry` field and does not exist until
    PR-5 lands it.
 2. `addEndHandler` computes the measurement and puts the result into the store under that id — **but
    only for a completed response**. `ResultStore.Entry` carries no disposition field
@@ -1124,8 +1126,9 @@ disposition table in **JVM mode only**, and S1 is this branch's proof that a JVM
 survive AOT. So before a native cell publishes any crash count or latency distribution, it must
 reproduce S3's four dispositions under SubstrateVM — `/ok` 200, an app 500, a 3xx, and a mid-response
 client disconnect — and confirm that `addEndHandler` fires on each, that `ar.succeeded()` is `false`
-on the disconnect, and that `addHeadersEndHandler`'s `X-Basquin-Req` still reaches the client on the
-500. If `addEndHandler` does not fire on native close detection, the boundary records nothing for that
+on the disconnect. **Do not gate on `addHeadersEndHandler`'s `X-Basquin-Req` reaching the client** — an
+earlier draft did, and that criterion can never pass: the extension never writes that header (§4.3),
+only S3's probe fixture did. Gating a native cell on it would block PR-4 on an impossible check. If `addEndHandler` does not fire on native close detection, the boundary records nothing for that
 disposition and the crash counter silently reverts to the `getStatusCode()`-reads-200 behaviour
 amendment 3 exists to prevent. The check is cheap — the extension's own control routes (§7.3) already
 provide three of the four dispositions.

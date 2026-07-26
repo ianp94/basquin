@@ -51,84 +51,52 @@ JUnit 4.13.2 with `useJUnit()` · Quarkus 3.37.3 targets built through container
 | `settings.gradle` | **Modify.** `include 'basquin-maven-injector'`. |
 | `basquin-maven-injector/build.gradle` | **Create.** Java + `maven-publish`; `maven-core` and `javax.inject` as `compileOnly`; bakes `version` into a resource. |
 | `basquin-maven-injector/src/main/java/com/basquin/maven/BasquinInjector.java` | **Create.** The participant. Only class with `afterProjectsRead`. |
+| `basquin-maven-injector/src/main/resources/META-INF/sisu/javax.inject.Named` | **Create.** The Sisu index naming `BasquinInjector`. **Maven discovers core extensions through this file, not by scanning `@Named`** — both measured spike jars contain one. Gradle will not generate it (processors run only from `annotationProcessor`), and without it the build succeeds, the tests pass, and the participant silently never runs. |
 | `basquin-maven-injector/src/main/java/com/basquin/maven/InjectorVersion.java` | **Create.** Reads the baked version resource. Single responsibility so the participant needn't know about resource loading. |
 | `basquin-maven-injector/src/test/java/com/basquin/maven/BasquinInjectorTest.java` | **Create.** Injection behaviour: both halves, per-project freshness, multi-module reactor. |
 | `basquin-maven-injector/src/test/java/com/basquin/maven/BasquinInjectorGuardsTest.java` | **Create.** Operator guards: fail-loudly, idempotence, skip. |
 | `basquin-quarkus/runtime/build.gradle`, `basquin-quarkus/deployment/build.gradle` | **Modify.** Add the `pages` publish target — today only `basquin-core` has one. |
-| `.github/workflows/release.yml` | **Modify.** Publish all three artifacts; extend the version-vs-tag assertion to all three. |
+| `.github/workflows/release.yml` | **Modify.** Publish the three extension-chain artifacts (Task 2) and the injector itself (Task 3 Step 2c, once the module exists); extend the version-vs-tag assertion to all four. |
 | `basquin-init.gradle` | **Create.** Gradle-side equivalent of the participant, per spec §5. |
 | `docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md` | **Modify.** S5's four amendments + §8.1's resolution. |
 | `docs/THIRD-PARTY-APPS.md`, `docs/ARCHITECTURE.md` | **Modify.** Build-time injection section; build-vs-runtime symmetry. |
 
 ---
 
-### Task 1: Close the CI path-filter gap
+### Task 1: Close the CI path-filter gap — **DONE (commit `ad435e0`)**
 
-A guard that cannot run is not a guard. `ci.yml`'s `paths:` filters list `agent/**`, `basquin-core/**`,
-`runner/**`, `examples/**`, `test/**`, `native/**`, `tomcat-war/**`, `tomcat-valve/**`, `build.gradle`,
-`settings.gradle`, `gradle/**`, `gradlew`, `gradlew.bat`, `deploy/bench/**` — and **not**
-`basquin-quarkus/**`. PR #102's CI ran only because it incidentally touched `basquin-core/build.gradle`,
-`settings.gradle` and `test/**`. A change confined to `basquin-quarkus/**` runs no CI at all. This is
-the same defect PR-1 shipped (moved core fell outside every filter), and adding a ninth module without
-fixing it repeats it a third time.
+A guard that cannot run is not a guard. `ci.yml`'s `paths:` filters listed `agent/**`,
+`basquin-core/**`, `runner/**`, `examples/**`, `test/**`, `native/**`, `tomcat-war/**`,
+`tomcat-valve/**`, `build.gradle`, `settings.gradle`, `gradle/**`, `gradlew`, `gradlew.bat`,
+`deploy/bench/**` — and **not** `basquin-quarkus/**`. PR #102's CI ran only because it incidentally
+touched `basquin-core/build.gradle`, `settings.gradle` and `test/**`. A change confined to
+`basquin-quarkus/**` ran no CI at all — the same defect PR-1 shipped when the extracted core fell
+outside every filter.
+
+**Status: completed on this branch before the other tasks began**, because every later task's tests
+are worthless in CI until it is. Both `push` and `pull_request` blocks now carry
+`basquin-quarkus/**` and `basquin-maven-injector/**` (16 paths each, verified by parsing the YAML).
+
+> **Note for anyone re-reading this plan:** round 1's review flagged this task as "already done on
+> main, the plan asserts a stale gap". That was an artifact of the review running concurrently with
+> commit `ad435e0` — the reviewer read the branch working tree after the fix landed. `main` at that
+> moment had **zero** occurrences (`git show main:.github/workflows/ci.yml | grep -c 'basquin-quarkus/\*\*'`
+> → `0`). The gap was real and this task closed it; nothing here needs re-doing.
 
 **Files:**
-- Modify: `.github/workflows/ci.yml` (both the `push` and `pull_request` `paths:` blocks)
+- Modified: `.github/workflows/ci.yml` (both the `push` and `pull_request` `paths:` blocks)
 
 **Interfaces:**
 - Consumes: nothing.
 - Produces: CI coverage for `basquin-quarkus/**` and `basquin-maven-injector/**`, which every later
   task depends on for its tests to mean anything in CI.
 
-- [ ] **Step 1: Verify the gap exists before fixing it**
-
-```bash
-grep -c "basquin-quarkus" .github/workflows/ci.yml
-```
-
-Expected: `0`.
-
-- [ ] **Step 2: Add both directories to both `paths:` blocks**
-
-In `.github/workflows/ci.yml`, in **both** the `push:` and `pull_request:` `paths:` lists, add these
-two entries immediately after the `- 'basquin-core/**'` line:
-
-```yaml
-      # DD-043: without these, a change confined to the Quarkus extension or the Maven injector
-      # triggers no CI at all — the defect PR-1 shipped when the extracted core fell outside every
-      # filter. PR #102 ran only because it incidentally touched basquin-core/ and settings.gradle.
-      - 'basquin-quarkus/**'
-      - 'basquin-maven-injector/**'
-```
-
-- [ ] **Step 3: Verify both blocks were changed, not just one**
-
-```bash
-grep -c "basquin-quarkus/\*\*" .github/workflows/ci.yml
-```
-
-Expected: `2` — one for `push`, one for `pull_request`. A `1` means only one block was edited.
-
-- [ ] **Step 4: Verify the YAML still parses**
-
-```bash
-python3 -c "import yaml,sys; d=yaml.safe_load(open('.github/workflows/ci.yml')); \
-p=d[True]['pull_request']['paths']; print('pull_request paths:', len(p)); \
-assert 'basquin-quarkus/**' in p and 'basquin-maven-injector/**' in p; print('OK')"
-```
-
-Expected: prints the path count then `OK`.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add .github/workflows/ci.yml
-git commit -m "ci: bring basquin-quarkus and basquin-maven-injector inside the path filters
-
-A change confined to basquin-quarkus/** triggered no CI at all. #102 ran only because
-it incidentally touched basquin-core/build.gradle, settings.gradle and test/**. Same
-defect PR-1 shipped with the extracted core; fixing it before adding a ninth module."
-```
+- [x] **Step 1: Verified the gap existed** — `grep -c "basquin-quarkus" .github/workflows/ci.yml`
+      returned `0` before the change.
+- [x] **Step 2: Added both directories to both `paths:` blocks**, each with a comment recording why.
+- [x] **Step 3: Verified both blocks changed** — `grep -c "basquin-quarkus/\*\*"` returns `2`.
+- [x] **Step 4: Verified the YAML parses and both triggers carry both entries** — 16 paths on each.
+- [x] **Step 5: Committed** as `ad435e0`.
 
 ---
 
@@ -222,18 +190,22 @@ with:
             :basquin-core:publishAllPublicationsToPagesRepository \
             :basquin-quarkus:runtime:publishAllPublicationsToPagesRepository \
             :basquin-quarkus:deployment:publishAllPublicationsToPagesRepository
-      - name: Assert all three artifacts reached docs/maven
+      - name: Assert the extension chain reached docs/maven
         run: |
           set -euo pipefail
+          TAG='${{ steps.v.outputs.tag }}'
           for a in basquin-core basquin-quarkus basquin-quarkus-deployment; do
-            f="docs/maven/com/basquin/$a/0.3.0/$a-0.3.0.jar"
+            f="docs/maven/com/basquin/$a/$TAG/$a-$TAG.jar"
             [ -f "$f" ] || { echo "::error::$f missing after publish"; exit 1; }
           done
           echo "extension chain present in docs/maven"
 ```
 
-The hardcoded `0.3.0` in that assertion is deliberate only if it matches the tag; use the resolved tag
-instead — replace `0.3.0` with `${{ steps.v.outputs.tag }}` in both the loop path and the message.
+The version comes from the resolved tag rather than a hardcoded `0.3.0`.
+
+**A fourth artifact — the injector itself — joins this list in Task 3 Step 2c**, where the module is
+created. It is deliberately not added here: `:basquin-maven-injector` does not exist yet, and a task
+whose verification cannot run until a later task has landed is not independently reviewable.
 
 - [ ] **Step 5: Extend the version-vs-tag assertion to all three modules**
 
@@ -346,12 +318,19 @@ targetCompatibility = '17'
 repositories { mavenCentral() }
 
 dependencies {
-    // 3.9.6 matches the maven-core the spikes measured against (S5 verified the
-    // setRemoteArtifactRepositories behaviour in 3.9.16 bytecode; the API is identical).
+    // 3.9.6 is what both spike participants COMPILED against (their poms); they then EXECUTED
+    // correctly under the wrapper's Maven 3.9.16, which is the actual evidence this pin rests on.
     compileOnly 'org.apache.maven:maven-core:3.9.6'
+    // DefaultRepositoryLayout lives in maven-compat, not maven-core. S5's probe pom carries the
+    // verified note that the Maven 3.9.16 distribution ships maven-compat in lib/, so it is on the
+    // core classrealm that -Dmaven.ext.class.path extends — compileOnly is correct for the same
+    // reason it is correct for maven-core: the host Maven supplies it, and shipping our own copy
+    // would risk shadowing the host's classes.
+    compileOnly 'org.apache.maven:maven-compat:3.9.6'
     compileOnly 'javax.inject:javax.inject:1'
 
     testImplementation 'org.apache.maven:maven-core:3.9.6'
+    testImplementation 'org.apache.maven:maven-compat:3.9.6'
     testImplementation 'javax.inject:javax.inject:1'
     testImplementation 'junit:junit:4.13.2'
 }
@@ -399,6 +378,65 @@ publishing {
     }
 }
 ```
+
+- [ ] **Step 2b: Create the Sisu index — without it the injector is never discovered**
+
+Create `basquin-maven-injector/src/main/resources/META-INF/sisu/javax.inject.Named` containing
+exactly one line:
+
+```
+com.basquin.maven.BasquinInjector
+```
+
+**Why this file decides whether any of this works.** Maven's container discovers components on
+`maven.ext.class.path` through this index, not by scanning for `@Named`. S4's findings name it
+explicitly as the mechanism ("confirms `@Named` will actually be discoverable by Maven's Sisu/Guice
+component lookup … not just that the class compiled"), and both measured probe jars contain it —
+S5's holds the single line `com.basquin.spike.RepoInjectProbe`.
+
+Those jars got it for free because they were built by **Maven**, which runs annotation processors it
+finds on the compile classpath. **Gradle runs processors only from the `annotationProcessor`
+configuration**, and this module's Maven artifacts are `compileOnly`. So a Gradle-built jar carries
+no index, Maven never instantiates `BasquinInjector`, `afterProjectsRead` never fires — and the
+build succeeds, producing an **uninstrumented** application. That is spec §5.1's silent-uninstrumented
+failure reproduced inside PR-3's own deliverable, and every unit test in Tasks 3–5 still passes,
+because they drive `inject(...)` directly and deliberately bypass container wiring.
+
+A static resource is used rather than `annotationProcessor 'org.eclipse.sisu:org.eclipse.sisu.inject'`
+because the static file is byte-identical to what the measured jars contain, whereas the processor
+route adds a moving part no spike exercised.
+
+Put this comment at the top of the participant class so the file is never tidied away as inert:
+
+```java
+ * <p><b>Discovery depends on {@code src/main/resources/META-INF/sisu/javax.inject.Named}</b>, which
+ * must name this class. Maven's container finds components on {@code maven.ext.class.path} through
+ * that index rather than by scanning for {@code @Named}; both measured spike probes carry one
+ * (S4 findings, Method section). Delete it and this participant silently never runs — the build
+ * still succeeds and the application ships uninstrumented.
+```
+
+- [ ] **Step 2c: Add the injector to the release publish, so operators can obtain the jar**
+
+Task 2 wired three artifacts into `.github/workflows/release.yml`. Now that the module exists, add the
+fourth. In the publish step append the line:
+
+```yaml
+            :basquin-maven-injector:publishAllPublicationsToPagesRepository
+```
+
+then add `basquin-maven-injector` to that step's `for a in …` assertion list, and
+`:basquin-maven-injector` to the version-vs-tag loop's project list.
+
+Without this the operator documentation Task 8 writes — "one command, nothing else" — carries an
+unstated build-from-source prerequisite: the jar an operator puts on `maven.ext.class.path` would
+exist nowhere they could fetch it.
+
+```bash
+grep -c "publishAllPublicationsToPagesRepository" .github/workflows/release.yml
+```
+
+Expected: `4`.
 
 - [ ] **Step 3: Create `InjectorVersion.java`**
 
@@ -751,15 +789,31 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
 
 Expected: PASS, 7 tests.
 
-- [ ] **Step 8: Verify the jar is self-contained and carries the baked version**
+- [ ] **Step 8: Verify the jar carries BOTH the baked version and the discovery index**
+
+The index check is the one that matters. Every test in this module passes with discovery broken, so
+without this assertion the first symptom would be Task 6 failing five tasks later for a reason that
+looks like anything but a missing resource.
 
 ```bash
 ./gradlew :basquin-maven-injector:jar --no-daemon
-unzip -p basquin-maven-injector/build/libs/basquin-maven-injector-0.3.0.jar \
-  basquin-injector.properties
+J=basquin-maven-injector/build/libs/basquin-maven-injector-0.3.0.jar
+unzip -p "$J" basquin-injector.properties
+unzip -p "$J" META-INF/sisu/javax.inject.Named
 ```
 
-Expected: `version=0.3.0`.
+Expected: `version=0.3.0`, then `com.basquin.maven.BasquinInjector`.
+
+Then confirm the index names a class that actually exists in the jar — a stale index after a rename
+is as silent as a missing one:
+
+```bash
+CLS=$(unzip -p "$J" META-INF/sisu/javax.inject.Named | tr -d '\r' | head -1 | tr '.' '/')
+unzip -l "$J" | grep -q "$CLS.class" && echo "OK  index names a class present in the jar" \
+  || { echo "BROKEN  index names $CLS but no such class in the jar"; exit 1; }
+```
+
+Expected: `OK  index names a class present in the jar`.
 
 - [ ] **Step 9: Commit**
 
@@ -927,7 +981,10 @@ public class BasquinInjectorGuardsTest {
         assertEquals(0, p.getRemoteArtifactRepositories().size());
     }
 
-    /** Skip is opt-in: any value other than "true" leaves injection on. */
+    /**
+     * Skip is opt-in: injection stays on unless the property parses as true. Note
+     * {@code Boolean.parseBoolean} is case-insensitive, so {@code TRUE} skips as well.
+     */
     @Test
     public void skipIsOffUnlessExplicitlyTrue() throws Exception {
         MavenProject p = project("app");
@@ -947,7 +1004,11 @@ public class BasquinInjectorGuardsTest {
 ./gradlew :basquin-maven-injector:test --no-daemon --tests '*BasquinInjectorGuardsTest*'
 ```
 
-Expected: FAIL — `injectsNothingWhenSkipIsSet` and the management guards fail; there is no guard code yet.
+Expected: FAIL — **three** tests fail with no guard code present:
+`injectsNothingWhenSkipIsSet`, `failsLoudlyWhenDependencyManagementPinsOurGroupToADifferentVersion`,
+and `doesNotDuplicateAnAlreadyDeclaredDependencyButStillAddsTheRepository` (which adds a second
+dependency without the idempotence check). The other three pass already, which is correct — they
+assert behaviour Task 3 delivered.
 
 - [ ] **Step 3: Add the guards to `BasquinInjector.inject`**
 
@@ -1136,17 +1197,21 @@ Run it against this repository itself — not to instrument anything, but becaus
 or a bad `allprojects` block fails immediately:
 
 ```bash
-./gradlew -I basquin-init.gradle -Dbasquin.inject.skip=true -q projects --no-daemon 2>&1 | head -20
+./gradlew -I basquin-init.gradle -Dbasquin.inject.skip=true projects --no-daemon 2>&1 | head -20
 ```
 
 Expected: the project list, preceded by
 `[basquin-injector] basquin.inject.skip=true — injecting nothing (baseline build)`.
 
+**Do not add `-q`.** It sets the log level to QUIET, which is above LIFECYCLE, so every
+`logger.lifecycle` line the script emits is suppressed — the verification would fail while the script
+under test is perfectly fine.
+
 - [ ] **Step 3: Verify the injecting path parses and reports per project**
 
 ```bash
 ./gradlew -I basquin-init.gradle -Dbasquin.inject.repo.url=http://localhost:8000/ \
-  -q projects --no-daemon 2>&1 | grep "basquin-injector" | head -5
+  projects --no-daemon 2>&1 | grep "basquin-injector" | head -5
 ```
 
 Expected: one `[basquin-injector] instrumented :<project> (com.basquin:basquin-quarkus:0.3.0 from
@@ -1218,34 +1283,63 @@ rm -rf build/tmp/pr3-pages && mkdir -p bench-results/dd043-pr3-restvillains-2026
   :basquin-core:publishAllPublicationsToPagesRepository \
   :basquin-quarkus:runtime:publishAllPublicationsToPagesRepository \
   :basquin-quarkus:deployment:publishAllPublicationsToPagesRepository
-(cd build/tmp/pr3-pages && python3 -m http.server 8000 --bind 0.0.0.0) \
+(cd build/tmp/pr3-pages && python3 -m http.server 8000 --bind 127.0.0.1) \
   > bench-results/dd043-pr3-restvillains-2026-07-26/http-access.log 2>&1 &
+echo $! > /tmp/pr3-http-server.pid
 sleep 2 && curl -sf -o /dev/null -w "server up: %{http_code}\n" \
   http://localhost:8000/com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.pom
 ```
 
 Expected: `server up: 200`.
 
+**Bind to `127.0.0.1` and reach it with `--network host`, exactly as spike S5 did — this is not an
+incidental detail.** Maven 3.9.16's default `maven-default-http-blocker` mirror matches
+`external:http:*` and **exempts localhost**. Serving on `0.0.0.0` and pointing the build at the docker
+bridge gateway (`http://172.17.x.x:8000/`) is precisely the class that mirror matches, and whether any
+resolver re-applies settings mirrors to an *injected* repository is **explicitly unmeasured** — S5's
+README flags it as a scope limit. The fetch that would be blocked is the deployment artifact's, which
+is Step 8's decisive unconfounded evidence. Reusing S5's measured channel keeps that risk out of an
+acceptance run; do not substitute a gateway route without spiking it first.
+
+The PID is captured to a file because `kill %1` does not work across separate shell invocations.
+
 - [ ] **Step 4: Build rest-villains with the injector and nothing else**
 
-The container reaches the host server via the docker gateway; `--add-host` maps a stable name.
-Determine the gateway and run the build:
+**First, create the build wrapper this step needs.** PR-2's
+`bench-results/dd043-pr2-restvillains-2026-07-26/build.sh` forwards `EXTRA_MAVEN_OPTS` but accepts no
+extra `docker run` arguments, so it cannot mount the injector jar or set `--network host`. Copy it to
+`bench-results/dd043-pr3-restvillains-2026-07-26/build.sh` and insert `${EXTRA_DOCKER_ARGS:-}` into its
+`docker run` argument list, immediately before the `"$IMAGE"` argument.
+
+Use the name `EXTRA_DOCKER_ARGS` — that is the established variable across this project
+(`bench-results/dd043-spikes-2026-07-24/env/build.sh:41`, used by both S4 and S5). A second,
+differently-named variable for the same purpose is how a convention quietly forks.
+
+**Stage the injector jar outside the application's git clone.** With
+`APP_DIR=…/quarkus-super-heroes/rest-villains`, `$APP_DIR/..` is the **root of the app's clone** — the
+app tree is the whole clone, not just the module directory. Putting the jar there makes Step 5's
+pristine check fail on a file this plan planted, defeating the very property under test.
 
 ```bash
-GW=$(docker network inspect bridge -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}')
-INJ=/mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/basquin-maven-injector/build/libs/basquin-maven-injector-0.3.0.jar
-cp "$INJ" "$APP_DIR/../basquin-maven-injector.jar"   # sibling of the app dir, not inside it
-EXTRA_MAVEN_OPTS="-Dmaven.ext.class.path=/inj/basquin-maven-injector.jar -Dbasquin.inject.repo.url=http://$GW:8000/" \
-DOCKER_EXTRA_ARGS="-v $(cd "$APP_DIR/.." && pwd):/inj" \
-  bench-results/dd043-pr2-restvillains-2026-07-26/build.sh clean package -DskipTests \
+export APP_DIR   # build.sh reads it from the environment
+STAGE=/mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/build/tmp/pr3-inj
+mkdir -p "$STAGE"
+cp basquin-maven-injector/build/libs/basquin-maven-injector-0.3.0.jar "$STAGE/"
+
+EXTRA_DOCKER_ARGS="--network host -v $STAGE:/inj" \
+EXTRA_MAVEN_OPTS="-Dmaven.ext.class.path=/inj/basquin-maven-injector-0.3.0.jar -Dbasquin.inject.repo.url=http://localhost:8000/" \
+  bench-results/dd043-pr3-restvillains-2026-07-26/build.sh clean package -DskipTests \
   2>&1 | tee bench-results/dd043-pr3-restvillains-2026-07-26/build.log
 ```
 
-`build.sh` does not currently forward a `DOCKER_EXTRA_ARGS` variable. Add support for it by copying
-`build.sh` to the new evidence directory and inserting `${DOCKER_EXTRA_ARGS:-}` into its `docker run`
-argument list — a new file in *our* tree, never in the app tree.
+`--network host` plus a `localhost` URL is S5's measured channel — see Step 3's note on the
+`maven-default-http-blocker` mirror for why this is load-bearing rather than a style choice.
 
 Expected: `BUILD SUCCESS`, and `[basquin-injector] instrumented rest-villains` in the log.
+
+**If that log line is absent, stop.** It means the participant never loaded — check the Sisu index
+first (`unzip -p …jar META-INF/sisu/javax.inject.Named`), because Maven tolerates a nonexistent
+`maven.ext.class.path` entry silently and will complete an **uninstrumented** build without error.
 
 - [ ] **Step 5: Verify the target tree is still pristine after the build**
 
@@ -1301,7 +1395,8 @@ block with the exact commands above. State plainly that the app tree was verifie
 before and after.
 
 ```bash
-docker rm -f basquin-restvillains-app; kill %1   # stop the HTTP server
+docker rm -f basquin-restvillains-app
+kill "$(cat /tmp/pr3-http-server.pid)" && rm -f /tmp/pr3-http-server.pid   # stop the HTTP server
 git add bench-results/dd043-pr3-restvillains-2026-07-26
 git commit -m "bench(dd043): PR-3 acceptance — rest-villains instrumented with zero pom edits
 
@@ -1370,21 +1465,21 @@ repo path.
 Native compilation is **serialized on a mutex** (spec §7.2) — confirm no other native build or
 benchmark is running first. It is slow; allow 15+ minutes.
 
-`bench-results/dd043-spikes-2026-07-24/env/build.sh` already forwards `EXTRA_MAVEN_OPTS` into the
-container's `MAVEN_OPTS` (its line 40), so the injector's properties need no new mechanism. It does
-**not** accept extra `docker run` arguments, though, and the injector jar has to be mounted. Copy it
-to `bench-results/dd043-pr3-native-2026-07-26/build.sh` and insert `${DOCKER_EXTRA_ARGS:-}` into its
-`docker run` argument list — a new file in *our* tree; do not edit the Phase-0 script in place, since
-other spikes' Reproduce blocks call it.
+**Use `env/build.sh` directly — it already has both hooks.** It forwards `EXTRA_MAVEN_OPTS` into the
+container's `MAVEN_OPTS` (line 40) **and** expands `${EXTRA_DOCKER_ARGS:-}` (line 41), which is how
+S4 mounted its probe (`EXTRA_DOCKER_ARGS="-v $PROBE_ABS:/probe"`) and how S5 combined a mount with
+`--network host`. Do not copy or fork this script; unlike PR-2's `build.sh` it needs no modification.
 
 ```bash
-GW=$(docker network inspect bridge -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}')
-INJDIR=$(cd basquin-maven-injector/build/libs && pwd)
-DOCKER_EXTRA_ARGS="-v $INJDIR:/inj" \
-EXTRA_MAVEN_OPTS="-Dmaven.ext.class.path=/inj/basquin-maven-injector-0.3.0.jar -Dbasquin.inject.repo.url=http://$GW:8000/" \
-  bench-results/dd043-pr3-native-2026-07-26/build.sh clean package -DskipTests -Dnative \
+STAGE=/mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/build/tmp/pr3-inj
+EXTRA_DOCKER_ARGS="--network host -v $STAGE:/inj" \
+EXTRA_MAVEN_OPTS="-Dmaven.ext.class.path=/inj/basquin-maven-injector-0.3.0.jar -Dbasquin.inject.repo.url=http://localhost:8000/" \
+  bench-results/dd043-spikes-2026-07-24/env/build.sh clean package -DskipTests -Dnative \
   2>&1 | tee bench-results/dd043-pr3-native-2026-07-26/build-native.log
 ```
+
+Same measured transport as Task 6 — `--network host` with a `localhost` URL, for the
+`maven-default-http-blocker` reason recorded in Task 6 Step 3.
 
 The fixture's `native` profile is activated by the `native` property (`fixture/pom.xml:125-138`), so
 `-Dnative` is the correct switch — the same one S4 used (`s4-injection/findings.md:132`).
@@ -1574,9 +1669,34 @@ Task 8.
   records for `basquin-core`.
 
 **Placeholder scan:** no TBD/TODO; every code step carries complete code; every verification step
-carries its exact command and expected output. Task 6 step 4 and Task 7 step 3 require adding
-`DOCKER_EXTRA_ARGS` support to a **copy** of `build.sh` in our evidence tree — called out in the step
-rather than left implicit.
+carries its exact command and expected output. Task 6 Step 4 requires a **copy** of PR-2's `build.sh`
+in our evidence tree with `${EXTRA_DOCKER_ARGS:-}` inserted (that script genuinely lacks the hook);
+Task 7 calls `env/build.sh` **directly**, because it already has both hooks at lines 40–41 and both
+spikes used them. Both are called out in the steps rather than left implicit.
+
+**Round-1 review corrections applied.** An adversarial review
+(`.superpowers/sdd/plan-review-pr3-round1.md`) returned eight blocking findings; seven were real and
+are fixed above. The two that would have cost the most:
+- **No Sisu index** — the jar would build, all 13 tests pass, and Maven never discover the
+  participant, producing a green build of an *uninstrumented* application. That is spec §5.1's exact
+  failure mode reproduced inside PR-3's own deliverable, invisible until Task 6. Now a created
+  resource, a jar assertion, and a class comment (Task 3 Steps 2b and 8).
+- **A stale claim written as an imperative** — Task 7 asserted `env/build.sh` accepts no extra docker
+  arguments and instructed forking it, when `${EXTRA_DOCKER_ARGS:-}` sits at line 41 and both spikes
+  use it. This is the defect class this branch has spent four review rounds on, in my own plan.
+
+The eighth (**B6**, "Task 1 is already done on main, the plan asserts a stale gap") was a **false
+positive**: the review ran concurrently with commit `ad435e0`, so it read the branch tree after the
+fix. `main` had zero occurrences at that moment. Task 1's gap was real; it is marked done, not dropped.
+
+Also corrected from that review: `maven-compat` added (`DefaultRepositoryLayout` is not in
+maven-core, so the code as drafted would not compile); the acceptance transport reverted to S5's
+measured `--network host` + `localhost` rather than a docker-gateway URL the default
+`maven-default-http-blocker` mirror would match; the injector jar staged outside the app's git clone
+(`$APP_DIR/..` is the clone root, so the plan's own file would have failed its own pristine check);
+`-q` dropped from Task 5's commands (it suppresses `logger.lifecycle`, failing a working script); and
+the injector added to the release publish so the operator docs' "one command" has no unstated
+build-from-source step.
 
 **Type consistency:** `inject(List<MavenProject>, Properties)` has the same signature in Tasks 3 and 4;
 the constants (`GROUP_ID`, `ARTIFACT_ID`, `REPO_ID`, `DEFAULT_REPO_URL`, `PROP_SKIP`, `PROP_REPO_URL`,

@@ -15,6 +15,7 @@ import org.apache.maven.artifact.repository.MavenArtifactRepository;
 import org.apache.maven.artifact.repository.layout.DefaultRepositoryLayout;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Dependency;
+import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Repository;
 import org.apache.maven.model.RepositoryPolicy;
 import org.apache.maven.project.MavenProject;
@@ -72,18 +73,70 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
      * list directly keeps every behaviour unit-testable without standing up a Plexus container.
      */
     void inject(List<MavenProject> projects, Properties props) throws MavenExecutionException {
+        if (Boolean.parseBoolean(props.getProperty(PROP_SKIP))) {
+            System.out.println(LOG + PROP_SKIP + "=true — injecting nothing (baseline build)");
+            return;
+        }
         String version = orDefault(props.getProperty(PROP_VERSION), InjectorVersion.value());
         String url = orDefault(props.getProperty(PROP_REPO_URL), DEFAULT_REPO_URL);
 
         for (MavenProject p : projects) {
+            failOnConflictingManagedVersion(p, version);
             // Every model object below is allocated fresh inside this loop. Maven's model objects are
             // mutable; hoisting an allocation would alias one instance across the whole reactor, so a
             // later in-place mutation on one module would bleed into all the others. A single-module
             // build cannot detect that, which is why this is a written constraint and not taste.
-            addDependency(p, version);
+            if (declaresOurDependency(p)) {
+                // Not a duplicate — but the repository is still required: a declared dependency is
+                // not necessarily a resolvable one.
+                System.out.println(LOG + p.getArtifactId() + " already declares "
+                        + ARTIFACT_ID + "; adding the repository only");
+            } else {
+                addDependency(p, version);
+            }
             addRepository(p, url);
             System.out.println(LOG + "instrumented " + p.getArtifactId()
                     + " (" + GROUP_ID + ":" + ARTIFACT_ID + ":" + version + " from " + url + ")");
+        }
+    }
+
+    private boolean declaresOurDependency(MavenProject p) {
+        for (Dependency d : p.getModel().getDependencies()) {
+            if (GROUP_ID.equals(d.getGroupId()) && ARTIFACT_ID.equals(d.getArtifactId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Spec §5.1: a strict dependencyManagement/BOM may pin something the extension needs, and a
+     * managed version governs anything resolved transitively — notably basquin-core. Building
+     * against a different core than the extension was compiled against is the "succeeds but is
+     * silently wrong" outcome this design exists to prevent, so it is a hard failure.
+     */
+    private void failOnConflictingManagedVersion(MavenProject p, String version)
+            throws MavenExecutionException {
+        DependencyManagement dm = p.getModel().getDependencyManagement();
+        if (dm == null) {
+            return;
+        }
+        for (Dependency managed : dm.getDependencies()) {
+            if (!GROUP_ID.equals(managed.getGroupId())) {
+                continue;
+            }
+            String managedVersion = managed.getVersion();
+            if (managedVersion != null && !managedVersion.equals(version)) {
+                throw new MavenExecutionException(
+                        "basquin-injector: " + p.getArtifactId() + "'s dependencyManagement pins "
+                                + GROUP_ID + ":" + managed.getArtifactId() + " to " + managedVersion
+                                + ", but this injector supplies " + version + ". The managed version"
+                                + " would win for transitively resolved Basquin artifacts, producing"
+                                + " a build instrumented with a different core than the extension was"
+                                + " compiled against. Align the versions, or set -D" + PROP_VERSION
+                                + "=" + managedVersion + " if that is genuinely intended.",
+                        p.getFile());
+            }
         }
     }
 

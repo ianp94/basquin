@@ -1,0 +1,60 @@
+=== 0. sanity: villains collection has real, Hibernate/Postgres-backed data ===
+$ curl -s http://localhost:8084/api/villains | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d), d[0])"
+100 {'id': 50, 'level': 116, 'name': 'Harvester', 'otherName': '', 'picture': 'https://raw.githubusercontent.com/quarkusio/quarkus-super-heroes/characterdata/images/harvester-7132702029670535082.jpg', 'powers': 'Durability, Intelligence, Stamina, Super Speed, Super Strength, Cold Resistance, Endurance, Energy Blasts, Energy Resistance, Jump, Radiation Immunity, Reflexes, Toxin and Disease Resistance, Weapon-based Powers, Aura, Dexterity, Stealth'}
+
+=== 1. drive a real application route WITH X-Basquin-Req header ===
+$ curl -s -D - -H "X-Basquin-Req: villains-1" http://localhost:8084/api/villains -o /tmp/villains-1-body.json
+HTTP/1.1 200 OK
+transfer-encoding: chunked
+Content-Type: application/json;charset=UTF-8
+
+
+(body: 102011 bytes, 100 villains)
+
+=== 2. poll the result for that id ===
+$ curl -s "http://localhost:8084/__basquin/result?id=villains-1"
+7,415,0|0||
+
+=== 3. a request WITHOUT the header stores nothing: poll a made-up id ===
+$ curl -s -D - http://localhost:8084/api/villains -o /dev/null   (no X-Basquin-Req header)
+HTTP/1.1 200 OK
+transfer-encoding: chunked
+Content-Type: application/json;charset=UTF-8
+
+
+$ curl -s "http://localhost:8084/__basquin/result?id=villains-never-sent-this-id"
+miss
+
+=== 4. violations counter ===
+$ curl -s "http://localhost:8084/__basquin/violations"
+0
+
+=== 5. additional real routes, for a small latency/heap sample (not required by acceptance, extra evidence) ===
+
+--- villains-2: GET /api/villains again ---
+HTTP/1.1 200 OK
+transfer-encoding: chunked
+Content-Type: application/json;charset=UTF-8
+
+6,477,4|0||
+
+--- villains-3: GET /api/villains/random ---
+HTTP/1.1 200 OK
+Content-Type: application/json;charset=UTF-8
+content-length: 616
+
+53,962,0|0||
+
+--- villains-4: GET /api/villains/50 (single villain by id) ---
+HTTP/1.1 200 OK
+Content-Type: application/json;charset=UTF-8
+content-length: 436
+
+47,-16456,0|0||
+
+--- villains-5: GET /api/villains/hello (trivial ping route, no DB) ---
+HTTP/1.1 200 OK
+content-length: 22
+Content-Type: text/plain;charset=UTF-8
+
+0,97,0|0||

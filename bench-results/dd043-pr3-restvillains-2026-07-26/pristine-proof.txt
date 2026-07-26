@@ -1,0 +1,36 @@
+# Zero-edit proof for DD-043 PR-3's central claim
+
+Written 2026-07-26T12:07:35Z, after Task 6's review observed that this claim — the one PR-3
+exists to make — rested on prose while its four siblings each cited an artifact.
+
+## Direct check (post-hoc, at the commit the acceptance ran against)
+
+```
+$ cd ../quarkus-super-heroes && git rev-parse --short HEAD
+c9b46d7
+$ git status --porcelain          # empty output = no file added, modified or removed
+$ grep -c 'basquin' rest-villains/pom.xml
+0
+```
+
+## Why the build log independently proves the tree was clean DURING the build
+
+A post-hoc check cannot by itself distinguish "never modified" from "modified and reverted".
+The build log settles it, because the injector's two paths print different lines:
+
+```
+[basquin-injector] instrumented rest-villains (com.basquin:basquin-quarkus:0.3.0 from http://localhost:8000/)
+```
+
+The injector prints `already declares basquin-quarkus; adding the repository only` when the
+project's model already carries the dependency, and the plain `instrumented` line only when it
+does not. The log carries the latter, so at the moment Maven read the POM it contained no
+Basquin declaration — which is what PR-2's patch had added and what this run had to do without.
+
+Occurrences of the already-declares line in this build: 0
+
+## Scope
+
+This proves no *tracked* file changed. The build does write `target/` inside the clone, which is
+git-ignored upstream — hence `git status` staying empty rather than the directory being untouched.
+"Zero edits" means zero edits to the application's source, not that the build left no artifacts.

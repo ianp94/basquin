@@ -31,11 +31,22 @@ rather than intended.
 
 Three consequences, in descending order of severity:
 
-1. **`-Dbasquin.boundary=agent` is actively wrong for these targets.** The Quarkus extension *is* the
-   boundary. Injecting a property that names a different boundary implementation into an app that already
-   has one is a correctness hazard, not merely redundant — and on a native image the `-javaagent` beside
-   it is silently ignored (**inferred**: SubstrateVM has no JVMTI agent attach; not measured here — see
-   §8.1).
+1. **`-Dbasquin.boundary=agent` is wrong for a JVM-mode pre-instrumented target — and MEASURED inert on
+   a native one.** An earlier draft called it "actively wrong for these targets" without distinguishing the
+   two, which was too strong for native and imprecise about where the hazard lives.
+
+   **Measured** (`bench-results/dd044-native-jto-2026-07-26/`): with the exact string the operator would
+   inject, the native binary starts, serves `/ok` → 200, still reports `basquin` in its banner, and logs no
+   complaint. `basquin.boundary` is read only by `agent/BoundaryInstaller.java`, `agent/Agent.java` and
+   `agent/TomcatBoundaryAdvice.java`; neither `basquin-quarkus` nor `basquin-core` reads it, and on a native
+   image the agent that would is never loaded. So native targets are **not** broken by the current
+   operator.
+
+   **The hazard is real for a JVM-mode build-time-instrumented target**, which is the case the earlier
+   wording conflated with native. There `-javaagent` does load the agent, the agent does read
+   `basquin.boundary=agent`, and the request path ends up with **two** boundaries — the extension's filter
+   and the agent's ByteBuddy-installed one. That is the double-instrumentation conflict this mode must
+   prevent. (Reasoned from which code reads the property; not measured end-to-end — see §8.1.)
 
    **What that flag is for, and why skipping it loses nothing here.** `injection.go:111-114` records that
    `-Dbasquin.boundary=agent` is precisely how the *operator* path obtains its server-side
@@ -304,9 +315,22 @@ target for reasons unrelated to this feature. Whether the extension should grow 
 
 ## 8. Open questions
 
-### 8.1 Does a native image actually ignore an injected `-javaagent`, or fail to start?
+### 8.1 Does a native image actually ignore an injected `-javaagent`, or fail to start? — **RESOLVED: it ignores them**
 
-**Unverified.** §1's consequence 1 assumes SubstrateVM silently ignores `JAVA_TOOL_OPTIONS`-supplied
+**Resolved 2026-07-26 — measured, evidence `bench-results/dd044-native-jto-2026-07-26/`.** The native
+binary starts, serves, and stays instrumented; the flags are inert on SubstrateVM, so the current operator
+does **not** hard-break native targets. §1's consequence 1 has been narrowed accordingly, and the primary
+motivation for this feature is now (a) double instrumentation on **JVM-mode** pre-instrumented targets and
+(b) status dishonesty — neither affected by this result.
+
+**Still open, narrower:** the JVM-mode double-boundary conflict is reasoned from which code reads
+`basquin.boundary`, not measured end-to-end; and the test used an agent jar path that does not exist, so
+"SubstrateVM ignores a *present* agent jar" remains inference (it has no JVMTI attach, so the outcome
+should not differ).
+
+The original text is kept below because it is why the experiment was run.
+
+~~**Unverified.** §1's consequence 1 assumes SubstrateVM silently ignores `JAVA_TOOL_OPTIONS`-supplied
 `-javaagent`. If it instead **fails to start**, the current operator would hard-break any native target the
 moment a `BasquinTarget` was applied — which would make this spec more urgent, not less, and belongs in
 `THIRD-PARTY-APPS.md` as a hazard.

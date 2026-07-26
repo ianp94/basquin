@@ -6,9 +6,10 @@ order is what it is*. If you find a detail stated here and nowhere else, it is i
 (The benchmark page had exactly this drift and it is what `deploy/bench/render_page.py` now exists to
 prevent.)
 
-Last reviewed: 2026-07-25 (DD-043 Phase 0 ran and passed its gate; PR-1 (`basquin-core` extraction) is
-done on branch `dd043-pr1-basquin-core`, not yet merged; PR-2 cleared subject to its entry requirement.
-The DD-040→DD-039 arc was completed and merged on 2026-07-23. See "Start here next").
+Last reviewed: 2026-07-26. DD-043 PR-1 (#100) and PR-2 (#102) are **merged**; **PR-3 is open as
+[#103](https://github.com/ianp94/basquin/pull/103)**, awaiting approval and the human's merge. A new
+follow-on — **DD-044 / PR-3.5** — is specced and reviewed but not started. The DD-040→DD-039 arc was
+completed and merged 2026-07-23. See "Start here next".
 
 ---
 
@@ -41,7 +42,17 @@ work, not cleanup of this thread.
 | **Benchmark re-run** | All three apps re-measured on the trustworthy channel | **merged** as [#97](https://github.com/ianp94/basquin/pull/97) (2026-07-23). This is the payoff — first benchmarks whose finding counts are real | — | `docs/benchmarks.html` (generated), `bench-results/*/‌*-bench3-explore/` |
 | **DD-041** | Clustered exploration across replicas — the one you asked for (service-backed apps) | **next up**, not specced. DD-039 leaves it a clean seam (the same-method-hop merge) | nothing (DD-040/039 merged) | `TODO.md` "Next after DD-040" |
 | **DD-042** | A load-mode concurrency oracle — load counts but never *asserts* | designed, not specced; independent, can precede or follow DD-041 | nothing | `TODO.md` "Future: DD-042" |
-| **DD-043** | Native + reactive targets — build-time instrumentation of a GraalVM-native Quarkus app | **Phase 0 done, gate PASSED** — **merged** as [#98](https://github.com/ianp94/basquin/pull/98) (2026-07-24). All four spikes resolved; S1 REFUTED as specified then CONFIRMED via S1b; 8 spec amendments forced, none voiding a section, plus a round-2 fix pass from the whole-branch review (spec ledger, "Round 2"). **PR-1 (`basquin-core` extraction) done** — `Invariants` and `ResultStore` moved into a new `:basquin-core` Gradle subproject, 324 → 326 tests, 0 failures, on branch `dd043-pr1-basquin-core` (not yet merged). **PR-2 is cleared to start, subject to the entry requirement spec §4.1 records**: `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private and must be widened together — widening `Invariants` alone leaves the call unusable, since `Result` and `Violation`'s fields stay inaccessible. The publishing half is **resolved**: `maven-publish` ships `basquin-core` to the local repo and, from the next `v*` tag, to a Pages-served Maven repo at `https://ianp94.github.io/basquin/maven/` (empty until then — use `publishToMavenLocal`). Only the visibility widening remains before the extension's boundary filter can call it. PR-3…PR-5 still carry the two entry gates Phase 0 did not settle — **§8.2** (plugin-execution injection, PR-4) and **§6.2** (native JFR streaming, PR-5) | nothing (Phase 0 cleared it) | [spec](superpowers/specs/2026-07-24-native-reactive-targets-design.md) · [plan](superpowers/plans/2026-07-24-dd043-phase0-spikes.md) · [evidence](../bench-results/dd043-spikes-2026-07-24/REPORT.md) |
+| **DD-043** | Native + reactive targets — build-time instrumentation of a GraalVM-native Quarkus app | **Phase 0 done, gate PASSED** — **merged** as [#98](https://github.com/ianp94/basquin/pull/98) (2026-07-24). All four spikes resolved; S1 REFUTED as specified then CONFIRMED via S1b; 8 spec amendments forced, none voiding a section, plus a round-2 fix pass from the whole-branch review (spec ledger, "Round 2"). **PR-1 (#100), PR-2 (#102) merged; PR-3 open as
+[#103](https://github.com/ianp94/basquin/pull/103)** — build-time injection with zero edits to the
+target's tree, both halves of §5.2 passed (JVM on `rest-villains`, native on the fixture), 380 tests.
+§8.1 **resolved**: Apicurio's server has no native build on the 3.x line, so row 5 needs a substitute —
+ranked Debezium Server (Quarkus 3.33.1.1) > Eclipse Hono HTTP adapter (3.27.4.1, reactive, heavier
+infra) > Apicurio 2.6.x, the last only behind a compatibility spike since `basquin-quarkus` is pinned to
+3.37.3. A **new row-5 gate** follows: the Quarkus version range over which one `basquin-quarkus` build
+augments is untested, since heroes and villains are both pinned at the toolchain's own version.
+**PR-4's entry gate §8.2 (plugin-execution injection) is still UNMEASURED** and must be settled before
+PR-4 starts; **§6.2** (native JFR streaming) still gates PR-5. A follow-on **DD-044 / PR-3.5** is
+[specced](superpowers/specs/2026-07-26-preinstrumented-targets-design.md) but not started | nothing (Phase 0 cleared it) | [spec](superpowers/specs/2026-07-24-native-reactive-targets-design.md) · [plan](superpowers/plans/2026-07-24-dd043-phase0-spikes.md) · [evidence](../bench-results/dd043-spikes-2026-07-24/REPORT.md) |
 
 ### Why that order
 
@@ -78,16 +89,49 @@ work, not cleanup of this thread.
 One PR is open ([#100](https://github.com/ianp94/basquin/pull/100) — DD-043 PR-1, the `basquin-core`
 extraction; scope under "Open PRs" below). Four threads are ready to pick up, in rough priority:
 
-0. **DD-043 PR-1 — the `basquin-core` extraction — done.** `Invariants` evaluation, `ResultStore` and
-   the DD-040 salted id scheme moved out of `agent/` into a new `:basquin-core` Gradle subproject;
-   `Agent.begin/end` composition and everything `ThreadLocal`-backed stayed behind. Zero behaviour
-   change confirmed (324 → 326 tests, 0 failures), on branch `dd043-pr1-basquin-core`, not yet merged.
-   Spec §4.1 records why the package stays `agent` and the PR-2 entry requirement that follows from it.
-   **Next: PR-2** (`basquin-quarkus` MVP) — cleared to start, with **one** gap left of the two spec §4.1
-   recorded: `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all
-   package-private and must be widened together (widening `Invariants` alone is not enough). The
-   publishing gap is closed — `basquin-core` publishes to the local repo now, and to a Pages-served Maven
-   repo at `https://ianp94.github.io/basquin/maven/` from the next `v*` tag (empty until then).
+0. **DD-043 PR-3 — `basquin-maven-injector` — done, open as
+   [#103](https://github.com/ianp94/basquin/pull/103), awaiting approval and the human's merge.**
+   PR-1 (`basquin-core` extraction, #100) and PR-2 (`basquin-quarkus` extension, #102) are **merged**.
+
+   PR-3 delivers build-time injection: a Maven core extension on `-Dmaven.ext.class.path` that adds the
+   Quarkus extension to a target application's build with **zero edits to that application's tree**.
+   Spec §5.2's two-artifact bar passed both halves — JVM on the real `rest-villains` app
+   (`bench-results/dd043-pr3-restvillains-2026-07-26/`) and native on the Phase-0 fixture
+   (`bench-results/dd043-pr3-native-2026-07-26/`). 380 tests, 0 failures.
+
+   **What a fresh agent most needs to know about this branch.** Two mechanisms fail *silently* if
+   touched carelessly, and both are load-bearing:
+   - The repository injection is **two-level**. A `Repository` on the `Model` alone is a no-op at
+     `afterProjectsRead`; `setRemoteArtifactRepositories(...)` is what refreshes the list Maven and
+     quarkus-maven-plugin actually read. Measured by spike S5.
+   - `META-INF/sisu/javax.inject.Named` is how Maven discovers the participant. Gradle does not
+     generate it. Delete it and the jar builds, every test passes, and the target ships uninstrumented.
+     A Gradle task `finalizedBy('jar')` guards it — deliberately not only `check`, since the release
+     path publishes without running `check`.
+
+   **Five silent-bypass shapes are closed** by four guards, and the shape of that history is the lesson:
+   three of the five were found *after* implementation, by review. Guard 4 is written as a **whitelist**
+   of usable declarations (scope, type, classifier, exclusions) rather than a list of known-bad values,
+   because enumerating bad values shipped the next variant twice. `<exclusions>` is the one shape
+   **§5.2's banner acceptance cannot detect** — the extension still appears in `Installed features`
+   while a stripped `basquin-core` leaves it unusable.
+
+   **Next: PR-4** (coverage — offline-JaCoCo execution injection, `/__basquin/coverage`, the native 2×2
+   cells). Its **entry gate is spec §8.2** — whether `afterProjectsRead` model mutation reaches the
+   per-project *execution plan*, not just resolution — and that is **still unmeasured**. S4 injected a
+   dependency; nobody has injected a plugin *execution*. Settle it the way S4 and S5 settled their
+   halves — inject a plugin execution with an observable side effect into the spike fixture, build, and
+   show the effect in the log — before building on the assumption.
+
+   **DD-044 / PR-3.5 is specced but not started**
+   (`docs/superpowers/specs/2026-07-26-preinstrumented-targets-design.md`): the operator cannot today
+   drive a build-time-instrumented target without patching it, because `buildAgentArgs` appends
+   `-javaagent`, `-Xbootclasspath/a` and `-Dbasquin.boundary=agent` **unconditionally** — "inject
+   nothing" is unrepresentable, and a no-agent target still reports `Phase=Injected` for an app the
+   operator never modified. It went through a review round that found five blocking defects; read §2.2a
+   and §2.2b before implementing, as they cover the two windows where the new code could still emit the
+   dishonest signal the whole feature exists to prevent. Slots **before PR-4** only if the in-cluster
+   verification matters sooner than coverage does; otherwise after.
 
 1. **DD-041 — clustered exploration across replicas (the one the user asked for, for service-backed
    apps).** Not specced yet — so the next step is *brainstorm → spec → plan*, NOT code. DD-039 leaves
@@ -118,10 +162,13 @@ time, nothing CPU-heavy during a run.
 
 ## Open PRs
 
-**[#100](https://github.com/ianp94/basquin/pull/100) — DD-043 PR-1, the `basquin-core` extraction.**
-Moves `Invariants` and `ResultStore` into a new `:basquin-core` Gradle subproject, 324 → 326 tests,
-0 failures. Approved; the added test and the `verifyShippedJarsContainCore` Gradle guard are the two
-durable pieces — see the DD-043 row above for what it leaves PR-2.
+**[#103](https://github.com/ianp94/basquin/pull/103) — DD-043 PR-3, `basquin-maven-injector`.**
+Build-time injection with zero edits to the target's source; both halves of spec §5.2 passed; 380 tests,
+0 failures. Labelled `ready-for-approver`. Five follow-ups are recorded in `TODO.md` under "DD-043 PR-3
+follow-ups", each with why it was deferred — most notably that the verify script's `jvm` and `native`
+stages have never been executed.
+
+#100 (PR-1, `basquin-core` extraction) and #102 (PR-2, `basquin-quarkus` extension) are **merged**.
 
 [#99](https://github.com/ianp94/basquin/pull/99) (this file's previous post-merge sync) merged
 2026-07-25 as `42790aa`. Everything else is merged to `main`.

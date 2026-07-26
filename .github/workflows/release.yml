@@ -7,8 +7,9 @@ name: Release
 #   - the packaged Helm chart as a release asset
 #   - the GitHub Pages Helm repo (docs/charts/) — the `pages` job repackages + reindexes + commits to
 #     main automatically (deploy/helm/publish.sh remains for a manual/bootstrap refresh).
-#   - the GitHub Pages Maven repo (docs/maven/) — the same `pages` job publishes basquin-core there
-#     and commits it, so a Maven build can depend on com.basquin:basquin-core with no credentials.
+#   - the GitHub Pages Maven repo (docs/maven/) — the same `pages` job publishes the whole Basquin
+#     extension chain there (basquin-core, basquin-quarkus, basquin-quarkus-deployment) and commits
+#     it, so a Maven build can depend on them with no credentials.
 on:
   push:
     tags: ['v*']
@@ -167,7 +168,7 @@ jobs:
           helm package deploy/helm/basquin-operator --destination docs/charts \
             --version "${{ steps.v.outputs.tag }}" --app-version "${{ steps.v.outputs.tag }}"
           helm repo index docs/charts --url https://ianp94.github.io/basquin/charts --merge docs/charts/index.yaml
-      # DD-043: publish basquin-core into docs/maven, which Pages serves at
+      # DD-043: publish the extension chain into docs/maven, which Pages serves at
       # https://ianp94.github.io/basquin/maven/ — the Maven-repo counterpart of docs/charts.
       # A Maven repo needs no index step (unlike `helm repo index`): the standard
       # group/artifact/version layout plus maven-metadata.xml, which Gradle writes, is the whole
@@ -176,7 +177,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      # This PR made `version` in basquin-core/build.gradle load-bearing. It was decorative before —
+      # DD-043 made `version` load-bearing in every published module's build.gradle (basquin-core
+      # and both basquin-quarkus modules). It was decorative before —
       # nothing in the build read it, and the workflow stamps images/CLI/chart straight from the tag —
       # so a release-prep commit that bumps the tag but forgets this field is a very plausible miss.
       # The failure would be silent: Gradle would republish the OLD coordinate, `git diff --cached`
@@ -225,5 +227,5 @@ jobs:
           if git diff --cached --quiet; then
             echo "no chart or maven changes to publish"; exit 0
           fi
-          git commit -m "chore(release): publish chart + basquin-core ${{ steps.v.outputs.tag }} to the Pages repos [skip ci]"
+          git commit -m "chore(release): publish chart + the Basquin extension chain ${{ steps.v.outputs.tag }} to the Pages repos [skip ci]"
           git push origin main

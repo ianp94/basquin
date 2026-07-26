@@ -89,6 +89,9 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
             String declared = declaredVersion(p);
             String effective = version;
             if (declared != null) {
+                // Scope first: a test/provided-scoped declaration is unusable regardless of its version,
+                // so checking the version before the scope would report the less serious problem.
+                failOnUnusableDeclaredScope(p, declaredScope(p));
                 failOnConflictingDeclaredVersion(p, declared, version);
                 // Not a duplicate — but the repository is still required: a declared dependency is
                 // not necessarily a resolvable one.
@@ -113,6 +116,55 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
             }
         }
         return null;
+    }
+
+    /**
+     * The scope of an existing declaration of our artifact, or {@code null} if there is none.
+     *
+     * <p>Maven's default when {@code <scope>} is absent is {@code compile}, which this returns as
+     * {@code "compile"} so callers need not repeat the defaulting.
+     */
+    private String declaredScope(MavenProject p) {
+        for (Dependency d : p.getModel().getDependencies()) {
+            if (GROUP_ID.equals(d.getGroupId()) && ARTIFACT_ID.equals(d.getArtifactId())) {
+                String s = d.getScope();
+                return (s == null || s.isBlank()) ? "compile" : s;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * A declaration at a scope that cannot carry the extension into the application is a **fourth** way
+     * injection can be defeated silently, and it is the one no version check can see.
+     *
+     * <p>{@link #declaredVersion} matches on groupId and artifactId alone. A project declaring
+     * {@code com.basquin:basquin-quarkus} at {@code test} or {@code provided} scope — a leftover from
+     * experimentation is the likely cause — therefore reads as "already declared", so the dependency is
+     * not injected and only the repository is added. The extension never reaches the module's
+     * compile/runtime classpath, augmentation does not include it, and the build **succeeds** producing an
+     * uninstrumented application whose {@code /__basquin/result} polls return {@code "miss"}. None of the
+     * version guards fire, because the version does not conflict — it may even match.
+     *
+     * <p>Only {@code compile} and {@code runtime} put the artifact where augmentation needs it, so
+     * anything else fails loudly per spec §5.1 rather than being silently accepted or silently duplicated.
+     * Found by review of PR #103, which was asked to look for exactly this shape after two similar
+     * asymmetries had already been fixed on the branch.
+     */
+    private void failOnUnusableDeclaredScope(MavenProject p, String scope)
+            throws MavenExecutionException {
+        if (scope == null || "compile".equals(scope) || "runtime".equals(scope)) {
+            return;
+        }
+        throw new MavenExecutionException(
+                "basquin-injector: " + p.getArtifactId() + " already declares " + GROUP_ID + ":"
+                        + ARTIFACT_ID + " at scope '" + scope + "', which cannot carry the extension onto"
+                        + " the application's classpath — augmentation would not include it and the build"
+                        + " would succeed UNINSTRUMENTED, with /__basquin/result returning \"miss\"."
+                        + " Only 'compile' and 'runtime' are usable. Change that declaration's scope,"
+                        + " remove it and let this injector add it, or pass -D" + PROP_SKIP
+                        + "=true to leave this build uninstrumented deliberately.",
+                p.getFile());
     }
 
     /**

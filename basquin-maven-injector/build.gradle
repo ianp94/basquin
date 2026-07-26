@@ -57,6 +57,62 @@ java {
     withSourcesJar()
 }
 
+// Maven discovers this core extension through META-INF/sisu/javax.inject.Named, NOT by scanning for
+// @Named. Nothing in the unit suite can catch that resource going missing: all tests drive inject()
+// directly and bypass container wiring entirely, so `./gradlew check` stays green while the shipped jar
+// is undiscoverable — and a target application then builds successfully and completely uninstrumented.
+//
+// PR #103's review found this guard existed only in scripts/verify-dd043-pr3.sh, which no workflow runs.
+// A guard outside CI is not a guard.
+//
+// finalizedBy on `jar` rather than only wiring into `check`, following the same reasoning recorded for
+// verifyShippedJarsContainCore in the root build.gradle: the release path publishes without running
+// `check`, so a check-only guard would let a regression ship through release without ever executing.
+def verifyInjectorIsDiscoverable = tasks.register('verifyInjectorIsDiscoverable') {
+    description = 'Fails if the built jar could not be discovered by Maven as a core extension.'
+    def jarFile = tasks.named('jar', Jar).flatMap { it.archiveFile }
+    inputs.file(jarFile)
+    doLast {
+        def index = 'META-INF/sisu/javax.inject.Named'
+        def zip = new java.util.zip.ZipFile(jarFile.get().asFile)
+        try {
+            def entry = zip.getEntry(index)
+            if (entry == null) {
+                throw new GradleException("${jarFile.get().asFile.name} has no ${index}. Maven would " +
+                        "never instantiate the participant, so an injected build would succeed and " +
+                        "produce an UNINSTRUMENTED application. Restore " +
+                        "src/main/resources/${index}.")
+            }
+            // Derived, never hardcoded: read the class the index names and require it in this same jar.
+            // A stale index after a rename is exactly as silent as a missing one.
+            def named = zip.getInputStream(entry).text.trim().readLines().findAll { it.trim() }
+            if (named.size() != 1) {
+                throw new GradleException("${index} must name exactly one class, found ${named.size()}: ${named}")
+            }
+            def classEntry = named[0].replace('.', '/') + '.class'
+            if (zip.getEntry(classEntry) == null) {
+                throw new GradleException("${index} names ${named[0]} but ${classEntry} is not in the " +
+                        "jar — a stale index is as silent as a missing one.")
+            }
+            def props = zip.getEntry('basquin-injector.properties')
+            if (props == null) {
+                throw new GradleException("basquin-injector.properties missing from the jar; " +
+                        "InjectorVersion.value() would throw at runtime in the target's build.")
+            }
+            def p = new Properties()
+            zip.getInputStream(props).withStream { p.load(it) }
+            if (p.getProperty('version') != project.version.toString()) {
+                throw new GradleException("baked version '${p.getProperty('version')}' != project " +
+                        "version '${project.version}'.")
+            }
+            logger.lifecycle("verifyInjectorIsDiscoverable: ${index} -> ${named[0]}, version ${p.getProperty('version')}")
+        } finally {
+            zip.close()
+        }
+    }
+}
+tasks.named('jar') { finalizedBy verifyInjectorIsDiscoverable }
+
 publishing {
     publications {
         injector(MavenPublication) {

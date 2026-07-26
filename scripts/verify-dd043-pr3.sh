@@ -149,7 +149,12 @@ run_unit() {
 run_jar() {
   log "jar — injector discoverability and baked version"
   ./gradlew -q --no-daemon :basquin-maven-injector:jar > "$OUT/jar-build.log" 2>&1
-  local j; j="$(ls basquin-maven-injector/build/libs/basquin-maven-injector-*.jar 2>/dev/null | head -1)"
+  # Exclude -sources.jar / -javadoc.jar: build.gradle enables withSourcesJar(), and '-' (0x2D) sorts
+  # BEFORE '.' (0x2E), so a plain `head -1` picks basquin-maven-injector-X-sources.jar when it exists —
+  # which has no .class files and no baked properties, so both checks below would spuriously FAIL against
+  # a perfectly good build. A false negative in the one stage that exists to catch silent non-discovery.
+  local j; j="$(ls basquin-maven-injector/build/libs/basquin-maven-injector-*.jar 2>/dev/null \
+        | grep -vE -- '-(sources|javadoc)\.jar$' | head -1)"
   if [ -z "$j" ]; then bad "jar" "no jar produced"; return; fi
 
   local idx cls ver

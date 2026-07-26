@@ -169,6 +169,66 @@ public class BasquinInjectorGuardsTest {
         }
     }
 
+    private static void declareAtScope(MavenProject p, String scope) {
+        Dependency d = new Dependency();
+        d.setGroupId(BasquinInjector.GROUP_ID);
+        d.setArtifactId(BasquinInjector.ARTIFACT_ID);
+        d.setVersion(InjectorVersion.value());
+        d.setScope(scope);
+        p.getModel().getDependencies().add(d);
+    }
+
+    /**
+     * The fourth silent bypass, found by review of PR #103. A declaration at a scope that cannot carry the
+     * extension onto the application's classpath reads as "already declared" to a groupId+artifactId
+     * match, so the dependency is skipped, augmentation never sees the extension, and the build succeeds
+     * UNINSTRUMENTED — with no version conflict for the other guards to catch.
+     */
+    @Test
+    public void failsLoudlyWhenOurArtifactIsDeclaredAtAnUnusableScope() {
+        for (String scope : new String[] {"test", "provided", "system", "import"}) {
+            MavenProject p = project("app");
+            declareAtScope(p, scope);
+            try {
+                new BasquinInjector().inject(Arrays.asList(p), new Properties());
+                fail("scope '" + scope + "' cannot carry the extension onto the classpath, so it must "
+                        + "not be accepted as an existing declaration");
+            } catch (MavenExecutionException e) {
+                assertTrue("message must name the offending scope: " + e.getMessage(),
+                        e.getMessage().contains(scope));
+                assertTrue("message must say the build would be uninstrumented: " + e.getMessage(),
+                        e.getMessage().contains("UNINSTRUMENTED"));
+            }
+        }
+    }
+
+    /** The two usable scopes must still be accepted, or the guard breaks legitimate targets. */
+    @Test
+    public void acceptsCompileAndRuntimeScopedDeclarations() throws Exception {
+        for (String scope : new String[] {"compile", "runtime"}) {
+            MavenProject p = project("app");
+            declareAtScope(p, scope);
+
+            new BasquinInjector().inject(Arrays.asList(p), new Properties());
+
+            assertEquals("scope '" + scope + "': no duplicate added",
+                    1, p.getModel().getDependencies().size());
+            assertEquals("scope '" + scope + "': the repository is still required",
+                    1, p.getRemoteArtifactRepositories().size());
+        }
+    }
+
+    /** An absent {@code <scope>} means compile in Maven, so it must be accepted like an explicit one. */
+    @Test
+    public void acceptsADeclarationWithNoExplicitScope() throws Exception {
+        MavenProject p = project("app");
+        declareAtScope(p, null);
+
+        new BasquinInjector().inject(Arrays.asList(p), new Properties());
+
+        assertEquals(1, p.getModel().getDependencies().size());
+    }
+
     /**
      * The escape hatch the failure message advertises must actually work — otherwise the guard tells
      * an operator to do something that does not help, which is worse than a bare failure.

@@ -86,27 +86,67 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
             // mutable; hoisting an allocation would alias one instance across the whole reactor, so a
             // later in-place mutation on one module would bleed into all the others. A single-module
             // build cannot detect that, which is why this is a written constraint and not taste.
-            if (declaresOurDependency(p)) {
+            String declared = declaredVersion(p);
+            String effective = version;
+            if (declared != null) {
+                failOnConflictingDeclaredVersion(p, declared, version);
                 // Not a duplicate — but the repository is still required: a declared dependency is
                 // not necessarily a resolvable one.
                 System.out.println(LOG + p.getArtifactId() + " already declares "
-                        + ARTIFACT_ID + "; adding the repository only");
+                        + ARTIFACT_ID + ":" + declared + "; adding the repository only");
+                // Report what the build will actually use, not what we would have injected.
+                effective = declared;
             } else {
                 addDependency(p, version);
             }
             addRepository(p, url);
             System.out.println(LOG + "instrumented " + p.getArtifactId()
-                    + " (" + GROUP_ID + ":" + ARTIFACT_ID + ":" + version + " from " + url + ")");
+                    + " (" + GROUP_ID + ":" + ARTIFACT_ID + ":" + effective + " from " + url + ")");
         }
     }
 
-    private boolean declaresOurDependency(MavenProject p) {
+    /** The version this project already declares for our artifact, or {@code null} if it declares none. */
+    private String declaredVersion(MavenProject p) {
         for (Dependency d : p.getModel().getDependencies()) {
             if (GROUP_ID.equals(d.getGroupId()) && ARTIFACT_ID.equals(d.getArtifactId())) {
-                return true;
+                return d.getVersion();
             }
         }
-        return false;
+        return null;
+    }
+
+    /**
+     * The declared-dependency counterpart of {@link #failOnConflictingManagedVersion}, and it exists
+     * for symmetry with it rather than as a separate idea.
+     *
+     * <p>An explicit direct version wins over both dependency management and anything we could inject,
+     * so when a project already declares our artifact at a different version, <b>that</b> version is
+     * what the build uses. The extension then differs from the one the operator's driver expects, and a
+     * wire-format skew on {@code /__basquin/result} surfaces as polls returning {@code "miss"} — DD-040's
+     * exact failure mode, arriving silently.
+     *
+     * <p>Treating this as a log line while {@link #failOnConflictingManagedVersion} hard-fails would be
+     * an inconsistency, not a policy: both are the same hazard — the build resolving a different Basquin
+     * than the tooling was built against. Spec §5.1 requires failing loudly, so both fail.
+     *
+     * <p>A project that genuinely means to pin its own version has two documented ways to say so, and
+     * the message names them.
+     */
+    private void failOnConflictingDeclaredVersion(MavenProject p, String declared, String version)
+            throws MavenExecutionException {
+        if (declared == null || declared.equals(version)) {
+            return;
+        }
+        throw new MavenExecutionException(
+                "basquin-injector: " + p.getArtifactId() + " already declares " + GROUP_ID + ":"
+                        + ARTIFACT_ID + " at version " + declared + ", but this injector supplies "
+                        + version + ". An explicit declared version wins, so the build would use "
+                        + declared + " while the driver expects " + version + " — a wire-format skew on"
+                        + " /__basquin/result shows up as result polls returning \"miss\" rather than as"
+                        + " a build error. Align the versions, or pass -D" + PROP_VERSION + "="
+                        + declared + " to inject the declared version deliberately, or -D" + PROP_SKIP
+                        + "=true to leave this build uninstrumented.",
+                p.getFile());
     }
 
     /**

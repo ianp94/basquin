@@ -97,7 +97,11 @@ public class BasquinInjectorGuardsTest {
         Dependency existing = new Dependency();
         existing.setGroupId(BasquinInjector.GROUP_ID);
         existing.setArtifactId(BasquinInjector.ARTIFACT_ID);
-        existing.setVersion("0.3.0");
+        // Derived, not typed: this test is about the no-duplicate rule, so the declared version must
+        // AGREE with the injected one. A literal would silently start exercising the
+        // conflicting-declared-version guard instead the first time the project version is bumped,
+        // and this test would fail for a reason that has nothing to do with duplication.
+        existing.setVersion(InjectorVersion.value());
         p.getModel().getDependencies().add(existing);
 
         new BasquinInjector().inject(Arrays.asList(p), new Properties());
@@ -133,5 +137,57 @@ public class BasquinInjectorGuardsTest {
         new BasquinInjector().inject(Arrays.asList(p), props);
 
         assertEquals(1, p.getModel().getDependencies().size());
+    }
+
+    /**
+     * The declared-dependency counterpart of the dependencyManagement guard. An explicit declared
+     * version wins over anything we inject, so the build would use it while the driver expects ours —
+     * and that skew surfaces as {@code /__basquin/result} polls returning {@code "miss"}, not as a build
+     * error. Same hazard as a conflicting managed pin, so it fails the same way; treating one as fatal
+     * and the other as a log line would be an inconsistency rather than a policy.
+     */
+    @Test
+    public void failsLoudlyWhenTheProjectDeclaresOurArtifactAtADifferentVersion() {
+        MavenProject p = project("app");
+        Dependency existing = new Dependency();
+        existing.setGroupId(BasquinInjector.GROUP_ID);
+        existing.setArtifactId(BasquinInjector.ARTIFACT_ID);
+        existing.setVersion("0.0.1-different");
+        p.getModel().getDependencies().add(existing);
+
+        try {
+            new BasquinInjector().inject(Arrays.asList(p), new Properties());
+            fail("expected MavenExecutionException — a declared version that differs from the injected "
+                    + "one must not be accepted with only a log line");
+        } catch (MavenExecutionException e) {
+            String m = e.getMessage();
+            assertTrue("message must name the declared version: " + m, m.contains("0.0.1-different"));
+            assertTrue("message must name the version we supply: " + m,
+                    m.contains(InjectorVersion.value()));
+            assertTrue("message must name an escape hatch: " + m,
+                    m.contains(BasquinInjector.PROP_VERSION) || m.contains(BasquinInjector.PROP_SKIP));
+        }
+    }
+
+    /**
+     * The escape hatch the failure message advertises must actually work — otherwise the guard tells
+     * an operator to do something that does not help, which is worse than a bare failure.
+     */
+    @Test
+    public void theAdvertisedVersionOverrideResolvesTheDeclaredVersionConflict() throws Exception {
+        MavenProject p = project("app");
+        Dependency existing = new Dependency();
+        existing.setGroupId(BasquinInjector.GROUP_ID);
+        existing.setArtifactId(BasquinInjector.ARTIFACT_ID);
+        existing.setVersion("0.0.1-different");
+        p.getModel().getDependencies().add(existing);
+
+        Properties props = new Properties();
+        props.setProperty(BasquinInjector.PROP_VERSION, "0.0.1-different");
+
+        new BasquinInjector().inject(Arrays.asList(p), props);
+
+        assertEquals("no duplicate added", 1, p.getModel().getDependencies().size());
+        assertEquals("the repository is still required", 1, p.getRemoteArtifactRepositories().size());
     }
 }

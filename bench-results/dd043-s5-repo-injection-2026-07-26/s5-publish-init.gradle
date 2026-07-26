@@ -1,0 +1,19 @@
+// DD-043 spike S5 — Gradle init script (passed via -I), NOT part of any module's build.
+//
+// Adds one extra publishing repository, `s5Pages`, to every maven-publish project. It points at
+// this spike's fresh stand-in for the GitHub Pages repo
+// (bench-results/dd043-s5-repo-injection-2026-07-26/pages-repo), which is then served over HTTP.
+// An init script is used so that no build.gradle is modified: the spike's zero-edit discipline
+// covers this repo's own build files too, and the existing `dd043Spike`/`pages` repositories in
+// the build files keep their meanings.
+gradle.allprojects { p ->
+    p.plugins.withId('maven-publish') {
+        p.extensions.configure(org.gradle.api.publish.PublishingExtension) { ext ->
+            ext.repositories.maven { repo ->
+                repo.name = 's5Pages'
+                repo.url = p.rootProject.layout.projectDirectory
+                        .dir('bench-results/dd043-s5-repo-injection-2026-07-26/pages-repo').asFile.toURI()
+            }
+        }
+    }
+}

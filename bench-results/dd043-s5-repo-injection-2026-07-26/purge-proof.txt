@@ -1,0 +1,83 @@
+# DD-043 S5 — local-repository purge proof (the S4-addendum ambiguity control)
+# Local repo: bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository (the one env/build.sh mounts at /m2)
+
+## BEFORE purge — 2026-07-26 07:24:48 UTC — com/basquin contents:
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0-sources.jar
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0-sources.jar.md5
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0-sources.jar.sha1
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0-sources.jar.sha256
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0-sources.jar.sha512
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.jar
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.jar.md5
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.jar.sha1
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.jar.sha256
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.jar.sha512
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.module
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.module.md5
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.module.sha1
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.module.sha256
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.module.sha512
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.pom
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.pom.md5
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.pom.sha1
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.pom.sha256
+com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.pom.sha512
+com/basquin/basquin-core/maven-metadata-local.xml
+com/basquin/basquin-core/maven-metadata.xml
+com/basquin/basquin-core/maven-metadata.xml.md5
+com/basquin/basquin-core/maven-metadata.xml.sha1
+com/basquin/basquin-core/maven-metadata.xml.sha256
+com/basquin/basquin-core/maven-metadata.xml.sha512
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.jar
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.jar.md5
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.jar.sha1
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.jar.sha256
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.jar.sha512
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.module
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.module.md5
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.module.sha1
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.module.sha256
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.module.sha512
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.pom
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.pom.md5
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.pom.sha1
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.pom.sha256
+com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.pom.sha512
+com/basquin/basquin-quarkus-deployment/maven-metadata.xml
+com/basquin/basquin-quarkus-deployment/maven-metadata.xml.md5
+com/basquin/basquin-quarkus-deployment/maven-metadata.xml.sha1
+com/basquin/basquin-quarkus-deployment/maven-metadata.xml.sha256
+com/basquin/basquin-quarkus-deployment/maven-metadata.xml.sha512
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.jar
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.jar.md5
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.jar.sha1
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.jar.sha256
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.jar.sha512
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.module
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.module.md5
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.module.sha1
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.module.sha256
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.module.sha512
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.pom
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.pom.md5
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.pom.sha1
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.pom.sha256
+com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.pom.sha512
+com/basquin/basquin-quarkus/maven-metadata.xml
+com/basquin/basquin-quarkus/maven-metadata.xml.md5
+com/basquin/basquin-quarkus/maven-metadata.xml.sha1
+com/basquin/basquin-quarkus/maven-metadata.xml.sha256
+com/basquin/basquin-quarkus/maven-metadata.xml.sha512
+com/basquin/spike/localonly/local-probe-dep/1.0/_remote.repositories
+com/basquin/spike/localonly/local-probe-dep/1.0/local-probe-dep-1.0.jar
+com/basquin/spike/localonly/local-probe-dep/1.0/local-probe-dep-1.0.pom
+com/basquin/spike/localonly/local-probe-dep/maven-metadata-local.xml
+
+## PURGE: rm -rf /mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin
+
+## AFTER purge — 2026-07-26 07:24:48 UTC:
+$ find /mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin
+bfs: error: /mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin: No such file or directory.
+find exit code: 1
+$ ls /mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com | grep -i basquin
+grep exit code: 1 (1 = no match, basquin gone)

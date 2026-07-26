@@ -709,6 +709,27 @@ from "checked and clean" while meaning "never detected". So taint is not a self-
 §7.3 carries a control that forces it positive; without that control passing, the taint rate is not
 published and neither is the heap column that rests on it.
 
+**A negative delta is a third failure the in-flight counter cannot see — measured on a real app.**
+PR-2's `rest-villains` acceptance polled `47,-16456,0|0||`: a claimed heap delta of **−16,456 KB** for a
+single Hibernate/Postgres GET (`bench-results/dd043-pr2-restvillains-2026-07-26/curl-transcript.txt`).
+A request does not free 16 MB; that is a GC cycle inside the measurement window — the phenomenon behind
+the standing `heapDriftKb` debt (+381 MB one run, −194 MB another, deliberately never published).
+
+The taint rule does **not** catch it. The in-flight counter detects *overlapping requests*, and a GC is
+not a request, so the window looks clean by that test while the number is meaningless. Left as is, PR-5
+could implement taint and `UNMEASURED` in full and this figure would still be published.
+
+**The sign is itself a disposition signal, and it is free.** A negative per-request heap delta is
+*definitionally* unattributable: allocation cannot be negative, so the window contained a collection.
+Record it `UNMEASURED`, never as a number — and unlike the overlap case it needs no counter and no GC
+introspection to detect. Whatever PR-5 builds for `UNMEASURED` must therefore cover **three** producers:
+overlap, sub-quantum, and negative.
+
+Also observed on the same run: `6,477,4|0||` — a **thread delta of 4** on a reactive app, which is
+Vert.x growing its worker pool rather than the request leaking threads. §6.3 already replaces thread
+leak as an invariant for this target class, and this is a concrete reason why: the figure is real but
+not attributable to the request.
+
 #### The instrument is quantized, not continuous — state the floor
 
 Everything above treats the heap reading as a continuous number that noise perturbs. It is not.
@@ -1232,7 +1253,7 @@ history says this repo needs.
 | **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + a `/__basquin/{result,violations}` control surface sharing `ResultStore`'s wire format (§4.4a), control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private and must be widened together before the boundary filter can call this artifact. The publishing half is resolved: `maven-publish` ships both a local and a Pages-served Maven repo |
 | **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits | PR-2 |
 | **PR-4** | Coverage — offline-JaCoCo execution injection, `/__basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 · **entry gate: §8.2** (plugin-execution injection is unmeasured); the native cells additionally carry §7.2's S3 re-check |
-| **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs. **Also owns two gaps PR-2 measured:** the `UNMEASURED` disposition and §6.1's in-flight taint — both need a `ResultStore.Entry` field, and until they land §7.3's sub-quantum control **fails** and the heap invariant is **not publishable**; and the watchdog, without which `block-loop`'s control cannot be claimed | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |
+| **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs. **Also owns three gaps PR-2 measured:** the `UNMEASURED` disposition and §6.1's in-flight taint — both need a `ResultStore.Entry` field, and until they land §7.3's sub-quantum control **fails** and the heap invariant is **not publishable**; the watchdog, without which `block-loop`'s control cannot be claimed; and **negative** heap deltas (measured `-16,456 KB` on `rest-villains`), which the in-flight counter structurally cannot detect because a GC is not a request | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |
 
 Docs land with their PR: `THIRD-PARTY-APPS.md` gains a build-time-injection section, `ARCHITECTURE.md`
 gains the build-vs-runtime injection symmetry.

@@ -1053,3 +1053,33 @@ that is a DD-041 spec decision, with this measurement as its input.
 - A concurrent-edit conflict answers `302 /PageModified.jsp?page=<page>`; a missing anti-spam pair
   gives `302 /Wiki.jsp?page=SessionExpired`; a missing CSRF token gives `302 /error/Forbidden.html`.
 - Tomcat rejects a request line containing a raw `"` or `<` with a 400 before JSPWiki sees it.
+
+## DD-043 PR-3 follow-ups (deferred during PR #103 review, recorded so they cannot evaporate)
+
+These were judged non-blocking during PR #103's review and deliberately not fixed in that PR. They are
+written down here because the review caught me claiming they were "recorded rather than bodged" when they
+were recorded nowhere — the same evaporation that #95 had to go back and fix.
+
+- [ ] **`scripts/verify-dd043-pr3.sh`'s `jvm:boundary` check can pass on an error page.** It accepts any
+      non-empty, non-`miss` body, so an HTML error response would read as a pass. It must assert the
+      **shape** — `ResultStore.format`'s `costCsv|invariantCount|detail|leak`, i.e. three comma-separated
+      numbers before the first `|`. A check that passes on the wrong thing is worse than no check in the one
+      stage whose job is proving the boundary sat on the request path.
+- [ ] **`basquin-init.gradle` hand-types `0.3.0`.** Same defect class as the spec's drifted counts, and it
+      will silently inject a stale coordinate the first time the version is bumped. Not a quick fix: a
+      Gradle init script cannot read the injector jar's baked `basquin-injector.properties`, because it runs
+      before and outside any project's classpath. Needs a decision on the mechanism — a documented
+      `-Dbasquin.inject.version` requirement, a generated init script, or reading the version from the
+      Pages repo's `maven-metadata.xml`.
+- [ ] **`scripts/verify-dd043-pr3.sh` starts `postgres:16`; the PR-2 harness uses `postgres:18`.** Align
+      them, or the verify script's JVM stage exercises a different database than the acceptance runs it is
+      meant to reproduce.
+- [ ] **`scripts/verify-dd043-pr3.sh`'s `jvm`/`native` stages hardcode paths into dated evidence
+      directories** (`bench-results/dd043-pr3-restvillains-2026-07-26/build.sh`,
+      `bench-results/dd043-pr2-restvillains-2026-07-26/run-app.sh`). Raised by the Claude App review. They
+      break the day those directories are pruned or renamed; consider moving the two harness scripts under
+      `scripts/`.
+- [ ] **`scripts/verify-dd043-pr3.sh`'s `jvm` and `native` stages have never been executed.** Written and
+      committed unexercised (the native mutex was held, and the `guards` stage mutates source a running
+      build was compiling). The script's own `RESULTS.md` discloses this, but it means both stages are
+      unverified code. Run them once end-to-end.

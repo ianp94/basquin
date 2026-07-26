@@ -464,7 +464,12 @@ bounded at **2 s** (mirroring DD-040's bound), with the driver's read timeout ab
 Per request:
 
 1. Filter **reads** the driver's id from the inbound `X-Basquin-Req` **request** header, stamps start
-   time, stashes both on the `RoutingContext`, and increments the in-flight counter (§6.1).
+   time, baseline heap and baseline thread count, and stashes them on the `RoutingContext`
+   (`BasquinBoundaryFilter.handle`). **No in-flight counter exists here.** An earlier draft of this
+   step said the filter increments one; the actual PR-2 filter has no counter field, so nothing in
+   `basquin-quarkus` today implements §6.1's taint mechanism. That counter is **PR-5's** — see PR-5's
+   roadmap entry: §6.1's in-flight taint "needs a `ResultStore.Entry` field" and does not exist until
+   PR-5 lands it.
 2. `addEndHandler` computes the measurement and puts the result into the store under that id — **but
    only for a completed response**. `ResultStore.Entry` carries no disposition field
    (`costCsv, invariantCount, detail, leakDetected`), so "records disposition" is not literally
@@ -503,10 +508,19 @@ wholesale would recreate the circular dependency that broke the `Invariants` mov
 `awaitQuiescence` is `ITERATION_LOCK.tryLock(...)`, lock-based machinery that has no meaning on the
 lock-free reactive path this whole spec exists to support.
 
-**What is genuinely shared, and it is the part that matters.** The drift risk was never the routing —
-it is the **wire format**, and that already lives in `basquin-core` as `ResultStore.format(...)` /
-`ResultStore.take(id)`, public and reused verbatim. The Quarkus and Tomcat paths cannot disagree about
-what a result looks like, which is the whole anti-drift argument. Also worth extracting into
+**What is genuinely shared — and what that actually guarantees.** The drift risk was never the
+routing — it is the **wire format**, and that already lives in `basquin-core` as
+`ResultStore.format(...)` / `ResultStore.take(id)`, public and reused verbatim. Sharing that
+formatter guarantees the Quarkus and Tomcat paths cannot disagree about the wire **shape** — four
+`|`-separated fields, one line per hop. It does **not** guarantee they cannot disagree about
+**content**: what goes INTO an `Entry` is decided per-boundary, at each boundary's own call site, and
+the two had already diverged there. PR-2 briefly shipped `BasquinBoundaryFilter.publish` writing a
+bare `detail` (just the violated invariant's own message) where the Tomcat path publishes
+`name + ": " + detail` (`Agent.java:475`), silently losing *which* invariant fired, since
+`ResultStore.Entry` stores the field opaquely. Fixed, and now pinned by
+`BasquinBoundaryFilterTest#publishFormatsDetailAsNameColonDetailMatchingTomcat` — but the general
+lesson stands: content alignment across boundaries is a per-boundary obligation that has to be
+tested, not a property the shared formatter hands you for free. Also worth extracting into
 `basquin-core`, being tiny and pure: the `PREFIX` constant and the query-parameter parser, so both
 paths agree on `/__basquin/` and on how `?id=` is read.
 

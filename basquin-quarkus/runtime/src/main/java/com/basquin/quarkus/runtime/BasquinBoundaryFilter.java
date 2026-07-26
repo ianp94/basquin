@@ -81,10 +81,15 @@ public final class BasquinBoundaryFilter implements Handler<RoutingContext> {
         // explore-branch stamping happens on the Tomcat path. The negative-control defect routes
         // (spec §7.3) are the deliberate exception — see class javadoc — so they fall through to
         // the same instrumentation as an ordinary app route instead of returning here.
+        //
+        // ctx.normalizedPath(), NEVER ctx.request().path(): Vert.x-Web itself routes on the
+        // NORMALIZED path (io.vertx.ext.web.RoutingContext#normalizedPath), so classifying against
+        // the raw path would let a path-traversal-shaped URL like `/__basquin/../api/x` — which
+        // Vert.x-Web resolves to an ordinary app route — read as control-surface traffic here and
+        // skip instrumentation, reaching the app with a driver request id attached but UNMEASURED.
+        // Pinned by BasquinBoundaryFilterTest#handleReadsTheNormalizedPathNotTheRawRequestPath.
         String path = ctx.normalizedPath();
-        boolean isControlSurface = path != null && path.startsWith(BasquinControlHandler.PREFIX);
-        boolean isDefectRoute = path != null && path.startsWith(BasquinControlHandler.DEFECT_PREFIX);
-        if (isControlSurface && !isDefectRoute) {
+        if (isUninstrumentedControlPath(path)) {
             ctx.next();
             return;
         }
@@ -133,6 +138,25 @@ public final class BasquinBoundaryFilter implements Handler<RoutingContext> {
             // Never let boundary bookkeeping fail a request whose response is already written.
             System.err.println("[Basquin] boundary end-handler failed for id=" + reqId + ": " + t);
         }
+    }
+
+    /**
+     * Pure classification for {@link #handle}'s control-surface bypass: true for anything under
+     * {@link BasquinControlHandler#PREFIX} EXCEPT the negative-control defect routes (spec §7.3),
+     * which fall through to the same instrumentation as an ordinary app route instead of being
+     * treated as control traffic. Extracted out of {@link #handle} so the rule itself is testable
+     * without a live {@link RoutingContext} — see {@code BasquinBoundaryFilterTest}. Package-visible
+     * for tests.
+     *
+     * <p>Callers MUST pass the NORMALIZED path — see the comment at {@link #handle}'s call site for
+     * why. This method has no way to enforce that itself, since it only ever sees whatever string
+     * it is given; the wiring (which path {@link #handle} actually reads) is pinned separately, by
+     * a test that exercises {@link #handle} itself.
+     */
+    static boolean isUninstrumentedControlPath(String path) {
+        return path != null
+                && path.startsWith(BasquinControlHandler.PREFIX)
+                && !path.startsWith(BasquinControlHandler.DEFECT_PREFIX);
     }
 
     /**

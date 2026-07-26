@@ -15,3 +15,9 @@ include 'basquin-quarkus:deployment'
 // "name"/"artifact" fields say "runtime" rather than "basquin-quarkus". This does not affect
 // augmentation — that reads META-INF/quarkus-extension.properties' deployment-artifact key,
 // which is set explicitly below and unaffected by the project's Gradle name.
+
+// DD-043 PR-3: the Maven core extension that injects basquin-quarkus into a target application's
+// build with zero edits to its source (-Dmaven.ext.class.path). Deliberately a plain jar with no
+// runtime dependencies — it is loaded by the TARGET's Maven, so anything it needed would have to be
+// on that classpath too.
+include 'basquin-maven-injector'

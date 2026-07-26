@@ -8,8 +8,9 @@ name: Release
 #   - the GitHub Pages Helm repo (docs/charts/) — the `pages` job repackages + reindexes + commits to
 #     main automatically (deploy/helm/publish.sh remains for a manual/bootstrap refresh).
 #   - the GitHub Pages Maven repo (docs/maven/) — the same `pages` job publishes the whole Basquin
-#     extension chain there (basquin-core, basquin-quarkus, basquin-quarkus-deployment) and commits
-#     it, so a Maven build can depend on them with no credentials.
+#     extension chain there (basquin-core, basquin-quarkus, basquin-quarkus-deployment,
+#     basquin-maven-injector) and commits it, so a Maven build can depend on them with no
+#     credentials.
 on:
   push:
     tags: ['v*']
@@ -191,7 +192,7 @@ jobs:
           set -euo pipefail
           TAG='${{ steps.v.outputs.tag }}'
           fail=0
-          for p in :basquin-core :basquin-quarkus:runtime :basquin-quarkus:deployment; do
+          for p in :basquin-core :basquin-quarkus:runtime :basquin-quarkus:deployment :basquin-maven-injector; do
             V="$(./gradlew -q "$p:properties" --no-daemon | awk -F': ' '/^version:/{print $2}')"
             echo "$p version=$V  release tag=$TAG"
             if [ "$V" != "$TAG" ]; then
@@ -201,20 +202,22 @@ jobs:
             fi
           done
           [ "$fail" -eq 0 ]
-      # DD-043 PR-3: the injector resolves the whole extension chain from this repo, so all three
-      # artifacts ship together. Publishing only basquin-core would leave an injected build failing
+      # DD-043 PR-3: the injector resolves the whole extension chain from this repo, so all four
+      # artifacts ship together — including the injector jar itself, which an operator puts on
+      # maven.ext.class.path. Publishing only basquin-core would leave an injected build failing
       # to resolve basquin-quarkus — loudly, but only at a user's build rather than here.
       - name: Publish the extension chain into the Pages Maven repo
         run: |
           ./gradlew --no-daemon \
             :basquin-core:publishAllPublicationsToPagesRepository \
             :basquin-quarkus:runtime:publishAllPublicationsToPagesRepository \
-            :basquin-quarkus:deployment:publishAllPublicationsToPagesRepository
+            :basquin-quarkus:deployment:publishAllPublicationsToPagesRepository \
+            :basquin-maven-injector:publishAllPublicationsToPagesRepository
       - name: Assert the extension chain reached docs/maven
         run: |
           set -euo pipefail
           TAG='${{ steps.v.outputs.tag }}'
-          for a in basquin-core basquin-quarkus basquin-quarkus-deployment; do
+          for a in basquin-core basquin-quarkus basquin-quarkus-deployment basquin-maven-injector; do
             f="docs/maven/com/basquin/$a/$TAG/$a-$TAG.jar"
             [ -f "$f" ] || { echo "::error::$f missing after publish"; exit 1; }
           done

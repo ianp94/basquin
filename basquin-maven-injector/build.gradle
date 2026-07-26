@@ -1,0 +1,79 @@
+// DD-043 PR-3 — the Maven core extension (AbstractMavenLifecycleParticipant) that adds Basquin's
+// instrumentation to a Quarkus application at build time, with zero edits to the application tree.
+//
+// Loaded into the TARGET application's Maven via -Dmaven.ext.class.path, which means:
+//   * maven-core and javax.inject are compileOnly — the target's Maven supplies them, and shipping
+//     our own copies would risk shadowing the host Maven's classes.
+//   * no runtime dependencies at all, so the jar can be put on that classpath by itself.
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+group = 'com.basquin'
+version = '0.3.0'
+sourceCompatibility = '17'
+targetCompatibility = '17'
+
+repositories { mavenCentral() }
+
+dependencies {
+    // 3.9.6 is what both spike participants COMPILED against (their poms); they then EXECUTED
+    // correctly under the wrapper's Maven 3.9.16, which is the actual evidence this pin rests on.
+    compileOnly 'org.apache.maven:maven-core:3.9.6'
+    // DefaultRepositoryLayout lives in maven-compat, not maven-core. S5's probe pom carries the
+    // verified note that the Maven 3.9.16 distribution ships maven-compat in lib/, so it is on the
+    // core classrealm that -Dmaven.ext.class.path extends — compileOnly is correct for the same
+    // reason it is correct for maven-core: the host Maven supplies it, and shipping our own copy
+    // would risk shadowing the host's classes.
+    compileOnly 'org.apache.maven:maven-compat:3.9.6'
+    compileOnly 'javax.inject:javax.inject:1'
+
+    testImplementation 'org.apache.maven:maven-core:3.9.6'
+    testImplementation 'org.apache.maven:maven-compat:3.9.6'
+    testImplementation 'javax.inject:javax.inject:1'
+    testImplementation 'junit:junit:4.13.2'
+}
+
+test {
+    useJUnit()
+}
+
+jar {
+    archiveBaseName = 'basquin-maven-injector'
+}
+
+// The injected dependency's version is the injector's OWN version, baked in at build time rather
+// than typed into Java source. A hand-typed constant drifts from `version` above the first time one
+// is bumped without the other, and the symptom would be a resolution failure in someone else's build.
+def versionResourceDir = layout.buildDirectory.dir('generated/basquin-version')
+def writeVersionResource = tasks.register('writeVersionResource', WriteProperties) {
+    destinationFile = versionResourceDir.map { it.file('basquin-injector.properties') }
+    property 'version', project.version.toString()
+}
+sourceSets.main.output.dir(versionResourceDir, builtBy: writeVersionResource)
+
+java {
+    withSourcesJar()
+}
+
+publishing {
+    publications {
+        injector(MavenPublication) {
+            from components.java
+            pom {
+                name = 'basquin-maven-injector'
+                description = 'Maven core extension that injects the Basquin Quarkus extension into ' +
+                        'a target application build without modifying its source.'
+                url = 'https://github.com/ianp94/basquin'
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = 'pages'
+            url = rootProject.layout.projectDirectory.dir(
+                    providers.gradleProperty('basquinPagesDir').getOrElse('docs/maven'))
+        }
+    }
+}

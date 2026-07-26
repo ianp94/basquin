@@ -419,7 +419,7 @@ Standard two-module Quarkus extension shape:
 |---|---|
 | `FeatureBuildItem("basquin")` | Prints in the `Installed features` banner — the deploy signal, and §5.2's injection proof |
 | **`FilterBuildItem`** | Installs the request boundary. *Not* `RouteBuildItem` — `FilterBuildItem` (handler + priority) is Quarkus's idiomatic router-wide filter; `RouteBuildItem` registers routes. **Ordering trap:** Quarkus installs a `FilterBuildItem` as `router.route().order(-priority)`, so a `RouteBuildItem` with a *more negative* order runs **before the boundary** and is silently uninstrumented. Found in PR-2: a control route at order `-10_000` bypassed the filter at order `-100` entirely, producing no measurement and no error. Any route added under `/__basquin/` must sit **after** the boundary |
-| `RouteBuildItem` | The control surface at **`/__basquin/*`** — the prefix the driver actually calls (`LoadModeControl.PREFIX`), served as Vert.x routes so they exist in native without JAX-RS scanning. **Do not invent endpoints here:** delegate to `LoadModeControl.handle(path, query)`, which already resolves `/__basquin/result?id=…`, `/drift` and `/violations`. See §4.4a |
+| `RouteBuildItem` | The control surface at **`/__basquin/*`** — the prefix the driver actually calls (`LoadModeControl.PREFIX`), served as Vert.x routes so they exist in native without JAX-RS scanning. **Do NOT delegate to `LoadModeControl.handle`** — it calls `RequestBoundary.awaitQuiescence`, which is `ITERATION_LOCK.tryLock(...)`, and importing explore's serialization lock into the lock-free reactive path is a binding-invariant violation. The extension serves `result` and `violations` itself, sharing only `ResultStore`'s wire format; `mode` and `drift` are out of scope and answer `err:unknown`. See §4.4a |
 | `@Recorder` | Wires runtime state at application startup |
 
 The boundary sees only router traffic. Anything bypassing the router — a separate management
@@ -453,10 +453,11 @@ construction.
 **What transplants:** the result store, the salted `<RUN_SALT>-<n>` id scheme, and DD-040's
 first-class miss accounting.
 
-**What is replaced:** lock-based quiescence becomes a **completion-parking poll** — which
-`LoadModeControl.handle` already implements for the Tomcat path, so the extension reuses it rather
-than writing a second one (§4.4a). Conceptually, the handler on a miss waits for the store's `put`
-for that id,
+**What is replaced:** lock-based quiescence becomes a **completion-parking poll**, which the extension
+**writes itself** (`BasquinControlHandler.pollResult`). It cannot reuse the Tomcat path's:
+`LoadModeControl.handle`'s `result` case is `awaitQuiescence` plus a single `take`, and
+`awaitQuiescence` IS the lock-based wait this sentence replaces (§4.4a). The handler on a miss waits
+for the store's `put` for that id,
 bounded at **2 s** (mirroring DD-040's bound), with the driver's read timeout above it at **4 s**
 (same reasoning). A timeout is a recorded miss, never a zero.
 
@@ -722,8 +723,8 @@ could implement taint and `UNMEASURED` in full and this figure would still be pu
 **The sign is itself a disposition signal, and it is free.** A negative per-request heap delta is
 *definitionally* unattributable: allocation cannot be negative, so the window contained a collection.
 Record it `UNMEASURED`, never as a number — and unlike the overlap case it needs no counter and no GC
-introspection to detect. Whatever PR-5 builds for `UNMEASURED` must therefore cover **three** producers:
- overlap, sub-quantum, and negative.
+introspection to detect. Whatever PR-5 builds for `UNMEASURED` must cover **four** producers — overlap, sub-quantum, negative, and the
+GC-contaminated positive case described immediately below, which subsumes the third.
 
 **A fourth producer, and it subsumes the third.** Raised in PR-2's review: the sign argument only works
 in one direction. A window where a GC reclaims 2 MB while the request allocates 3 MB nets to **+1 MB** —

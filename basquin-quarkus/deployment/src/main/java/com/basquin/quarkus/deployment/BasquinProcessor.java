@@ -50,8 +50,7 @@ public class BasquinProcessor {
      *
      * <p>{@code control/defect/block-loop} is deliberately NOT served by this route — see {@link
      * #blockLoopRoute()}.
-     */
-    /**
+     *
      * <b>No ordering guarantee against an arbitrary target app.</b> This route is mounted at Vert.x's
      * default (positive, auto-incrementing) order, so a target that registers its own catch-all or
      * wildcard route at a <em>more negative</em> order would shadow {@code /__basquin/*} and the control

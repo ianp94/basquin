@@ -128,7 +128,7 @@ public final class BasquinControlHandler implements Handler<RoutingContext> {
 
     @Override
     public void handle(RoutingContext ctx) {
-        String path = ctx.request().path();
+        String path = ctx.normalizedPath();
         if (path != null && path.startsWith(DEFECT_PREFIX)) {
             String defectName = path.substring(DEFECT_PREFIX.length());
             DefectOutcome outcome = dispatchDefect(defectName, ctx.request().query());

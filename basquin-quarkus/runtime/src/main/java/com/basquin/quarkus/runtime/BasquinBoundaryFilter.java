@@ -81,7 +81,7 @@ public final class BasquinBoundaryFilter implements Handler<RoutingContext> {
         // explore-branch stamping happens on the Tomcat path. The negative-control defect routes
         // (spec §7.3) are the deliberate exception — see class javadoc — so they fall through to
         // the same instrumentation as an ordinary app route instead of returning here.
-        String path = ctx.request().path();
+        String path = ctx.normalizedPath();
         boolean isControlSurface = path != null && path.startsWith(BasquinControlHandler.PREFIX);
         boolean isDefectRoute = path != null && path.startsWith(BasquinControlHandler.DEFECT_PREFIX);
         if (isControlSurface && !isDefectRoute) {
@@ -153,7 +153,13 @@ public final class BasquinBoundaryFilter implements Handler<RoutingContext> {
         Invariants.Result r = Invariants.evaluateAndMaybeFail(0, elapsedMs, heapDeltaBytes, threadsNow, threadsDelta);
         List<Invariants.Violation> violations = r.violations;
         int invariantCount = violations.size();
-        String detail = invariantCount > 0 ? violations.get(0).detail : null;
+        // Format must match the Tomcat path (Agent.java:475 publishes `name + ": " + detail`).
+        // Sharing ResultStore.format only guarantees the WIRE shape; what goes INTO the Entry is
+        // per-boundary, so the two can still diverge — and did: publishing a bare detail loses which
+        // invariant fired, since the driver stores this field opaquely.
+        String detail = invariantCount > 0
+                ? violations.get(0).name + ": " + violations.get(0).detail
+                : null;
         // r.hardFailureMessage is deliberately never thrown: soft by structure (see class javadoc).
 
         // Mirrors agent/RequestBoundary.java:177-178 exactly.

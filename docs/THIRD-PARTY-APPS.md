@@ -114,9 +114,9 @@ acceptance runs (`bench-results/dd043-pr3-restvillains-2026-07-26/`,
 
 ### One command
 
-Build the injector jar (`./gradlew :basquin-maven-injector:jar`), then run the target's own build
-with the jar on `maven.ext.class.path`. The measured form is the containerised build the spec's §3.1
-prescribes (the acceptance runs used exactly this shape):
+Build the injector jar (`./gradlew :basquin-maven-injector:jar`), then run the target's own build with
+the jar on `maven.ext.class.path`. **The snippet below is illustrative, not the shape the acceptance
+runs used** — the minimum that must be true is that the property reaches the Maven JVM:
 
 ```
 docker run --rm -v "$PWD":/w -w /w \
@@ -125,8 +125,19 @@ docker run --rm -v "$PWD":/w -w /w \
   maven:3.9-eclipse-temurin-25 ./mvnw -B package [-Dnative]
 ```
 
-Any invocation works as long as the property reaches the Maven JVM. No pre-populate step exists:
-the injector supplies the repository too, so the command above is complete on its own.
+**It is not complete on its own, and an earlier version of this page wrongly said it was.** Two things
+it omits:
+
+1. **A reachable repository.** With no `-Dbasquin.inject.repo.url`, the injector resolves against the
+   default Pages URL, which — as the section above says — **serves nothing until the first `v*` tag
+   populates `docs/maven/`**. Until then every reader must either point it somewhere real
+   (`-Dbasquin.inject.repo.url=…`) or use the offline fallback below.
+2. **Whatever the target's own build needs.** The acceptance runs did not use this image or these
+   flags. They used the Mandrel builder image pinned by digest, `--entrypoint bash`,
+   `-u $(id -u):$(id -g)` with the `HOME`/`-Duser.home` workaround that script documents as mandatory,
+   and `--network host` so a `localhost` repository URL was reachable from inside the container. The
+   real shapes are `bench-results/dd043-pr3-restvillains-2026-07-26/build.sh` (JVM) and
+   `bench-results/dd043-spikes-2026-07-24/env/build.sh` (native) — read those before adapting this.
 
 **Verify it ran, every time.** Maven ignores a bad `maven.ext.class.path` **silently** — the build
 succeeds and ships uninstrumented. Two checks, both required:
@@ -167,9 +178,24 @@ wrong:
   ours — a wire-format skew that surfaces as `/__basquin/result` polls returning `miss`, not as a
   build error. Fix: align the versions, pass `-Dbasquin.inject.version=<declared>` to inject the
   declared version deliberately, or `-Dbasquin.inject.skip=true` to leave the build uninstrumented.
-- **Same-version declaration is not a failure:** the injector logs
+- **The pom declares `com.basquin:basquin-quarkus` in a shape that cannot carry the extension.** Four
+  shapes fail: a scope other than `compile`/`runtime`; a `type` other than `jar` (a `pom` type resolves
+  the POM and never the jar); any `classifier`; and any `<exclusions>`. Each would make the injector
+  treat the declaration as satisfying the injection and skip it, so the extension never reaches the
+  module's classpath and the build succeeds **uninstrumented**, with `/__basquin/result` returning
+  `miss`. Fix: make it a plain `compile`/`runtime`, `jar`-type, unclassified, exclusion-free
+  dependency, remove it and let the injector add it, or `-Dbasquin.inject.skip=true`.
+
+  The exclusions case deserves its own warning: it is the **one shape the `Installed features` banner
+  cannot detect**, because the extension still loads and still appears in the banner while a stripped
+  `basquin-core` leaves it unusable. Do not treat a banner check as sufficient here.
+
+- **A same-version declaration in a usable shape is not a failure:** the injector logs
   `already declares basquin-quarkus:<v>; adding the repository only` and adds just the repository —
-  a declared dependency is not necessarily a resolvable one.
+  a declared dependency is not necessarily a resolvable one. **"Usable shape" is load-bearing in that
+  sentence**, and an earlier version of this page stated the same-version case as unconditionally safe,
+  which the guard above now contradicts: a same-version declaration at `scope=test` or `type=pom`
+  hard-fails.
 
 ### Gradle targets — init script, unverified
 

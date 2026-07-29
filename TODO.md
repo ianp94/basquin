@@ -1079,7 +1079,12 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       `bench-results/dd043-pr2-restvillains-2026-07-26/run-app.sh`). Raised by the Claude App review. They
       break the day those directories are pruned or renamed; consider moving the two harness scripts under
       `scripts/`.
-- [ ] **`scripts/verify-dd043-pr3.sh`'s `jvm` and `native` stages have never been executed.** Written and
+- [x] **`scripts/verify-dd043-pr3.sh`'s `jvm` and `native` stages have never been executed.** Written and
       committed unexercised (the native mutex was held, and the `guards` stage mutates source a running
-      build was compiling). The script's own `RESULTS.md` discloses this, but it means both stages are
-      unverified code. Run them once end-to-end.
+      build was compiling). **Resolved 2026-07-29** (commit `a61a90c`): both stages ran end-to-end —
+      `bench-results/verify-20260729T153141Z/RESULTS.md` records `Stages run: unit jar guards jvm native`,
+      19/19 checks PASS, including `jvm:build`, `jvm:banner`, `native:build` and `native:banner`. The
+      original entry's sub-claim that "the script's own `RESULTS.md` discloses this" was also false — no
+      version of that file has ever said the stages were unexercised; it only states what a pass does and
+      does not establish. Do not re-run the native stage on the strength of this entry; check
+      `bench-results/verify-20260729T153141Z/` first.

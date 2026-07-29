@@ -35,12 +35,19 @@ Three consequences, in descending order of severity:
    a native one.** An earlier draft called it "actively wrong for these targets" without distinguishing the
    two, which was too strong for native and imprecise about where the hazard lives.
 
-   **Measured** (`bench-results/dd044-native-jto-2026-07-26/`): with the exact string the operator would
-   inject, the native binary starts, serves `/ok` → 200, still reports `basquin` in its banner, and logs no
-   complaint. `basquin.boundary` is read only by `agent/BoundaryInstaller.java`, `agent/Agent.java` and
-   `agent/TomcatBoundaryAdvice.java`; neither `basquin-quarkus` nor `basquin-core` reads it, and on a native
-   image the agent that would is never loaded. So native targets are **not** broken by the current
-   operator.
+   **Measured** (`bench-results/dd044-native-jto-2026-07-26/`): with the flags the operator's default
+   configuration injects — `-agentpath:`, `-javaagent:`, `-Xbootclasspath/a:` and `-Dbasquin.boundary=agent`,
+   in that order (`injection.go:102-115`) — the native binary starts, serves `/ok` → 200, still reports
+   `basquin` in its banner, and logs no complaint. **The mount-path segment tested was not byte-exact**:
+   the run pointed `-agentpath`/`-javaagent` at `/basquin/agents/...`, but the operator's real mount path
+   has no `/agents` segment — it is `/basquin` (`injection.go:61`, confirmed by the substring assertions at
+   `basquintarget_controller_test.go:148-149`). That does not change the verdict: the property under test
+   is whether SubstrateVM tolerates `-agentpath`/`-javaagent` pointing at a file that is not there, which
+   is insensitive to which nonexistent path string is used (see that directory's `README.md`) — but a run
+   against the operator's literal byte-exact string has still never been executed. `basquin.boundary` is
+   read only by `agent/BoundaryInstaller.java`, `agent/Agent.java` and `agent/TomcatBoundaryAdvice.java`;
+   neither `basquin-quarkus` nor `basquin-core` reads it, and on a native image the agent that would is
+   never loaded. So native targets are **not** broken by the current operator.
 
    **The hazard is real for a JVM-mode build-time-instrumented target**, which is the case the earlier
    wording conflated with native. There `-javaagent` does load the agent, the agent does read
@@ -329,7 +336,16 @@ motivation for this feature is now (a) double instrumentation on **JVM-mode** pr
 **Still open, narrower:** the JVM-mode double-boundary conflict is reasoned from which code reads
 `basquin.boundary`, not measured end-to-end; and the test used an agent jar path that does not exist, so
 "SubstrateVM ignores a *present* agent jar" remains inference (it has no JVMTI attach, so the outcome
-should not differ).
+should not differ). **Neither run was byte-exact, either:** both pointed `-agentpath`/`-javaagent` at
+`/basquin/agents/...`, but the operator's real mount path has no `/agents` segment — it is `/basquin`
+(`operator/internal/controller/injection.go:61`, confirmed by the substring assertions at
+`operator/internal/controller/basquintarget_controller_test.go:148-149`). This does not change the
+verdict — the agent files are absent from the test host under either path, and the property being
+measured (whether SubstrateVM tolerates agent flags pointing at a file that is not there) is insensitive
+to which nonexistent path string is used — but a run against the operator's literal byte-exact string
+(`-agentpath:/basquin/libbasquinjvmti.so -javaagent:/basquin/basquin-agent.jar
+-Xbootclasspath/a:/basquin/basquin-agent.jar -Dbasquin.boundary=agent`) has still never been executed; see
+`bench-results/dd044-native-jto-2026-07-26/README.md`.
 
 The original text is kept below because it is why the experiment was run.
 

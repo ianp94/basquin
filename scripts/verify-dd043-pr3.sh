@@ -62,6 +62,23 @@ mkdir -p "$OUT"
 PASS=0; FAIL=0; SKIP=0
 declare -a ROWS
 
+# The header must stamp the tree that RAN, not merely HEAD. A run made on a dirty tree and stamped
+# with a bare commit id invites the reproduction the header exists for — checkout, re-run — against a
+# commit that provably cannot yield these artifacts (round 4 measured exactly that on this directory's
+# predecessor: rows unreachable at the stamped commit). Captured at run START, before the guards stage
+# mutates and restores sources mid-run, and before a mid-run commit could move HEAD. Tracked-file
+# drift is what breaks "checkout the commit and re-run", so it alone sets DIRTY; untracked files are
+# still recorded in git-status.txt for the reader (each run's own bench-results/verify-* output is
+# untracked, so counting untracked paths would mark EVERY run dirty and the marker would bind nothing).
+GIT_COMMIT="$(git rev-parse --short HEAD)"
+GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+git status --porcelain > "$OUT/git-status.txt" 2>&1
+if [ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+  TREE_STATE="DIRTY"
+else
+  TREE_STATE="clean"
+fi
+
 log()  { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 ok()   { printf '  \033[32mPASS\033[0m  %s\n' "$*"; PASS=$((PASS+1)); ROWS+=("PASS|$1|${2:-}"); }
 bad()  { printf '  \033[31mFAIL\033[0m  %s\n' "$*"; FAIL=$((FAIL+1)); ROWS+=("FAIL|$1|${2:-}"); }
@@ -101,6 +118,11 @@ PY
 #
 # So an absence claim requires a SENTINEL: positive evidence in the same file that the relevant activity
 # happened at all. No sentinel, no PASS — it reports UNMEASURED instead, which is the honest outcome.
+#
+# (jvm:not-from-central applied this doctrine inline rather than through this helper: its failure
+# condition is "downloaded from any id OTHER than basquin-injected", which a single ERE cannot express,
+# and round 4 showed a sentinel loose enough to fit one regex here was loose enough to be satisfied by
+# the injector's own stdout. Any future absence row that CAN bind with one regex should use this helper.)
 assert_absent() {  # $1=file  $2=must-be-absent regex  $3=sentinel regex  $4=label  $5=pass message
   local f="$1" bad_re="$2" sentinel="$3" label="$4" msg="$5"
   if [ ! -s "$f" ]; then
@@ -237,10 +259,26 @@ if old not in t:
 p.write_text(t.replace(old, new, 1), encoding="utf-8")
 PY
     if [ $? -ne 0 ]; then cp "$backup" "$src"; bad "guards:$3" "mutation target not found — the guard's code shape changed"; return; fi
+    # failing_test_names() globs whatever XML sits in build/test-results. run_unit clears that dir for
+    # the identical trap one function away, but a previous MUTATION's failures land there too, and a
+    # mutation's expected test can be a member of the previous mutation's failing set (managed-version's
+    # set contains managed-exclusions' expected test — measured, not hypothetical). If this run then
+    # produces no fresh XML (compile error, daemon or lock failure, OOM), the old code read the stale
+    # set and printed PASS off a run that never happened. So: clear before the run, and refuse to read
+    # a verdict out of a dir the run did not repopulate.
+    rm -rf basquin-maven-injector/build/test-results
     ./gradlew :basquin-maven-injector:test --no-daemon -q > "$OUT/guard-$3.log" 2>&1
+    local rc=$?
     local names; names="$(failing_test_names)"
+    local fresh; fresh="$(find basquin-maven-injector/build/test-results -name '*.xml' -type f 2>/dev/null | wc -l)"
     cp "$backup" "$src"
-    if echo "$names" | grep -qx "$2"; then
+    # Gradle's exit code alone cannot say "the test task did not execute": tests-ran-and-failed (the
+    # expected outcome under a mutation) and never-compiled BOTH exit 1. Fresh XML is the discriminator.
+    if [ "$fresh" -eq 0 ]; then
+      bad "guards:$3" "UNMEASURED: no fresh JUnit XML (gradle rc=$rc) — the mutated suite never ran, so no verdict exists; see guard-$3.log"
+    elif [ "$rc" -eq 0 ]; then
+      bad "guards:$3" "module suite GREEN (rc=0) with the guard neutered — $2 cannot fail, the guard is dead"
+    elif echo "$names" | grep -qx "$2"; then
       ok "guards:$3" "neutering it fails $2 (among the failures; other tests sharing the guard may fail too — not asserted exclusive)"
     else
       bad "guards:$3" "expected $2 to fail; got: ${names:-<none>}"
@@ -266,6 +304,15 @@ PY
   # checking claims.
   _mutate '("        if (problem == null) {", "        if (true) {")' \
           "failsLoudlyWhenOurArtifactIsDeclaredAtAnUnusableScope" "declaration-usability"
+  # failOnUnusableSiblingDeclaration has TWO independent conditions (scope, then version) guarding a
+  # SIBLING basquin artifact's declaration, not our own — a whole-method mutation would leave one
+  # branch unbound. The scope anchor's 12 leading spaces (inside the for-loop) are load-bearing: an
+  # identical check at 8 spaces lives inside failOnUnusableDeclaration, and _mutate replaces only the
+  # first match, so the wrong indentation would silently mutate the wrong guard.
+  _mutate '("            if (!\"compile\".equals(scope) && !\"runtime\".equals(scope)) {", "            if (false) {")' \
+          "failsLoudlyWhenAnotherBasquinArtifactIsDeclaredAtAnUnusableScope" "sibling-scope"
+  _mutate '("            if (declared != null && !declared.equals(version)) {", "            if (false) {")' \
+          "failsLoudlyWhenAnotherBasquinArtifactIsDeclaredAtAConflictingVersion" "sibling-version"
 
   ./gradlew :basquin-maven-injector:test --no-daemon -q > "$OUT/guard-restore.log" 2>&1 \
     && ok "guards:restored" "source restored, module suite green" \
@@ -325,12 +372,32 @@ run_jvm() {
   grep -q "basquin-quarkus-deployment" "$OUT/http-access.log" \
     && ok "jvm:deployment-from-injected-repo" "$(grep -c 'basquin-quarkus-deployment' "$OUT/http-access.log") GET(s)" \
     || bad "jvm:deployment-from-injected-repo" "not fetched from the injected repo"
-  # The sentinel must bind to THIS claim, not merely prove the log is non-trivial. An earlier version
-  # used "Downloading from", which only shows Maven fetched something — a build where the injector never
-  # ran would satisfy it and still print PASS, leaving the invariant-1 hole this helper exists to close.
-  # The binding sentinel is evidence that com/basquin resolution was attempted at all.
-  assert_absent "$OUT/jvm-build.log" "Downloaded from central.*com/basquin" "com/basquin|com\.basquin" \
-    "jvm:not-from-central" "com/basquin resolution happened and none of it came from central"
+  # The sentinel must bind to THIS claim, not merely prove the log is non-trivial. Two prior sentinels
+  # failed that test: "Downloading from" (only shows Maven fetched something), and
+  # "com/basquin|com\.basquin" — satisfied by the injector's OWN "[basquin-injector] instrumented …
+  # (com.basquin:…)" stdout, printed at afterProjectsRead BEFORE any resolution, so a build whose
+  # injected repo never reached Aether still PASSed this row while resolving nothing from anywhere.
+  # Binding requires resolver evidence on both sides:
+  #   * sentinel: a com/basquin artifact actually DOWNLOADED from basquin-injected at the served URL.
+  #     The injector never prints "Downloaded from" (its every line is "[basquin-injector] "-prefixed),
+  #     so only Maven's resolver can satisfy this — and if the purge failed and everything resolved
+  #     from a stale local copy, this is absent and the row honestly reports UNMEASURED.
+  #   * failure: any com/basquin download under any other id:URL. Matching the artifact PATH in the
+  #     URL rather than the literal id "central" is what catches a <mirrorOf>*</mirrorOf> in the build
+  #     host's settings.xml: the mirror relabels the line with its own id — including for
+  #     basquin-injected itself, which a catch-all mirror also captures, and that IS a failure,
+  #     because the build then did not resolve from the injected repo and the acceptance is confounded.
+  local inj_dl foreign_dl
+  inj_dl="$(grep -cE "Downloaded from basquin-injected: http://localhost:$PORT/com/basquin/" "$OUT/jvm-build.log" 2>/dev/null)"
+  foreign_dl="$(grep -E 'Downloaded from [^:]+: [^ ]*/com/basquin/' "$OUT/jvm-build.log" 2>/dev/null \
+                 | grep -v "Downloaded from basquin-injected: http://localhost:$PORT/")"
+  if [ -n "$foreign_dl" ]; then
+    bad "jvm:not-from-central" "com/basquin downloaded from a repository other than basquin-injected: $(echo "$foreign_dl" | head -1)"
+  elif [ "${inj_dl:-0}" -gt 0 ]; then
+    ok "jvm:not-from-central" "$inj_dl com/basquin download(s), every one from basquin-injected; none from central or any mirror id"
+  else
+    bad "jvm:not-from-central" "UNMEASURED: no com/basquin artifact was ever Downloaded from basquin-injected — cannot tell 'none came from central' from 'nothing resolved at all' (see jvm-build.log)"
+  fi
 
   APP_CONTAINER=verify-pr3-app DB_CONTAINER=verify-pr3-db DB_NETWORK=verify-pr3-net APP_DIR="$app" \
     bash bench-results/dd043-pr2-restvillains-2026-07-26/run-app.sh > "$OUT/jvm-run-app.log" 2>&1
@@ -421,8 +488,13 @@ fi
 {
   echo "# DD-043 PR-3 verification — $TS"
   echo
-  echo "Commit: \`$(git rev-parse --short HEAD)\` on \`$(git rev-parse --abbrev-ref HEAD)\`"
+  echo "Commit: \`$GIT_COMMIT\` on \`$GIT_BRANCH\` — tree $TREE_STATE at run start (\`git-status.txt\`)"
   echo "Stages run: ${STAGES[*]}"
+  if [ "$TREE_STATE" = "DIRTY" ]; then
+    echo
+    echo "**DIRTY: tracked files differed from \`$GIT_COMMIT\` when this run started (see \`git-status.txt\`)."
+    echo "These results are NOT reproducible from that commit alone — do not cite this run against it.**"
+  fi
   echo
   echo "**$PASS passed, $FAIL failed, $SKIP skipped.**"
   echo

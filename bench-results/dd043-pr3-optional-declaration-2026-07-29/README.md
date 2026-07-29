@@ -30,30 +30,37 @@ drove, answers `miss` (`result-poll.txt:11-12`). So the cost line at `:8` is the
 that request, not the endpoint answering anything to anyone.
 
 **Do not read `176,-12207,10|0||` as a measurement.** It is a first-hit figure on a cold app, and its
-negative heap component is the same PR-5-owned artefact `bench-results/dd043-pr3-restvillains-2026-07-26/README.md:33-38`
+negative heap component is the same PR-5-owned artefact `bench-results/dd043-pr3-restvillains-2026-07-26/README.md:36-41`
 documents — a GC inside the window, which the in-flight counter structurally cannot detect. The only
 load-bearing property here is the line's **shape** (`costCsv|invariantCount|detail|leak`, not `miss`).
 
 ## Provenance of the captures — and which one is a re-run
 
-The build evidence (checks 1–4) is the **original** capture from the measurement recorded in
-`.superpowers/sdd/pr103-fix-s1-report.md`: `build-optional.log` and `build-optional-injector.log` are
-that run's own stdout, and `libmain-optional-injector.txt` is a listing of the `quarkus-app` those
-builds produced.
+The build evidence (checks 1–4) is the **original** capture: `build-optional.log` and
+`build-optional-injector.log` are that run's own stdout, and `libmain-optional-injector.txt` is a
+listing of the `quarkus-app` those builds produced. (A working note describing this same run,
+`.superpowers/sdd/pr103-fix-s1-report.md`, is not part of the committed record — `.superpowers/` is
+gitignored and `git ls-files .superpowers/` returns 0 files — so it is not cited as evidence here.)
 
 The runtime evidence (checks 5–6) is a **re-run**, on 2026-07-29T15:01–15:02Z. The original run's
-containers had been torn down, so its banner and its cost line (`179,-12265,9|0||`, quoted in that
-report) no longer existed as captured output anywhere. Rather than retype a figure from prose, the
+containers had been torn down, so its banner and its cost line no longer existed as captured output
+anywhere in the committed record. Rather than retype a figure from an uncommitted note, the
 **same `target/quarkus-app/quarkus-run.jar` that Run B produced** was booted again against a fresh
 `postgres:18` and re-polled. The re-run **agreed on every load-bearing property** — `basquin` in the
-banner, a cost line rather than `miss` — and differs only in the per-request numbers
-(`176,-12207,10` vs `179,-12265,9`), which are wall-clock, heap and thread deltas and are not expected
-to repeat. Nothing in this directory was reconstructed from the report's prose.
+banner, a cost line rather than `miss` (`result-poll.txt:8` = `176,-12207,10|0||`). The per-request
+numbers are wall-clock, heap and thread deltas and are not expected to repeat run-to-run; this
+directory does not claim they did. Nothing in this directory was reconstructed from an uncommitted
+note.
 
 Verified in `provenance.txt`:
 
-- `provenance.txt:5-7` — the injector jar Run B mounted is **md5-identical** to
-  `basquin-maven-injector/build/libs/basquin-maven-injector-0.3.0.jar` on this branch.
+- `provenance.txt:5-7` — at capture time (2026-07-29T15:03:43Z), the injector jar Run B mounted
+  md5-matched the jar then on disk at
+  `basquin-maven-injector/build/libs/basquin-maven-injector-0.3.0.jar`. That match is **not
+  re-derivable**: `build/` is gitignored and the jar is not byte-reproducible (a fresh
+  `./gradlew :basquin-maven-injector:jar` today produces a different md5). The property that
+  actually matters — that the mounted jar is *behaviourally* this branch's injector — is what
+  `provenance.txt:9-15` establishes from source, not from bytes.
 - `provenance.txt:9-15` — that jar was built at `a61a90c` with a working-tree delta on
   `BasquinInjector.java` of **0 non-comment changed lines** (javadoc only), so it is behaviourally the
   branch's injector.

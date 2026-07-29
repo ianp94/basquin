@@ -82,6 +82,7 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
 
         for (MavenProject p : projects) {
             failOnConflictingManagedVersion(p, version);
+            failOnUnusableSiblingDeclaration(p, version);
             // Every model object below is allocated fresh inside this loop. Maven's model objects are
             // mutable; hoisting an allocation would alias one instance across the whole reactor, so a
             // later in-place mutation on one module would bleed into all the others. A single-module
@@ -273,6 +274,50 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
      * managed version governs anything resolved transitively — notably basquin-core. Building
      * against a different core than the extension was compiled against is the "succeeds but is
      * silently wrong" outcome this design exists to prevent, so it is a hard failure.
+     *
+     * <p><b>Which managed attributes reach a dependency added at {@code afterProjectsRead} is measured,
+     * not reasoned about.</b> This method runs after model building, so Maven's model-level
+     * dependencyManagement injection has already passed over the model and cannot have touched the
+     * {@link Dependency} {@link #addDependency} is about to add. PR #103's round-4 approver was right that
+     * the two branches below rested on an unmeasured claim about what happens instead, and that the claim
+     * being wrong in either direction left the code wrong: false positives if managed attributes never
+     * reach us, an incomplete guard if they all do. The captured output is in the tree at
+     * {@code bench-results/dd043-pr3-r4-guard-measurement-2026-07-29/} (every figure below is a
+     * {@code file:line} into it, not prose). Against a minimal jar project under Maven 3.9.15
+     * ({@code provenance.txt}) with this injector on {@code maven.ext.class.path} and its guard neutered
+     * so the build could proceed ({@code injector-noguard.diff}):
+     * <ul>
+     *   <li><b>{@code <exclusions>} DO apply, at every depth.</b> A managed
+     *       {@code com.basquin:basquin-quarkus} at the <i>agreeing</i> version carrying an exclusion of
+     *       {@code basquin-core} resolved 94 artifacts with {@code basquin-quarkus:jar:0.3.0:compile}
+     *       present and <b>no basquin-core at all</b> ({@code logs/mx-noguard-list.log:12}), against the
+     *       control's 95 with {@code basquin-core:jar:0.3.0:runtime}
+     *       ({@code logs/ctl-noguard-list.log:12-13}) — and the build SUCCEEDED
+     *       ({@code logs/mx-noguard-list.log:108}). The exclusions branch below guards a real hazard and
+     *       its message is true.</li>
+     *   <li><b>{@code <version>} DOES apply, transitively.</b> A managed
+     *       {@code com.basquin:basquin-core:0.0.1-conflicting} resolved
+     *       {@code basquin-core:jar:0.0.1-conflicting:runtime} beside {@code basquin-quarkus:jar:0.3.0}
+     *       and succeeded ({@code logs/mcv-noguard-list.log:12-13,109}). With the guard restored, the
+     *       same cell aborts in {@code Scanning for projects} ({@code logs/mcv-stock-list.log:2}).</li>
+     *   <li><b>{@code scope}, {@code type}, {@code classifier} and {@code optional} do NOT apply</b> to
+     *       the dependency this injector adds. Each was varied alone on a managed
+     *       {@code com.basquin:basquin-quarkus} entry at the agreeing version and each cell came out
+     *       <i>identical to the control</i> — 95 artifacts, {@code basquin-quarkus} still at
+     *       {@code :compile}, {@code basquin-core} still at {@code :runtime}
+     *       ({@code logs/msc-noguard-list.log:12-13}, {@code logs/mty-noguard-list.log:12-13},
+     *       {@code logs/mcl-noguard-list.log:12-13}, {@code logs/mopt-noguard-list.log:12-13}). So this
+     *       method staying silent on a managed {@code <scope>provided</scope>} — which the approver
+     *       reproduced and read as a gap — is <b>correct</b>. There is nothing there to guard, and a
+     *       guard would hard-fail builds that demonstrably work, the same mistake guarding
+     *       {@code optional=true} would have been.</li>
+     * </ul>
+     *
+     * <p>That is why this method enumerates rather than whitelisting, and the enumeration is not a
+     * shortcut: the measurement says exclusions and version are the only two managed attributes that can
+     * reach us, so the two branches below are the whole set. Anything added to {@link Dependency}, or any
+     * change to the resolver's depth rules (Maven 4 replaces {@code ClassicDependencyManager}), re-opens
+     * that and the cells in {@code rerun.sh} are how to settle it again.
      */
     private void failOnConflictingManagedVersion(MavenProject p, String version)
             throws MavenExecutionException {
@@ -288,6 +333,8 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
             // basquin-core from the injector's own dependency, and — like the declared-path case — it
             // passes §5.2's banner, because the extension still loads. I had closed exclusions on the
             // declared path only. The same usability test must apply here or the fix was half a fix.
+            // Measured, not assumed — see this method's javadoc and mx-noguard-list.log:12 (94 resolved,
+            // no basquin-core) against ctl-noguard-list.log:12-13 (95, basquin-core present).
             if (managed.getExclusions() != null && !managed.getExclusions().isEmpty()) {
                 throw new MavenExecutionException(
                         "basquin-injector: " + p.getArtifactId() + "'s dependencyManagement declares "
@@ -310,6 +357,97 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
                                 + " a build instrumented with a different core than the extension was"
                                 + " compiled against. Align the versions, or set -D" + PROP_VERSION
                                 + "=" + managedVersion + " if that is genuinely intended.",
+                        p.getFile());
+            }
+        }
+    }
+
+    /**
+     * The seventh silent bypass, found by PR #103's round-4 approver as S2: everything above looks either
+     * at {@code com.basquin:basquin-quarkus} specifically ({@link #declaredDependency} matches on
+     * groupId <b>and</b> artifactId) or at {@code dependencyManagement}. A project that <i>declares</i>
+     * some other {@code com.basquin} artifact directly — {@code basquin-core} above all — was seen by
+     * nothing at all, while the identical shape one field away, in {@code dependencyManagement}, hard-fails
+     * in {@link #failOnConflictingManagedVersion}. That asymmetry was a policy hole, not a policy.
+     * DD-044 / PR-3.5 is specifically about targets that already carry Basquin, which makes it reachable
+     * rather than theoretical.
+     *
+     * <p><b>Which sibling shapes are hazards is measured, not assumed</b>, and that is why this guard
+     * checks two fields where {@link #failOnUnusableDeclaration} whitelists four. Captured output:
+     * {@code bench-results/dd043-pr3-r4-guard-measurement-2026-07-29/} — a minimal jar project under
+     * Maven 3.9.15 with the <i>shipped</i> injector on {@code maven.ext.class.path}, one declared
+     * {@code com.basquin:basquin-core} deviation per cell, reading Maven's own resolved set:
+     * <ul>
+     *   <li><b>A conflicting version is fatal.</b> Declaring {@code basquin-core:0.0.1-conflicting}
+     *       produced a resolved set holding {@code basquin-core:jar:0.0.1-conflicting:compile} beside
+     *       {@code basquin-quarkus:jar:0.3.0:compile} and <b>BUILD SUCCESS</b>
+     *       ({@code logs/dcv-stock-list.log:111-112,208}) — a nearest-wins direct declaration beating the
+     *       extension's own transitive core, which is verbatim the outcome
+     *       {@link #failOnConflictingManagedVersion} calls "succeeds but is silently wrong".</li>
+     *   <li><b>A scope that does not reach the application is fatal.</b> {@code <scope>test</scope>} put
+     *       {@code basquin-core:jar:0.3.0:test} ({@code logs/dsc-stock-list.log:12}) and
+     *       {@code <scope>provided</scope>} put {@code basquin-core:jar:0.3.0:provided}
+     *       ({@code logs/dprov-stock-list.log:12}) — in both, a direct declaration wins the scope for that
+     *       node, so the core is off the runtime classpath while {@code basquin-quarkus} is still at
+     *       {@code :compile}, and the build succeeds ({@code :109} of each).</li>
+     *   <li><b>{@code type}, {@code classifier} and {@code exclusions} are NOT hazards here, so they are
+     *       accepted.</b> {@code type} and {@code classifier} are part of the resolution key, so such a
+     *       declaration is a <i>different node</i> and the plain transitive core still arrives: 96
+     *       artifacts, one more than the control, with {@code basquin-core:pom:0.3.0:compile} <i>plus</i>
+     *       {@code basquin-core:jar:0.3.0:runtime} ({@code logs/dty-stock-list.log:13,15}) and
+     *       {@code basquin-core:jar:tests:0.3.0:compile} plus the same jar
+     *       ({@code logs/dcl-stock-list.log:56,58}). An {@code <exclusions>} on a declared
+     *       {@code basquin-core} strips that node's own transitives, of which
+     *       {@code basquin-core-0.3.0.pom} declares none, and the core still resolved at {@code :compile}
+     *       ({@code logs/dex-stock-list.log:12}). Copying {@link #failOnUnusableDeclaration}'s whole
+     *       whitelist here would therefore hard-fail three shapes that demonstrably work — the mistake
+     *       guarding {@code optional=true} would have been.</li>
+     * </ul>
+     *
+     * <p>{@code system} and {@code import} are not measured. They ride the same compile/runtime whitelist
+     * as {@code test}/{@code provided} for the same reason they do on the declared-{@code basquin-quarkus}
+     * path: {@code system} is only meaningful with a {@code systemPath}, and {@code import} only inside
+     * {@code dependencyManagement}.
+     *
+     * <p>Usability before version, for the reason {@link #inject} records at the declared-artifact call
+     * site: a declaration at an unusable scope is unusable whatever its version, so reporting the version
+     * first would report the lesser problem.
+     */
+    private void failOnUnusableSiblingDeclaration(MavenProject p, String version)
+            throws MavenExecutionException {
+        for (Dependency d : p.getModel().getDependencies()) {
+            if (!GROUP_ID.equals(d.getGroupId()) || ARTIFACT_ID.equals(d.getArtifactId())) {
+                // Our own artifact is failOnUnusableDeclaration's and failOnConflictingDeclaredVersion's.
+                continue;
+            }
+            String coordinate = GROUP_ID + ":" + d.getArtifactId();
+            String scope = (d.getScope() == null || d.getScope().isBlank()) ? "compile" : d.getScope();
+            if (!"compile".equals(scope) && !"runtime".equals(scope)) {
+                throw new MavenExecutionException(
+                        "basquin-injector: " + p.getArtifactId() + " declares " + coordinate
+                                + " at scope '" + scope + "'. A direct declaration wins the scope for that"
+                                + " artifact, so it would be kept off the application's runtime classpath"
+                                + " while the extension this injector adds still expects it there — the"
+                                + " build would succeed and the extension would be UNINSTRUMENTED at"
+                                + " runtime, with /__basquin/result returning \"miss\". Only 'compile' and"
+                                + " 'runtime' reach the application. Make it a compile/runtime dependency,"
+                                + " remove it and let the extension bring it in transitively, or pass -D"
+                                + PROP_SKIP + "=true to leave this build uninstrumented deliberately.",
+                        p.getFile());
+            }
+            String declared = d.getVersion();
+            if (declared != null && !declared.equals(version)) {
+                throw new MavenExecutionException(
+                        "basquin-injector: " + p.getArtifactId() + " declares " + coordinate + " at version"
+                                + " " + declared + ", but this injector supplies " + ARTIFACT_ID + ":"
+                                + version + ". A declared direct version wins over the one the extension"
+                                + " resolves transitively, so the build would run " + version
+                                + " of the extension against " + declared + " of " + d.getArtifactId()
+                                + " — a wire-format skew that shows up as /__basquin/result polls"
+                                + " returning \"miss\" rather than as a build error. Align the versions,"
+                                + " or pass -D" + PROP_VERSION + "=" + declared + " to inject the declared"
+                                + " version deliberately, or -D" + PROP_SKIP + "=true to leave this build"
+                                + " uninstrumented.",
                         p.getFile());
             }
         }

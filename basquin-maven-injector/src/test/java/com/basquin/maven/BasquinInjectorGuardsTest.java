@@ -388,6 +388,153 @@ public class BasquinInjectorGuardsTest {
         assertEquals(1, p.getModel().getDependencies().size());
     }
 
+    /** A declared com.basquin artifact that is NOT basquin-quarkus — the S2 path. */
+    private static Dependency declareSibling(MavenProject p, String artifactId, String version) {
+        Dependency d = new Dependency();
+        d.setGroupId(BasquinInjector.GROUP_ID);
+        d.setArtifactId(artifactId);
+        d.setVersion(version);
+        p.getModel().getDependencies().add(d);
+        return d;
+    }
+
+    /**
+     * The SEVENTH bypass, found by PR #103's round-4 approver as S2. {@code declaredDependency} matches on
+     * groupId AND artifactId, so a declared {@code com.basquin:basquin-core} was seen by no guard at all,
+     * while the identical shape in {@code dependencyManagement} hard-fails — an asymmetry, not a policy.
+     *
+     * <p>Measured against a real Maven 3.9.15 build with the shipped injector, not argued: the declared
+     * conflicting version won nearest-wins over the extension's own transitive core, the resolved set held
+     * {@code basquin-core:jar:0.0.1-conflicting:compile} beside {@code basquin-quarkus:jar:0.3.0:compile},
+     * and the build SUCCEEDED — {@code bench-results/dd043-pr3-r4-guard-measurement-2026-07-29/}
+     * {@code logs/dcv-stock-list.log:111-112,208}, cited line by line from
+     * {@code failOnUnusableSiblingDeclaration}'s javadoc.
+     */
+    @Test
+    public void failsLoudlyWhenAnotherBasquinArtifactIsDeclaredAtAConflictingVersion() {
+        MavenProject p = project("app");
+        declareSibling(p, "basquin-core", "0.0.1-conflicting");
+
+        try {
+            new BasquinInjector().inject(Arrays.asList(p), new Properties());
+            fail("a declared basquin-core at a conflicting version wins over the extension's own "
+                    + "transitive core, so it must not be accepted silently");
+        } catch (MavenExecutionException e) {
+            String m = e.getMessage();
+            assertTrue("message must name the artifact: " + m, m.contains("basquin-core"));
+            assertTrue("message must name the conflicting version: " + m, m.contains("0.0.1-conflicting"));
+            assertTrue("message must name the version we supply: " + m,
+                    m.contains(InjectorVersion.value()));
+            assertTrue("message must name an escape hatch: " + m,
+                    m.contains(BasquinInjector.PROP_VERSION) || m.contains(BasquinInjector.PROP_SKIP));
+        }
+    }
+
+    /**
+     * The other measured sibling hazard. A direct declaration wins the SCOPE for that artifact, so a
+     * test- or provided-scoped basquin-core is off the application's runtime classpath while the
+     * extension this injector adds is still at compile — measured as
+     * {@code basquin-core:jar:0.3.0:test} ({@code logs/dsc-stock-list.log:12}) and
+     * {@code basquin-core:jar:0.3.0:provided} ({@code logs/dprov-stock-list.log:12}), both with the build
+     * succeeding. The version guard cannot fire here: the version agrees exactly.
+     */
+    @Test
+    public void failsLoudlyWhenAnotherBasquinArtifactIsDeclaredAtAnUnusableScope() {
+        for (String scope : new String[] {"test", "provided", "system", "import"}) {
+            MavenProject p = project("app");
+            declareSibling(p, "basquin-core", InjectorVersion.value()).setScope(scope);
+            try {
+                new BasquinInjector().inject(Arrays.asList(p), new Properties());
+                fail("scope '" + scope + "' keeps basquin-core off the application's runtime classpath, "
+                        + "so it must not be accepted");
+            } catch (MavenExecutionException e) {
+                assertTrue("message must name the offending scope: " + e.getMessage(),
+                        e.getMessage().contains(scope));
+                assertTrue("message must name the artifact: " + e.getMessage(),
+                        e.getMessage().contains("basquin-core"));
+                assertTrue("message must say the build would be uninstrumented: " + e.getMessage(),
+                        e.getMessage().contains("UNINSTRUMENTED"));
+            }
+        }
+    }
+
+    /**
+     * A sibling at the version we supply is what the extension would have resolved anyway — accept it, and
+     * still inject. Measured: {@code basquin-core:jar:0.3.0:compile} beside
+     * {@code basquin-quarkus:jar:0.3.0:compile}, build succeeded ({@code logs/dag-stock-list.log:12-13}).
+     */
+    @Test
+    public void acceptsAnotherBasquinArtifactDeclaredAtTheInjectedVersion() throws Exception {
+        MavenProject p = project("app");
+        declareSibling(p, "basquin-core", InjectorVersion.value());
+
+        new BasquinInjector().inject(Arrays.asList(p), new Properties());
+
+        assertEquals("the sibling stays and basquin-quarkus is added beside it",
+                2, p.getModel().getDependencies().size());
+        assertEquals("the repository is still required", 1, p.getRemoteArtifactRepositories().size());
+    }
+
+    /**
+     * The three sibling shapes the guard deliberately does NOT reject, and it rejects nothing else, because
+     * each was measured harmless rather than reasoned about. {@code type} and {@code classifier} are part of
+     * the resolution key, so such a declaration is a different node and the plain transitive core still
+     * arrives — 96 resolved artifacts against the control's 95, with BOTH the deviant node and
+     * {@code basquin-core:jar:0.3.0:runtime} present ({@code logs/dty-stock-list.log:13,15},
+     * {@code logs/dcl-stock-list.log:56,58}); an {@code <exclusions>} on a declared basquin-core strips that
+     * node's own transitives, of which basquin-core has none, and the core still resolved at compile
+     * ({@code logs/dex-stock-list.log:12}).
+     *
+     * <p>This test exists so that accepting them stays a decision: if someone later widens this guard to
+     * {@code failOnUnusableDeclaration}'s full four-field whitelist, this fails and sends them to that
+     * evidence first — because widening it would hard-fail three builds that demonstrably work.
+     */
+    @Test
+    public void acceptsTheSiblingShapesMeasuredHarmless() throws Exception {
+        for (String shape : new String[] {"type", "classifier", "exclusions"}) {
+            MavenProject p = project("app");
+            Dependency d = declareSibling(p, "basquin-core", InjectorVersion.value());
+            if ("type".equals(shape)) {
+                d.setType("pom");
+            } else if ("classifier".equals(shape)) {
+                d.setClassifier("tests");
+            } else {
+                Exclusion ex = new Exclusion();
+                ex.setGroupId("*");
+                ex.setArtifactId("*");
+                d.addExclusion(ex);
+            }
+
+            new BasquinInjector().inject(Arrays.asList(p), new Properties());
+
+            assertEquals(shape + ": must be accepted and basquin-quarkus added beside it",
+                    2, p.getModel().getDependencies().size());
+            assertEquals(shape + ": the repository is still required",
+                    1, p.getRemoteArtifactRepositories().size());
+        }
+    }
+
+    /**
+     * The sibling guard's message advertises the same version override the declared-artifact guard does, so
+     * it must actually resolve the conflict — a guard that tells an operator to do something that does not
+     * help is worse than a bare failure.
+     */
+    @Test
+    public void theAdvertisedVersionOverrideResolvesTheSiblingVersionConflict() throws Exception {
+        MavenProject p = project("app");
+        declareSibling(p, "basquin-core", "0.0.1-different");
+
+        Properties props = new Properties();
+        props.setProperty(BasquinInjector.PROP_VERSION, "0.0.1-different");
+
+        new BasquinInjector().inject(Arrays.asList(p), props);
+
+        assertEquals("the sibling stays and basquin-quarkus is added beside it",
+                2, p.getModel().getDependencies().size());
+        assertEquals("the injector must supply the version the operator aligned on",
+                "0.0.1-different", p.getModel().getDependencies().get(1).getVersion());
+    }
+
     /**
      * The escape hatch the failure message advertises must actually work — otherwise the guard tells
      * an operator to do something that does not help, which is worse than a bare failure.

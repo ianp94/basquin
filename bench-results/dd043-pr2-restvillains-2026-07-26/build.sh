@@ -8,8 +8,8 @@
 # dies trying to mkdir "//.m2"). Both fixes are reused verbatim here.
 #
 # The one deliberate difference from the spike script: APP_DIR points OUTSIDE this repository, at
-# a sibling clone of quarkusio/quarkus-super-heroes (see README.md — cloned per
-# docs/THIRD-PARTY-APPS.md:58's precedent, never committed here), and the bind-mounted Maven local
+# a sibling clone of quarkusio/quarkus-super-heroes (see README.md — cloned to a sibling
+# directory, never committed here), and the bind-mounted Maven local
 # repo is the HOST's real ~/.m2, not a scratch directory scoped to one spike. That is a spec
 # requirement (DD-043 PR-2 brief): the extension was published via `publishToMavenLocal` into
 # ~/.m2, not the Phase-0 fixture's dd043Spike repository, so only the host's real ~/.m2 makes

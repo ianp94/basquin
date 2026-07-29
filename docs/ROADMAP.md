@@ -44,7 +44,7 @@ work, not cleanup of this thread.
 | **DD-042** | A load-mode concurrency oracle — load counts but never *asserts* | designed, not specced; independent, can precede or follow DD-041 | nothing | `TODO.md` "Future: DD-042" |
 | **DD-043** | Native + reactive targets — build-time instrumentation of a GraalVM-native Quarkus app | **Phase 0 done, gate PASSED** — **merged** as [#98](https://github.com/ianp94/basquin/pull/98) (2026-07-24). All four spikes resolved; S1 REFUTED as specified then CONFIRMED via S1b; 8 spec amendments forced, none voiding a section, plus a round-2 fix pass from the whole-branch review (spec ledger, "Round 2"). **PR-1 (#100), PR-2 (#102) merged; PR-3 open as
 [#103](https://github.com/ianp94/basquin/pull/103)** — build-time injection with zero edits to the
-target's tree, both halves of §5.2 passed (JVM on `rest-villains`, native on the fixture), 380 tests.
+target's tree, both halves of §5.2 passed (JVM on `rest-villains`, native on the fixture), 382 tests.
 §8.1 **resolved**: Apicurio's server has no native build on the 3.x line, so row 5 needs a substitute —
 ranked Debezium Server (Quarkus 3.33.1.1) > Eclipse Hono HTTP adapter (3.27.4.1, reactive, heavier
 infra) > Apicurio 2.6.x, the last only behind a compatibility spike since `basquin-quarkus` is pinned to
@@ -97,7 +97,7 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
    Quarkus extension to a target application's build with **zero edits to that application's tree**.
    Spec §5.2's two-artifact bar passed both halves — JVM on the real `rest-villains` app
    (`bench-results/dd043-pr3-restvillains-2026-07-26/`) and native on the Phase-0 fixture
-   (`bench-results/dd043-pr3-native-2026-07-26/`). 380 tests, 0 failures.
+   (`bench-results/dd043-pr3-native-2026-07-26/`). 382 tests, 0 failures.
 
    **What a fresh agent most needs to know about this branch.** Two mechanisms fail *silently* if
    touched carelessly, and both are load-bearing:
@@ -167,10 +167,11 @@ time, nothing CPU-heavy during a run.
 ## Open PRs
 
 **[#103](https://github.com/ianp94/basquin/pull/103) — DD-043 PR-3, `basquin-maven-injector`.**
-Build-time injection with zero edits to the target's source; both halves of spec §5.2 passed; 380 tests,
+Build-time injection with zero edits to the target's source; both halves of spec §5.2 passed; 382 tests,
 0 failures. Labelled `ready-for-approver`. Five follow-ups are recorded in `TODO.md` under "DD-043 PR-3
-follow-ups", each with why it was deferred — most notably that the verify script's `jvm` and `native`
-stages have never been executed.
+follow-ups", each with why it was deferred. One of them — that the verify script's `jvm` and `native`
+stages had never been executed — is now resolved: both ran end-to-end on 2026-07-29
+(`bench-results/verify-20260729T153141Z/RESULTS.md`, 19/19 checks PASS); the other four remain open.
 
 #100 (PR-1, `basquin-core` extraction) and #102 (PR-2, `basquin-quarkus` extension) are **merged**.
 

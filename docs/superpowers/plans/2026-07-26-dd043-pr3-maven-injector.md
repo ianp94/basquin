@@ -2,6 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **How to read this document (added post-PR-#103, round 4):** this plan is a historical,
+> already-executed record — its task steps narrate what was done, in the words used at the time,
+> including code samples and commit-message templates that match what was actually committed. It is
+> **not** kept in sync with the codebase as it evolves. Where a later review round found a step's
+> claim stale, the original narration is left intact (do not rewrite history) and a bolded
+> **"Amended — …"** paragraph is added immediately after it, pointing at the corrected fact and its
+> current source. An unamended sentence is not thereby guaranteed current — it may simply be a claim
+> no review round has re-checked yet. The authoritative current state of the code and its guards lives
+> in `BasquinInjector.java`'s own Javadoc, `docs/THIRD-PARTY-APPS.md`, the design spec, and the cited
+> `bench-results/` evidence directories, never in this plan's prose.
+
 **Goal:** Ship a Maven core extension that adds Basquin's instrumentation to a Quarkus application at build time with **zero edits to any file in the application tree**.
 
 **Architecture:** A jar containing one `AbstractMavenLifecycleParticipant`, activated by
@@ -1115,6 +1126,13 @@ Add the import `org.apache.maven.model.DependencyManagement;`.
 
 Expected: PASS, 13 tests (7 from Task 3 + 6 here).
 
+**Amended, same expansion as the guard-count note above:** 6 was `BasquinInjectorGuardsTest.java`'s
+size when Task 4 was originally three guards. PR #103's review rounds grew the guard set to seven
+fail-loudly conditions and grew the test file to match — at the time of the round-4 docs pass it
+carried 21 `@Test` methods (`grep -c '@Test' basquin-maven-injector/src/test/java/com/basquin/maven/BasquinInjectorGuardsTest.java`),
+not 6, making the module total 28, not 13. Re-run that command rather than trusting either number;
+this module is still under active review.
+
 - [ ] **Step 5: Mutation-check the two guards that could pass vacuously**
 
 A test that passes whether or not the behaviour exists proves nothing. Verify each guard's test can
@@ -1166,6 +1184,23 @@ injector is Maven-only without it.
 Gradle-built Quarkus target in this PR — the acceptance targets (rest-villains, the Phase-0 fixture)
 are both Maven. Task 8 records that limitation in the spec rather than letting the file imply a
 coverage it does not have.
+
+**Amended — "stub"/"not exercised" (here, and in the identical wording of the script's own header
+comment in Step 1's code block below) describes the gap as one of exercise, i.e. as if running the
+§5.2 banner check against a Gradle target would settle it. PR #103's round-4 review found that
+understates it: `basquin-init.gradle` implements only the `skip` opt-out and has no equivalent of the
+other four fail-loudly guards enumerated in Task 4's amendment above — it does not even check
+whether `com.basquin:basquin-quarkus` is already declared before adding another `implementation`
+dependency, so a conflicting version/exclusions/configuration is silently resolved by Gradle's own
+highest-version default instead of failing loudly, reproducing the DD-040 failure mode the Maven
+guards exist to prevent. A banner check would not surface this either: the banner only shows whether
+`basquin` loaded on *some* build, not whether a conflicting declaration was silently resolved around
+it. `docs/THIRD-PARTY-APPS.md`'s "Gradle targets" section carries the corrected, kept-in-sync
+operator-facing statement: §5.1's fail-loudly contract is **not implemented** on the Gradle path — a
+stronger and more accurate claim than "unverified." The script's own header comment in the code block
+below is left exactly as originally written and as it stands in the real `basquin-init.gradle` file
+today; editing only this plan's quoted copy while the real file keeps the same words would relocate
+the mismatch rather than fix it.**
 
 - [ ] **Step 1: Create `basquin-init.gradle`**
 
@@ -1268,8 +1303,11 @@ hands PR-3 the job of proving the same result with no edit at all.
 **Setup notes carried from PR-2's harness, which this reuses:**
 - `bench-results/dd043-pr2-restvillains-2026-07-26/build.sh` already forwards `EXTRA_MAVEN_OPTS` into
   the container's `MAVEN_OPTS`. That is the hook for `-Dmaven.ext.class.path`; no new mechanism needed.
-- The app lives in a **sibling clone** of `quarkusio/quarkus-super-heroes`, never committed here
-  (`docs/THIRD-PARTY-APPS.md:58`'s precedent). `APP_DIR` points at its `rest-villains`.
+- The app lives in a **sibling clone** of `quarkusio/quarkus-super-heroes`, never committed here —
+  same pattern PR-2 used (not tracked; see PR-2's `build.sh` header, not
+  `docs/THIRD-PARTY-APPS.md:58`, which is about JPetStore/Tomcat 9 and carries no such precedent —
+  a citation that did not resolve, corrected the same way in the restvillains evidence directories
+  themselves). `APP_DIR` points at its `rest-villains`.
 - The build runs in the pinned Mandrel image; the container's local repo is the host's real `~/.m2`.
 
 - [ ] **Step 1: Confirm the target tree is pristine — this is the property under test**
@@ -1314,8 +1352,11 @@ sleep 2 && curl -sf -o /dev/null -w "server up: %{http_code}\n" \
 Expected: `server up: 200`.
 
 **Bind to `127.0.0.1` and reach it with `--network host`, exactly as spike S5 did — this is not an
-incidental detail.** Maven 3.9.16's default `maven-default-http-blocker` mirror matches
-`external:http:*` and **exempts localhost**. Serving on `0.0.0.0` and pointing the build at the docker
+incidental detail.** Maven 3.9.15's default `maven-default-http-blocker` mirror matches
+`external:http:*` and **exempts localhost** — 3.9.15 is rest-villains' own wrapper version
+(`BasquinInjector.java:171`), not the Phase-0 fixture's 3.9.16 that Task 7's native cell targets;
+the two are different clones with different wrappers and the figure was originally conflated between
+them. Serving on `0.0.0.0` and pointing the build at the docker
 bridge gateway (`http://172.17.x.x:8000/`) is precisely the class that mirror matches, and whether any
 resolver re-applies settings mirrors to an *injected* repository is **explicitly unmeasured** — S5's
 README flags it as a scope limit. The fetch that would be blocked is the deployment artifact's, which
@@ -1427,6 +1468,18 @@ build; local repo purged first so resolution could not succeed for the wrong rea
 the deployment artifact — named by no pom anywhere — was fetched from the injected
 repository. Banner lists basquin and the boundary answers a result poll."
 ```
+
+**Amended — this step's instruction and the commit message above both say the app tree was "verified
+pristine before AND after," and that is exactly what got committed at the time (`6aff73d`/`7f3b99d`).
+PR #103's round-4 review found the directory's own artifact never supported the two-sided claim:
+`pristine-proof.txt` records a single post-hoc `git status --porcelain`, taken after both the build
+and the app run had already happened — there is no separate before-capture in this directory. The
+two-sided property is real, but is established by `scripts/verify-dd043-pr3.sh`, not by this
+directory: dirty-tree refusal before the build (`:284-289`) and `jvm:zero-edits` after (`:357-363`),
+surfaced in `RESULTS.md:25`. The current
+`bench-results/dd043-pr3-restvillains-2026-07-26/README.md` verdict and check-5 row carry the
+corrected framing; this plan's step and commit-message template above are left as originally written
+and executed, per this file's own history-preservation rule.**
 
 ---
 
@@ -1728,3 +1781,9 @@ Tasks 2, 6 and 7. The three system-property names are identical between `Basquin
 
 **Test-count expectations:** Task 3 adds 7 tests, Task 4 adds 6 — the repo total should rise from 359
 to 372. Verify with the whole-suite run rather than assuming.
+
+**Amended:** the "6"/"372" figures are as-scoped for Task 4's original three guards; PR #103's guard
+growth (see Task 4's amendment) took `BasquinInjectorGuardsTest.java` well past 6, so 372 no longer
+holds as either the module or the repo total, and the repo-wide count keeps moving as later work
+lands. This paragraph's own closing advice — verify with the whole-suite run rather than assuming —
+is the part to keep; do not treat 359 or 372 as current.

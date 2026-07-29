@@ -205,7 +205,7 @@ wrong:
   which the guard above now contradicts: a same-version declaration at `scope=test` or `type=pom`
   hard-fails.
 
-### Gradle targets — init script, unverified
+### Gradle targets — init script, no fail-loudly guards
 
 `basquin-init.gradle` (repository root) is the Gradle counterpart, honouring the same three system
 properties:
@@ -214,9 +214,17 @@ properties:
 ./gradlew -I /path/to/basquin-init.gradle build
 ```
 
-**Caveat: it is a stub in the delivery sense.** PR-3 never exercised it against a Gradle-built
-Quarkus application — both acceptance targets are Maven-built. Treat a Gradle target as unverified
-until the §5.2 banner check passes on one.
+**It implements only the `skip` opt-out.** The Maven injector's other four guards — conflicting
+managed version, conflicting managed exclusions, conflicting declared version, and an unusable
+declaration shape (§5.1) — have no Gradle equivalent: the script does not even check whether
+`com.basquin:basquin-quarkus` is already declared before adding another `implementation`
+dependency. A Gradle target that already declares the artifact — at another version, with
+exclusions, or in a non-resolving configuration — gets Gradle's own default highest-version
+conflict resolution instead of a hard failure, silently reproducing the DD-040 wire-format skew
+the Maven guards exist to prevent. Running the §5.2 banner check once would not surface this: the
+banner only shows whether `basquin` loaded on *some* build, not whether a conflicting declaration
+was silently resolved around it. §5.1's fail-loudly contract is **not implemented** on this path —
+that is a stronger statement than "unverified," and true independent of whether the check has run.
 
 ### Offline fallback — `publishToMavenLocal`
 

@@ -7,11 +7,14 @@ explicitly hands PR-3 the job of proving the same result with no edit at all. Do
 third-party Quarkus application whose tree is never touched and whose local Maven repository starts
 empty of `com.basquin`?
 
-**Verdict: CONFIRMED — all five acceptance checks passed.** The app tree was verified pristine
-(`git status --porcelain` empty) both **before and after** the build; the local repo was purged of
-`com.basquin` first so resolution could not succeed for the wrong reason; and the **deployment**
-artifact — named by no pom anywhere — was fetched from the injected repository by the Quarkus
-bootstrap resolver on its own. **JVM mode only — the native cell is separate evidence
+**Verdict: CONFIRMED — all five acceptance checks passed.** This directory's own artifact
+(`pristine-proof.txt:6,11`) is a single post-hoc `git status --porcelain` check, empty, taken after
+the build and the app run had already happened. The two-sided before-and-after property check 5 names
+is established separately, by `scripts/verify-dd043-pr3.sh`'s `jvm` stage (dirty-tree refusal
+before, `:284-289`; `jvm:zero-edits` after, `:357-363`; `RESULTS.md:25`), not by this directory. The
+local repo was purged of `com.basquin` first so resolution could not succeed for the wrong reason;
+and the **deployment** artifact — named by no pom anywhere — was fetched from the injected repository
+by the Quarkus bootstrap resolver on its own. **JVM mode only — the native cell is separate evidence
 (spec §5.2's other half).**
 
 ## Result
@@ -22,7 +25,7 @@ bootstrap resolver on its own. **JVM mode only — the native cell is separate e
 | 2 | Startup banner lists `basquin` under `Installed features` | `app-startup.log:25`, extracted to `banner.txt` |
 | 3 | The boundary works, not just loads: driven request returns a cost line, not `miss` | `result-poll.txt`: `X-Basquin-Req: pr3-accept-1` → `/__basquin/result?id=pr3-accept-1` → `787,-684,9|0||` |
 | 4 | `basquin-quarkus-deployment` fetched from the injected repo | `http-access.log` (4 GETs for it, all `200`); `build.log:31-36` (`Downloaded from basquin-injected`) |
-| 5 | App tree pristine **after** the build, not only before | `git status --porcelain` in the clone: empty (0 lines) after `clean package` *and* again after the app container ran against the mounted tree |
+| 5 | App tree pristine, checked once, post-hoc | `pristine-proof.txt:6,11`: a single `git status --porcelain`, empty, taken after `clean package` and after the app container ran. The before-**and**-after property (not merely after) is established by the verify run, not this artifact — `scripts/verify-dd043-pr3.sh:284-289` (before), `:357-363` (after), `RESULTS.md:25` |
 
 Build wall time 01:03 min (`build.log`, `Total time`). On check 3's numbers: 787 ms elapsed is a
 first-hit (Hibernate/Agroal warmup) figure, the −684 KB heap delta is the reactive-path GC-in-window
@@ -31,7 +34,7 @@ pool warmup. The point here is the line's *shape* — `costCsv|invariantCount|de
 proving the filter sat on the request path.
 
 **Do not read the −684 KB as a measurement.** The spec assigns negative heap deltas to **PR-5** as an
-`UNMEASURED` producer (design doc §9's PR-5 row, :1305), precisely because the in-flight counter
+`UNMEASURED` producer (design doc §9's PR-5 row, `:1409`), precisely because the in-flight counter
 structurally cannot detect them — a GC is not a request. This run is the second independent sighting on
 a different code path (PR-2 measured −16,456 KB on this same target), which makes the gap systematic
 rather than incidental, and is a data point for PR-5 rather than a defect in this acceptance. Until
@@ -59,14 +62,17 @@ before-listing, the `rm -rf`, and the failing `find` after. With the local repo 
 `com.basquin` and Central not carrying it, the injected repository is the only possible source. The
 HTTP access log agrees: 13 GETs, all `200` — the first is the host-side pre-build server check, the
 remaining 12 are the containerized build (3 artifacts x pom, pom.sha1, jar, jar.sha1). Timestamp
-note, same as S5: `http-access.log` is server-local EDT (UTC−4), `build.log` is UTC, so the access
-log's `07:47` aligns exactly with the build's `11:47Z` download lines.
+note, same as S5: `http-access.log` is server-local EDT (UTC−4), `build.log` is UTC. The build's
+download lines carry no timestamp of their own, so the alignment is derived, not read directly:
+`build.log`'s `Finished at: 2026-07-26T11:48:22Z` (`:128`) minus `Total time:  01:03 min` (`:127`)
+puts the build's start at ~11:47:19Z, and `http-access.log`'s GETs for the served artifacts run
+`07:47:21`-`07:47:37` EDT (`:3-14`) — i.e. `11:47:21`-`11:47:37` UTC — inside that window.
 
 ## Provenance
 
 - Target: `quarkusio/quarkus-super-heroes` at `c9b46d745620708e1519859bb4775469114381e5` — the same
-  sibling clone PR-2 used (`../quarkus-super-heroes/rest-villains`, never committed here;
-  `docs/THIRD-PARTY-APPS.md:58`'s precedent). PR-2's pom deviation was reverted
+  sibling clone PR-2 used (`../quarkus-super-heroes/rest-villains`, never committed here — not in
+  `git ls-files`). PR-2's pom deviation was reverted
   (`git checkout -- pom.xml`) and the tree confirmed pristine before the run.
 - Injector: `basquin-maven-injector-0.3.0.jar`, built from this branch at `58eb601` (working tree
   clean apart from this evidence directory) via `./gradlew :basquin-maven-injector:jar`. Sisu index
@@ -82,7 +88,7 @@ log's `07:47` aligns exactly with the build's `11:47Z` download lines.
 ## Transport note (HTTP, localhost, and the http-blocker)
 
 The build container ran with `--network host` and the repo URL `http://localhost:8000/` — spike S5's
-**measured** channel, not a convenience. Maven 3.9.16's default `maven-default-http-blocker` mirror
+**measured** channel, not a convenience. Maven 3.9.15's default `maven-default-http-blocker` mirror
 matches `external:http:*` and exempts localhost; a docker-gateway URL (`http://172.17.x.x:8000/`) is
 precisely the class that mirror matches, and whether mirrors are re-applied to an *injected*
 repository is unmeasured (S5's README, "Transport note"). The fetch that would be blocked is the
@@ -91,7 +97,9 @@ confounded exactly the check that matters.
 
 ## What this establishes, and what it does not
 
-**Establishes:** on the pinned toolchain (containerised Maven 3.9.16 wrapper, Quarkus 3.37.3, JVM
+**Establishes:** on the pinned toolchain (the app's own Maven wrapper, `apache-maven-3.9.15` —
+`bench-results/dd043-pr3-optional-declaration-2026-07-29/provenance.txt:57`, `BasquinInjector.java:171`
+— containerised, Quarkus 3.37.3, JVM
 packaging, JDK 25 Mandrel image), `basquin-maven-injector` instruments a real third-party
 application — datasource, Hibernate, contract-first generated resources — with zero edits to any
 file in the application's tree, no settings.xml, and no operator pre-populate step: one system

@@ -51,8 +51,11 @@ deployment jar that arrived over HTTP — not merely that the jar downloaded.
 1. **The HTTP server's access log** (`http-access.log`): 13 GETs, all `200`. The first
    (`03:25:08`) is a host-side pre-build server check; the remaining 12 are the containerized
    build — 3 artifacts x (pom, pom.sha1, jar, jar.sha1). The log's timestamps are server-local
-   EDT (UTC-4); the build log is UTC, so `03:26:03`–`03:26:12` EDT aligns exactly with the build's
-   download lines at `07:26` UTC.
+   EDT (UTC-4); the build log is UTC. The build's download lines carry no timestamp of their own,
+   so the alignment is derived, not read directly: `build-s5-injected.log`'s
+   `Finished at: 2026-07-26T07:26:37Z` (`:58`) minus `Total time:  01:06 min` (`:57`) puts the
+   build's start at ~07:25:31Z, and the containerized GETs above run `03:26:03`–`03:26:12` EDT
+   (`:3-14`) — i.e. `07:26:03`–`07:26:12` UTC — inside that window.
 2. **The build log's `Downloaded from basquin-injected:` lines** for all six files.
 3. **Maven Resolver's own `_remote.repositories` tracking files** written into the local repo by the
    build (`local-repo-provenance.txt`): all six entries read `...>basquin-injected=`.
@@ -90,9 +93,9 @@ repository takes **two** mutations:
 
 ## Transport note (HTTP, localhost, and the http-blocker)
 
-The container reached the host server via `EXTRA_DOCKER_ARGS="--network host"` (native dockerd
-29.1.3 on WSL2; verified with an in-container `curl` before the build), so the repo URL is
-`http://localhost:8000/`. Localhost is deliberate twice over: Maven 3.9.16's default
+The container reached the host server via `EXTRA_DOCKER_ARGS="--network host"` — confirmed by
+`http-access.log`'s 12 containerized-build GETs all succeeding (`:3-14`, all `200`) — so the repo URL
+is `http://localhost:8000/`. Localhost is deliberate twice over: Maven 3.9.16's default
 `maven-default-http-blocker` mirror matches `external:http:*`, which **exempts localhost** — and the
 production Pages URL is HTTPS, which no default mirror matches either. So the spike matches
 production's "no default mirror interferes" condition. A consequence, stated plainly: this spike is

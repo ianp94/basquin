@@ -1,0 +1,45 @@
+# Debezium Server native declarations, captured 2026-07-29T15:16:38Z
+# debezium-server main @ 860760214720a5b3b09ad1fea28745eca235d914 ; debezium core main @ 38e9e602968c84c11c2cfbbc10b984b944787c5d
+
+## debezium core pom.xml — grep -n 'quarkus.version'
+101:        <!-- Should be aligned with the jandex version used in quarkus version quarkus.version.runtime -->
+132:        <quarkus.version.runtime>3.33.1.1</quarkus.version.runtime>
+
+## debezium-server .github/workflows/cross-maven.yml — triggers (lines 12-24)
+12:name: Cross Maven CI
+13:
+14:on:
+15:  pull_request:
+16:    branches:
+17:      - main
+18:      - 1.*
+19:      - 2.*
+20:      - 3.*
+21:      - 4.*
+22:    paths-ignore:
+23:      - '*.md'
+24:
+
+## debezium-server .github/workflows/cross-maven.yml — native-build job
+170:  native-build:
+171:    name: Verify native build
+172:    runs-on: ubuntu-latest
+173:    needs: build
+174:    steps:
+175:      - name: Set up JDK
+176:        uses: actions/setup-java@v5
+177:        with:
+178:          distribution: 'temurin'
+179:          java-version: 25
+180:      - name: Checkout Debezium Server repository
+181:        uses: actions/checkout@v7
+182:        with:
+183:          path: server
+184:      - name: Cache Maven packages
+185:        uses: actions/cache@v6
+186:        with:
+187:          path: ~/.m2
+188:          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+189:          restore-keys: ${{ runner.os }}-m2
+190:      - name: Maven build Debezium Server Native
+191:        run: ./server/mvnw clean install -fae -f server/debezium-server-native-dist/pom.xml -Passembly,native -Dformat.formatter.goal=validate -Dformat.imports.goal=check -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 -DskipNonCore

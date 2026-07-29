@@ -158,6 +158,14 @@ trap cleanup EXIT
 
 run_unit() {
   log "unit — whole test suite"
+  # `check` does not delete a module's test-results dir for tests that were renamed or removed — the
+  # old XML just sits there, still glob-matched by suite_counts() below. That is the exact trap that
+  # produced the "2 module / 361 repo-wide" misread on this branch, now feeding RESULTS.md's totals
+  # under a header promising every number is derived from an artifact (see top of file). Clearing
+  # every module's test-results dir before the run is the fix: it requires no change to build.gradle
+  # (redirecting Gradle's test output to a per-run directory would), and nothing later in this script
+  # reads test-results before run_unit repopulates it.
+  find . -type d -path '*/build/test-results' -prune -exec rm -rf {} +
   ./gradlew check --console=plain --no-daemon > "$OUT/gradle-check.log" 2>&1
   local rc=$? counts; counts="$(suite_counts)"
   local tot="${counts% *}" f="${counts#* }"
@@ -197,7 +205,7 @@ run_jar() {
     fi
   fi
 
-  local declared; declared="$(sed -n "s/^version *= *'\(.*\)'/\1/p" basquin-maven-injector/build.gradle | head -1)"
+  local declared; declared="$(sed -n "s/^version *= *'\(.*\)'/\1/p" basquin-maven-injector/build.gradle | tr -d '\r' | head -1)"
   if [ -n "$ver" ] && [ "$ver" = "$declared" ]; then
     ok "jar:baked-version" "$ver matches build.gradle"
   else
@@ -213,7 +221,13 @@ run_guards() {
   local backup="$OUT/BasquinInjector.java.orig"
   cp "$src" "$backup"
 
-  _mutate() { # $1 = python replacement expr file content, $2 = expected failing test, $3 = label
+  # $2 asserts MEMBERSHIP, not exclusivity: neutering one guard can legitimately take a shared
+  # helper down with it and fail more than one test (declaration-usability does — the scope, type,
+  # classifier, and exclusions checks all live behind the same `if (problem == null)` gate, so
+  # disabling it fails every test that exercises that gate, not only the named one). This helper only
+  # asserts that $2 is AMONG the failures — the thing that actually matters, since a guard whose own
+  # test does not fail when neutered is silently disabled — and never claims $2 is the only failure.
+  _mutate() { # $1 = python replacement expr file content, $2 = a test expected among the failures, $3 = label
     python3 - "$src" <<PY
 import pathlib, sys
 p = pathlib.Path(sys.argv[1]); t = p.read_text(encoding="utf-8")
@@ -227,7 +241,7 @@ PY
     local names; names="$(failing_test_names)"
     cp "$backup" "$src"
     if echo "$names" | grep -qx "$2"; then
-      ok "guards:$3" "neutering it fails exactly $2"
+      ok "guards:$3" "neutering it fails $2 (among the failures; other tests sharing the guard may fail too — not asserted exclusive)"
     else
       bad "guards:$3" "expected $2 to fail; got: ${names:-<none>}"
     fi
@@ -237,6 +251,13 @@ PY
           "injectsNothingWhenSkipIsSet" "skip"
   _mutate '("        DependencyManagement dm = p.getModel().getDependencyManagement();", "        DependencyManagement dm = null;")' \
           "failsLoudlyWhenDependencyManagementPinsOurGroupToADifferentVersion" "managed-version"
+  # The managed-version mutation above disables the WHOLE managed-path lookup (dm = null), which takes
+  # both of failOnConflictingManagedVersion's conditions down together and only asserts the version
+  # test among the failures. That leaves the exclusions branch added in a61a90c unbound by any
+  # mutation — it could be deleted entirely and this stage would still report all-PASS. This mutation
+  # neuters ONLY that branch's condition, leaving the dm lookup and the version check intact.
+  _mutate '("            if (managed.getExclusions() != null && !managed.getExclusions().isEmpty()) {", "            if (false) {")' \
+          "failsLoudlyWhenDependencyManagementCarriesExclusions" "managed-exclusions"
   _mutate '("if (declared == null || declared.equals(version))", "if (true)")' \
           "failsLoudlyWhenTheProjectDeclaresOurArtifactAtADifferentVersion" "declared-version"
   # The fourth guard. PR #103's approver found the header comment claimed to mutation-check "each"

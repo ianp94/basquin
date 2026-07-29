@@ -118,7 +118,7 @@ boundary filter answered on a real route.
 | `build.sh` | PR-2's containerized build entrypoint plus the one documented change: `${EXTRA_DOCKER_ARGS:-}` before `"$IMAGE"` |
 | `build.log` | full decisive build (`clean package -DskipTests`) — injector line at :2, `BUILD SUCCESS` at :125 |
 | `purge-proof.txt` | host `~/.m2` `com/basquin` before-listing, purge, failing `find` after |
-| `pristine-proof.txt` | check 5's artifact: the clone's commit + empty `git status`, plus the build-log argument that the tree was clean *during* the build (the injector's `instrumented` line is printed only when the model carried no Basquin declaration, and `already declares` appears 0 times) |
+| `pristine-proof.txt` | check 5's artifact: the clone's commit + empty `git status`, plus the build-log argument that `rest-villains/pom.xml` carried no Basquin declaration at the moment Maven read the model (the injector's `instrumented` line is printed only when the model carried no Basquin declaration, and `already declares` appears 0 times) |
 | `http-access.log` | the HTTP server's request log — every remote fetch with status codes; the deployment artifact's 4 GETs are check 4 |
 | `app-startup.log` | app container log from boot through the banner |
 | `banner.txt` | the extracted `Installed features` line |

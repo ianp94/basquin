@@ -1,0 +1,28 @@
+# Apicurio 2.6.x version facts, ref 2.6.x @ b7f3e291fd5861717932294e4a08d94ddc6981fc, captured 2026-07-29T15:16:38Z
+
+## pom.xml (root) — grep -n 'quarkus.version|<version>' head
+7:    <version>2.6.14-SNAPSHOT</version>
+154:        <quarkus.version>3.15.3</quarkus.version>
+552:                <version>${quarkus.version}</version>
+807:                <version>${quarkus.version}</version>
+929:                    <version>${quarkus.version}</version>
+
+## app/pom.xml — grep -n 'resteasy'
+106:            <artifactId>quarkus-resteasy-jackson</artifactId>
+139:            <artifactId>quarkus-resteasy-client</artifactId>
+143:            <artifactId>quarkus-resteasy-client-jackson</artifactId>
+
+## tags matching ^2\.6\. (gh api repos/Apicurio/apicurio-registry/tags --paginate)
+2.6.13.Final	cee5ea80	2025-07-16T18:47:17Z
+2.6.12.Final	46845b1f	2025-06-17T13:09:59Z
+2.6.11.Final	5c109109	2025-06-03T13:03:26Z
+2.6.9.Final	38e4a4da	2025-05-30T17:57:58Z
+2.6.8.Final	e128ffaf	2025-01-31T07:34:14Z
+2.6.7.Final	7c14cec4	2025-01-21T20:28:47Z
+2.6.6.Final	9f6094bd	2024-12-10T08:43:32Z
+2.6.5.Final	da5fd5ce	2024-10-03T11:05:00Z
+2.6.4.Final	dba1576c	2024-09-17T13:33:11Z
+2.6.3.Final	16682f9d	2024-09-09T18:17:52Z
+2.6.2.Final	10e4e7a4	2024-08-14T16:40:56Z
+2.6.1.Final	8cb6286c	2024-07-08T10:33:09Z
+2.6.0.Final	bb6e326a	2024-06-25T15:21:06Z

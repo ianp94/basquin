@@ -58,6 +58,43 @@ public class BasquinInjectorGuardsTest {
         }
     }
 
+    /**
+     * The managed half of the exclusions hazard, and the second of the two shapes §5.2's banner
+     * acceptance cannot detect. Managed exclusions apply to the dependency THIS INJECTOR adds, so a
+     * dependencyManagement entry carrying {@code <exclusions>} can strip basquin-core exactly as a
+     * declared one can — and the extension still loads, so Installed features still lists it.
+     *
+     * <p>Without this test only {@code failOnConflictingManagedVersion}'s version branch was covered:
+     * deleting the exclusions branch it gained in {@code a61a90c} failed nothing.
+     */
+    @Test
+    public void failsLoudlyWhenDependencyManagementCarriesExclusions() {
+        MavenProject p = project("app");
+        DependencyManagement dm = new DependencyManagement();
+        Dependency managed = new Dependency();
+        managed.setGroupId(BasquinInjector.GROUP_ID);
+        managed.setArtifactId(BasquinInjector.ARTIFACT_ID);
+        managed.setVersion(InjectorVersion.value());   // agreeing version: only the exclusions branch can fire
+        Exclusion ex = new Exclusion();
+        ex.setGroupId(BasquinInjector.GROUP_ID);
+        ex.setArtifactId("basquin-core");
+        managed.addExclusion(ex);
+        dm.addDependency(managed);
+        p.getModel().setDependencyManagement(dm);
+
+        try {
+            new BasquinInjector().inject(Arrays.asList(p), new Properties());
+            fail("managed exclusions can strip basquin-core from the injected dependency, so they must "
+                    + "not be accepted");
+        } catch (MavenExecutionException e) {
+            String m = e.getMessage();
+            assertTrue("message must name exclusions: " + m, m.contains("exclusion"));
+            assertTrue("message must name dependencyManagement as the path: " + m,
+                    m.contains("dependencyManagement"));
+            assertTrue("message must say the banner cannot detect this: " + m, m.contains("banner"));
+        }
+    }
+
     /** A managed entry that AGREES with us is harmless and must not fail the build. */
     @Test
     public void acceptsDependencyManagementThatAgreesWithTheInjectedVersion() throws Exception {
@@ -244,10 +281,13 @@ public class BasquinInjectorGuardsTest {
     }
 
     /**
-     * The shape §5.2's banner acceptance CANNOT detect, found by PR #103's independent approver. Exclusions
-     * can strip the extension's own transitive dependencies — notably basquin-core — leaving the extension
-     * jar present and the feature still listed in Installed features, while the boundary cannot work. No
-     * acceptance run would fail, so this guard is the only thing standing in front of it.
+     * One of the TWO shapes §5.2's banner acceptance cannot detect, found by PR #103's independent
+     * approver. Exclusions can strip the extension's own transitive dependencies — notably basquin-core —
+     * leaving the extension jar present and the feature still listed in Installed features, while the
+     * boundary cannot work. No acceptance run would fail, so a guard is the only thing standing in front
+     * of it: {@code failOnUnusableDeclaration} for this, the DECLARED path, and
+     * {@code failOnConflictingManagedVersion}'s exclusions branch for the managed one, pinned by
+     * {@link #failsLoudlyWhenDependencyManagementCarriesExclusions}. Neither covers the other's path.
      */
     @Test
     public void failsLoudlyWhenTheDeclarationCarriesExclusions() {
@@ -288,6 +328,37 @@ public class BasquinInjectorGuardsTest {
 
         assertEquals(1, p.getModel().getDependencies().size());
         assertEquals(1, p.getRemoteArtifactRepositories().size());
+    }
+
+    /**
+     * {@code optional=true} is the one shape the usability whitelist deliberately accepts even though it is
+     * NOT identical to what the injector would add (which sets no optional flag). It is accepted on a
+     * measurement, not on an argument: rest-villains built with {@code <optional>true</optional>} and this
+     * injector on {@code maven.ext.class.path} put both basquin jars in {@code quarkus-app/lib/main/},
+     * banner-listed {@code basquin} in Installed features, and answered {@code /__basquin/result} with a
+     * cost line rather than {@code "miss"}. The captured output is in the tree at
+     * {@code bench-results/dd043-pr3-optional-declaration-2026-07-29/}, cited line by line from
+     * {@code failOnUnusableDeclaration}'s javadoc. This test exists so that accepting it stays a decision:
+     * if someone later adds an {@code isOptional()} branch to the guard, this fails and sends them to that
+     * evidence first. It measures a <b>direct</b> optional only; a transitive one is unmeasured.
+     */
+    @Test
+    public void acceptsAnOptionalDeclarationBecauseADirectOptionalStillReachesTheClasspath()
+            throws Exception {
+        MavenProject p = project("app");
+        Dependency d = new Dependency();
+        d.setGroupId(BasquinInjector.GROUP_ID);
+        d.setArtifactId(BasquinInjector.ARTIFACT_ID);
+        d.setVersion(InjectorVersion.value());   // matching version, so only the usability guard can fire
+        d.setOptional(true);
+        p.getModel().getDependencies().add(d);
+
+        new BasquinInjector().inject(Arrays.asList(p), new Properties());
+
+        assertEquals("must not duplicate the declaration", 1, p.getModel().getDependencies().size());
+        assertEquals("the repository is still required", 1, p.getRemoteArtifactRepositories().size());
+        assertTrue("the injector must not silently rewrite the declaration it accepted",
+                p.getModel().getDependencies().get(0).isOptional());
     }
 
     /** The two usable scopes must still be accepted, or the guard breaks legitimate targets. */

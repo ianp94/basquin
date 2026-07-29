@@ -1,0 +1,15 @@
+--- /mnt/c/Users/ianpa/OneDrive/Documents/GitHub/quarkus-super-heroes/rest-villains/pom.xml	2026-07-26 07:45:47.414981600 -0400
++++ /tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/b754fc8b-9424-4ced-b01f-1265076cc490/scratchpad/optprobe/pom.xml	2026-07-29 10:52:25.632950392 -0400
+@@ -39,6 +39,12 @@
+   </dependencyManagement>
+   <dependencies>
+     <dependency>
++      <groupId>com.basquin</groupId>
++      <artifactId>basquin-quarkus</artifactId>
++      <version>0.3.0</version>
++      <optional>true</optional>
++    </dependency>
++    <dependency>
+       <groupId>io.quarkus</groupId>
+       <artifactId>quarkus-rest-jackson</artifactId>
+     </dependency>

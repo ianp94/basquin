@@ -836,13 +836,34 @@ Spec §5.1 requires the injector to fail loudly rather than silently. A build th
 produces an uninstrumented binary is DD-043 §1.1's relocated failure mode, and it is the outcome all
 of this exists to prevent.
 
-Three guards, each answering a way the injection can be defeated without anyone noticing:
+**Amended — this list is the guard set as originally scoped when this plan was written, and PR #103's
+review rounds grew it well past three.** As implemented in `BasquinInjector.java` on this branch
+there are three guard *methods* — `failOnConflictingManagedVersion`, `failOnUnusableDeclaration`,
+`failOnConflictingDeclaredVersion` — enforcing **seven** fail-loudly conditions, not the three below:
+two in the managed-dependency path (a managed version conflict, item 1 below; and a managed entry
+carrying `<exclusions>`, added later, which strips `basquin-core` transitively), four in the
+declared-dependency *usability* path (a `scope` other than `compile`/`runtime`; a `type` other than
+`jar`; any `classifier`; any `<exclusions>`), and one more in the declared-*version* path (a declared
+version conflict, distinct from the usability check). Item 2 below — "skip the dependency, still add
+the repository" — is what happens only when a pre-existing declaration hits **none** of those seven;
+four of the shapes (declared scope, declared type, declared classifier, declared exclusions) now
+hard-fail the build instead of being skipped, exactly the "already declares" case item 2 describes as
+uniformly safe. See each guard method's Javadoc in `BasquinInjector.java` for the shape-by-shape
+history, and `docs/THIRD-PARTY-APPS.md`'s "Fail-loudly behaviours" section for the operator-facing
+description kept in sync with the current code. `-Dbasquin.inject.skip=true` (item 3 below) is
+unaffected by any of this — it is an operator opt-out, not a guard against silent bypass.
+
+Three guards, each answering a way the injection can be defeated without anyone noticing — as
+originally scoped; **item 2 is superseded, see the amendment above:**
 
 1. **`dependencyManagement` pins our group to a different version.** Managed versions govern the
    transitive `basquin-core`, so a BOM pinning `com.basquin:*` silently changes what resolves. Fail.
 2. **The project already declares `basquin-quarkus`** (e.g. a pom edited during PR-2's acceptance).
-   Injecting again would duplicate the dependency. Skip the dependency, still add the repository —
-   a declared dependency is not necessarily a *resolvable* one.
+   Injecting again would duplicate the dependency. ~~Skip the dependency, still add the repository~~
+   — true only when the existing declaration is in a usable shape (plain `compile`/`runtime`,
+   `jar`-type, unclassified, exclusion-free, matching version); otherwise the build now hard-fails.
+   A declared dependency is not necessarily a *resolvable* one, which is why the repository is still
+   added even in the safe case.
 3. **`-Dbasquin.inject.skip=true`** so an operator can run a clean baseline build with the injector
    still on the classpath — which is how a benchmark's control cell is produced.
 

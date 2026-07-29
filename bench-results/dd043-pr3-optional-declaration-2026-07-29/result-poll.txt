@@ -1,0 +1,12 @@
+# Runtime re-capture 2026-07-29T15:02:19Z — app container 'basquin-optional-app' running
+# target/quarkus-app/quarkus-run.jar produced by build-optional-injector.log (the optional declaration, through the real injector)
+
+$ curl -s -o /dev/null -w 'GET /api/villains -> %{http_code}\n' -H 'X-Basquin-Req: optional-rerun-1' http://localhost:8084/api/villains
+GET /api/villains -> 200
+
+$ curl -s 'http://localhost:8084/__basquin/result?id=optional-rerun-1'
+176,-12207,10|0||
+
+# control: an id that was never driven must answer "miss"
+$ curl -s 'http://localhost:8084/__basquin/result?id=never-driven-control'
+miss

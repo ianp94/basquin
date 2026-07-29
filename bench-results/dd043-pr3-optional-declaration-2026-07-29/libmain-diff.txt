@@ -1,0 +1,17 @@
+# Captured 2026-07-29T15:01:17Z from bench-results/dd043-pr3-optional-declaration-2026-07-29/
+
+$ diff libmain-nonoptional-reference.txt libmain-optional-injector.txt
+(no output; exit status 0 = the two listings are identical)
+
+$ wc -l libmain-nonoptional-reference.txt libmain-optional-injector.txt
+  228 libmain-nonoptional-reference.txt
+  228 libmain-optional-injector.txt
+  456 total
+
+$ grep basquin libmain-optional-injector.txt
+com.basquin.basquin-core-0.3.0.jar
+com.basquin.basquin-quarkus-0.3.0.jar
+
+$ grep basquin libmain-nonoptional-reference.txt
+com.basquin.basquin-core-0.3.0.jar
+com.basquin.basquin-quarkus-0.3.0.jar

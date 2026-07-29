@@ -1,0 +1,48 @@
+# Screened-out candidates — native references in CI workflows
+# captured 2026-07-29T15:16:38Z
+# method: resolve each repo's default branch head, enumerate
+#         .github/workflows via the contents API, grep each file for 'native'.
+
+=== apache/polaris  default_branch=main  head=a15bc8d4f18140a82afa48d58626f7b195ee5454  (2026-07-29T06:47:22Z)
+    workflow files: 14
+    workflow files containing 'native': 0
+
+=== projectnessie/nessie  default_branch=main  head=5627b0f0576a8b467c0b9be34ec13fcfa2fb6f7f  (2026-07-28T17:02:43Z)
+    workflow files: 8
+    workflow files containing 'native': 0
+
+=== quarkusio/code.quarkus.io  default_branch=main  head=85eb11d1d4281afe6f66bea88308026986351c9c  (2026-06-30T12:49:55Z)
+    workflow files: 3
+    workflow files containing 'native': 0
+
+=== apache/incubator-kie-kogito-apps  default_branch=main  head=15b82850e9c812e61fe8e36ccf42ae11e211d9fc  (2026-07-29T06:59:03Z)
+    workflow files: 7
+    HIT .github/workflows/publish-jitexecutor-native-rc.yml  (12 line(s) containing 'native')
+        1:name: "Publish jitexecutor-native - Release Candidate"
+        7:      - ".github/workflows/publish-jitexecutor-native-rc.yml"
+        21:  build_jitexecutor_native:
+        274:          gu install native-image
+        289:          components: "native-image"
+        321:          mvn clean install -B -ntp -DskipTests -pl jitexecutor-native/jitexecutor-native-darwin -am -Pjitexecutor-native
+        329:          mvn clean deploy -B -ntp -DdeployAtEnd -DskipTests -pl jitexecutor-native/jitexecutor-native-darwin -am -Pjitexecutor-native -Papache-release -s ${SETTINGS_FILE_PATH}
+        335:          mvn clean install -B -ntp -DskipTests -pl jitexecutor-native/jitexecutor-native-linux -am -Pjitexecutor-native
+        343:          mvn clean deploy -B -ntp -DdeployAtEnd -DskipTests -pl jitexecutor-native/jitexecutor-native-linux -am -Pjitexecutor-native -Papache-release -s ${SETTINGS_FILE_PATH}
+        349:          mvn clean install -B -ntp -DskipTests -pl jitexecutor-native/jitexecutor-native-win32 -am -Pjitexecutor-native
+        357:          mvn clean deploy -B -ntp -DdeployAtEnd -DskipTests -pl jitexecutor-native/jitexecutor-native-win32 -am -Pjitexecutor-native -Papache-release -s $env:SETTINGS_FILE_PATH
+        363:          path: ./jitexecutor-native/jitexecutor-native-*/target/jitexecutor-native-*-${{ steps.version.outputs.PROJECT_VERSION }}-run*
+    HIT .github/workflows/publish-jitexecutor-native.yml  (13 line(s) containing 'native')
+        1:name: "Publish jitexecutor-native"
+        7:      - ".github/workflows/publish-jitexecutor-native.yml"
+        8:      - "jitexecutor-native/**"
+        16:  build_jitexecutor_native:
+        89:          gu install native-image
+        104:          components: "native-image"
+        132:          mvn clean install -B -ntp -DskipTests -pl jitexecutor-native/jitexecutor-native-darwin -am -Pjitexecutor-native
+        141:          mvn clean deploy -B -ntp -DdeployAtEnd -DskipTests -pl jitexecutor-native/jitexecutor-native-darwin -am -Pjitexecutor-native
+        147:          mvn clean install -B -ntp -DskipTests -pl jitexecutor-native/jitexecutor-native-linux -am -Pjitexecutor-native
+        156:          mvn clean deploy -B -ntp -DdeployAtEnd -DskipTests -pl jitexecutor-native/jitexecutor-native-linux -am -Pjitexecutor-native
+        162:          mvn clean install -B -ntp -DskipTests -pl jitexecutor-native/jitexecutor-native-win32 -am -Pjitexecutor-native
+        171:          mvn clean deploy -B -ntp -DdeployAtEnd -DskipTests -pl jitexecutor-native/jitexecutor-native-win32 -am -Pjitexecutor-native
+        177:          path: ./jitexecutor-native/jitexecutor-native-*/target/jitexecutor-native-*-${{ steps.version.outputs.PROJECT_VERSION }}-run*
+    workflow files containing 'native': 2
+

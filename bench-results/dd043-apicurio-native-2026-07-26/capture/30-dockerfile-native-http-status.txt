@@ -1,0 +1,13 @@
+# Dockerfile.native reachability spot-check, captured 2026-07-29T15:16:38Z
+# method: curl -sSL -o /dev/null -w '%{http_code}' $RAW/<repo>/<sha>/<path>
+
+REF        SHA                                            PATH                                                       HTTP
+2.6.x      b7f3e291fd5861717932294e4a08d94ddc6981fc       distro/docker/src/main/docker/Dockerfile.native            200
+2.6.x      b7f3e291fd5861717932294e4a08d94ddc6981fc       distro/docker/src/main/docker/Dockerfile.native-scratch    200
+2.6.x      b7f3e291fd5861717932294e4a08d94ddc6981fc       distro/docker/src/main/docker/Dockerfile.jvm               200
+main       23159df62ef7a0935f55b8423c3b0d458773ecfc       distro/docker/src/main/docker/Dockerfile.native            404
+main       23159df62ef7a0935f55b8423c3b0d458773ecfc       distro/docker/src/main/docker/Dockerfile.native-scratch    404
+main       23159df62ef7a0935f55b8423c3b0d458773ecfc       distro/docker/src/main/docker/Dockerfile.jvm               200
+main-head  5d1dd525e08e76eb9b970d9b6d74e5f8488210cf       distro/docker/src/main/docker/Dockerfile.native            404
+main-head  5d1dd525e08e76eb9b970d9b6d74e5f8488210cf       distro/docker/src/main/docker/Dockerfile.native-scratch    404
+main-head  5d1dd525e08e76eb9b970d9b6d74e5f8488210cf       distro/docker/src/main/docker/Dockerfile.jvm               200

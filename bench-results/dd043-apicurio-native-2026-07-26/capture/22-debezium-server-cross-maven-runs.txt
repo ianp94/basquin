@@ -1,0 +1,30 @@
+# Debezium Server — workflow 'Cross Maven CI' (.github/workflows/cross-maven.yml, id 46636201), job 'Verify native build'
+# query:      gh api "repos/debezium/debezium-server/actions/workflows/46636201/runs?per_page=12&status=completed"
+# job filter: job name matches /native build/i  (per-run: gh api repos/debezium/debezium-server/actions/runs/<id>/jobs)
+# captured:   2026-07-29T15:16:38Z
+# total_count reported by the API for THIS query (branch filter applies; GitHub also ages out old runs): 269
+
+RUN_ID         BRANCH                               RUN_SHA   WORKFLOW_CONCL  CREATED_AT             NATIVE_JOB
+30319772988    dbz-2279-zerobus-sink                4722fcca  failure         2026-07-28T01:16:12Z   Verify native build => skipped
+30313669053    dbz-2279-zerobus-sink                98d51ffc  action_required 2026-07-27T23:17:39Z   (NO JOB MATCHING FILTER)
+30254682282    debezium/dbz#2265-full-jdbc-sink-support cbae7c65  success         2026-07-27T09:36:32Z   Verify native build => success
+30254417005    debezium/dbz#2265-full-jdbc-sink-support ae0dc89c  failure         2026-07-27T09:32:49Z   Verify native build => skipped
+30086164379    debezium/dbz#188                     df098e49  success         2026-07-24T10:26:21Z   Verify native build => success
+30080771387    debezium/dbz#188                     34046f7d  failure         2026-07-24T08:57:12Z   Verify native build => skipped
+29940371103    debezium/dbz#2265-full-jdbc-sink-support a415bee9  success         2026-07-22T16:58:48Z   Verify native build => success
+29777270580    sns-sqs-message-group-id-fair-queues d6eda10a  success         2026-07-20T20:42:58Z   Verify native build => success
+29775033461    debezium/dbz#188                     2d47ef56  failure         2026-07-20T20:10:46Z   Verify native build => skipped
+29756389657    sns-sqs-message-group-id-fair-queues 31a9b31d  success         2026-07-20T15:42:32Z   Verify native build => success
+29516539076    DBZ-7996-sink-framework-pt2          444efe0c  success         2026-07-16T16:40:09Z   Verify native build => success
+29516453141    DBZ-7996-sink-framework-pt2          5323af43  success         2026-07-16T16:38:55Z   Verify native build => success
+
+# ---- DERIVED TALLY over the 12 runs above (window 2026-07-16 .. 2026-07-28) ----
+# runs listed:            12
+# workflow conclusions:
+#           1 action_required
+#           4 failure
+#           7 success
+# native-job conclusions (one line per matching job across all runs listed):
+#           4 skipped
+#           7 success
+# runs with NO matching native job at all: 1

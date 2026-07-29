@@ -178,6 +178,13 @@ wrong:
   ours — a wire-format skew that surfaces as `/__basquin/result` polls returning `miss`, not as a
   build error. Fix: align the versions, pass `-Dbasquin.inject.version=<declared>` to inject the
   declared version deliberately, or `-Dbasquin.inject.skip=true` to leave the build uninstrumented.
+- **`dependencyManagement` carries an `<exclusions>` entry on any `com.basquin:*` managed
+  dependency.** Managed exclusions apply to the dependency this injector adds, so — like the
+  declared-path exclusions case below — they can strip `basquin-core` from its transitive
+  resolution while the extension jar itself still loads. The `Installed features` banner cannot
+  tell the difference: the extension still appears in it, so a banner-only acceptance run would
+  pass a build that ships broken. Fix: remove the managed exclusions, or
+  `-Dbasquin.inject.skip=true` to leave the build uninstrumented deliberately.
 - **The pom declares `com.basquin:basquin-quarkus` in a shape that cannot carry the extension.** Four
   shapes fail: a scope other than `compile`/`runtime`; a `type` other than `jar` (a `pom` type resolves
   the POM and never the jar); any `classifier`; and any `<exclusions>`. Each would make the injector
@@ -186,9 +193,10 @@ wrong:
   `miss`. Fix: make it a plain `compile`/`runtime`, `jar`-type, unclassified, exclusion-free
   dependency, remove it and let the injector add it, or `-Dbasquin.inject.skip=true`.
 
-  The exclusions case deserves its own warning: it is the **one shape the `Installed features` banner
-  cannot detect**, because the extension still loads and still appears in the banner while a stripped
-  `basquin-core` leaves it unusable. Do not treat a banner check as sufficient here.
+  The exclusions case deserves its own warning: together with the `dependencyManagement`-managed
+  exclusions case above, these are the **two shapes the `Installed features` banner cannot
+  detect**, because in both the extension still loads and still appears in the banner while a
+  stripped `basquin-core` leaves it unusable. Do not treat a banner check as sufficient for either.
 
 - **A same-version declaration in a usable shape is not a failure:** the injector logs
   `already declares basquin-quarkus:<v>; adding the repository only` and adds just the repository —

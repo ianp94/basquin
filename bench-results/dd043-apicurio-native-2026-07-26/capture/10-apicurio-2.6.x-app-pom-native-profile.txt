@@ -1,0 +1,51 @@
+# SOURCE: https://raw.githubusercontent.com/Apicurio/apicurio-registry/b7f3e291fd5861717932294e4a08d94ddc6981fc/app/pom.xml
+# ref: refs/heads/2.6.x @ b7f3e291fd5861717932294e4a08d94ddc6981fc   captured: 2026-07-29T15:16:38Z
+#
+# grep -n for 'native':
+#   590:            <id>native</id>
+#   593:                    <name>native</name>
+#   608:                                        <native.image.path>${project.build.directory}/${project.build.finalName}-runner</native.image.path>
+#   619:                <quarkus.native.enabled>true</quarkus.native.enabled>
+#
+# verbatim lines 585-625 (file is 625 lines):
+585:                </plugins>
+586:            </build>
+587:        </profile>
+588:
+589:        <profile>
+590:            <id>native</id>
+591:            <activation>
+592:                <property>
+593:                    <name>native</name>
+594:                </property>
+595:            </activation>
+596:            <build>
+597:                <plugins>
+598:                    <plugin>
+599:                        <artifactId>maven-failsafe-plugin</artifactId>
+600:                        <executions>
+601:                            <execution>
+602:                                <goals>
+603:                                    <goal>integration-test</goal>
+604:                                    <goal>verify</goal>
+605:                                </goals>
+606:                                <configuration>
+607:                                    <systemPropertyVariables>
+608:                                        <native.image.path>${project.build.directory}/${project.build.finalName}-runner</native.image.path>
+609:                                        <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+610:                                        <maven.home>${maven.home}</maven.home>
+611:                                    </systemPropertyVariables>
+612:                                </configuration>
+613:                            </execution>
+614:                        </executions>
+615:                    </plugin>
+616:                </plugins>
+617:            </build>
+618:            <properties>
+619:                <quarkus.native.enabled>true</quarkus.native.enabled>
+620:                <quarkus.package.jar.enabled>false</quarkus.package.jar.enabled>
+621:            </properties>
+622:        </profile>
+623:
+624:    </profiles>
+625:</project>

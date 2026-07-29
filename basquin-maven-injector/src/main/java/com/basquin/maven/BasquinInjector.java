@@ -133,16 +133,61 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
      *   <li>{@code classifier} — a classified artifact is not the extension jar.</li>
      *   <li>{@code exclusions} — can strip the extension's own transitive dependencies, notably
      *       {@code basquin-core}, leaving the jar present but unusable. Found by PR #103's independent
-     *       approver, and it is the <b>only</b> shape §5.2's banner acceptance cannot detect: the feature
-     *       still appears in {@code Installed features}, so no acceptance run would fail. An earlier
-     *       self-review had judged exclusions harmless on the reasoning that "the extension jar still
-     *       delivers" — true, and beside the point.</li>
+     *       approver, and it is <b>one of the two</b> shapes §5.2's banner acceptance cannot detect: the
+     *       feature still appears in {@code Installed features}, so no acceptance run would fail. The
+     *       other is the same hazard one function away, on the <i>managed</i> path —
+     *       {@code <exclusions>} on a {@code dependencyManagement} entry for {@code com.basquin}, closed
+     *       by {@link #failOnConflictingManagedVersion} after review showed this fix had been half a fix.
+     *       This guard covers the declared path only. An earlier self-review had judged exclusions
+     *       harmless on the reasoning that "the extension jar still delivers" — true, and beside the
+     *       point.</li>
      * </ul>
      *
      * <p>Each was found after the previous one was fixed, so enumerating bad values would have shipped the
-     * next variant. This requires the declaration to be positively equivalent to what the injector would
-     * add — a plain {@code compile}/{@code runtime}, {@code jar}-type, unclassified dependency — and fails
-     * loudly on anything else per spec §5.1.
+     * next variant. This is therefore a whitelist, and it covers every field of {@link Dependency} that can
+     * change whether the jar reaches the classpath: {@code scope}, {@code type}, {@code classifier} and
+     * {@code exclusions} must match what {@link #addDependency} produces — a plain {@code compile}/{@code
+     * runtime}, {@code jar}-type, unclassified, exclusion-free dependency — and anything else fails loudly
+     * per spec §5.1. Of the model's remaining fields, {@code groupId}/{@code artifactId} are the match key
+     * {@link #declaredDependency} uses, {@code version} is checked by
+     * {@link #failOnConflictingDeclaredVersion}, and {@code systemPath} is only meaningful with
+     * {@code scope=system}, which the scope branch already rejects.
+     *
+     * <p><b>{@code optional} is the one field this method deliberately does not reject, and it is the one
+     * exception to "equivalent to what the injector would add"</b> — {@link #addDependency} sets no
+     * {@code optional} flag, so an accepted {@code optional=true} declaration is not identical to it. The
+     * mechanism: {@code <optional>} only stops a dependency being inherited by <i>downstream consumers</i>
+     * of this module; it does not remove it from the declaring module's own classpath, which is the only
+     * classpath instrumentation needs. In {@code maven-resolver-util-1.9.27},
+     * {@code OptionalDependencySelector.selectDependency} is {@code depth < 2 || !isOptional()} and its
+     * {@code deriveChildSelector} increments {@code depth} from 0, so a project's own direct dependencies
+     * are judged at {@code depth == 1} and a direct optional is always collected;
+     * {@code MavenRepositorySystemUtils.newSession} is what installs that selector.
+     *
+     * <p>That mechanism is only an argument, and this branch's rule is to measure once rather than resolve
+     * a bypass by assumption — so the behaviour was measured end-to-end, not inferred, and the captured
+     * output is in the tree at {@code bench-results/dd043-pr3-optional-declaration-2026-07-29/} (every
+     * figure below is a {@code file:line} into it, not prose). Against quarkus-super-heroes
+     * {@code rest-villains} (Quarkus 3.37.3, {@code build-optional-injector.log:19}; Maven 3.9.15,
+     * {@code provenance.txt:57}) with {@code com.basquin:basquin-quarkus:0.3.0} declared
+     * {@code <optional>true</optional>} as the only deviation from the upstream pom
+     * ({@code pom-deviation.diff:7-12}) and this injector on {@code maven.ext.class.path}, the injector
+     * took this accept path ({@code build-optional-injector.log:2} — "already declares
+     * basquin-quarkus:0.3.0; adding the repository only") and the build succeeded
+     * ({@code build-optional-injector.log:108}); {@code target/quarkus-app/lib/main/} contained both
+     * {@code com.basquin.basquin-quarkus-0.3.0.jar} and {@code com.basquin.basquin-core-0.3.0.jar}
+     * ({@code libmain-optional-injector.txt:4-5}) in a 228-file list identical to the non-optional
+     * injected build's ({@code libmain-diff.txt:4,7-8}); the runtime banner listed {@code basquin} under
+     * {@code Installed features} ({@code app-startup.log:25}, extracted to {@code banner.txt:1}); and
+     * {@code /__basquin/result} answered a driven request with the cost line {@code 176,-12207,10|0||}
+     * ({@code result-poll.txt:8}) while an undriven id on the same endpoint still returned {@code "miss"}
+     * ({@code result-poll.txt:12}). An optional declaration therefore ships an instrumented application:
+     * it is not a silent bypass, and guarding it would reject a build that demonstrably works.
+     * (That directory's README records which captures are the original run and which are a later
+     * re-capture of the runtime half, and what the run does not establish — notably that a
+     * <i>transitive</i> optional, judged at {@code depth >= 2}, is unmeasured.)
+     * {@code BasquinInjectorGuardsTest#acceptsAnOptionalDeclarationBecauseADirectOptionalStillReachesTheClasspath}
+     * pins that this shape stays accepted.
      */
     private void failOnUnusableDeclaration(MavenProject p, Dependency d) throws MavenExecutionException {
         String scope = (d.getScope() == null || d.getScope().isBlank()) ? "compile" : d.getScope();
@@ -160,8 +205,10 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
         } else if (d.getExclusions() != null && !d.getExclusions().isEmpty()) {
             problem = "exclusions (" + d.getExclusions().size() + "), which can strip the extension's own"
                     + " transitive dependencies — notably basquin-core — leaving the extension jar present"
-                    + " but unusable. This is the ONE shape §5.2's banner acceptance cannot detect: the"
-                    + " feature still appears in Installed features, so only this guard can catch it";
+                    + " but unusable. Exclusions are one of the TWO shapes §5.2's banner acceptance cannot"
+                    + " detect — this one on the declared dependency, the other on a dependencyManagement"
+                    + " entry for com.basquin — because the feature still appears in Installed features"
+                    + " either way. No acceptance run would catch this declaration; only this guard does";
         }
         if (problem == null) {
             return;

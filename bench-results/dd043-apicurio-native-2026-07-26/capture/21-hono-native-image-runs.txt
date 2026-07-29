@@ -1,0 +1,32 @@
+# Eclipse Hono — workflow 'Build native images and run integration tests' (.github/workflows/native-images-tests.yml, id 19566723)
+# query:      gh api "repos/eclipse-hono/hono/actions/workflows/19566723/runs?per_page=15&status=completed"
+# job filter: job name matches /native/i  (per-run: gh api repos/eclipse-hono/hono/actions/runs/<id>/jobs)
+# captured:   2026-07-29T15:16:38Z
+# total_count reported by the API for THIS query (branch filter applies; GitHub also ages out old runs): 1233
+
+RUN_ID         BRANCH                               RUN_SHA   WORKFLOW_CONCL  CREATED_AT             NATIVE_JOB
+30446539639    master                               8a4c4370  success         2026-07-29T11:10:33Z   Run integration tests with native images => success
+30422454591    master                               8a4c4370  success         2026-07-29T04:30:25Z   Run integration tests with native images => success
+30372013196    master                               8a4c4370  failure         2026-07-28T15:10:03Z   Run integration tests with native images => failure
+30353650433    master                               8a4c4370  success         2026-07-28T11:09:27Z   Run integration tests with native images => success
+30328896514    master                               8a4c4370  success         2026-07-28T04:29:33Z   Run integration tests with native images => success
+30279722872    master                               8a4c4370  failure         2026-07-27T15:23:05Z   Run integration tests with native images => failure
+30262452532    master                               8a4c4370  success         2026-07-27T11:34:31Z   Run integration tests with native images => success
+30237612865    master                               8a4c4370  failure         2026-07-27T04:37:26Z   Run integration tests with native images => failure
+30206879363    master                               8a4c4370  success         2026-07-26T14:49:10Z   Run integration tests with native images => success
+30199146720    master                               8a4c4370  success         2026-07-26T10:55:20Z   Run integration tests with native images => success
+30187997674    master                               8a4c4370  failure         2026-07-26T04:34:22Z   Run integration tests with native images => failure
+30162332873    master                               8a4c4370  success         2026-07-25T14:47:39Z   Run integration tests with native images => success
+30155230749    master                               8a4c4370  success         2026-07-25T10:52:08Z   Run integration tests with native images => success
+30144105964    master                               8a4c4370  success         2026-07-25T04:29:12Z   Run integration tests with native images => success
+30103619135    master                               8a4c4370  success         2026-07-24T15:03:03Z   Run integration tests with native images => success
+
+# ---- DERIVED TALLY over the 15 runs above (window 2026-07-24 .. 2026-07-29) ----
+# runs listed:            15
+# workflow conclusions:
+#           4 failure
+#          11 success
+# native-job conclusions (one line per matching job across all runs listed):
+#           4 failure
+#          11 success
+# runs with NO matching native job at all: 0

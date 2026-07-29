@@ -109,12 +109,16 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
      A Gradle task `finalizedBy('jar')` guards it — deliberately not only `check`, since the release
      path publishes without running `check`.
 
-   **Five silent-bypass shapes are closed** by four guards, and the shape of that history is the lesson:
-   three of the five were found *after* implementation, by review. Guard 4 is written as a **whitelist**
-   of usable declarations (scope, type, classifier, exclusions) rather than a list of known-bad values,
-   because enumerating bad values shipped the next variant twice. `<exclusions>` is the one shape
-   **§5.2's banner acceptance cannot detect** — the extension still appears in `Installed features`
-   while a stripped `basquin-core` leaves it unusable.
+   **Five silent-bypass shapes are closed** across two guards, and the shape of that history is the
+   lesson: all five were found *after* implementation, by review — none by the original design or a
+   self-review. `failOnUnusableDeclaration` closes four of them as a **whitelist** of usable
+   declarations (scope, type, classifier, exclusions) rather than a list of known-bad values, because
+   narrowing the guard to specific bad values kept shipping the next variant. The fifth — `<exclusions>`
+   on a *managed* (not declared) `com.basquin:*` entry — surfaced only after that whitelist shipped,
+   when review showed the declared-path fix had been half a fix; `failOnConflictingManagedVersion`
+   closes it. **Two shapes, not one, are what §5.2's banner acceptance cannot detect:** declared
+   exclusions and managed exclusions both leave the extension jar present — so `Installed features`
+   still lists it — while a stripped `basquin-core` leaves it unusable.
 
    **Next: PR-4** (coverage — offline-JaCoCo execution injection, `/__basquin/coverage`, the native 2×2
    cells). Its **entry gate is spec §8.2** — whether `afterProjectsRead` model mutation reaches the

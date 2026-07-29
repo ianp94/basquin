@@ -13,7 +13,7 @@ $ grep -c 'basquin' rest-villains/pom.xml
 0
 ```
 
-## Why the build log independently proves the tree was clean DURING the build
+## Why the build log independently proves rest-villains/pom.xml carried no Basquin declaration when Maven read it
 
 A post-hoc check cannot by itself distinguish "never modified" from "modified and reverted".
 The build log settles it, because the injector's two paths print different lines:

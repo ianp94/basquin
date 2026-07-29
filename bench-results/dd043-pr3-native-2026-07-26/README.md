@@ -25,7 +25,7 @@ injection (S4's `banner-native.txt`), so this run isolates *the injector* as the
 | 1 | Injector announced itself | `build-native.log:2` = `[basquin-injector] instrumented fixture (com.basquin:basquin-quarkus:0.3.0 from http://localhost:8000/)` |
 | 2 | `BUILD SUCCESS`, native profile | `build-native.log:132`; Mandrel 25.0.3.0 JDK 25.0.3+9-LTS (`:55`), native-image proper 41.2s (`:128`), Maven total 03:11 min (`:134`) |
 | 3 | All three chain artifacts fetched from the injected repo | `build-native.log:10,13,17,19` (runtime+core, pom+jar) and `:30,33` (deployment, pom+jar) — all `Downloaded from basquin-injected`; **zero** `Downloaded from central:` lines for any `com/basquin` path |
-| 4 | Native binary runs on the host and serves | `fixture-1.0.0-SNAPSHOT-runner` (ELF 64-bit x86-64, stripped, 48,655,416 bytes) run directly on this WSL2 host: `started in 0.144s` (`banner-native.log:5`), `/ok` → `200` |
+| 4 | Native binary runs on the host and serves | `fixture-1.0.0-SNAPSHOT-runner` (ELF 64-bit x86-64, dynamically linked, stripped, 48,655,416 bytes — `binary-stat.txt:14,18`) run directly on this WSL2 host: `started in 0.144s` (`banner-native.log:5`), `/ok` → `200` |
 | 5 | Banner lists `basquin` | `banner-native.log:7` / `banner-native.txt`: `Installed features: [basquin, cdi, rest, smallrye-context-propagation, vertx]` |
 
 Baseline comparison: S4's native run of this same fixture reported
@@ -123,6 +123,7 @@ its banner. Together with Task 6's JVM cell this completes spec §5.2's two-arti
 | `http-access.log` | the HTTP server's request log — 13 GETs, all `200`; the deployment artifact's 4 are the unconfounded fetch |
 | `banner-native.log` | the native binary's startup output, boot through banner |
 | `banner-native.txt` | the extracted `Installed features` line |
+| `binary-stat.txt` | post-hoc `file`/`stat` on the still-present (gitignored) binary — backs check 4's size/format figure; mtime cross-checks against `build-native.log:135`'s finish timestamp |
 
 The built binary (`fixture/target/fixture-1.0.0-SNAPSHOT-runner`) and the served jars
 (`build/tmp/pr3-pages`) are **not** tracked — `bench-results/` tracks no built artifacts anywhere.

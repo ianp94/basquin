@@ -1,0 +1,11 @@
+# DD-043 §8.1 capture manifest
+capture_date_utc	2026-07-29T15:16:38Z
+gh_version	gh version 2.96.0 (2026-07-02)
+
+# repo	ref	resolved_sha	committer_date
+Apicurio/apicurio-registry	2.6.x	b7f3e291fd5861717932294e4a08d94ddc6981fc	2025-11-19T12:22:18Z
+Apicurio/apicurio-registry	main (head at capture)	5d1dd525e08e76eb9b970d9b6d74e5f8488210cf	2026-07-29T14:40:23Z
+Apicurio/apicurio-registry	main (README-pinned)	23159df62ef7a0935f55b8423c3b0d458773ecfc	2026-07-25 (per README:11)
+eclipse-hono/hono	master	8a4c437061c30d0269ce58a3406cbefb0d97c3c8	2026-07-21T15:41:02Z
+debezium/debezium-server	main	860760214720a5b3b09ad1fea28745eca235d914	2026-07-29T12:22:50Z
+debezium/debezium	main	38e9e602968c84c11c2cfbbc10b984b944787c5d	2026-07-29T12:22:23Z

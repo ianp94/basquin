@@ -1,0 +1,57 @@
+# Provenance captures for bench-results/dd043-pr3-optional-declaration-2026-07-29/
+# Written 2026-07-29T15:03:43Z
+
+## 1. The injector jar Run B mounted is the one this branch builds
+$ md5sum <jar mounted at /ext/injector.jar in Run B> basquin-maven-injector/build/libs/basquin-maven-injector-0.3.0.jar
+3d7af5df37a2d880ce1bd19536ed1a7c  /tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/b754fc8b-9424-4ced-b01f-1265076cc490/scratchpad/injector.jar
+3d7af5df37a2d880ce1bd19536ed1a7c  /mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/basquin-maven-injector/build/libs/basquin-maven-injector-0.3.0.jar
+
+$ git log --oneline -1
+a61a90c fix(dd043): round 3's three blocking findings — and each was a half-fix of mine
+
+# the working-tree delta on BasquinInjector.java at jar-build time was javadoc-only:
+$ git diff -U0 .../BasquinInjector.java | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' | grep -vE '^[+-][[:space:]]*(\*|//|/\*)' | wc -l
+0
+# (0 = every changed line is a comment line; no behaviour delta from a61a90c)
+
+## 2. Image digest — build and run used the digest pinned at bench-results/dd043-pr3-restvillains-2026-07-26/build.sh:30
+$ docker inspect --format '{{json .RepoDigests}}' quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25
+["quay.io/quarkus/ubi9-quarkus-mandrel-builder-image@sha256:c1d52b8ac781c2b7cf6f0cb3ed366ee3ea5ea4e5e34014eaf060ca6841afd6e5"]
+$ docker inspect --format '{{.Config.Image}}' basquin-optional-app
+quay.io/quarkus/ubi9-quarkus-mandrel-builder-image@sha256:c1d52b8ac781c2b7cf6f0cb3ed366ee3ea5ea4e5e34014eaf060ca6841afd6e5
+$ sed -n 30p bench-results/dd043-pr3-restvillains-2026-07-26/build.sh
+IMAGE="${BASQUIN_SPIKE_IMAGE:-quay.io/quarkus/ubi9-quarkus-mandrel-builder-image@sha256:c1d52b8ac781c2b7cf6f0cb3ed366ee3ea5ea4e5e34014eaf060ca6841afd6e5}"
+
+## 3. Offline resolution — the cached basquin artifacts record repository id 'basquin-injected' (= BasquinInjector.REPO_ID)
+$ ls ~/.m2/repository/com/basquin/
+basquin-core
+basquin-quarkus
+basquin-quarkus-deployment
+$ cat ~/.m2/repository/com/basquin/basquin-quarkus/0.3.0/_remote.repositories
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Sun Jul 26 11:47:21 GMT 2026
+basquin-quarkus-0.3.0.jar>basquin-injected=
+basquin-quarkus-0.3.0.pom>basquin-injected=
+
+## 4. The reference (non-optional, injected) build these listings are compared against
+# left in the sibling clone's target/ by the PR-3 acceptance (bench-results/dd043-pr3-restvillains-2026-07-26/)
+$ ls -la --time-style=long-iso ../quarkus-super-heroes/rest-villains/target/quarkus-app/lib/main/ | grep basquin
+-rwxrwxrwx 1 ian ian     7587 2026-07-26 07:46 com.basquin.basquin-core-0.3.0.jar
+-rwxrwxrwx 1 ian ian    10019 2026-07-26 07:46 com.basquin.basquin-quarkus-0.3.0.jar
+
+## 5. Both builds ran offline (-o): no artifact was fetched during them
+$ grep -c -E 'Downloading from|Downloaded from' build-optional-injector.log build-optional.log
+build-optional-injector.log:0
+build-optional.log:0
+# (0 and 0 — resolution was satisfied entirely from the mounted ~/.m2)
+
+## 6. Run A carried no injector at all (it is the control, not the decisive run)
+$ grep -c -i basquin build-optional.log
+0
+# (0 = no [basquin-injector] line and no basquin resolution line: the dependency was pom-declared only)
+
+## 7. The Maven the target builds with (pinned by the app's own wrapper, not by us)
+$ cat ../quarkus-super-heroes/rest-villains/.mvn/wrapper/maven-wrapper.properties
+wrapperVersion=3.3.4
+distributionType=only-script
+distributionUrl=https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.15/apache-maven-3.9.15-bin.zip

@@ -1,0 +1,15 @@
+Note: /mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/basquin-maven-injector/src/main/java/com/basquin/maven/BasquinInjector.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+28 tests completed, 1 failed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':basquin-maven-injector:test'.
+> There were failing tests. See the report at: file:///mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/basquin-maven-injector/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 6s

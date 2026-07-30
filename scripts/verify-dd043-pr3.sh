@@ -385,11 +385,23 @@ run_jvm() {
   # cannot report on: `git status --porcelain` in a non-repo prints NOTHING and exits 128, so a
   # stdout-emptiness test alone waves the gate open having measured nothing (round-5 B2 — the
   # defect class named at the top of this file, in the gate guarding PR-3's headline claim).
-  # rc=0 is not enough either: a target nested inside some OTHER repository — an unpacked ZIP
-  # under a checkout, ignored by it — gets rc=0 with git reporting on the WRONG tree (measured:
-  # an ignored dir inside this repo gives rc=0 and the ENCLOSING repo's status). So the
-  # work-tree root git answers for must be $app itself, physical-path compared so a symlinked
-  # APP_DIR is not spuriously refused.
+  # rc=0 is not enough either — but the first follow-up over-corrected: it demanded the work-tree
+  # root EQUAL $app, and that refuses the GENUINE acceptance target, because rest-villains is a
+  # module INSIDE the quarkus-super-heroes repository (the normal shape for a Maven module; its
+  # root is the enclosing repo, not itself). Root-equality was a proxy for two distinct hazards,
+  # each now gated on the thing it actually guards:
+  #   * WHICH tree answered: $app nested in THIS repo makes git grade basquin's own status
+  #     (measured: an ignored dir inside this repo gives rc=0 and the ENCLOSING repo's status).
+  #     So the discovered root must not be the basquin root — physical-path compared so a
+  #     symlinked APP_DIR can neither dodge the refusal nor be spuriously caught by it.
+  #   * WHETHER git can SEE edits under $app: an unpacked ZIP under some unrelated checkout,
+  #     ignored by it, also gets rc=0 — and a status scoped to that dir prints nothing FOREVER,
+  #     edits included, so "pristine" there would be vacuous. `git ls-files -- .` non-empty
+  #     proves git tracks content under $app, making a clean scoped status mean "checked and
+  #     clean" rather than "never looked".
+  # Both status queries (this preflight and jvm:zero-edits) are scoped with `-- .` so the verdict
+  # grades the TARGET directory: dirt elsewhere in the enclosing repo neither blocks the stage
+  # nor gets billed to rest-villains, while any edit inside $app is still a reported line.
   # `git -C "$app"` rather than `(cd "$app" && git status ...)`: the earlier shape ran the
   # command inside a `cd`'d subshell with the `2>` redirect INSIDE it, so the relative path
   # $OUT/jvm-git-preflight-stderr.txt resolved against $app, not the repo — on a non-repo target
@@ -398,11 +410,20 @@ run_jvm() {
   # (jvm:zero-edits) would then report as a self-inflicted dirty-tree failure. `git -C` never
   # changes the shell's cwd, so the redirect resolves in REPO_ROOT regardless, and $? is still
   # git's own exit status (no subshell, no `&&` chain to obscure it).
-  local dirty rc top
-  dirty="$(git -C "$app" status --porcelain 2>"$OUT/jvm-git-preflight-stderr.txt")"; rc=$?
+  local dirty rc top basquin_root
+  dirty="$(git -C "$app" status --porcelain -- . 2>"$OUT/jvm-git-preflight-stderr.txt")"; rc=$?
   top="$(cd -P "$app" && git rev-parse --show-toplevel 2>/dev/null)"
-  if [ "$rc" -ne 0 ] || [ "$top" != "$(cd -P "$app" && pwd)" ]; then
+  basquin_root="$(cd -P "$REPO_ROOT" && pwd)"
+  if [ "$rc" -ne 0 ] || [ -z "$top" ]; then
     skip "jvm" "UNMEASURED: git cannot report on $app (git status rc=$rc, work-tree root: ${top:-<none>}) — zero-edits could never be graded there, so the stage refuses to run (see jvm-git-preflight-stderr.txt)"
+    return
+  fi
+  if [ "$top" = "$basquin_root" ]; then
+    skip "jvm" "UNMEASURED: $app resolves inside the basquin repo itself (work-tree root: $top) — git would grade THIS repo's status, not the target's"
+    return
+  fi
+  if [ -z "$(git -C "$app" ls-files -- . 2>/dev/null | head -1)" ]; then
+    skip "jvm" "UNMEASURED: git tracks nothing under $app (work-tree root: $top) — a clean status there would mean 'never looked', not 'checked and clean'"
     return
   fi
   if [ -n "$dirty" ]; then
@@ -506,8 +527,12 @@ run_jvm() {
   # POSITIVE sentinel — porcelain v2's `# branch.oid` header, printed even on a clean tree —
   # proves git saw a repository, which v1's empty output never could. File-change lines in v2
   # never start with '#' (tracked '1'/'2'/'u', untracked '?'), so non-'#' lines are the edits.
+  # Scoped `-- .` like the preflight: $app is a module inside its repository, so an unscoped
+  # status would bill any concurrent change elsewhere in quarkus-super-heroes to rest-villains.
+  # The pathspec confines the file-change lines to $app's subtree (edits inside it still appear,
+  # repo-root-relative) while the branch headers — the sentinel — print regardless of pathspec.
   local statusfile="$OUT/jvm-target-status-after.txt" after arc
-  (cd "$app" && git status --porcelain=v2 --branch) > "$statusfile" 2>&1; arc=$?
+  (cd "$app" && git status --porcelain=v2 --branch -- .) > "$statusfile" 2>&1; arc=$?
   after="$(grep -v '^#' "$statusfile")"
   if [ "$arc" -ne 0 ]; then
     bad "jvm:zero-edits" "UNMEASURED: git could not report on $app (rc=$arc) — 'pristine' would be vacuous (see jvm-target-status-after.txt)"

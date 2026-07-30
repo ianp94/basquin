@@ -1083,11 +1083,11 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       committed unexercised (the native mutex was held, and the `guards` stage mutates source a running
       build was compiling). **Resolved 2026-07-29**: both stages ran end-to-end in the run of record,
       made against `8cadf8a` on a clean tree and committed as `3d2fc58`.
-      `bench-results/verify-20260729T163905Z/RESULTS.md:4` records `Stages run: unit jar guards jvm native`
+      `bench-results/verify-20260730T002548Z/RESULTS.md:4` records `Stages run: unit jar guards jvm native`
       and `:6` **21 passed, 0 failed, 0 skipped**, including `jvm:build` (`:21`), `jvm:banner` (`:25`),
       `native:build` (`:28`) and `native:banner` (`:30`). The original entry's sub-claim that "the script's
       own `RESULTS.md` discloses this" was also false — that file does not say the stages were unexercised;
       its only such section (`:32-41`) states what a pass does and does not establish. Do not re-run the
-      native stage on the strength of this entry; check `bench-results/verify-20260729T163905Z/` first.
+      native stage on the strength of this entry; check `bench-results/verify-20260730T002548Z/` first.
       (An earlier run, `verify-20260729T153141Z`, was **deleted** in `8cadf8a` — its B1 and B2 checks could
       not fail, so it certified nothing. Do not cite it; it is not in the tree.)

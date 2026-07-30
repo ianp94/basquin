@@ -49,27 +49,65 @@ DBZ="${DBZ_ROW%%$'\t'*}"
 
 # ---- 1. Apicurio 2.6.x app/pom.xml native profile ----------------------------
 RAW=https://raw.githubusercontent.com
-fetch() { curl -sSL "$RAW/$1/$2/$3"; }
+# fetch <repo> <ref> <path>
+# Prints the file's raw content on stdout and returns 0 ONLY on HTTP 200 (curl
+# -f: a non-2xx response prints nothing and the function returns 1). This is
+# the round-5 fix for S1: the previous `curl -sSL` (no -f, no status check)
+# turned a 404 into a zero-byte-different "404: Not Found" body, and every
+# `grep -c`/`grep -n` over it silently read as a genuine zero — indistinguishable
+# from "checked and clean". The binding invariant is that a reported zero must
+# mean "checked and clean", never "the check failed", so every call site below
+# that treats an empty/zero grep result as evidence checks fetch's own exit
+# status first (`if body="$(fetch ...)"; then ... else FETCH FAILED ... fi`)
+# rather than piping straight into grep.
+fetch() {
+  local tmp status rc
+  tmp="$(mktemp)"
+  status="$(curl -sS -L -f -o "$tmp" -w '%{http_code}' "$RAW/$1/$2/$3")"
+  rc=$?
+  if [ $rc -ne 0 ]; then
+    echo "FETCH-FAILED repo=$1 ref=$2 path=$3 http=${status:-?} curl_exit=$rc" >&2
+    rm -f "$tmp"
+    return 1
+  fi
+  cat "$tmp"
+  rm -f "$tmp"
+  return 0
+}
 
 {
   echo "# SOURCE: $RAW/Apicurio/apicurio-registry/$APIC_26X/app/pom.xml"
   echo "# ref: refs/heads/2.6.x @ $APIC_26X   captured: $CAPTURE_DATE_UTC"
   echo "#"
-  echo "# grep -n for 'native':"
-  fetch Apicurio/apicurio-registry "$APIC_26X" app/pom.xml | grep -n 'native' | sed 's/^/#   /'
-  echo "#"
-  echo "# verbatim lines 585-625 (file is 625 lines):"
-  fetch Apicurio/apicurio-registry "$APIC_26X" app/pom.xml | grep -n '' | sed -n '585,625p'
+  if body="$(fetch Apicurio/apicurio-registry "$APIC_26X" app/pom.xml)"; then
+    echo "# fetch: OK (HTTP 200)"
+    echo "#"
+    echo "# grep -n for 'native':"
+    printf '%s\n' "$body" | grep -n 'native' | sed 's/^/#   /'
+    echo "#"
+    echo "# verbatim lines 585-625 (file is 625 lines):"
+    printf '%s\n' "$body" | grep -n '' | sed -n '585,625p'
+  else
+    echo "# FETCH FAILED — see stderr. No content captured; nothing below is evidence of anything."
+  fi
 } > "$OUT/10-apicurio-2.6.x-app-pom-native-profile.txt"
 
 {
   echo "# Apicurio 2.6.x version facts, ref 2.6.x @ $APIC_26X, captured $CAPTURE_DATE_UTC"
   echo
   echo "## pom.xml (root) — grep -n 'quarkus.version|<version>' head"
-  fetch Apicurio/apicurio-registry "$APIC_26X" pom.xml | grep -n 'quarkus.version\|^    <version>'
+  if body="$(fetch Apicurio/apicurio-registry "$APIC_26X" pom.xml)"; then
+    printf '%s\n' "$body" | grep -n 'quarkus.version\|^    <version>'
+  else
+    echo "FETCH FAILED — see stderr"
+  fi
   echo
   echo "## app/pom.xml — grep -n 'resteasy'"
-  fetch Apicurio/apicurio-registry "$APIC_26X" app/pom.xml | grep -n 'resteasy'
+  if body="$(fetch Apicurio/apicurio-registry "$APIC_26X" app/pom.xml)"; then
+    printf '%s\n' "$body" | grep -n 'resteasy'
+  else
+    echo "FETCH FAILED — see stderr"
+  fi
   echo
   echo "## tags matching ^2\\.6\\. (gh api repos/Apicurio/apicurio-registry/tags --paginate)"
   gh api repos/Apicurio/apicurio-registry/tags --paginate --jq '.[].name' \
@@ -86,14 +124,25 @@ fetch() { curl -sSL "$RAW/$1/$2/$3"; }
   echo
   for f in app/pom.xml pom.xml; do
     echo "## $f — count of the string 'native'"
-    n="$(fetch Apicurio/apicurio-registry "$APIC_MAIN_PINNED" "$f" | grep -c 'native')"
-    echo "grep -c native $f = $n"
-    echo "## $f — grep -n 'quarkus.version'"
-    fetch Apicurio/apicurio-registry "$APIC_MAIN_PINNED" "$f" | grep -n 'quarkus.version' || echo "(none)"
+    if body="$(fetch Apicurio/apicurio-registry "$APIC_MAIN_PINNED" "$f")"; then
+      n="$(printf '%s\n' "$body" | grep -c 'native')"
+      echo "grep -c native $f = $n   [fetch OK, HTTP 200 — verified]"
+      echo "## $f — grep -n 'quarkus.version'"
+      printf '%s\n' "$body" | grep -n 'quarkus.version' || echo "(none) [fetch OK, HTTP 200 — verified absence]"
+    else
+      echo "grep -c native $f = FETCH FAILED — NOT a verified zero, see stderr"
+      echo "## $f — grep -n 'quarkus.version'"
+      echo "FETCH FAILED — NOT a verified absence, see stderr"
+    fi
     echo
   done
   echo "## same counts at main HEAD @ $APIC_MAIN_HEAD (drift check)"
-  echo "grep -c native app/pom.xml = $(fetch Apicurio/apicurio-registry "$APIC_MAIN_HEAD" app/pom.xml | grep -c 'native')"
+  if body="$(fetch Apicurio/apicurio-registry "$APIC_MAIN_HEAD" app/pom.xml)"; then
+    n="$(printf '%s\n' "$body" | grep -c 'native')"
+    echo "grep -c native app/pom.xml = $n   [fetch OK, HTTP 200 — verified]"
+  else
+    echo "grep -c native app/pom.xml = FETCH FAILED — NOT a verified zero, see stderr"
+  fi
 } > "$OUT/12-apicurio-main-no-native.txt"
 
 # ---- 2b. §1.2 and §1.5 sources (were read from the sparse clone, now pinned) --
@@ -101,25 +150,33 @@ fetch() { curl -sSL "$RAW/$1/$2/$3"; }
   echo "# Apicurio main @ $APIC_MAIN_PINNED — sources for README §1.2 and §1.5"
   echo "# captured $CAPTURE_DATE_UTC"
   echo
-  echo "## cli/pom.xml — grep -n 'native|cliSkipNative'"
-  fetch Apicurio/apicurio-registry "$APIC_MAIN_PINNED" cli/pom.xml \
-    | grep -n 'native\|cliSkipNative\|Native'
-  echo
-  echo "## cli/pom.xml — verbatim lines 14-30 (default-native block)"
-  fetch Apicurio/apicurio-registry "$APIC_MAIN_PINNED" cli/pom.xml | grep -n '' | sed -n '14,30p'
-  echo
-  echo "## cli/pom.xml — verbatim around <id>cli-skip-native</id>"
-  fetch Apicurio/apicurio-registry "$APIC_MAIN_PINNED" cli/pom.xml | grep -n '' \
-    | sed -n "$(fetch Apicurio/apicurio-registry "$APIC_MAIN_PINNED" cli/pom.xml \
-        | grep -n '<id>cli-skip-native</id>' | cut -d: -f1 | awk '{print $1-2","$1+24"p"}')"
+  if clipom="$(fetch Apicurio/apicurio-registry "$APIC_MAIN_PINNED" cli/pom.xml)"; then
+    echo "## cli/pom.xml — grep -n 'native|cliSkipNative'  [fetch OK, HTTP 200]"
+    printf '%s\n' "$clipom" | grep -n 'native\|cliSkipNative\|Native'
+    echo
+    echo "## cli/pom.xml — verbatim lines 14-30 (default-native block)"
+    printf '%s\n' "$clipom" | grep -n '' | sed -n '14,30p'
+    echo
+    echo "## cli/pom.xml — verbatim around <id>cli-skip-native</id>"
+    printf '%s\n' "$clipom" | grep -n '' \
+      | sed -n "$(printf '%s\n' "$clipom" | grep -n '<id>cli-skip-native</id>' | cut -d: -f1 | awk '{print $1-2","$1+24"p"}')"
+  else
+    echo "## cli/pom.xml — FETCH FAILED, see stderr; sections below skipped"
+  fi
   echo
   echo "## README.md (repo root) — grep -n 'cliSkipNative'"
-  fetch Apicurio/apicurio-registry "$APIC_MAIN_PINNED" README.md | grep -n 'cliSkipNative' \
-    || echo "(no match)"
+  if readme="$(fetch Apicurio/apicurio-registry "$APIC_MAIN_PINNED" README.md)"; then
+    printf '%s\n' "$readme" | grep -n 'cliSkipNative' || echo "(no match) [fetch OK, HTTP 200 — verified absence]"
+  else
+    echo "FETCH FAILED — NOT a verified absence, see stderr"
+  fi
   echo
   echo "## app/src/main/resources/application.properties — grep -n storage/datasource keys"
-  fetch Apicurio/apicurio-registry "$APIC_MAIN_PINNED" app/src/main/resources/application.properties \
-    | grep -n 'apicurio.storage.kind\|apicurio.storage.sql.kind\|apicurio.datasource.url'
+  if appprops="$(fetch Apicurio/apicurio-registry "$APIC_MAIN_PINNED" app/src/main/resources/application.properties)"; then
+    printf '%s\n' "$appprops" | grep -n 'apicurio.storage.kind\|apicurio.storage.sql.kind\|apicurio.datasource.url'
+  else
+    echo "FETCH FAILED, see stderr"
+  fi
 } > "$OUT/15-apicurio-main-cli-pom-and-appprops.txt"
 
 # ---- 3. §4 addendum spot-check: Dockerfile.native presence -------------------
@@ -221,17 +278,28 @@ tally_runs debezium/debezium-server 46636201 '' 12 'native build' \
   echo "# Eclipse Hono native declarations, master @ $HONO, captured $CAPTURE_DATE_UTC"
   echo
   echo "## bom/pom.xml — grep -n 'quarkus.platform.version'"
-  fetch eclipse-hono/hono "$HONO" bom/pom.xml | grep -n 'quarkus.platform.version'
+  if body="$(fetch eclipse-hono/hono "$HONO" bom/pom.xml)"; then
+    printf '%s\n' "$body" | grep -n 'quarkus.platform.version'
+  else
+    echo "FETCH FAILED — see stderr"
+  fi
   echo
   for f in adapters/parent/pom.xml services/parent/pom.xml; do
     echo "## $f — verbatim around the build-native-image profile"
-    fetch eclipse-hono/hono "$HONO" "$f" | grep -n '' \
-      | sed -n "$(fetch eclipse-hono/hono "$HONO" "$f" | grep -n '<id>build-native-image</id>' | cut -d: -f1 | awk '{print $1-2","$1+8"p"}')"
+    if body="$(fetch eclipse-hono/hono "$HONO" "$f")"; then
+      printf '%s\n' "$body" | grep -n '' \
+        | sed -n "$(printf '%s\n' "$body" | grep -n '<id>build-native-image</id>' | cut -d: -f1 | awk '{print $1-2","$1+8"p"}')"
+    else
+      echo "FETCH FAILED — see stderr"
+    fi
     echo
   done
   echo "## .github/workflows/native-images-tests.yml — schedule + job names"
-  fetch eclipse-hono/hono "$HONO" .github/workflows/native-images-tests.yml \
-    | grep -n 'name:\|cron:\|schedule:\|on:\|workflow_dispatch' | head -20
+  if body="$(fetch eclipse-hono/hono "$HONO" .github/workflows/native-images-tests.yml)"; then
+    printf '%s\n' "$body" | grep -n 'name:\|cron:\|schedule:\|on:\|workflow_dispatch' | head -20
+  else
+    echo "FETCH FAILED — see stderr"
+  fi
 } > "$OUT/40-hono-native-declarations.txt"
 
 {
@@ -239,14 +307,26 @@ tally_runs debezium/debezium-server 46636201 '' 12 'native build' \
   echo "# debezium-server main @ $DBZS ; debezium core main @ $DBZ"
   echo
   echo "## debezium core pom.xml — grep -n 'quarkus.version'"
-  fetch debezium/debezium "$DBZ" pom.xml | grep -n 'quarkus.version'
+  if body="$(fetch debezium/debezium "$DBZ" pom.xml)"; then
+    printf '%s\n' "$body" | grep -n 'quarkus.version'
+  else
+    echo "FETCH FAILED — see stderr"
+  fi
   echo
   echo "## debezium-server .github/workflows/cross-maven.yml — triggers (lines 12-24)"
-  fetch debezium/debezium-server "$DBZS" .github/workflows/cross-maven.yml | grep -n '' | sed -n '12,24p'
+  if body="$(fetch debezium/debezium-server "$DBZS" .github/workflows/cross-maven.yml)"; then
+    printf '%s\n' "$body" | grep -n '' | sed -n '12,24p'
+  else
+    echo "FETCH FAILED — see stderr"
+  fi
   echo
   echo "## debezium-server .github/workflows/cross-maven.yml — native-build job"
-  fetch debezium/debezium-server "$DBZS" .github/workflows/cross-maven.yml | grep -n '' \
-    | sed -n "$(fetch debezium/debezium-server "$DBZS" .github/workflows/cross-maven.yml | grep -n '^  native-build:' | cut -d: -f1 | awk '{print $1","$1+21"p"}')"
+  if body="$(fetch debezium/debezium-server "$DBZS" .github/workflows/cross-maven.yml)"; then
+    printf '%s\n' "$body" | grep -n '' \
+      | sed -n "$(printf '%s\n' "$body" | grep -n '^  native-build:' | cut -d: -f1 | awk '{print $1","$1+21"p"}')"
+  else
+    echo "FETCH FAILED — see stderr"
+  fi
 } > "$OUT/41-debezium-native-declarations.txt"
 
 # ---- 7. Build-step tally: did the NATIVE IMAGE BUILD itself pass? ------------
@@ -356,20 +436,26 @@ grep_workflows() { # repo sha outfile label
     if [ -z "$files" ]; then echo "(.github/workflows not found at this ref)"; return; fi
     echo "# workflow files found: $(printf '%s\n' "$files" | wc -l)"
     echo
-    local total=0
+    local total=0 failed=0
     while read -r f; do
-      local hits
-      hits="$(fetch "$repo" "$sha" "$f" | grep -n 'native' || true)"
-      if [ -n "$hits" ]; then
-        echo "## $f  ($(printf '%s\n' "$hits" | wc -l) hit(s))"
-        printf '%s\n' "$hits" | sed 's/^/    /'
-        total=$((total + $(printf '%s\n' "$hits" | wc -l)))
+      local content hits
+      if content="$(fetch "$repo" "$sha" "$f")"; then
+        hits="$(printf '%s\n' "$content" | grep -n 'native' || true)"
+        if [ -n "$hits" ]; then
+          echo "## $f  ($(printf '%s\n' "$hits" | wc -l) hit(s))"
+          printf '%s\n' "$hits" | sed 's/^/    /'
+          total=$((total + $(printf '%s\n' "$hits" | wc -l)))
+        else
+          echo "## $f  (0 hits, fetch OK — verified)"
+        fi
       else
-        echo "## $f  (0 hits)"
+        echo "## $f  (FETCH FAILED — NOT a verified zero, see stderr)"
+        failed=$((failed + 1))
       fi
     done <<< "$files"
     echo
     echo "# total 'native' hits across all workflow files: $total"
+    echo "# files where fetch failed (excluded above, NOT verified zeros): $failed"
   } > "$out"
 }
 
@@ -399,15 +485,22 @@ grep_workflows Apicurio/apicurio-registry "$APIC_26X" \
     if [ -z "$files" ]; then echo "    (.github/workflows not readable)"; echo; continue; fi
     echo "    workflow files: $(printf '%s\n' "$files" | wc -l)"
     hitfiles=0
+    failfiles=0
     while read -r f; do
-      h="$(fetch "$repo" "$sha" "$f" | grep -c 'native' || true)"
-      if [ "${h:-0}" -gt 0 ]; then
-        echo "    HIT $f  ($h line(s) containing 'native')"
-        fetch "$repo" "$sha" "$f" | grep -n 'native' | sed 's/^/        /'
-        hitfiles=$((hitfiles+1))
+      if content="$(fetch "$repo" "$sha" "$f")"; then
+        h="$(printf '%s\n' "$content" | grep -c 'native' || true)"
+        if [ "${h:-0}" -gt 0 ]; then
+          echo "    HIT $f  ($h line(s) containing 'native')  [fetch OK]"
+          printf '%s\n' "$content" | grep -n 'native' | sed 's/^/        /'
+          hitfiles=$((hitfiles+1))
+        fi
+      else
+        echo "    FETCH FAILED for $f — NOT a verified zero, see stderr"
+        failfiles=$((failfiles+1))
       fi
     done <<< "$files"
     echo "    workflow files containing 'native': $hitfiles"
+    echo "    workflow files where fetch failed (excluded, NOT verified zeros): $failfiles"
     echo
   done
 } > "$OUT/50-screened-out-candidates.txt"

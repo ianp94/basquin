@@ -101,13 +101,34 @@ PY
 }
 
 # Name every failing test, so a mutation check can assert WHICH test failed rather than how many.
-failing_test_names() {
-  python3 - <<'PY'
-import glob, xml.etree.ElementTree as ET
-for p in glob.glob("basquin-maven-injector/build/test-results/**/*.xml", recursive=True):
+# Takes the JUnit-XML directory as $1 so the guards stage can point it at the COPY inside $OUT —
+# the verdict and the committed evidence must be the same bytes (round-5 S3: guards rows named a
+# failing test whose XML lived only in build/, which is never committed, so a reader could not
+# check which test failed against the run directory).
+failing_test_names() {  # $1 = directory holding JUnit XML (searched recursively)
+  python3 - "$1" <<'PY'
+import glob, os, sys, xml.etree.ElementTree as ET
+for p in glob.glob(os.path.join(sys.argv[1], "**", "*.xml"), recursive=True):
     for tc in ET.parse(p).getroot().iter("testcase"):
         if tc.find("failure") is not None or tc.find("error") is not None:
             print(tc.get("name"))
+PY
+}
+
+# "<total> <failures+errors>" summed over one directory's JUnit XML — same contract as
+# suite_counts() but scoped, so guards:restored can derive its counts from the copy in $OUT.
+xml_counts() {  # $1 = directory holding JUnit XML (searched recursively)
+  python3 - "$1" <<'PY'
+import glob, os, sys, xml.etree.ElementTree as ET
+tot = fail = 0
+for p in glob.glob(os.path.join(sys.argv[1], "**", "*.xml"), recursive=True):
+    try:
+        r = ET.parse(p).getroot()
+        tot  += int(r.get("tests", 0))
+        fail += int(r.get("failures", 0)) + int(r.get("errors", 0))
+    except Exception:
+        pass
+print(f"{tot} {fail}")
 PY
 }
 
@@ -150,16 +171,23 @@ purge_basquin() {  # $1 = a local maven repository root
   } >> "$proof"
 }
 
-serve_pages() {  # publishes the chain to a scratch dir and serves it on 127.0.0.1
-  local dir="$OUT/pages-repo"
+serve_pages() {  # $1 = stage tag; publishes the chain to a scratch dir and serves it on 127.0.0.1
+  # PER-STAGE log files, never a shared one: `>` TRUNCATES, and `native` runs after `jvm` in the
+  # default `all` order, so with a shared $OUT/http-access.log the native stage's serve_pages
+  # destroyed the JVM stage's HTTP evidence mid-run and refilled the file with native traffic
+  # (round-5 B1: the run of record's jvm:deployment-from-injected-repo row cited a log that no
+  # longer held the traffic it was graded on — hidden because the native build happened to make
+  # the same number of deployment GETs). Any row citing one of these logs must cite the file
+  # tagged with ITS OWN stage.
+  local tag="$1" dir="$OUT/pages-repo"
   rm -rf "$dir"
   ./gradlew -q --no-daemon "-PbasquinPagesDir=$dir" \
     :basquin-core:publishAllPublicationsToPagesRepository \
     :basquin-quarkus:runtime:publishAllPublicationsToPagesRepository \
     :basquin-quarkus:deployment:publishAllPublicationsToPagesRepository \
-    > "$OUT/publish.log" 2>&1 || return 1
+    > "$OUT/publish-$tag.log" 2>&1 || return 1
   ( cd "$dir" && exec python3 -m http.server "$PORT" --bind 127.0.0.1 ) \
-    > "$OUT/http-access.log" 2>&1 &
+    > "$OUT/http-access-$tag.log" 2>&1 &
   echo $! > "$OUT/http-server.pid"
   sleep 2
   curl -sf -o /dev/null "http://localhost:$PORT/com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.pom"
@@ -267,10 +295,19 @@ PY
     # set and printed PASS off a run that never happened. So: clear before the run, and refuse to read
     # a verdict out of a dir the run did not repopulate.
     rm -rf basquin-maven-injector/build/test-results
-    ./gradlew :basquin-maven-injector:test --no-daemon -q > "$OUT/guard-$3.log" 2>&1
+    # No -q: at lifecycle level the log carries "N tests completed, M failed" and a FAILED line per
+    # failing test, so the committed guard-$3.log can support the row's named test on its own
+    # (round-5 S3: the -q logs showed only a count and a pointer to an uncommitted HTML report).
+    ./gradlew :basquin-maven-injector:test --no-daemon --console=plain > "$OUT/guard-$3.log" 2>&1
     local rc=$?
-    local names; names="$(failing_test_names)"
-    local fresh; fresh="$(find basquin-maven-injector/build/test-results -name '*.xml' -type f 2>/dev/null | wc -l)"
+    # Copy the run's JUnit XML into the results directory and read the verdict FROM THE COPY:
+    # what the check graded and what the run directory holds are then the same bytes, and the
+    # fresh-XML count over the copy doubles as the did-it-run discriminator below.
+    local xmldir="$OUT/guard-$3-junit"
+    rm -rf "$xmldir"; mkdir -p "$xmldir"
+    find basquin-maven-injector/build/test-results -name '*.xml' -type f -exec cp {} "$xmldir/" \; 2>/dev/null
+    local names; names="$(failing_test_names "$xmldir")"
+    local fresh; fresh="$(find "$xmldir" -name '*.xml' -type f | wc -l)"
     cp "$backup" "$src"
     # Gradle's exit code alone cannot say "the test task did not execute": tests-ran-and-failed (the
     # expected outcome under a mutation) and never-compiled BOTH exit 1. Fresh XML is the discriminator.
@@ -279,9 +316,9 @@ PY
     elif [ "$rc" -eq 0 ]; then
       bad "guards:$3" "module suite GREEN (rc=0) with the guard neutered — $2 cannot fail, the guard is dead"
     elif echo "$names" | grep -qx "$2"; then
-      ok "guards:$3" "neutering it fails $2 (among the failures; other tests sharing the guard may fail too — not asserted exclusive)"
+      ok "guards:$3" "neutering it fails $2 (per guard-$3-junit/; among the failures — other tests sharing the guard may fail too, not asserted exclusive)"
     else
-      bad "guards:$3" "expected $2 to fail; got: ${names:-<none>}"
+      bad "guards:$3" "expected $2 to fail; got: ${names:-<none>} (guard-$3-junit/)"
     fi
   }
 
@@ -314,9 +351,26 @@ PY
   _mutate '("            if (declared != null && !declared.equals(version)) {", "            if (false) {")' \
           "failsLoudlyWhenAnotherBasquinArtifactIsDeclaredAtAConflictingVersion" "sibling-version"
 
-  ./gradlew :basquin-maven-injector:test --no-daemon -q > "$OUT/guard-restore.log" 2>&1 \
-    && ok "guards:restored" "source restored, module suite green" \
-    || bad "guards:restored" "suite not green after restore — CHECK $src against $backup"
+  # guards:restored previously keyed on gradle's exit code alone — the precise trap _mutate
+  # refuses 45 lines up: rc=0 cannot distinguish "ran green" from "did not run", and its -q log
+  # carried neither a test count nor BUILD SUCCESSFUL, so the committed artifact could not
+  # support the row (round-5 S3). Same discipline as _mutate now: clear, run, copy the JUnit XML
+  # into $OUT, and grade fresh-XML presence + counts from the copy, not the exit code alone.
+  rm -rf basquin-maven-injector/build/test-results
+  ./gradlew :basquin-maven-injector:test --no-daemon --console=plain > "$OUT/guard-restore.log" 2>&1
+  local rrc=$?
+  local rxml="$OUT/guard-restore-junit"
+  rm -rf "$rxml"; mkdir -p "$rxml"
+  find basquin-maven-injector/build/test-results -name '*.xml' -type f -exec cp {} "$rxml/" \; 2>/dev/null
+  local rcounts; rcounts="$(xml_counts "$rxml")"
+  local rtot="${rcounts% *}" rfail="${rcounts#* }"
+  if [ "$(find "$rxml" -name '*.xml' -type f | wc -l)" -eq 0 ]; then
+    bad "guards:restored" "UNMEASURED: no fresh JUnit XML after the restore run (gradle rc=$rrc) — cannot tell 'ran green' from 'never ran'; see guard-restore.log"
+  elif [ "$rrc" -eq 0 ] && [ "$rfail" -eq 0 ] && [ "$rtot" -gt 0 ]; then
+    ok "guards:restored" "source restored, module suite green ($rtot tests, 0 failures per guard-restore-junit/)"
+  else
+    bad "guards:restored" "suite not green after restore ($rtot tests, $rfail failures, gradle rc=$rrc) — CHECK $src against $backup"
+  fi
 }
 
 run_jvm() {
@@ -327,8 +381,30 @@ run_jvm() {
   fi
   app="$(cd "$app" && pwd)"
 
-  # Refuse rather than revert: the tree is not ours to clean up.
-  local dirty; dirty="$(cd "$app" && git status --porcelain 2>/dev/null)"
+  # Refuse rather than revert: the tree is not ours to clean up. And refuse to GRADE a tree git
+  # cannot report on: `git status --porcelain` in a non-repo prints NOTHING and exits 128, so a
+  # stdout-emptiness test alone waves the gate open having measured nothing (round-5 B2 — the
+  # defect class named at the top of this file, in the gate guarding PR-3's headline claim).
+  # rc=0 is not enough either: a target nested inside some OTHER repository — an unpacked ZIP
+  # under a checkout, ignored by it — gets rc=0 with git reporting on the WRONG tree (measured:
+  # an ignored dir inside this repo gives rc=0 and the ENCLOSING repo's status). So the
+  # work-tree root git answers for must be $app itself, physical-path compared so a symlinked
+  # APP_DIR is not spuriously refused.
+  # `git -C "$app"` rather than `(cd "$app" && git status ...)`: the earlier shape ran the
+  # command inside a `cd`'d subshell with the `2>` redirect INSIDE it, so the relative path
+  # $OUT/jvm-git-preflight-stderr.txt resolved against $app, not the repo — on a non-repo target
+  # this threw a spurious "No such file or directory" from the shell itself, and on a real clone
+  # it would have written the stderr file INTO the target tree, which the very next check
+  # (jvm:zero-edits) would then report as a self-inflicted dirty-tree failure. `git -C` never
+  # changes the shell's cwd, so the redirect resolves in REPO_ROOT regardless, and $? is still
+  # git's own exit status (no subshell, no `&&` chain to obscure it).
+  local dirty rc top
+  dirty="$(git -C "$app" status --porcelain 2>"$OUT/jvm-git-preflight-stderr.txt")"; rc=$?
+  top="$(cd -P "$app" && git rev-parse --show-toplevel 2>/dev/null)"
+  if [ "$rc" -ne 0 ] || [ "$top" != "$(cd -P "$app" && pwd)" ]; then
+    skip "jvm" "UNMEASURED: git cannot report on $app (git status rc=$rc, work-tree root: ${top:-<none>}) — zero-edits could never be graded there, so the stage refuses to run (see jvm-git-preflight-stderr.txt)"
+    return
+  fi
   if [ -n "$dirty" ]; then
     printf '%s\n' "$dirty" > "$OUT/jvm-target-dirty.txt"
     skip "jvm" "target tree is dirty — commit/revert it yourself, then re-run (see jvm-target-dirty.txt)"
@@ -339,7 +415,7 @@ run_jvm() {
   fi
 
   purge_basquin "$HOME/.m2/repository" "jvm-purge-proof.txt"
-  if ! serve_pages; then bad "jvm" "could not publish/serve the scratch Pages repo"; return; fi
+  if ! serve_pages jvm; then bad "jvm" "could not publish/serve the scratch Pages repo (publish-jvm.log)"; return; fi
 
   local stage="$REPO_ROOT/build/tmp/verify-pr3-inj"
   mkdir -p "$stage"; cp basquin-maven-injector/build/libs/basquin-maven-injector-*.jar "$stage/"
@@ -368,10 +444,12 @@ run_jvm() {
     && ok "jvm:participant-ran" "$(grep -o '\[basquin-injector\] instrumented.*' "$OUT/jvm-build.log" | head -1)" \
     || bad "jvm:participant-ran" "no injector log line — check the jar's sisu index; Maven ignores a bad ext.class.path SILENTLY"
 
-  # The unconfounded evidence: no pom anywhere names the deployment artifact.
-  grep -q "basquin-quarkus-deployment" "$OUT/http-access.log" \
-    && ok "jvm:deployment-from-injected-repo" "$(grep -c 'basquin-quarkus-deployment' "$OUT/http-access.log") GET(s)" \
-    || bad "jvm:deployment-from-injected-repo" "not fetched from the injected repo"
+  # The unconfounded evidence: no pom anywhere names the deployment artifact. Counted from the
+  # JVM stage's OWN access log — see the round-5 B1 note on serve_pages for why the file is
+  # per-stage. (A missing/empty log makes the grep fail, so that shape reports FAIL, not PASS.)
+  grep -q "basquin-quarkus-deployment" "$OUT/http-access-jvm.log" \
+    && ok "jvm:deployment-from-injected-repo" "$(grep -c 'basquin-quarkus-deployment' "$OUT/http-access-jvm.log") GET(s) in http-access-jvm.log" \
+    || bad "jvm:deployment-from-injected-repo" "not fetched from the injected repo (see http-access-jvm.log)"
   # The sentinel must bind to THIS claim, not merely prove the log is non-trivial. Two prior sentinels
   # failed that test: "Downloading from" (only shows Maven fetched something), and
   # "com/basquin|com\.basquin" — satisfied by the injector's OWN "[basquin-injector] instrumented …
@@ -420,13 +498,25 @@ run_jvm() {
     bad "jvm:boundary" "poll returned '${poll:-<empty>}' — the filter did not see the request"
   fi
 
-  # The actual claim: zero edits AFTER the build, not merely before.
-  local after; after="$(cd "$app" && git status --porcelain)"
-  if [ -z "$after" ]; then
-    ok "jvm:zero-edits" "target tree still pristine after the build"
+  # The actual claim: zero edits AFTER the build, not merely before — and "pristine" must come
+  # from a git that actually ANSWERED. `git status --porcelain` exits 128 with EMPTY stdout in a
+  # non-repo (or if the build destroyed .git, or git left PATH), and the old stdout-only test
+  # printed PASS off exactly that (round-5 B2), on the row carrying PR-3's headline claim. Two
+  # things bind it now: rc must be 0, and the verdict is graded from a captured artifact whose
+  # POSITIVE sentinel — porcelain v2's `# branch.oid` header, printed even on a clean tree —
+  # proves git saw a repository, which v1's empty output never could. File-change lines in v2
+  # never start with '#' (tracked '1'/'2'/'u', untracked '?'), so non-'#' lines are the edits.
+  local statusfile="$OUT/jvm-target-status-after.txt" after arc
+  (cd "$app" && git status --porcelain=v2 --branch) > "$statusfile" 2>&1; arc=$?
+  after="$(grep -v '^#' "$statusfile")"
+  if [ "$arc" -ne 0 ]; then
+    bad "jvm:zero-edits" "UNMEASURED: git could not report on $app (rc=$arc) — 'pristine' would be vacuous (see jvm-target-status-after.txt)"
+  elif ! grep -q '^# branch\.oid' "$statusfile"; then
+    bad "jvm:zero-edits" "UNMEASURED: rc=0 but no branch header in jvm-target-status-after.txt — git answered nothing gradeable"
+  elif [ -z "$after" ]; then
+    ok "jvm:zero-edits" "target tree still pristine after the build (jvm-target-status-after.txt: branch headers only)"
   else
-    printf '%s\n' "$after" > "$OUT/jvm-target-dirty-after.txt"
-    bad "jvm:zero-edits" "the build modified the target tree — PR-3's central claim FAILS"
+    bad "jvm:zero-edits" "the build modified the target tree — PR-3's central claim FAILS (see jvm-target-status-after.txt)"
   fi
   stop_server
 }
@@ -444,7 +534,7 @@ run_native() {
   echo "  (native compilation is serialized on a mutex and takes 15+ minutes; nothing else CPU-heavy should run)"
 
   purge_basquin "$REPO_ROOT/bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository" "native-purge-proof.txt"
-  if ! serve_pages; then bad "native" "could not publish/serve the scratch Pages repo"; return; fi
+  if ! serve_pages native; then bad "native" "could not publish/serve the scratch Pages repo (publish-native.log)"; return; fi
 
   local stage="$REPO_ROOT/build/tmp/verify-pr3-inj"
   mkdir -p "$stage"; cp basquin-maven-injector/build/libs/basquin-maven-injector-*.jar "$stage/"

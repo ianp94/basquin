@@ -52,6 +52,31 @@ both substitutes look **stronger**, not weaker, than the draft claimed — so th
 (see §5 for the re-assessment, including the one respect in which the evidence is now *worse* for
 Apicurio 2.6.x).
 
+### 0.2b Round-5 fix: `fetch()` could not distinguish a failed download from a genuine zero
+
+`capture.sh`'s `fetch()` was `curl -sSL "$RAW/$1/$2/$3"` — no `-f`, no status check. A 404 returns
+GitHub's `404: Not Found` body **with exit 0**, and every `grep -c`/`grep -n` over it reads as a
+clean zero. Every load-bearing zero in §1.1/§1.3/§1.4 (`capture/12`'s `app/pom.xml`/`pom.xml` = 0,
+the 25 zero-hit workflow files in `capture/13` including `verify.yaml`) was therefore indistinguishable
+from a failed download rather than a checked absence. `capture.sh:30-138` already used the safe
+pattern (`%{http_code}` recorded explicitly) for the Dockerfile spot-check; it was not applied
+everywhere else.
+
+**Fixed:** `fetch()` now uses `curl -f` and records the HTTP status; every call site that turns its
+output into a hit-count or absence claim checks fetch's own exit status first and reports
+`FETCH-FAILED` rather than a bare zero if the download failed
+([`capture/capture.sh`](capture/capture.sh)).
+
+**Re-verified, and no conclusion changes.** Because §1.1/§1.3/§1.4's zeros are all fetched at the
+*pinned* ref `APIC_MAIN_PINNED` (a fixed SHA, not a moving branch), they are re-checkable
+byte-for-byte without the Actions-tally drift that affects §2/§5's moving windows. A standalone
+re-fetch of every URL behind those zeros — `app/pom.xml`, `pom.xml`, all 29 workflow files including
+`verify.yaml` — using the same `-f` discipline returned **HTTP 200 for all of them, zero fetch
+failures**: 25 of 29 workflow files zero-hit (matches `capture/13`), `verify.yaml` zero-hit and
+confirmed fetched, both poms zero-hit and confirmed fetched
+([`capture/16-s1-pinned-fetch-reverification-2026-07-29.txt`](capture/16-s1-pinned-fetch-reverification-2026-07-29.txt)).
+The zeros were genuine. §8.1's verdict is unchanged.
+
 ### 0.3 Evidence index
 
 | file | what it pins |
@@ -63,6 +88,7 @@ Apicurio 2.6.x).
 | [`capture/13-apicurio-main-workflows-native-grep.txt`](capture/13-apicurio-main-workflows-native-grep.txt) | every `main` workflow file grepped for `native` |
 | [`capture/14-apicurio-2.6.x-workflows-native-grep.txt`](capture/14-apicurio-2.6.x-workflows-native-grep.txt) | same for 2.6.x |
 | [`capture/15-apicurio-main-cli-pom-and-appprops.txt`](capture/15-apicurio-main-cli-pom-and-appprops.txt) | `cli/pom.xml` native + `cli-skip-native` blocks, root `README.md:117`, `application.properties` storage keys |
+| [`capture/16-s1-pinned-fetch-reverification-2026-07-29.txt`](capture/16-s1-pinned-fetch-reverification-2026-07-29.txt) | round-5 fix (§0.2b): every §1.1/§1.3/§1.4 zero re-fetched with `curl -f`, all HTTP 200, no conclusion changed |
 | [`capture/20-apicurio-2.6.x-verify-runs.txt`](capture/20-apicurio-2.6.x-verify-runs.txt) | 2.6.x `verify.yaml` runs + native-job conclusions |
 | [`capture/21-hono-native-image-runs.txt`](capture/21-hono-native-image-runs.txt) | Hono `native-images-tests.yml` runs + job conclusions |
 | [`capture/22-debezium-server-cross-maven-runs.txt`](capture/22-debezium-server-cross-maven-runs.txt) | Debezium Server `cross-maven.yml` runs + `Verify native build` conclusions |

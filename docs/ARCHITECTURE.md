@@ -92,9 +92,16 @@ never-modify-the-source thesis, met by a different mechanism (DD-043 spec §1.1,
 
 In both rows no file in the application's source tree is created or modified. What changes is where
 the failure mode lives: a runtime agent can silently detach, while a build-time injection can
-silently *not happen* — so its presence is proven per build by the `basquin` entry in the startup
-banner's `Installed features`, never assumed. Operator guide:
-[THIRD-PARTY-APPS.md](THIRD-PARTY-APPS.md); full design:
+silently *not happen* — so its presence is checked per build via the `basquin` entry in the startup
+banner's `Installed features`, never left unchecked. That check is **necessary but not
+sufficient**: two shapes — an `<exclusions>` entry on the declared, or on the managed,
+`com.basquin:basquin-quarkus` dependency, either of which can strip the transitive `basquin-core`
+the extension needs — leave `basquin` in the banner while the build is unusable, so no banner-only
+acceptance run would catch them. On the Maven path, `basquin-maven-injector`'s fail-loudly guards
+close that gap by hard-failing the build itself, before any banner exists to check; on the Gradle
+path (`basquin-init.gradle`), which implements none of those guards, the banner is the only signal
+and is not sufficient on its own. Guard-by-guard detail: THIRD-PARTY-APPS.md's "Fail-loudly
+behaviours" section. Operator guide: [THIRD-PARTY-APPS.md](THIRD-PARTY-APPS.md); full design:
 `docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md` §5.
 
 ## Early Usage Pattern (preview)

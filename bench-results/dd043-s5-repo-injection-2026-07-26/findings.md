@@ -22,7 +22,13 @@ injecting the `<repository>` into the `Model` alone is a no-op at `afterProjects
 effective repository lists were computed before any participant ran. The participant must *also*
 append to `p.getRemoteArtifactRepositories()` and call `p.setRemoteArtifactRepositories(...)`, whose
 3.9.16 implementation (verified in bytecode) refreshes the Aether `remoteProjectRepositories` list
-that both Maven resolution and the quarkus-maven-plugin consume.
+that both Maven resolution and the quarkus-maven-plugin consume. **Round 5 (2026-07-29): the
+model-only half of this claim is now measured, not just read from bytecode.** A control probe
+(`ModelOnlyRepoInjectProbe.java`) applies the model mutation alone and omits
+`setRemoteArtifactRepositories(...)`; the resulting build fails at dependency resolution
+(`Could not find artifact com.basquin:basquin-quarkus:jar:0.3.0 in central`) because the resolver
+never attempts `basquin-injected` at all — see README "The control cell (round 5, 2026-07-29)",
+`build-s5-control.log`.
 
 ## Scope limits (claims are exactly this wide)
 
@@ -41,9 +47,11 @@ The brief was right that either outcome forces one. The CONFIRMED outcome forces
 1. **§5 (Injection without source modification):** the injector's `afterProjectsRead` injects the
    `basquin-quarkus` dependency **and the Pages `<repository>`** — and the spec must state the
    two-level mutation (model `Repository` + `setRemoteArtifactRepositories(...)` to refresh
-   `remoteProjectRepositories`), because the model-only version passes no test and fails silently.
-   Fresh-instance-per-project discipline (already specified for `Dependency`) applies to the
-   `Repository`/`ArtifactRepository` objects too.
+   `remoteProjectRepositories`), because the model-only version **fails to resolve, measured**
+   (round-5 control cell, `build-s5-control.log`: `BUILD FAILURE`,
+   `Could not resolve dependencies ... com.basquin:basquin-quarkus:jar:0.3.0`) — not merely argued
+   from maven-core's bytecode. Fresh-instance-per-project discipline (already specified for
+   `Dependency`) applies to the `Repository`/`ArtifactRepository` objects too.
 2. **§5, operator contract:** no operator pre-populate step is required; S4's local-repo path
    (`publishToMavenLocal` / `install:install-file`) demotes to a documented **offline fallback**,
    not a requirement. `THIRD-PARTY-APPS.md` therefore needs no per-app install step.

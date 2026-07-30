@@ -127,7 +127,11 @@ the version branch, not the exclusions branch, is the one that catches this cell
 
 ## S2 — a declared `com.basquin:basquin-core` at a conflicting version, and what else on that path matters
 
-All S2 cells are run with the **`stock`** jar: the question is what the *shipped* injector does.
+All S2 cells are run with the **`stock`** jar: the question is what the *shipped* injector does. "Shipped"
+here means shipped **at capture time**, commit `bffcbba` (`provenance.txt`) — the commit these very
+findings motivated `failOnUnusableSiblingDeclaration` against, which landed *next*, in `8cadf8a`. Two of
+the three hazard rows below (`dcv`, `dsc`, `dprov`) are exactly the shapes that guard now rejects; see
+"Reproducibility under the shipped guard" below for what that means for reproducing this directory today.
 
 **The bypass is real.** `cells/dcv.pom.xml` declares `com.basquin:basquin-core:0.0.1-conflicting` directly:
 
@@ -210,12 +214,74 @@ re-run here because S2's guard edits the same file they anchor in. Five are new:
 - Maven **3.9.15** only (`provenance.txt`), which is the version `BasquinInjector`'s javadoc pins to.
   Maven 4's resolver replaces `ClassicDependencyManager`'s depth rules; nothing here transfers to it.
 
+## Reproducibility under the shipped guard (round-5 approver S6)
+
+This directory was captured at `bffcbba` (`provenance.txt`), the commit immediately **before**
+`failOnUnusableSiblingDeclaration` landed in `8cadf8a`. Three of its cells — `dcv`, `dsc`, `dprov` — are
+precisely the shapes that guard was written to reject. Naively rebuilding `rerun.sh`'s "stock" jar from
+whatever is checked out today (post-`8cadf8a`) would make those three cells abort at `Scanning for
+projects` instead of reproducing the committed `BUILD SUCCESS`, with no way for a reader to tell a real
+regression from the guard doing its job. `rerun.sh` now avoids that by building **three** jars instead of
+two:
+
+- `stock` — today's checkout (HEAD), used for every cell the guard does not affect.
+- `noguard` — `stock` with `failOnConflictingManagedVersion` neutered, for the S1 cells.
+- `stock-preguard` — `BasquinInjector.java`/`InjectorVersion.java` **as they read at `bffcbba`**, read
+  via `git show bffcbba:<path>` (read-only; no checkout, no working-tree change) and compiled fresh. Used
+  only for `dcv`, `dsc`, `dprov`, so those three reproduce the committed `BUILD SUCCESS` verbatim.
+
+`rerun.sh` then runs `dcv`/`dsc`/`dprov` a **second** time each, against today's `stock` jar, into three
+new logs (`dcv-guard-verify-list.log`, `dsc-guard-verify-list.log`, `dprov-guard-verify-list.log`) that
+are not part of the original 17 and are not compared against them. These are expected to abort at
+`Scanning for projects` with `failOnUnusableSiblingDeclaration`'s message — confirmed by an actual run
+(below) — which is the guard working, not a failure of this script.
+
+| cell(s) | reproduces verbatim today? | why |
+|---|---|---|
+| `ctl`, `mx`, `msc`, `mty`, `mcl`, `mopt`, `mcv` (`noguard`) | yes | `noguard` bypasses every guard, including the new one |
+| `mcv` (`stock`) | yes | trips `failOnConflictingManagedVersion`, unchanged since before `bffcbba` |
+| `ctl`, `dag`, `dty`, `dcl`, `dex` (`stock`) | yes | none declare a sibling shape `failOnUnusableSiblingDeclaration` checks (it looks only at `scope` and `version`) |
+| **`dcv`, `dsc`, `dprov`** | **yes, via the pinned `stock-preguard` jar** — **no**, if built from today's checkout instead | these are exactly the shapes the new guard rejects |
+
+**Verified by an actual run**, `MVN`/`BASQUIN_SRC_REPO` pointed at this machine's Maven 3.9.15 install and
+`~/.m2/repository` (which already held `com/basquin/*:0.3.0`), network reachable to Maven Central:
+
+```
+$ WORK=<scratch> bash rerun.sh
+...
+dcv (stock-preguard)     -> dcv-stock-list.log
+dsc (stock-preguard)     -> dsc-stock-list.log
+dprov (stock-preguard)   -> dprov-stock-list.log
+...
+dcv (stock)              -> dcv-guard-verify-list.log
+dsc (stock)              -> dsc-guard-verify-list.log
+dprov (stock)            -> dprov-guard-verify-list.log
+```
+
+- `dcv-stock-list.log` (`stock-preguard`): `[INFO] BUILD SUCCESS`, resolved set holds
+  `com.basquin:basquin-core:jar:0.0.1-conflicting:compile` — matches `logs/dcv-stock-list.log` as
+  committed. Same for `dsc`/`dprov` (`:test`/`:provided`, `BUILD SUCCESS`).
+- `dcv-guard-verify-list.log` (today's `stock`): `[ERROR] basquin-injector: probe-dcv declares
+  com.basquin:basquin-core at version 0.0.1-conflicting, but this injector supplies
+  basquin-quarkus:0.3.0. …` — `failOnUnusableSiblingDeclaration`'s own message, build aborted at
+  `Scanning for projects`. `dsc`/`dprov` abort the same way with the scope-branch message
+  (`… declares com.basquin:basquin-core at scope 'test'/'provided'. …`).
+- The unaffected cells (`ctl-stock`, `dag-stock`, `dty-stock`, `dcl-stock`, `dex-stock`, `mcv-stock`, all
+  `-noguard` cells) reproduced with the same resolved counts as `cell-results.txt` (95/95/96/96/95 and
+  `mcv-stock`'s pre-existing `failOnConflictingManagedVersion` abort).
+
+This confirms the table above by measurement, not assertion: the finding this directory reports is
+unaffected by the guard that was added afterward, and the reproduction script now says so instead of
+failing confusingly.
+
 ## Reproduce
 
-`rerun.sh` regenerates 16 of the 17 logs in `logs/` from `cells/*.pom.xml`. The seventeenth,
-`ctl-noguard-coldcache-list.log`, is the same control cell on a cold local repository — kept only because
-it is the one log that records where every artifact came from — and a rerun's local repository will be
-warm by the time it reaches the control, so that file is not reproducible verbatim. It needs network (Maven Central), a
-Maven 3.9.15 distribution, and `com/basquin/*:0.3.0` available somewhere it can be pointed at; it builds
-its own local repository and its own two injector jars from the module source, and writes nothing into
-the repository tree or into `~/.m2/repository`.
+`rerun.sh` regenerates 16 of the 17 original logs in `logs/` from `cells/*.pom.xml`, plus 3 new
+guard-verification logs (see above). The seventeenth original log, `ctl-noguard-coldcache-list.log`, is
+the same control cell on a cold local repository — kept only because it is the one log that records
+where every artifact came from — and a rerun's local repository will be warm by the time it reaches the
+control, so that file is not reproducible verbatim. It needs network (Maven Central), a Maven 3.9.15
+distribution, `git` (to read `BasquinInjector.java`/`InjectorVersion.java` at `bffcbba` — read-only, no
+checkout), and `com/basquin/*:0.3.0` available somewhere it can be pointed at; it builds its own local
+repository and its own three injector jars from the module source, and writes nothing into the repository
+tree or into `~/.m2/repository`.

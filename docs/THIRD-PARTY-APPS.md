@@ -198,6 +198,21 @@ wrong:
   detect**, because in both the extension still loads and still appears in the banner while a
   stripped `basquin-core` leaves it unusable. Do not treat a banner check as sufficient for either.
 
+- **The pom directly declares a *different* `com.basquin` artifact — `basquin-core` above all — at
+  a scope other than `compile`/`runtime`, or at a version other than the one this injector
+  supplies.** This is a separate hazard from the `basquin-quarkus` shapes above: it is not about our
+  own artifact, but about a sibling artifact the extension needs transitively. A direct declaration
+  wins the scope or version for that artifact over what the extension would otherwise pull in, so a
+  `test`/`provided` scope keeps `basquin-core` off the runtime classpath and a conflicting version
+  pairs the extension with a `basquin-core` it was not built against — either way the build succeeds
+  and `/__basquin/result` polls return `miss`. DD-044 / PR-3.5 is specifically about targets that
+  already carry Basquin, which makes this reachable rather than theoretical, not a corner case. (This
+  guard aborts the build before any banner is produced, so — unlike the two exclusions shapes above —
+  it is not something a banner check could ever have been asked to catch.) Fix: remove the
+  declaration and let the extension bring `basquin-core` in transitively, align the scope/version if
+  the declaration is intentional, or `-Dbasquin.inject.skip=true` to leave the build uninstrumented
+  deliberately.
+
 - **A same-version declaration in a usable shape is not a failure:** the injector logs
   `already declares basquin-quarkus:<v>; adding the repository only` and adds just the repository —
   a declared dependency is not necessarily a resolvable one. **"Usable shape" is load-bearing in that
@@ -214,17 +229,21 @@ properties:
 ./gradlew -I /path/to/basquin-init.gradle build
 ```
 
-**It implements only the `skip` opt-out.** The Maven injector's other four guards — conflicting
-managed version, conflicting managed exclusions, conflicting declared version, and an unusable
-declaration shape (§5.1) — have no Gradle equivalent: the script does not even check whether
+**It implements only the `skip` opt-out.** The Maven injector's other five guards — conflicting
+managed version, conflicting managed exclusions, conflicting declared version, an unusable
+declaration shape (§5.1), and an unusable *sibling* declaration (a directly declared `com.basquin`
+artifact other than `basquin-quarkus` — `basquin-core` above all — at a non-`compile`/`runtime`
+scope or a conflicting version) — have no Gradle equivalent: the script does not even check whether
 `com.basquin:basquin-quarkus` is already declared before adding another `implementation`
-dependency. A Gradle target that already declares the artifact — at another version, with
-exclusions, or in a non-resolving configuration — gets Gradle's own default highest-version
-conflict resolution instead of a hard failure, silently reproducing the DD-040 wire-format skew
-the Maven guards exist to prevent. Running the §5.2 banner check once would not surface this: the
-banner only shows whether `basquin` loaded on *some* build, not whether a conflicting declaration
-was silently resolved around it. §5.1's fail-loudly contract is **not implemented** on this path —
-that is a stronger statement than "unverified," and true independent of whether the check has run.
+dependency, and it does not look at any other `com.basquin` artifact at all. A Gradle target that
+already declares the artifact — at another version, with exclusions, or in a non-resolving
+configuration — or that already declares a sibling like `basquin-core` at a bad scope or version,
+gets Gradle's own default highest-version conflict resolution instead of a hard failure, silently
+reproducing the DD-040 wire-format skew the Maven guards exist to prevent. Running the §5.2 banner
+check once would not surface this: the banner only shows whether `basquin` loaded on *some* build,
+not whether a conflicting declaration was silently resolved around it. §5.1's fail-loudly contract
+is **not implemented** on this path — that is a stronger statement than "unverified," and true
+independent of whether the check has run.
 
 ### Offline fallback — `publishToMavenLocal`
 

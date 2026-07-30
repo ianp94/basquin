@@ -12,7 +12,11 @@ edits to any application-tree file?
 **Verdict: CONFIRMED — all three artifacts, including the deployment artifact the Quarkus bootstrap
 resolver fetches on its own.** The one implementation subtlety that matters is recorded below: a
 model-level `<repository>` injection alone is a no-op at `afterProjectsRead` time; the participant
-must also rebuild the project's effective repository lists.
+must also rebuild the project's effective repository lists. **Both halves of that claim are now
+measured, not just observed**: the two-mutation build below is the treatment cell, and
+[a model-only control](#the-control-cell-round-5-2026-07-29) — same participant, `2b` (the
+effective-list mutation) deliberately omitted — is the missing cell a round-5 review found absent;
+it fails to resolve, exactly as the mechanism predicts.
 
 ## Result
 
@@ -75,6 +79,71 @@ from that shared local repo, so re-running S4's addendum needs its `install:inst
 After this spike's build the local repo holds `com.basquin` again — fetched from `basquin-injected`,
 as the `_remote.repositories` files record.
 
+## The control cell (round 5, 2026-07-29)
+
+A round-5 approver review (`.superpowers/sdd/approver-pr103.md` S2) found that this spike, as
+originally captured, had **no control**: `RepoInjectProbe.java` applies both the model-level and
+effective-list mutations unconditionally, so no build had ever been captured with the effective-list
+half (`2b`) omitted. `BasquinInjector.java`, `docs/ROADMAP.md` and the PR description all called the
+"model-only injection is a no-op" claim **"measured by spike S5"**, but the only support for it was
+reading maven-core 3.9.16 bytecode (see the next section) — the behavioral half was argued, not run.
+This section is that missing cell.
+
+**Participant:** `probe-participant/src/main/java/com/basquin/spike/ModelOnlyRepoInjectProbe.java`,
+added to the same module as `RepoInjectProbe.java` (both `@Named`, both on the probe jar's Sisu
+index — `unzip -p repo-inject-probe-1.0.jar META-INF/sisu/javax.inject.Named` lists both). It
+performs step 1 (inject the dependency) and step 2a (`p.getModel().getRepositories().add(repo)`)
+verbatim from `RepoInjectProbe`, but **deliberately omits 2b**
+(`p.setRemoteArtifactRepositories(...)`) — gated on a distinct system property
+(`-Dbasquin.inject.repo.control.url`, not `-Dbasquin.inject.repo.url`) so it cannot fire alongside
+the treatment probe by accident.
+
+**Ambiguity control, re-applied:** the shared local repo was already purged of `com/basquin` from
+the original spike and had not been repopulated (`s2-control-purge-proof.txt` re-confirms `find`
+still reports "No such file or directory" immediately before this build). `pages-repo/` (same
+artifacts as the treatment cell) was served on `http://localhost:8000/` exactly as before.
+
+**Result: BUILD FAILURE, dependency resolution — exactly as the mechanism predicts.**
+
+```
+[REPO-INJECT-CONTROL] added dependency com.basquin:basquin-quarkus:0.3.0 and repository
+basquin-injected=http://localhost:8000/ to the MODEL ONLY (2b omitted) for fixture
+...
+[WARNING] The POM for com.basquin:basquin-quarkus:jar:0.3.0 is missing, no dependency information available
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.jar
+[INFO] BUILD FAILURE
+[ERROR] Failed to execute goal on project fixture: Could not resolve dependencies for project com.basquin.spike:fixture:quarkus:1.0.0-SNAPSHOT
+[ERROR] dependency: com.basquin:basquin-quarkus:jar:0.3.0 (compile)
+[ERROR] 	Could not find artifact com.basquin:basquin-quarkus:jar:0.3.0 in central (https://repo.maven.apache.org/maven2)
+```
+(`build-s5-control.log`, full 27-line log; the lines above are `:2` and `:9-20`.)
+
+Two points close the loop with the treatment cell:
+
+- Maven tried **only** `central` — `basquin-injected` never appears as an attempted source. That is
+  the model-only mutation's effect made visible: the repository is in `Model.getRepositories()` (so
+  the participant's own log line reports it added), but never in the *effective* remote-repository
+  list dependency resolution actually reads.
+- `http-access-s2-control.log` (the same HTTP server, same `pages-repo/`) recorded **zero** requests
+  from the containerized build — only the one manual pre-build sanity GET made before `env/build.sh`
+  ran. The server was reachable and serving the right files (that GET returned `200`); the build
+  simply never asked it for anything, which corroborates "never in the effective list" independently
+  of the Maven log.
+
+Note on the fixture pom: at the time the original decisive build ran, `fixture/pom.xml` still
+declared `com.basquin:basquin-quarkus` (a PR-2-spike leftover, per the original "Does not establish"
+list below). Commit `7430d24` (2026-07-26, later the same day) removed it as part of PR-3
+acceptance, so by the time this control ran the pom declared no such dependency — the `basquin-core`
+transitive question doesn't even arise here, since resolution now fails on `basquin-quarkus` itself,
+whose only source of declaration is the participant. This makes the control *cleaner* than the
+original treatment cell (no dependency-provenance confound), not weaker.
+
+**Conclusion:** the model-only injection is a no-op **measured**, not merely read from bytecode. Both
+cells of the paired comparison are now on record: `build-s5-injected.log` (both mutations, `BUILD
+SUCCESS`, all three artifacts resolve from `basquin-injected`) vs. `build-s5-control.log` (model
+mutation only, `BUILD FAILURE`, resolution never reaches `basquin-injected`). `findings.md` §"Spec
+amendment forced" item 1 is updated accordingly.
+
 ## The participant, and the subtlety PR-3 must carry
 
 `probe-participant/src/main/java/com/basquin/spike/RepoInjectProbe.java` (S4's `InjectProbe`
@@ -83,13 +152,16 @@ repository takes **two** mutations:
 
 - **Model level** — `p.getModel().getRepositories().add(repo)`. Alone, this is too late to do
   anything: the project's effective repository lists were computed at project-building time, before
-  any participant runs.
+  any participant runs. **Measured**, not just argued from the mechanism: the model-only control cell
+  above (`ModelOnlyRepoInjectProbe`) applies exactly this half and nothing else, and fails to resolve
+  (`build-s5-control.log`).
 - **Effective-list level** — append a `MavenArtifactRepository` and call
   `p.setRemoteArtifactRepositories(...)`. Verified against maven-core 3.9.16 bytecode: that setter
   also refreshes the Aether list (`remoteProjectRepositories = RepositoryUtils.toRepos(...)`), which
   is what Maven's dependency resolution and the quarkus-maven-plugin's
   `@Parameter("${project.remoteProjectRepositories}")` actually consume. This is how the injected
-  repository reached the Quarkus bootstrap resolver.
+  repository reached the Quarkus bootstrap resolver — and, by the control cell's contrapositive, why
+  omitting it leaves the resolver trying only `central`.
 
 ## Transport note (HTTP, localhost, and the http-blocker)
 
@@ -110,7 +182,11 @@ packaging), a Maven core extension can inject a remote repository at `afterProje
 two-level mutation above — such that the full `com.basquin` closure (runtime, deployment, core)
 resolves over HTTP from that repository with the local repo empty of it and Central not carrying it,
 and the resulting app's banner lists `basquin`. PR-3's injector can be self-contained: one
-`-Dmaven.ext.class.path`, no pom/settings edit, no operator pre-populate step.
+`-Dmaven.ext.class.path`, no pom/settings edit, no operator pre-populate step. **Also establishes,
+as a measured control (round 5):** the model-level mutation alone is a no-op — with `2b` omitted the
+build fails at dependency resolution and the resolver never attempts the injected repository at all
+(`build-s5-control.log`, `http-access-s2-control.log`) — so both halves of the two-level-mutation
+claim are now behavioral evidence, not one measured cell plus one bytecode-argued cell.
 
 **Does not establish:**
 
@@ -137,17 +213,20 @@ and the resulting app's banner lists `basquin`. PR-3's injector can be self-cont
 
 | File | What it is |
 |---|---|
-| `probe-participant/` | participant source (`RepoInjectProbe.java`) + pom; jar builds to `target/`, which is git-ignored |
-| `probe-build.log` | participant build (`maven:3.9-eclipse-temurin-17` container) |
+| `probe-participant/` | participant source (`RepoInjectProbe.java` — treatment; `ModelOnlyRepoInjectProbe.java` — round-5 control) + pom; jar builds to `target/`, which is git-ignored |
+| `probe-build.log` | participant build, original capture (`maven:3.9-eclipse-temurin-17` container), treatment class only |
 | `s5-publish-init.gradle` | init script adding the `s5Pages` publish target (no build.gradle edits) |
 | `publish-s5-pages.log` | Gradle publish of the three artifacts from HEAD into `pages-repo/` |
 | `pages-repo/` | the served repository — stand-in for the Pages repo. **Not tracked in git** (it holds built jars, and `bench-results/` tracks none anywhere); regenerate it with the publish step in *Reproduce* below. That the artifacts were served is evidenced by `http-access.log`, not by these bytes |
 | `central-absence.txt` | `repo1.maven.org` HTTP 404 for all three artifact paths |
-| `purge-proof.txt` | local-repo `com/basquin` before-listing, purge, failing `find` after |
-| `http-access.log` | the HTTP server's request log — every remote fetch, with status codes |
-| `build-s5-injected.log` | full decisive build (`clean package -DskipTests`) |
+| `purge-proof.txt` | local-repo `com/basquin` before-listing, purge, failing `find` after (treatment cell) |
+| `http-access.log` | the HTTP server's request log — every remote fetch, with status codes (treatment cell) |
+| `build-s5-injected.log` | full decisive **treatment** build (`clean package -DskipTests`, both mutations) |
 | `banner-s5-run.log` / `banner-s5.txt` | app startup output / extracted `Installed features` line |
 | `local-repo-provenance.txt` | post-build `_remote.repositories` files naming `basquin-injected` |
+| `s2-control-purge-proof.txt` | round-5: local-repo `com/basquin` re-confirmed absent immediately before the control build |
+| `http-access-s2-control.log` | round-5: HTTP server log for the control build — zero build-originated requests |
+| `build-s5-control.log` | round-5: full **control** build (model-level mutation only, `2b` omitted) — `BUILD FAILURE` |
 
 ## Reproduce
 
@@ -186,4 +265,29 @@ docker run --rm -d --name s5-verify -p 8080:8080 --entrypoint java \
 sleep 12 && curl -s -o /dev/null -w '/ok -> %{http_code}\n' http://localhost:8080/ok \
   && docker logs s5-verify | grep "Installed features"
 docker rm -f s5-verify; kill %1   # stop the app container and the HTTP server
+```
+
+**The control cell** (round 5) — steps 1-2 are shared (build the probe jar once; it carries both
+`RepoInjectProbe` and `ModelOnlyRepoInjectProbe`); the rest is a second pass with a different system
+property and an expected failure, not a stale-target concern since the build never gets far enough
+to write to `target/`:
+
+```bash
+# 3'. Ambiguity control, re-applied (same command as step 3)
+rm -rf bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin
+find bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin   # must error: No such file
+
+# 4'. Serve the SAME pages-repo/ again
+python3 -u -m http.server 8000 --bind 127.0.0.1 \
+  -d bench-results/dd043-s5-repo-injection-2026-07-26/pages-repo \
+  > bench-results/dd043-s5-repo-injection-2026-07-26/http-access-s2-control.log 2>&1 &
+
+# 5'. The control build — note basquin.inject.repo.CONTROL.url, not .repo.url. Expect BUILD FAILURE.
+PROBE_ABS="$PWD/bench-results/dd043-s5-repo-injection-2026-07-26/probe-participant/target"
+EXTRA_DOCKER_ARGS="--network host -v $PROBE_ABS:/probe" \
+EXTRA_MAVEN_OPTS="-Dmaven.ext.class.path=/probe/repo-inject-probe-1.0.jar -Dbasquin.inject.repo.control.url=http://localhost:8000/" \
+  bench-results/dd043-spikes-2026-07-24/env/build.sh clean package -DskipTests
+# exit code 1, "Could not resolve dependencies ... com.basquin:basquin-quarkus:jar:0.3.0"
+
+kill %1   # stop the HTTP server; no app container to stop, the build never produced one
 ```

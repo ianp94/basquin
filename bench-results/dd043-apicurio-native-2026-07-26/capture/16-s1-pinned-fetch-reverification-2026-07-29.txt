@@ -1,0 +1,32 @@
+# S1 fix — pinned-ref re-verification, captured 2026-07-29T23:57:22Z
+#
+# Round-5 approver finding S1: capture.sh's fetch() (pre-fix) was 'curl -sSL' with no -f and
+# no status check, so a 404 (GitHub's '404: Not Found' body, exit 0) was indistinguishable
+# from a genuinely absent match — every load-bearing zero in capture/12 and capture/13 could
+# have been a failed download rather than a checked absence.
+#
+# This file re-fetches every URL underlying those zero claims with curl -f (fails loudly, no
+# body, nonzero exit on non-200) at the SAME pinned ref the committed capture used
+# (APIC_MAIN_PINNED=23159df62ef7a0935f55b8423c3b0d458773ecfc — this ref does not move, so this is byte-reproducible, not a
+# point-in-time drift check). Every fetch below either succeeded with HTTP 200 (status printed)
+# or, had it failed, would be reported as FETCH-FAILED rather than silently folded into a
+# grep count. Read alongside the fixed capture/capture.sh, whose fetch() now applies this same
+# -f + status-check discipline to every call site producing a hit-count or absence claim.
+
+## capture/12's two central zero claims (README §1.1/§1.4): app/pom.xml, pom.xml
+  app/pom.xml  fetch=OK http=200  grep -c native = 0   [verified zero, not a fetch failure]
+  pom.xml  fetch=OK http=200  grep -c native = 0   [verified zero, not a fetch failure]
+
+## capture/13's workflow-file sweep (README §1.3): every .github/workflows file at the pinned ref
+workflow files enumerated: 29  (capture/13 also reports 29)
+zero-hit files, fetch verified OK (capture/13 also reports 25): 25
+nonzero-hit files (capture/13 also reports 4, totalling 10 hits): 4
+fetch failures (would mean a zero above is NOT verified): 0
+
+## the single most decisive zero: verify.yaml (README calls this out by name)
+  verify.yaml  fetch=OK http=200  grep -c native = 0   [verified zero, not a fetch failure]
+
+## CONCLUSION
+All fetches behind README §1.1/§1.3/§1.4's zero-hit claims returned HTTP 200; zero fetch
+failures occurred. The zeros are confirmed genuine (checked and clean), not fetch failures
+misread as absences. No figure in README.md changes as a result of this fix.

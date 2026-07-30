@@ -1,4 +1,0 @@
-jar: basquin-maven-injector/build/libs/basquin-maven-injector-0.3.0.jar
-sha256: b7e734f839ee975e2bbf124d8035d6c78e4465f12d3fed2e278abaf668567250
-sisu index: com.basquin.maven.BasquinInjector
-baked version: 0.3.0

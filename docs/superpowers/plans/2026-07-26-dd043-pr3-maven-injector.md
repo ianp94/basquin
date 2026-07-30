@@ -1480,7 +1480,7 @@ two-sided property is real, but is established by `scripts/verify-dd043-pr3.sh`,
 directory: dirty-tree refusal before the build (the preflight
 `git -C "$app" status --porcelain -- .`) and `jvm:zero-edits` after
 (`git status --porcelain=v2 --branch -- .`), surfaced in
-`bench-results/verify-20260730T162038Z/RESULTS.md`'s `jvm:zero-edits` row. All three are cited by
+`bench-results/verify-20260730T215842Z/RESULTS.md`'s `jvm:zero-edits` row. All three are cited by
 command text and row key rather than by line, because the line numbers here were wrong once and went
 stale again while being fixed. The current
 `bench-results/dd043-pr3-restvillains-2026-07-26/README.md` verdict and check-5 row carry the

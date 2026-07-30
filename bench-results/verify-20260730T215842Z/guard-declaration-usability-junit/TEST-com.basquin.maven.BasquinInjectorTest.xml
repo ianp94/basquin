@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.basquin.maven.BasquinInjectorTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-07-30T22:00:36" hostname="Billy" time="0.097">
+  <properties/>
+  <testcase name="injectedVersionIsOverridable" classname="com.basquin.maven.BasquinInjectorTest" time="0.01"/>
+  <testcase name="injectedVersionIsTheInjectorsOwnBakedVersion" classname="com.basquin.maven.BasquinInjectorTest" time="0.021"/>
+  <testcase name="repositoryUrlIsOverridable" classname="com.basquin.maven.BasquinInjectorTest" time="0.011"/>
+  <testcase name="allocatesFreshModelObjectsPerProject" classname="com.basquin.maven.BasquinInjectorTest" time="0.011"/>
+  <testcase name="pinsTheInjectedRepositorysReleaseAndSnapshotPolicies" classname="com.basquin.maven.BasquinInjectorTest" time="0.011"/>
+  <testcase name="injectsTheDependencyIntoEveryProjectInTheReactor" classname="com.basquin.maven.BasquinInjectorTest" time="0.011"/>
+  <testcase name="preservesRepositoriesTheProjectAlreadyHad" classname="com.basquin.maven.BasquinInjectorTest" time="0.011"/>
+  <testcase name="injectsTheRepositoryAtBothTheModelAndEffectiveListLevels" classname="com.basquin.maven.BasquinInjectorTest" time="0.011"/>
+  <system-out><![CDATA[[basquin-injector] instrumented a (com.basquin:basquin-quarkus:9.9.9 from https://ianp94.github.io/basquin/maven/)
+[basquin-injector] instrumented a (com.basquin:basquin-quarkus:0.3.0 from https://ianp94.github.io/basquin/maven/)
+[basquin-injector] instrumented a (com.basquin:basquin-quarkus:0.3.0 from http://localhost:8000/)
+[basquin-injector] instrumented a (com.basquin:basquin-quarkus:0.3.0 from https://ianp94.github.io/basquin/maven/)
+[basquin-injector] instrumented b (com.basquin:basquin-quarkus:0.3.0 from https://ianp94.github.io/basquin/maven/)
+[basquin-injector] instrumented c (com.basquin:basquin-quarkus:0.3.0 from https://ianp94.github.io/basquin/maven/)
+[basquin-injector] instrumented a (com.basquin:basquin-quarkus:0.3.0 from https://ianp94.github.io/basquin/maven/)
+[basquin-injector] instrumented a (com.basquin:basquin-quarkus:0.3.0 from https://ianp94.github.io/basquin/maven/)
+[basquin-injector] instrumented b (com.basquin:basquin-quarkus:0.3.0 from https://ianp94.github.io/basquin/maven/)
+[basquin-injector] instrumented c (com.basquin:basquin-quarkus:0.3.0 from https://ianp94.github.io/basquin/maven/)
+[basquin-injector] instrumented a (com.basquin:basquin-quarkus:0.3.0 from https://ianp94.github.io/basquin/maven/)
+[basquin-injector] instrumented a (com.basquin:basquin-quarkus:0.3.0 from https://ianp94.github.io/basquin/maven/)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

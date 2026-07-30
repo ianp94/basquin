@@ -1,0 +1,12 @@
+# purge proof — 2026-07-30T05:43:32Z
+# repository: /home/ian/.m2/repository
+
+## BEFORE:
+/home/ian/.m2/repository/com/basquin/basquin-quarkus
+/home/ian/.m2/repository/com/basquin/basquin-quarkus-deployment
+/home/ian/.m2/repository/com/basquin/basquin-core
+
+## PURGE: rm -rf /home/ian/.m2/repository/com/basquin
+
+## AFTER (a 'No such file' error here is the proof):
+find: ‘/home/ian/.m2/repository/com/basquin’: No such file or directory

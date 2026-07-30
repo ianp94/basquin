@@ -700,10 +700,12 @@ run_jvm() {
   # `-f` writes error bodies too, so a 404 page or a diagnostic string satisfied it just as well as a
   # real cost line (approver finding 13). boundary_poll_shape_ok (above) holds the derivation from
   # ResultStore.format and rejects error pages, "miss", empty and truncated bodies while accepting
-  # ANY hop count >= 1. The run of record's poll body is `794,2139,8|0||`
-  # (bench-results/verify-20260730T102725Z/jvm-result-poll.txt — quoted by re-reading that file's
-  # TEXT): one single-hop line of the wire shape, costCsv="794,2139,8", invariantCount="0",
-  # detail="", leak="". The shape is justified by ResultStore.format, never by any one measurement —
+  # ANY hop count >= 1. Each run's actual poll body is written to jvm-result-poll.txt in that run's
+  # own directory; deliberately NOT quoted here. A specific run's value in this comment has now been
+  # carried across a repoint twice (round 9 finding 1, then again in its own fix — the second time
+  # caught by scripts/check-citations.py, not by a human). The wire shape is one line per hop:
+  # costCsv="latencyMs,heapDeltaKb,threadDelta", then invariantCount, detail, leak.
+  # The shape is justified by ResultStore.format, never by any one measurement —
   # so if a supersession ever repoints that citation, the quoted value MUST be re-read from the file
   # at the new path (PR #103 round 9, blocking 1: a repoint carried the superseded run's value into a
   # citation whose own file said otherwise, and the verification used was `ls` — the path's

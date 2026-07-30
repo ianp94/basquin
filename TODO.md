@@ -1185,11 +1185,11 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
 - [x] **`scripts/verify-dd043-pr3.sh`'s `jvm` and `native` stages have never been executed.** Written and
       committed unexercised (the native mutex was held, and the `guards` stage mutates source a running
       build was compiling). **Resolved 2026-07-30**: both stages ran end-to-end in the run of record,
-      stamped `20260730T102725Z` and made against `6e67ca7` on a clean tree. All four figures come from
-      `bench-results/verify-20260730T102725Z/RESULTS.md`, read by label rather than by line number because
+      stamped `20260730T151004Z` and made against `119d400` on a clean tree. All four figures come from
+      `bench-results/verify-20260730T151004Z/RESULTS.md`, read by label rather than by line number because
       that header gains lines: its title line carries the stamp, its `Commit:` line the SHA and
       `tree clean at run start`, its `Stages run:` line `unit jar guards jvm native`, and the line after
-      that **26 passed, 0 failed, 0 skipped** — including the `jvm:build`, `jvm:banner`, `native:build` and
+      that **27 passed, 0 failed, 0 skipped** — including the `jvm:build`, `jvm:banner`, `native:build` and
       `native:banner` rows, cited by row key because inserting a guard row renumbers that whole table and
       these four citations went stale twice that way already. This entry previously stamped the run
       `20260730T054112Z` at `9f1e990` — a run `572282a` **deleted**, and a SHA contradicted by the very
@@ -1201,7 +1201,7 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       `## What a pass here does and does not establish` heading, which states what a pass does and does not
       establish. (Cited by heading with no line range at all: the range given here was off by one at both
       ends, and a limitations list that gains a bullet invalidates any range.) Do not re-run the
-      native stage on the strength of this entry; check `bench-results/verify-20260730T102725Z/` first.
+      native stage on the strength of this entry; check `bench-results/verify-20260730T151004Z/` first.
       (An earlier run, `verify-20260729T153141Z`, was **deleted** in `8cadf8a` — its B1 and B2 checks could
       not fail, so it certified nothing. Do not cite it; it is not in the tree.)
 - [ ] **A repo-wide line-citation audit (PR #103 round 7) found 135 wrong citations out of 547

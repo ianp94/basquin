@@ -1,1 +1,0 @@
-e9b2350b9e4ad41b50bda4de5e1dc50328c064c5f403d208988e2a89412f4a7c  /mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/build/tmp/verify-pr3-inj/basquin-maven-injector-0.3.0.jar

@@ -14,7 +14,7 @@ is established separately, by `scripts/verify-dd043-pr3.sh`'s `jvm` stage — di
 the build (the preflight `git -C "$app" status --porcelain -- .`, whose non-zero `rc` `skip`s the whole
 stage as UNMEASURED) and `jvm:zero-edits` after it
 (`git status --porcelain=v2 --branch -- .` into `jvm-target-status-after.txt`), graded in
-`bench-results/verify-20260730T102725Z/RESULTS.md`'s `jvm:zero-edits` row. All three are cited by
+`bench-results/verify-20260730T151004Z/RESULTS.md`'s `jvm:zero-edits` row. All three are cited by
 command text and row key, not by line: the script's line numbers went stale twice while this very
 citation was being fixed, and any added guard row renumbers that table. The run *directory* is the part
 that still has to be re-checked by hand — the previous name here was superseded and deleted while this
@@ -32,7 +32,7 @@ by the Quarkus bootstrap resolver on its own. **JVM mode only — the native cel
 | 2 | Startup banner lists `basquin` under `Installed features` | `app-startup.log:25`, extracted to `banner.txt` |
 | 3 | The boundary works, not just loads: driven request returns a cost line, not `miss` | `result-poll.txt`: `X-Basquin-Req: pr3-accept-1` → `/__basquin/result?id=pr3-accept-1` → `787,-684,9|0||` |
 | 4 | `basquin-quarkus-deployment` fetched from the injected repo | `http-access.log` (4 GETs for it, all `200`); `build.log:31-36` (`Downloaded from basquin-injected`) |
-| 5 | App tree pristine, checked once, post-hoc | `pristine-proof.txt:6,11`: a single `git status --porcelain`, empty, taken after `clean package` and after the app container ran. The before-**and**-after property (not merely after) is established by the verify run, not this artifact — in `scripts/verify-dd043-pr3.sh`, the preflight `git -C "$app" status --porcelain -- .` (before; a non-zero `rc` `skip`s the stage as UNMEASURED) and `git status --porcelain=v2 --branch -- .` into `jvm-target-status-after.txt` (after). Each is that file's only occurrence, so it is cited by command text, not by a line number that edits keep invalidating. Graded `PASS` at `bench-results/verify-20260730T102725Z/RESULTS.md`'s `jvm:zero-edits` row (row key, not line — an added guard row renumbers the table), against the same clone commit `c9b46d74…` this directory used (that run's `jvm-target-status-after.txt:1`) |
+| 5 | App tree pristine, checked once, post-hoc | `pristine-proof.txt:6,11`: a single `git status --porcelain`, empty, taken after `clean package` and after the app container ran. The before-**and**-after property (not merely after) is established by the verify run, not this artifact — in `scripts/verify-dd043-pr3.sh`, the preflight `git -C "$app" status --porcelain -- .` (before; a non-zero `rc` `skip`s the stage as UNMEASURED) and `git status --porcelain=v2 --branch -- .` into `jvm-target-status-after.txt` (after). Each is that file's only occurrence, so it is cited by command text, not by a line number that edits keep invalidating. Graded `PASS` at `bench-results/verify-20260730T151004Z/RESULTS.md`'s `jvm:zero-edits` row (row key, not line — an added guard row renumbers the table), against the same clone commit `c9b46d74…` this directory used (that run's `jvm-target-status-after.txt:1`) |
 
 Build wall time 01:03 min (`build.log`, `Total time`). On check 3's numbers: 787 ms elapsed is a
 first-hit (Hibernate/Agroal warmup) figure, the −684 KB heap delta is the reactive-path GC-in-window

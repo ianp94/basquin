@@ -86,7 +86,7 @@ check above, not by this line of reasoning: `git status --porcelain` empty (this
 
 ### Independently reproduced by the scripted run of record
 
-`bench-results/verify-20260730T102725Z/jvm-build.log:2` is the `instrumented` line, and the same two
+`bench-results/verify-20260730T151004Z/jvm-build.log:2` is the `instrumented` line, and the same two
 greps against that log return 0 already-declares lines and 1 injector line (`grep -c 'already
 declares'` = 0, `grep -c '\[basquin-injector\]'` = 1 — re-run against that file, not copied). That run
 does not leave the discriminator to a hand grep either: it grades it as its own row,
@@ -94,10 +94,10 @@ does not leave the discriminator to a hand grep either: it grades it as its own 
 already-declares path — the dependency came from injection, not the pom"* — which is the graded form of
 this section's whole argument. It also grades the target tree **before and after** the build rather
 than only after, which this directory does not: the before half is the dirty-tree preflight, whose
-stderr capture `bench-results/verify-20260730T102725Z/jvm-git-preflight-stderr.txt` is 0 bytes and
+stderr capture `bench-results/verify-20260730T151004Z/jvm-git-preflight-stderr.txt` is 0 bytes and
 whose failure would have `skip`ped the stage as UNMEASURED (that run reports `0 skipped` with `jvm`
 among `Stages run:`); the after half is
-`bench-results/verify-20260730T102725Z/jvm-target-status-after.txt`, four lines of branch headers only
+`bench-results/verify-20260730T151004Z/jvm-target-status-after.txt`, four lines of branch headers only
 (`# branch.oid c9b46d745620708e1519859bb4775469114381e5` at `:1` — the same clone commit this
 directory's own check reports at `:10`).
 

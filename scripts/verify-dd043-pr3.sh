@@ -5,7 +5,14 @@
 #   bash scripts/verify-dd043-pr3.sh                 # fast stages only (unit, jar, guards) — no docker
 #   bash scripts/verify-dd043-pr3.sh all             # everything, including the ~15-min native build
 #   bash scripts/verify-dd043-pr3.sh unit jar        # named stages, in the order given
+#   bash scripts/verify-dd043-pr3.sh all --allow-dirty  # full run against a dirty tree anyway —
+#                                                     # RESULTS.md comes out stamped NON-CITABLE
 #   APP_DIR=/path/to/rest-villains bash scripts/verify-dd043-pr3.sh jvm
+#
+# A FULL run (`all`, or the same five stages named explicitly) is the run of record and REFUSES to
+# start against a dirty or unmeasurable tree, exit 3, unless --allow-dirty is passed — see the
+# IS_FULL / --allow-dirty comments below. A fast/partial run (the default, or any named subset) is
+# never refused; a dirty tree there just gets a NON-CITABLE RESULTS.md, same as always.
 #
 # Stages:
 #   unit    ./gradlew check — whole-suite test count and failures, read from the JUnit XML
@@ -47,17 +54,36 @@ TS="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT="bench-results/verify-$TS"
 PORT="${BASQUIN_VERIFY_PORT:-8000}"
 RESTORE_M2=0
+ALLOW_DIRTY=0
 STAGES=()
 
 for arg in "$@"; do
   case "$arg" in
-    --restore-m2) RESTORE_M2=1 ;;
+    --restore-m2)  RESTORE_M2=1 ;;
+    --allow-dirty) ALLOW_DIRTY=1 ;;
     all)          STAGES=(unit jar guards jvm native) ;;
     unit|jar|guards|jvm|native) STAGES+=("$arg") ;;
     *) echo "unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
 [ ${#STAGES[@]} -eq 0 ] && STAGES=(unit jar guards)
+
+# A FULL run (every stage — `all`, or the same five named explicitly) is the one whose RESULTS.md
+# is meant to become the run of record: round-11's approver found the DIRTY marker below is
+# annotation, not a gate — a dirty tree still produces a full page of PASS rows, exit 0, and
+# nothing stops it from being cited or committed as such. A fast dev-loop invocation (the no-args
+# default, or any named subset) is deliberately NOT gated here: running `guards` against
+# in-progress edits is exactly what the fast loop is for, and gating it would punish the workflow
+# this script's own header comment documents. Only completeness decides FULL, never the literal
+# spelling `all` vs `unit jar guards jvm native` typed out — an accidental way to spell the same
+# run must not dodge the same gate.
+IS_FULL=1
+for _want in unit jar guards jvm native; do
+  _found=0
+  for _s in "${STAGES[@]}"; do [ "$_s" = "$_want" ] && { _found=1; break; }; done
+  [ "$_found" -eq 1 ] || { IS_FULL=0; break; }
+done
+unset _want _found _s
 
 mkdir -p "$OUT"
 PASS=0; FAIL=0; SKIP=0
@@ -88,6 +114,43 @@ elif grep -qv '^??' "$OUT/git-status.txt"; then
   TREE_STATE="DIRTY"
 else
   TREE_STATE="clean"
+fi
+
+# Annotation alone (the DIRTY stamp above) is not a gate: round-11's approver ran this exact
+# script against a dirty tree and got a full RESULTS.md of PASS rows, exit 0 — reproducible from
+# nowhere, citable by anyone who does not read the header. A FULL run (IS_FULL, computed above
+# from the actual stage set — not the literal word `all`) is the one whose output this project
+# treats as the run of record (round 4's predecessor directory was superseded for exactly this:
+# rows unreachable at the commit they were stamped with), so it is the one that must REFUSE by
+# default rather than merely warn. The fast dev loop is deliberately exempt — see IS_FULL's
+# comment — and stays annotate-only, same as before this round.
+# UNMEASURED is refused on the same terms as DIRTY, not just DIRTY: "git status itself failed"
+# is strictly less known than "git status ran and found drift", so a full run must not treat a
+# failed measurement as looser than a positive one.
+# --allow-dirty is the one documented escape hatch, for a deliberate exploratory full run against
+# a tree the operator already knows is dirty; its RESULTS.md still comes out stamped NON-CITABLE
+# below, so the opt-in cannot accidentally mint a citable artifact either.
+if [ "$TREE_STATE" != "clean" ] && [ "$IS_FULL" -eq 1 ] && [ "$ALLOW_DIRTY" -ne 1 ]; then
+  {
+    echo "REFUSED: a full run (${STAGES[*]}) is the run of record — its RESULTS.md is meant to be"
+    echo "cited, and citing it requires the tree that produced it to be reproducible from the"
+    echo "stamped commit alone."
+    echo
+    if [ "$TREE_STATE" = "DIRTY" ]; then
+      echo "Tracked files differ from \`$GIT_COMMIT\` on \`$GIT_BRANCH\` (full listing: $OUT/git-status.txt):"
+      grep -v '^??' "$OUT/git-status.txt"
+    else
+      echo "git status itself FAILED at run start (rc=$GIT_STATUS_RC, see $OUT/git-status-stderr.txt) —"
+      echo "the tree's state cannot even be determined, which is strictly worse than known-dirty."
+    fi
+    echo
+    echo "Commit or stash your changes and re-run for a citable run of record."
+    echo "For a deliberate, non-citable exploratory full run against this tree as-is, pass --allow-dirty."
+    echo "Fast dev-loop runs (no arguments, or any named subset short of all five stages) are not"
+    echo "gated by this check — only a full run is, since only a full run's output is meant to become"
+    echo "the run of record."
+  } >&2
+  exit 3
 fi
 
 log()  { printf '\n\033[1m== %s\033[0m\n' "$*"; }
@@ -861,21 +924,40 @@ if [ "$RESTORE_M2" -eq 1 ]; then
 fi
 
 {
-  echo "# DD-043 PR-3 verification — $TS"
+  # Every reader-visible line that could be skimmed in isolation — the H1, the DIRTY/UNMEASURED
+  # banner, and the pass/fail headline itself — carries the same NON-CITABLE marker below. A dirty
+  # or unmeasured full run only ever reaches this point via --allow-dirty (the gate above refuses
+  # it otherwise), so the stamp also records that it was a deliberate opt-in, not an accident.
+  TITLE_TAG=""; PASSFAIL_TAG=""
+  if [ "$TREE_STATE" != "clean" ]; then
+    TITLE_TAG=" — NON-CITABLE"
+    PASSFAIL_TAG=" — NON-CITABLE (see warning above)"
+  fi
+  echo "# DD-043 PR-3 verification — $TS$TITLE_TAG"
   echo
   echo "Commit: \`$GIT_COMMIT\` on \`$GIT_BRANCH\` — tree $TREE_STATE at run start (\`git-status.txt\`)"
   echo "Stages run: ${STAGES[*]}"
   if [ "$TREE_STATE" = "DIRTY" ]; then
     echo
-    echo "**DIRTY: tracked files differed from \`$GIT_COMMIT\` when this run started (see \`git-status.txt\`)."
-    echo "These results are NOT reproducible from that commit alone — do not cite this run against it.**"
+    echo "**NON-CITABLE — DIRTY: tracked files differed from \`$GIT_COMMIT\` when this run started"
+    if [ "$IS_FULL" -eq 1 ]; then
+      echo "(full run — proceeded only because \`--allow-dirty\` was passed):**"
+    else
+      echo "(see \`git-status.txt\`):**"
+    fi
+    echo
+    echo '```'
+    grep -v '^??' "$OUT/git-status.txt"
+    echo '```'
+    echo
+    echo "**These results are NOT reproducible from that commit alone — do not cite this run against it.**"
   elif [ "$TREE_STATE" != "clean" ]; then
     echo
-    echo "**UNMEASURED: \`git status\` FAILED at run start (rc=$GIT_STATUS_RC, see \`git-status-stderr.txt\`) —"
+    echo "**NON-CITABLE — UNMEASURED: \`git status\` FAILED at run start (rc=$GIT_STATUS_RC, see \`git-status-stderr.txt\`) —"
     echo "the state of the tree that produced these results is unknown. Do not cite this run against \`$GIT_COMMIT\`.**"
   fi
   echo
-  echo "**$PASS passed, $FAIL failed, $SKIP skipped.**"
+  echo "**$PASS passed, $FAIL failed, $SKIP skipped.$PASSFAIL_TAG**"
   echo
   echo "| Result | Check | Detail (derived from this directory's artifacts) |"
   echo "|---|---|---|"

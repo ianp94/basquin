@@ -170,7 +170,17 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
    `guards:restored` recording the source restored and the module suite green. Cited by **row key, not
    line**: mid-table insertions in rounds 6 and 7 invalidated that line range twice, and any further
    guard renumbers it again. Mind the arithmetic when restating this — eight *shapes* are closed by
-   seven *throws*, because `failOnUnusableDeclaration`'s single `throw` bundles four shapes, so mutation
+   seven *throws*, and the two counts do not line up method-by-method, so "8 shapes" and "7 throws"
+   are the only two figures worth restating. The throws distribute
+   1 / 1 / 3 / 2 across `failOnUnusableDeclaration`, `failOnConflictingDeclaredVersion`,
+   `failOnConflictingManagedVersion` and `failOnUnusableSiblingDeclaration` (count them with
+   `awk '/private void failOn/{m=$3} /throw new MavenExecutionException/{print m}'` over
+   `BasquinInjector.java`) — three offsetting mismatches, not one:
+   `failOnUnusableDeclaration` bundles four shapes behind one `throw`; the sibling guard's one
+   numbered shape (the seventh) splits across two `throw`s, scope and version; and
+   `failOnConflictingDeclaredVersion` is a `throw` with no shape number of its own, being the
+   declared-path counterpart of the managed-version conflict rather than a distinct bypass. Quoting
+   only the first of the three makes 8 look like it should reduce to 5. Mutation
    coverage is per-throw (one neutered branch per row), not per shape. **Four shapes, not one, are what
    §5.2's banner acceptance cannot detect, and the class keeps growing because each is a different route
    to the same resolved state — `basquin-quarkus` still loads, `basquin-core` doesn't:** a declared
@@ -220,7 +230,10 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
    **The pieces, in priority order:**
 
    0. **Run the verification harness in CI.** No job invokes `scripts/verify-dd043-pr3.sh` — it is
-      manual-only, and it is also outside `ci.yml`'s path filters. That is the root cause behind most of
+      manual-only. (It is no longer outside the path filters: this PR added `'scripts/**'` to both of
+      `ci.yml`'s lists, `.github/workflows/ci.yml:51` for `push` and `:79` for `pull_request`, so a
+      commit touching only the harness now triggers the workflow — it just triggers no job that runs
+      the harness.) Manual-only is the root cause behind most of
       the findings in row 1 of the table: `jar:baked-version` could not pass on a CRLF checkout for three
       rounds because nothing ran it, and the `jar` stage passed against a jar it never built until round 8
       executed it deliberately. The `unit jar guards` stages need no docker and complete in minutes; wire
@@ -237,8 +250,25 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
       file's *current text*, not merely the path existing, and runs over the **whole tree**, not the
       diff — a diff-scoped check was run in round 7 and missed four dead citations — including the PR's
       central "app tree pristine" claim — because they lived in files that commit did not modify.
-      Measured by running it 2026-07-30: **1,207** citations checked across 91 md + 2 pinned + 27
-      comment-scanned files, under a second, exit **0**. It found a defect class hand-checking could
+      Measured 2026-07-30 and committed as an artifact, not restated as a live total: the corpus this
+      tool scans includes this sentence, so a bare number quoted here — as an earlier version of this
+      paragraph did, and as `TODO.md`'s copy of the same line separately did — goes stale the moment
+      either file is edited, including by the edit that records the number. (Those two copies were
+      also circular: this paragraph's total was backed only by `TODO.md`'s identical hand-typed
+      figure, not by any artifact — fixed here by citing the run directly instead of routing through
+      `TODO.md`.) One real run is committed at `bench-results/citations-20260730T214700Z/`, the same
+      pattern this document already uses for `scripts/verify-dd043-pr3.sh`'s evidence:
+      `bench-results/citations-20260730T214700Z/output.txt` is the tool's raw stdout, and its
+      `README.md` explains the disposition classes and states plainly that
+      the numbers are a snapshot of a corpus that changes with every doc edit. That run's header
+      (`bench-results/citations-20260730T214700Z/output.txt:1`) parsed 1689 citations across 91 md + 2
+      pinned + 27 comment-scanned files; its final disposition line
+      (`bench-results/citations-20260730T214700Z/output.txt:372`) reports 1241 verified, 299
+      UNCHECKED, 136 allowlisted, 2 reported to owners, 13 disclosed absences, 0 untracked-on-disk —
+      six buckets summing to the parsed total, asserted by the tool itself — exit 0. To get today's
+      real figures, run `python3 scripts/check-citations.py` and read its own final disposition line;
+      never carry a total forward from this paragraph, `TODO.md`, or a prior run directory. It found a
+      defect class hand-checking could
       not: a citation to agents.md in `docs/DESIGN-DECISIONS.md`'s DD-021 entry, a file that exists on
       the authoring machine but is gitignored, so it resolved for its author and was dead on a fresh
       clone (fixed in the same pass).
@@ -276,9 +306,11 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
    the feedback loop for defects that still reach review. 1 is now built; 2-3 are the remaining
    structural pieces. 4-6 are cheap once those exist.
 
-   **Also worth noting for whoever picks this up:** `scripts/verify-dd043-pr3.sh` is itself outside
-   `ci.yml`'s path filters, so a commit touching only the harness triggers no job — harmless today
-   because no job runs it, and a gap the moment item 0 lands.
+   **Also worth noting for whoever picks this up:** `scripts/verify-dd043-pr3.sh` is now *inside*
+   `ci.yml`'s path filters — this PR added `'scripts/**'` to both lists
+   (`.github/workflows/ci.yml:51`, `:79`) so the `citation-integrity` job fires on script-only
+   commits. The remaining half of the gap is that no job invokes the harness, so a commit touching
+   only it still gets no harness run; item 0 is what closes that.
 
 2. **DD-041 — clustered exploration across replicas (the one the user asked for, for service-backed
    apps).** Not specced yet — so the next step is *brainstorm → spec → plan*, NOT code. DD-039 leaves

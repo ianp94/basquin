@@ -66,8 +66,11 @@ no `continue` and no early return — `:103` sets `effective = declared`, `:104-
 
 ### What the two facts together establish
 
-`declaredDependency` (`BasquinInjector.java:229-236`) scans `p.getModel().getDependencies()` and
-matches on `GROUP_ID`/`ARTIFACT_ID` (`:231`) — `com.basquin` (`:55`) and `basquin-quarkus` (`:56`).
+The `private Dependency declaredDependency(MavenProject p)` method in `BasquinInjector.java` — cited
+by method signature rather than by line, because guard insertions above it have already shifted its
+line range once — scans `p.getModel().getDependencies()` and matches on `GROUP_ID`/`ARTIFACT_ID`
+alone, i.e. the `static final String GROUP_ID = "com.basquin"` and
+`static final String ARTIFACT_ID = "basquin-quarkus"` constants at the top of that class.
 So the sound claim is precisely this: **the effective model Maven built for `rest-villains` contained
 no `com.basquin:basquin-quarkus` dependency at the moment the injector read it.**
 

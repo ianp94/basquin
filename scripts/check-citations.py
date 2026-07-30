@@ -9,11 +9,15 @@ of PR #103. This tool detects the three failure modes observed there:
   2. STALE LINE     — a cited line number is past end-of-file, a pinned `file:line: expected-text`
                       row no longer matches, or a value quoted beside a line citation exists in
                       the file but NOT at the cited line(s).
-  3. CARRIED VALUE  — prose quotes a backticked figure (cost CSV, timestamp, commit hash, large
-                      count) next to a citation, and the figure appears NOWHERE in any file that
-                      passage cites: the quote came from an older, regenerated artifact. This is
-                      the mode hand-checking kept missing — it requires reading the cited file's
-                      content, not checking its existence.
+  3. CARRIED VALUE  — prose quotes a figure (cost CSV, timestamp, large count) next to a
+                      citation, and the figure appears NOWHERE in any file that passage cites:
+                      the quote came from an older, regenerated artifact. This is the mode
+                      hand-checking kept missing — it requires reading the cited file's
+                      content, not checking its existence. Round 11: both round-10 blocking
+                      findings lived in value FORMS this check did not look at (a **bold**
+                      figure; a small attribute-quoted count `tests="7"`), so the examined
+                      forms are now enumerated below and every unexamined digit-bearing form
+                      beside a citation is COUNTED in the summary.
 
 SCOPE — deliberate, not incidental. WHOLE-TREE, never diff-scoped: a diff-scoped run in PR #103
 round 7 missed four dead citations because they lived in files the commit did not touch. "Whole
@@ -65,10 +69,49 @@ not verify: a zero in this tool's output means checked-and-clean, never unexamin
 MECHANICS. Prose is grouped into logical units — markdown paragraphs (blank-line delimited;
 each table row its own unit) and contiguous comment blocks — because a wrapped sentence puts
 the quoted value and its citation on adjacent physical lines. A quoted value passes if it
-appears in ANY file the unit cites (at a cited line where lines are given). Only strong value
-shapes are checked (pipe/comma cost CSVs, >=4-digit numbers, thousands-separated numbers,
-UTC stamps, digit-bearing hex hashes >=7); short prose numbers like `200` are not treated as
-quotes — that single rule removed most mode-3 false positives during tuning.
+appears in ANY file the unit cites (at a cited line where lines are given).
+
+VALUE FORMS EXAMINED — the round-11 boundary, explicit because two consecutive review rounds
+found blocking defects in forms the tool did not look at:
+  * strong shapes (pipe/comma cost CSVs, >=4-digit plain numbers, thousands-separated
+    numbers, UTC stamps) in backticks OR in **bold** — this repo writes its headline figures
+    in bold, which is exactly the class that matters most (round-10 blocking finding 2,
+    `**1,207**`, was invisible when only backticked spans were read);
+  * thousands-separated numbers and UTC stamps EMBEDDED in a bold phrase (`**1,235
+    findings**`), except figures preceded by ~ / ≈ / ± — an approximation is a derived
+    number, legitimately absent from every artifact, and checking those was the largest
+    false-positive class in round-11 tuning;
+  * numeric attribute quotes — `` `tests="8"` `` or **bold** equivalent — checked as the
+    LITERAL string in the cited file: the attribute name anchors the match, so even a
+    1-digit value is strong (round-10 blocking finding 1 quoted `tests="7"` from an XML
+    reading `tests="8"`; the bare digit 7 was below the old size floor);
+  * bare (unformatted) thousands-separated numbers and UTC stamps, ONLY on a physical line
+    that itself carries a citation — bare prose is too noisy for unit-level pairing;
+  * a >=4-digit figure absent from every cited file's TEXT still verifies when it equals a
+    cited file's line count, exactly or minus a header row — "(1,041 rows)" beside a
+    1,042-line CSV is a count OF the file, not a quote FROM it, and is checked as one.
+A value found ONLY in cited line-less hand-authored prose (.md outside bench-results/) is
+NEVER counted verified: that is a claim corroborating a claim. Round 11 caught ROADMAP's
+carried run-total "verifying" against the identical hand-typed figure in TODO.md — itself a
+FAILED carried value. Such hits are printed as circular-corroboration NOTEs. This tool's own
+source and allowlist are excluded from value backing entirely: they quote figures in order
+to discuss or suppress them (a carried value under indictment briefly "verified" against the
+allowlist entry written to report it).
+
+VALUE FORMS NOT EXAMINED — counted per class in the summary when they sit in a unit beside a
+citation, so the size of the blind spot is printed, not implied:
+  * short numbers (1-3 digits, no separator) in backticks or bold (`**7**`, `200`):
+    substring-matching a 1-3-digit number against a file is meaningless, so a wrong small
+    count in prose ("30 module tests") is NOT caught unless attribute-quoted;
+  * other digit-bearing code spans with no strong shape (versions `0.3.0`, expressions,
+    command flags);
+  * digit-bearing bold phrases containing no strong-shaped figure (`**8 operator guards**`);
+  * bare unseparated 4+-digit numbers — indistinguishable from years/dates (`2026`);
+  * a parenthesised comma-group directly after a backticked citation — this repo's line-LIST
+    idiom (`` `RequestGrammar.java` (82,105) `` means lines 82 and 105, not 82,105).
+NOT examined and NOT countable (no reliable extractor; named here so the gap is disclosed,
+not silent): bare short prose numbers ("8 guards", "23 + 8" arithmetic), spelled-out figures,
+percentages, and italic/single-asterisk emphasis.
 
 FALSE-POSITIVE CLASSES handled (each one was hit while tuning against the real tree):
   * fenced code blocks (a `docker run -v` path in a recipe is not a citation) and inline code
@@ -118,6 +161,10 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ALLOWLIST_FILE = ROOT / "scripts" / "check-citations-allowlist.txt"
+# The tool and its allowlist QUOTE figures in order to discuss or suppress them — they are
+# never evidence FOR those figures. Round 11: two carried values under indictment briefly
+# "verified" against the allowlist entry written to report them. Excluded from value backing.
+SELF_FILES = {"scripts/check-citations.py", "scripts/check-citations-allowlist.txt"}
 
 CITED_EXTS = (
     "md|txt|log|java|sh|py|go|gradle|xml|yml|yaml|json|csv|tsv|properties|html|svg|bat|kts|exec"
@@ -143,6 +190,24 @@ VALUE_RE = re.compile(
     r"|\d{8}T\d{6}Z"                      # UTC stamp: 20260730T102725Z
     r")$"
 )
+BOLD_RE = re.compile(r"\*\*([^*\n]+?)\*\*")
+# Numeric attribute quote (`tests="8"`): checked as the LITERAL string in the cited file.
+# The attribute name anchors the match, so a 1-digit value is still a strong claim — this is
+# the round-10 blocking-finding-1 shape. Values are restricted to digits/commas/dots: a
+# non-numeric attribute value is prose-paraphrase-prone and stays unexamined (counted).
+ATTR_VALUE_RE = re.compile(r'[A-Za-z_][A-Za-z0-9_.:-]*="-?\d[\d,.]*"')
+# Embedded/bare strong shapes. The lookbehind excludes ~ / ≈ / ± — a figure written as an
+# approximation is DERIVED (`~1,048,576` is 2x the 524,288 quantum, `≈3,254,201` an
+# extrapolation; both real examples from the s2 findings), legitimately in no artifact, so
+# checking approximations can only produce false positives.
+THOUSANDS_RE = re.compile(r"(?<![\d,.\w~≈±])-?\d{1,3}(?:,\d{3})+(?![\d,]|\.\d)")
+STAMP_RE = re.compile(r"(?<![\dT])\d{8}T\d{6}Z")
+SHORT_NUM_RE = re.compile(r"-?\d{1,3}")
+BARE4_RE = re.compile(r"(?<![\d,.\w])\d{4,}(?!\d)")
+# `` `RequestGrammar.java` (82,105) `` is this repo's line-LIST idiom (lines 82 and 105), not
+# the number 82,105 — but only when the parenthesised group directly follows a backticked
+# citation, which is checked per line; a parenthesised figure elsewhere is still a value.
+LINELIST_IDIOM_RE = re.compile(r"`\s*\((-?\d{1,3}(?:,\d{3})+)\)")
 NEG_RE = re.compile(
     r"(?:no longer exist|does not exist|do not exist|don't exist|never (?:produced|created|"
     r"committed|existed)|not (?:in|part of) the (?:repo|tree)|not present|does not survive|"
@@ -154,6 +219,18 @@ PINNED_RE = re.compile(r"^([A-Za-z0-9_./-]+):(\d+): (.*)$")
 # In bare (unbackticked) prose, a token preceded by one of these is a fragment of a URL,
 # an absolute machine-local path, or a shell/env expansion — not a citation.
 FRAGMENT_PRECEDERS = ":/.$~\\"
+
+# Value forms the tool does NOT examine, counted per class wherever they sit in a unit that
+# also carries a citation (see the docstring's VALUE FORMS NOT EXAMINED). A disclosed gap is
+# a known limit; a silent one is the defect this tool exists to prevent.
+V_UNEX_SHORT = ("values NOT examined: short number (<4 digits, no separator) in code/bold — "
+                "substring match is meaningless")
+V_UNEX_CODE = ("values NOT examined: digit-bearing code span with no strong shape "
+               "(version, expression, flag)")
+V_UNEX_BOLD = ("values NOT examined: digit-bearing bold phrase with no strong-shaped figure")
+V_UNEX_BARE = ("values NOT examined: bare unseparated 4+-digit number (year/date-shaped)")
+V_UNEX_PAREN = ("values NOT examined: parenthesised group straight after a backticked "
+                "citation (line-list idiom `file` (82,105))")
 
 _file_cache: dict[str, list[str] | None] = {}
 
@@ -227,6 +304,7 @@ def main() -> int:
     disclosed_out: list[str] = []
     untracked_out: list[str] = []
     sibling_out: list[str] = []
+    circular_out: list[str] = []
     stats: collections.Counter = collections.Counter()
 
     # Citation dispositions — every parsed citation lands in exactly one; the sum is asserted
@@ -287,6 +365,12 @@ def main() -> int:
             if not cands:
                 cands = [t for t in tracked_set
                          if t.lower().endswith(("-" + low, "_" + low, "/" + low))]
+            if not cands:
+                # Single-segment DIRECTORY shorthand (`crds/.` -> "crds"): before round 11
+                # these could never resolve — only files were candidates — so a tracked
+                # chart directory cited by its own name failed as a dead path.
+                cands = [d for d in tracked_dirs
+                         if d.lower() == low or d.lower().endswith("/" + low)]
             if cite_dir:
                 near = [c for c in cands if c.startswith(cite_dir + "/")]
                 if len(near) == 1:
@@ -310,6 +394,11 @@ def main() -> int:
 
     def parse_token(token: str):
         token = token.strip("\"'")
+        # Ellipsis must be rejected BEFORE trailing-punctuation stripping: a truncated
+        # `../corpus/...` otherwise loses its dots and masquerades as the real path
+        # `../corpus/` (a round-11 false positive in a shell comment).
+        if "…" in token or "..." in token:
+            return None
         while token and token[-1] in ".,;)]}'\"":
             if token[-1] == "." and TOKEN_RE.fullmatch(token):
                 break
@@ -363,7 +452,12 @@ def main() -> int:
         """unit: [(physical line number, text)] — one paragraph / table row / comment block."""
         citations = []  # (lineno, raw, path, [lines])
         values = []     # (lineno, normalised value)
+        unex: collections.Counter = collections.Counter()  # unexamined value forms, per class
+        bold_line: list[tuple[int, list[str]]] = []
+        plain_line: list[tuple[int, str]] = []
+        idiom_vals: set[str] = set()  # `file` (82,105) — line lists, not thousands figures
         for lineno, text in unit:
+            idiom_vals.update(LINELIST_IDIOM_RE.findall(text))
             spans = set()
             for m in INLINE_CODE_RE.finditer(text):
                 span = m.group(1).strip()
@@ -374,8 +468,12 @@ def main() -> int:
                         citations.append((lineno, span, *parsed))
                         continue
                 norm = span.replace("\\|", "|")
-                if VALUE_RE.fullmatch(norm):
+                if VALUE_RE.fullmatch(norm) or ATTR_VALUE_RE.fullmatch(norm):
                     values.append((lineno, norm))
+                elif SHORT_NUM_RE.fullmatch(norm):
+                    unex[V_UNEX_SHORT] += 1
+                elif any(ch.isdigit() for ch in norm):
+                    unex[V_UNEX_CODE] += 1
             bare = INLINE_CODE_RE.sub(" ", text)
             for m in TOKEN_RE.finditer(bare):
                 tok = m.group(0)
@@ -399,6 +497,51 @@ def main() -> int:
                     parsed = parse_token(tok)
                     if parsed and "/" in parsed[0]:
                         citations.append((lineno, tok, *parsed))
+            bold_line.append((lineno, BOLD_RE.findall(bare)))
+            # Bold spans and citation tokens are stripped before the bare-prose scan so the
+            # same occurrence is never extracted (or counted unexamined) twice.
+            plain_line.append((lineno, DIR_TOKEN_RE.sub(
+                " ", TOKEN_RE.sub(" ", BOLD_RE.sub(" ", bare)))))
+
+        # Round-11 value forms: bold spans (whole-span strong shape or attribute quote, else
+        # embedded thousands/stamps), then bare prose on citation-carrying lines only.
+        cit_lines = {c[0] for c in citations}
+        for lineno, bolds in bold_line:
+            for span in bolds:
+                norm = span.strip().strip(" .,;:!").replace("\\|", "|")
+                if VALUE_RE.fullmatch(norm) or ATTR_VALUE_RE.fullmatch(norm):
+                    values.append((lineno, norm))
+                    continue
+                strong = []
+                for mm in THOUSANDS_RE.finditer(norm):
+                    if mm.group(0) in idiom_vals:
+                        unex[V_UNEX_PAREN] += 1
+                    else:
+                        strong.append(mm.group(0))
+                strong += [mm.group(0) for mm in STAMP_RE.finditer(norm)]
+                if strong:
+                    values.extend((lineno, s) for s in strong)
+                elif SHORT_NUM_RE.fullmatch(norm):
+                    unex[V_UNEX_SHORT] += 1
+                elif any(ch.isdigit() for ch in norm):
+                    unex[V_UNEX_BOLD] += 1
+        for lineno, plain in plain_line:
+            if lineno not in cit_lines:
+                continue
+            for mm in THOUSANDS_RE.finditer(plain):
+                if mm.group(0) in idiom_vals:
+                    unex[V_UNEX_PAREN] += 1
+                else:
+                    values.append((lineno, mm.group(0)))
+            for mm in STAMP_RE.finditer(plain):
+                values.append((lineno, mm.group(0)))
+            unex[V_UNEX_BARE] += len(BARE4_RE.findall(STAMP_RE.sub(" ", plain)))
+        # The unexamined counts are meaningful only where a value COULD have been paired
+        # with a citation — count them for citation-bearing units, so the printed number is
+        # the size of the actual blind spot, not tree-wide digit noise.
+        if citations:
+            for k, v in unex.items():
+                stats[k] += v
 
         unit_text = {ln: txt for ln, txt in unit}
         resolved: list[tuple[str, list[str], list[int], int]] = []
@@ -478,10 +621,13 @@ def main() -> int:
         for vline, val in values:
             variants = {val, val.replace(",", "")} if re.fullmatch(
                 r"-?\d{1,3}(,\d{3})+", val) else {val}
-            found_at_cited_line = found_somewhere = False
+            found_at_cited_line = found_somewhere = pinned_hit = False
             checked_files = []
+            found_files: list[str] = []
             for raw, file_cands, lns, _ in resolved:
                 for c in file_cands:
+                    if c in SELF_FILES:
+                        continue  # this tool's own text is never evidence for a figure
                     lines = read_lines(c)
                     if lines is None:
                         continue
@@ -491,11 +637,25 @@ def main() -> int:
                                  if any(v in ln for v in variants)]
                     if hit_lines:
                         found_somewhere = True
+                        found_files.append(c)
                         if not lns or set(hit_lines) & set(lns):
                             found_at_cited_line = True
+                        if lns and set(hit_lines) & set(lns):
+                            pinned_hit = True
             if not checked_files:
                 stats["values: beside no verified citation (not checked)"] += 1
                 continue
+            if not found_somewhere and re.fullmatch(r"\d{4,}", val.replace(",", "")):
+                # "(1,041 rows)" beside a 1,042-line CSV: the figure is a COUNT OF the cited
+                # file, not a quote FROM it — verifiable directly against len(lines), exact
+                # or one less (a header row). Four digits minimum, so a coincidental
+                # equality is vanishingly unlikely.
+                n = int(val.replace(",", ""))
+                if any(c not in SELF_FILES
+                       and (rl := read_lines(c)) is not None and len(rl) in (n, n + 1)
+                       for _, fc, _, _ in resolved for c in fc):
+                    stats["values: verified as line/row count of a cited file"] += 1
+                    continue
             if not found_somewhere and citing.startswith("bench-results/"):
                 # Round-10 fix (b) — NARROW, REPORTED exemption, no longer a silent pass.
                 # An evidence run directory is a self-contained record: a README paragraph
@@ -532,6 +692,20 @@ def main() -> int:
                             f"the cited file(s) but not at the cited line(s) "
                             f"({', '.join(sorted(set(checked_files)))})") == "failed"
                     else "values: reported (suppressed FAIL)"] += 1
+            elif not pinned_hit and all(
+                    f.endswith(".md") and not f.startswith("bench-results/")
+                    for f in found_files):
+                # Found ONLY in cited hand-authored prose (line-less .md outside
+                # bench-results/): that is corroboration by another CLAIM, not by an
+                # artifact — round 11 caught docs/ROADMAP.md's carried run-total "verifying"
+                # against the identical hand-typed figure in TODO.md, which was itself a
+                # FAILED carried value. Noted, never counted verified.
+                stats["values: found only in cited prose .md (circular; noted, "
+                      "not verified)"] += 1
+                circular_out.append(
+                    f"{citing}:{vline}: value `{val}` is backed only by prose "
+                    f"{', '.join(sorted(set(found_files)))} — another claim, not an "
+                    f"artifact; cite the artifact or pin a line")
             else:
                 stats["values: verified in cited file(s)"] += 1
 
@@ -610,6 +784,27 @@ def main() -> int:
             else:
                 stats[K_PIN] += 1
 
+    # Comment scanning — '#'-comment lines of tracked *.sh and .github/workflows/* files,
+    # grouped into contiguous blocks (a comment block is one claim unit, like a paragraph).
+    # RESTORED in round 11: the round-10 rewrite dropped this loop while the summary line
+    # kept printing "N comment-scanned files" — the tool's own claim was wider than its
+    # check, the precise defect class it exists to catch, silently for one full round.
+    for citing in citing_comments:
+        if frozen_reason(citing):
+            frozen_files += 1
+            continue
+        unit = []
+        for n, line in enumerate(read_lines(citing) or [], 1):
+            txt = line.strip()
+            if txt.startswith("#") and not txt.startswith("#!"):
+                unit.append((n, txt.lstrip("#").strip()))
+            else:
+                if unit:
+                    check_unit(citing, unit)
+                    unit = []
+        if unit:
+            check_unit(citing, unit)
+
     # The ledger must balance: every parsed citation has exactly one disposition. If this
     # trips, the tool has a silent-drop bug — the round-10 blocking defect class — and no
     # verdict it prints can be trusted, so abort loudly.
@@ -628,9 +823,16 @@ def main() -> int:
     print("  citation dispositions (each citation lands in exactly one; sum equals total):")
     for k in DISPOSITIONS:
         print(f"    {stats[k]:5d}  {k}")
-    print("  value quotes beside citations:")
+    print("  value quotes beside citations (backticked, **bold**, attribute-quoted, and "
+          "bare separated numbers/stamps on citation lines):")
     for k in sorted(k for k in stats if k.startswith("values:")):
         print(f"    {stats[k]:5d}  {k}")
+    print("  value forms NOT examined, sitting beside citations (counted, per class; "
+          "see docstring):")
+    for k in (V_UNEX_SHORT, V_UNEX_CODE, V_UNEX_BOLD, V_UNEX_BARE, V_UNEX_PAREN):
+        print(f"    {stats[k]:5d}  {k}")
+    print("        (not countable, also unexamined: bare short prose numbers, spelled-out "
+          "figures, percentages, arithmetic)")
     print("  non-citation tokens skipped (counted, per class):")
     for k in sorted(k for k in stats if k.startswith("skipped tokens:")):
         print(f"    {stats[k]:5d}  {k}")
@@ -658,6 +860,8 @@ def main() -> int:
                          "failed)", untracked_out),
                         ("SIBLING-BACKED values (bench-results run dir; imprecise citation, "
                          "not failed)", sibling_out),
+                        ("values backed ONLY by cited prose .md (circular corroboration — "
+                         "a claim, not an artifact; not verified, not failed)", circular_out),
                         ("REPORTED to owning agent, pending their fix (not failed)",
                          reported_out)):
         if rows:
@@ -669,11 +873,19 @@ def main() -> int:
         for f in findings:
             print(f"  FAIL {f}")
         return 1
+    n_unex = sum(stats[k] for k in (V_UNEX_SHORT, V_UNEX_CODE, V_UNEX_BOLD, V_UNEX_BARE,
+                                    V_UNEX_PAREN))
+    n_rep = stats[K_REP] + stats["values: reported (suppressed FAIL)"]
     print(f"\nOK — {n_verified} of {n_cit} citations verified clean (dead paths, stale "
           f"lines, carried values); {n_unchecked} UNCHECKED, {stats[K_ALLOW]} allowlisted, "
-          f"{stats[K_REP]} reported to owners, {stats[K_DISC]} disclosed absences, "
-          f"{stats[K_DISK]} untracked-on-disk — all listed above. No claim is made about "
-          f"anything not counted as verified.")
+          f"{n_rep} reported to owners, {stats[K_DISC]} disclosed absences, "
+          f"{stats[K_DISK]} untracked-on-disk — all listed above. Values checked only in "
+          f"backticks, **bold**, attribute quotes, and bare separated-number/stamp forms on "
+          f"citation lines; {n_unex} digit-bearing tokens beside citations were in forms NOT "
+          f"examined (short numbers, non-strong code spans/bold phrases, year-shaped bare "
+          f"numbers — counted above), and bare short prose numbers, spelled-out figures, "
+          f"percentages and arithmetic are never examined. No claim is made about anything "
+          f"not counted as verified.")
     return 0
 
 

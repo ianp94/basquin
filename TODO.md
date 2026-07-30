@@ -640,9 +640,9 @@ The three disclosed citations, one each in three files, are **not** part of this
 tells a fresh-clone reader the pointer is dead, right where it's cited, so no ledger entry is needed
 to surface it:
 
-| File:line | What it discloses at the site |
+| Site (anchored by entry, not by line — the one line-number here went stale inside one round) | What it discloses at the site |
 |---|---|
-| `TODO.md:1228` | "is gitignored and does not survive on its own" |
+| `TODO.md`, the DD-045 entry beginning "A repo-wide line-citation audit (PR #103 round 7) found 135 wrong citations out of 547" | "is gitignored and does not survive on its own" |
 | `bench-results/dd043-pr3-citation-audit-2026-07-30/README.md:6` | "gitignored, so a fresh clone has no file backing those numbers at all" |
 | `bench-results/dd043-pr3-optional-declaration-2026-07-29/README.md:44` | "not part of the committed record — `.superpowers/` is gitignored ... so it is not cited as evidence here" |
 
@@ -1135,8 +1135,11 @@ Full rationale and the ordered item list are in `docs/ROADMAP.md`'s "Start here 
 pointer so the debt is visible from here too. The one-line version: **PR-3 took eight approver rounds,
 the feature held in every one, and almost every finding was in the machinery that certifies it.**
 
-- [ ] **0 — run the harness in CI.** No job invokes `scripts/verify-dd043-pr3.sh`; it is manual-only
-      and outside `ci.yml`'s path filters. This is why `jar:baked-version` could not pass on a CRLF
+- [ ] **0 — run the harness in CI.** No job invokes `scripts/verify-dd043-pr3.sh`; it is manual-only.
+      It is *not* outside the path filters any more — this PR put `'scripts/**'` in both of `ci.yml`'s
+      lists (`.github/workflows/ci.yml:51` push, `:79` pull_request), so a harness-only commit does
+      trigger the workflow; what it still does not trigger is any job that runs the harness. Being
+      manual-only is why `jar:baked-version` could not pass on a CRLF
       checkout for three rounds and why the `jar` stage passed against a jar it never built until round
       8 ran it deliberately. `unit jar guards` needs no docker and finishes in minutes. Do this first —
       the rest shorten the feedback loop; this changes when the loop closes.
@@ -1148,9 +1151,26 @@ the feature held in every one, and almost every finding was in the machinery tha
       suppressions, each with a reason). Wired into `.github/workflows/ci.yml` as the
       `citation-integrity` job, which runs on both `push` and `pull_request`; both path-filter lists
       carry `scripts/**`, `**/*.md`, `**/citations.txt` and `bench-results/**`, so the script, the
-      allowlist, and the files it checks all trigger the job. Measured by running it 2026-07-30:
-      **1,207** citations checked across 91 md + 2 pinned + 27 comment-scanned files, finishes in
-      under a second, exits **0**. It caught a defect class hand-checking never would have: DD-021's
+      allowlist, and the files it checks all trigger the job. **Do not cite a live total to the
+      script that computes it** — the corpus this tool scans includes this very sentence, so an edit
+      here moves the true count, including the edit that would record it. That circularity is why an
+      earlier version of this line was hand-retyped multiple times in one review round chasing the
+      tool's own moving output, and was stale again by the next round regardless of the retype. The
+      fix mirrors what `scripts/verify-dd043-pr3.sh`'s evidence already does: commit a timestamped run
+      directory and cite *that*, not the script. One real run is committed at
+      `bench-results/citations-20260730T214700Z/` —
+      `bench-results/citations-20260730T214700Z/output.txt` is the tool's own stdout, pasted
+      verbatim, and `README.md` explains every disposition class and states plainly that its numbers
+      describe one run against one (admittedly dirty) tree, not a bound. That run's header
+      (`bench-results/citations-20260730T214700Z/output.txt:1`) parsed 1689 citations across 91 md + 2
+      pinned + 27 comment-scanned files; its final disposition line
+      (`bench-results/citations-20260730T214700Z/output.txt:372`) reports 1241 verified, 299
+      UNCHECKED, 136 allowlisted, 2 reported to owners, 13 disclosed absences, 0 untracked-on-disk —
+      six buckets summing to the parsed total, asserted by the tool itself — exit 0.
+      **To get today's real figures, run `python3 scripts/check-citations.py` and read its own final
+      disposition line — do not retype a total out of this entry, `docs/ROADMAP.md`, or any prior run
+      directory; the command is the only citation of this number that can never go stale.** It caught
+      a defect class hand-checking never would have: DD-021's
       entry in `docs/DESIGN-DECISIONS.md` cited agents.md, a file that exists on the authoring machine
       but is gitignored — the citation resolved for its author and was dead on every fresh clone
       (fixed in the same pass that added this entry). Evidence for the scale that motivated building
@@ -1170,7 +1190,10 @@ the feature held in every one, and almost every finding was in the machinery tha
       narrower question and asking it is what let round 8's findings through.
       **Add its mirror image: resolve open debt against the code.** Round 9 swept all **91** `- [ ]`
       entries in this file against the tree and found **ten** the code already satisfied — the box count
-      went 91 open / 152 closed to 82 / 162 — plus one (`status.load` in the CLI) whose named gap had
+      went 91 open / 152 closed to **81 open / 163 closed** in `119d400` (counted with
+      `git show <rev>:TODO.md | grep -cE '^\s*- \[[ x]\]'` on both sides of that commit, so the numbers
+      are derived rather than tallied by hand; closed rose by eleven, not ten, because the same commit
+      also landed the already-done "1 — citation-resolution CI check" entry) — plus one (`status.load` in the CLI) whose named gap had
       half closed and needed narrowing rather than checking off. Two had been false since `a0595b9`,
       the whole span of DD-043. The sharpest was "Roller's `login_publish` sequence has never published
       a single row", sitting 91 lines below an already-`[x]` DD-039 entry recording 84 such rows: the
@@ -1204,8 +1227,13 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       defect PR #103 round 9 filed as blocking: this entry stayed `[ ]` for two commits after the fix
       landed, so a committed document said the one row proving the boundary was on the request path was
       broken when it was not. **When a deferral is overridden, close it in the same commit as the fix.**
-- [ ] **`basquin-init.gradle` hand-types `0.3.0`.** Same defect class as the spec's drifted counts, and it
-      will silently inject a stale coordinate the first time the version is bumped. Not a quick fix: a
+- [ ] **`basquin-init.gradle` hand-types `0.3.0`.** Same defect class as the spec's drifted counts, but
+      **no longer silent**: `verifyGradleInitScriptVersion`
+      (`basquin-maven-injector/build.gradle:189`, wired into `jar` at `:228` and `check` at `:229`)
+      compares the init script's hard-coded default against the module version and throws
+      a `GradleException` when they diverge (`:212`), so an in-tree bump now fails the build loudly
+      rather than shipping a stale coordinate. What stays open is the mechanism, not the detection —
+      the version is still hand-typed in two places and kept honest by a guard. Not a quick fix: a
       Gradle init script cannot read the injector jar's baked `basquin-injector.properties`, because it runs
       before and outside any project's classpath. Needs a decision on the mechanism — a documented
       `-Dbasquin.inject.version` requirement, a generated init script, or reading the version from the

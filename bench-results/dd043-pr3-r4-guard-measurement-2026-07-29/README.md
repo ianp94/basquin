@@ -211,7 +211,12 @@ re-run here because S2's guard edits the same file they anchor in. Five are new:
   same way, but that was not exercised.
 - `com.basquin:basquin-core:0.0.1-conflicting` is a copy of the 0.3.0 jar, so "the build succeeds with a
   mismatched core" is measured at the *resolution* level. Nothing was executed from it.
-- Maven **3.9.15** only (`provenance.txt`), which is the version `BasquinInjector`'s javadoc pins to.
+- Maven **3.9.15** only, and that version is attested by exactly one file: `provenance.txt:7`
+  (`Apache Maven 3.9.15 (98b2cdbfdb5f1ac8781f537ea9acccaed7922349)`), captured once for the run. It is
+  **not** in the per-cell evidence — the 17 `logs/*.log` files were captured without `-V`, they open at
+  `[INFO] Scanning for projects...`, and `grep 'Apache Maven' logs/*.log` matches nothing. So the
+  version is a run-level record, not something any individual cell's log proves.
+  It is the version `BasquinInjector`'s javadoc pins to.
   Maven 4's resolver replaces `ClassicDependencyManager`'s depth rules; nothing here transfers to it.
 
 ## Reproducibility under the shipped guard (round-5 approver S6)

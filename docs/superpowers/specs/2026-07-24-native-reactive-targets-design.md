@@ -599,10 +599,16 @@ plugin execution is PR-4's, behind §8.2's entry gate (§9).
 `allprojects { … }`, deliberately sharing the Maven injector's three system properties
 (`basquin.inject.skip`, `basquin.inject.repo.url`, `basquin.inject.version`) so an operator
 instrumenting a mixed estate learns one contract. **It implements only the `skip` opt-out** — the
-other six guards §5.1 requires on the Maven side (conflicting managed version, conflicting managed
-exclusions, conflicting declared version, an unusable declaration shape, an unusable *sibling* scope,
-and a conflicting *sibling* version — the last two on a directly declared `com.basquin` artifact
-other than `basquin-quarkus`, `basquin-core` above all) have no Gradle counterpart, and the script
+other six §5.1 requires on the Maven side have no Gradle counterpart. "Six" counts independently-
+triggerable `throw MavenExecutionException` sites, not guard *methods*: `BasquinInjector.java` has
+only four methods that can throw (`failOnUnusableDeclaration`, `failOnConflictingDeclaredVersion`,
+`failOnConflictingManagedVersion`, `failOnUnusableSiblingDeclaration`), but two of the four each
+contain two separate `throw` statements for two independent conditions, giving six: conflicting
+managed version, conflicting managed exclusions, conflicting declared version, an unusable
+declaration shape (one `throw` bundling four sub-shapes — scope/type/classifier/exclusions — as a
+single condition), an unusable *sibling* scope, and a conflicting *sibling* version (the last two on
+a directly declared `com.basquin` artifact other than `basquin-quarkus`, `basquin-core` above all).
+None of the six has a Gradle counterpart, and the script
 does not even detect a pre-existing declaration — of `basquin-quarkus` or of a sibling — before
 adding its own. Running §5.2's banner check against a Gradle target would not exercise any of that —
 it proves the extension loaded, not that a silent bypass was rejected — so §5.1's fail-loudly

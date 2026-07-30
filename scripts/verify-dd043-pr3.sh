@@ -9,8 +9,9 @@
 #
 # Stages:
 #   unit    ./gradlew check — whole-suite test count and failures, read from the JUnit XML
-#   jar     the injector jar's three integrity properties: the Sisu index exists, it names a
-#           class actually present in the jar, and the baked version matches build.gradle
+#   jar     the injector jar's integrity properties: the Sisu index exists, it names a class
+#           actually present in the jar, the baked version matches build.gradle, and
+#           basquin-init.gradle's hard-coded default injected version has not drifted from it
 #   guards  mutation-checks each fail-loudly guard: neuter it, confirm ITS OWN test fails, revert
 #   jvm     spec §5.2 half 1 — rest-villains instrumented with ZERO edits to its source, JVM mode
 #   native  spec §5.2 half 2 — the Phase-0 fixture instrumented and built as a native image
@@ -140,10 +141,11 @@ PY
 # So an absence claim requires a SENTINEL: positive evidence in the same file that the relevant activity
 # happened at all. No sentinel, no PASS — it reports UNMEASURED instead, which is the honest outcome.
 #
-# (jvm:not-from-central applied this doctrine inline rather than through this helper: its failure
-# condition is "downloaded from any id OTHER than basquin-injected", which a single ERE cannot express,
-# and round 4 showed a sentinel loose enough to fit one regex here was loose enough to be satisfied by
-# the injector's own stdout. Any future absence row that CAN bind with one regex should use this helper.)
+# (The *:not-from-central rows apply this doctrine through assert_resolved_from_injected below rather
+# than through this helper: their failure condition is "downloaded from any id OTHER than
+# basquin-injected", which a single ERE cannot express, and round 4 showed a sentinel loose enough to
+# fit one regex here was loose enough to be satisfied by the injector's own stdout. Any future absence
+# row that CAN bind with one regex should use this helper.)
 assert_absent() {  # $1=file  $2=must-be-absent regex  $3=sentinel regex  $4=label  $5=pass message
   local f="$1" bad_re="$2" sentinel="$3" label="$4" msg="$5"
   if [ ! -s "$f" ]; then
@@ -159,7 +161,44 @@ assert_absent() {  # $1=file  $2=must-be-absent regex  $3=sentinel regex  $4=lab
   fi
 }
 
-purge_basquin() {  # $1 = a local maven repository root
+# The resolution-provenance row, one implementation for BOTH build stages. PR #103's approver found
+# the native half of §5.2 had no row binding its pass to injection: native:build, native:serves and
+# native:banner all still PASS if purge_basquin silently fails and com.basquin resolves from the
+# fixture's stale local repo — which the extension's own dd043Spike publishing target populates, so
+# that is a reachable state, not a hypothetical. Success proves nothing about injection; only
+# resolution provenance does, and a provenance row the jvm stage has and the native stage lacks is a
+# PASS for something never measured — this repo's most serious defect class.
+#
+# The sentinel must bind to THIS claim, not merely prove the log is non-trivial. Two prior sentinels
+# failed that test: "Downloading from" (only shows Maven fetched something), and
+# "com/basquin|com\.basquin" — satisfied by the injector's OWN "[basquin-injector] instrumented …
+# (com.basquin:…)" stdout, printed at afterProjectsRead BEFORE any resolution, so a build whose
+# injected repo never reached Aether still PASSed this row while resolving nothing from anywhere.
+# Binding requires resolver evidence on both sides:
+#   * sentinel: a com/basquin artifact actually DOWNLOADED from basquin-injected at the served URL.
+#     The injector never prints "Downloaded from" (its every line is "[basquin-injector] "-prefixed),
+#     so only Maven's resolver can satisfy this — and if the purge failed and everything resolved
+#     from a stale local copy, this is absent and the row honestly reports UNMEASURED.
+#   * failure: any com/basquin download under any other id:URL. Matching the artifact PATH in the
+#     URL rather than the literal id "central" is what catches a <mirrorOf>*</mirrorOf> in the build
+#     host's settings.xml: the mirror relabels the line with its own id — including for
+#     basquin-injected itself, which a catch-all mirror also captures, and that IS a failure,
+#     because the build then did not resolve from the injected repo and the acceptance is confounded.
+assert_resolved_from_injected() {  # $1 = the stage's Maven build log  $2 = row label
+  local blog="$1" label="$2" inj_dl foreign_dl
+  inj_dl="$(grep -cE "Downloaded from basquin-injected: http://localhost:$PORT/com/basquin/" "$blog" 2>/dev/null)"
+  foreign_dl="$(grep -E 'Downloaded from [^:]+: [^ ]*/com/basquin/' "$blog" 2>/dev/null \
+                 | grep -v "Downloaded from basquin-injected: http://localhost:$PORT/")"
+  if [ -n "$foreign_dl" ]; then
+    bad "$label" "com/basquin downloaded from a repository other than basquin-injected: $(echo "$foreign_dl" | head -1)"
+  elif [ "${inj_dl:-0}" -gt 0 ]; then
+    ok "$label" "$inj_dl com/basquin download(s), every one from basquin-injected; none from central or any mirror id"
+  else
+    bad "$label" "UNMEASURED: no com/basquin artifact was ever Downloaded from basquin-injected — cannot tell 'none came from central' from 'nothing resolved at all' (see $(basename "$blog"))"
+  fi
+}
+
+purge_basquin() {  # $1 = a local maven repository root  $2 = proof file name; exit status asserts the purge
   local repo="$1" proof="$OUT/$2"
   { echo "# purge proof — $(date -u +%FT%TZ)"; echo "# repository: $repo"; echo
     echo "## BEFORE:"; find "$repo/com/basquin" -maxdepth 1 -mindepth 1 2>&1 || true
@@ -169,6 +208,12 @@ purge_basquin() {  # $1 = a local maven repository root
   { echo; echo "## AFTER (a 'No such file' error here is the proof):"
     find "$repo/com/basquin" -type f 2>&1 || true
   } >> "$proof"
+  # Captured is not graded: until PR #103 round 6 nothing ever read the AFTER section back, so an rm
+  # that failed (EPERM, an open handle on a mount that resurrects the dir) left a proof file
+  # faithfully RECORDING the survivors while the stage built on against the very copy the purge
+  # existed to remove. The exit status now asserts the one thing the proof is for, and both call
+  # sites refuse the stage on it rather than running a build whose attribution is already confounded.
+  [ ! -e "$repo/com/basquin" ]
 }
 
 serve_pages() {  # $1 = stage tag; publishes the chain to a scratch dir and serves it on 127.0.0.1
@@ -260,6 +305,41 @@ run_jar() {
     ok "jar:baked-version" "$ver matches build.gradle"
   else
     bad "jar:baked-version" "baked='${ver:-<MISSING>}' build.gradle='$declared'"
+  fi
+
+  # basquin-init.gradle (the Gradle counterpart to this jar) hand-types the injected version's
+  # default where the Maven path above does not — see verifyGradleInitScriptVersion's comment in
+  # build.gradle. That task is finalizedBy('jar'), so it already ran once, silently, as a side effect
+  # of the `:basquin-maven-injector:jar` invocation at the top of this function — but this function
+  # never checks THAT invocation's exit code, and a jar archive still lands in build/libs/ even when
+  # a finalizer fails afterward (the archive task itself already succeeded), so a drifted literal
+  # would sail through unreported. Rather than trust an implicit run this script never inspects, give
+  # the check its own dedicated, log-backed invocation: it's cheap (a regex over one checked-in text
+  # file, no compilation), and it gives this row an artifact of its own to derive its detail from.
+  #
+  # No `-q`: with it, Gradle suppresses LIFECYCLE output entirely (verified empirically — the PASS
+  # message never appears in a `-q` log, only a FAILURE would), so a quiet log carries a sentinel on
+  # failure but not on success — an asymmetry that would make "ran and passed" indistinguishable from
+  # "never ran". Same reasoning `_mutate` already recorded for its own `--no-daemon --console=plain`
+  # (no -q) invocations.
+  #
+  # rc alone cannot tell "ran and passed" from "gradle never reached the task" (unknown task name,
+  # daemon/JVM failure, etc. — verified empirically: a bogus task name also exits non-zero with no
+  # task output at all) — the same discriminator class as `_mutate`'s fresh-XML requirement and
+  # `run_unit`'s tot>0. The task's `doLast` prints a message prefixed "verifyGradleInitScriptVersion:"
+  # on BOTH outcomes (lifecycle on pass, GradleException text on fail — both verified empirically), so
+  # that prefix is the sentinel that the task body actually executed; only then does rc pick which of
+  # the two outcomes it was.
+  ./gradlew --no-daemon --console=plain :basquin-maven-injector:verifyGradleInitScriptVersion \
+    > "$OUT/gradle-init-version.log" 2>&1
+  local girc=$? sentinel
+  sentinel="$(grep -o 'verifyGradleInitScriptVersion:.*' "$OUT/gradle-init-version.log" | head -1)"
+  if [ -z "$sentinel" ]; then
+    bad "jar:gradle-init-version" "UNMEASURED: no verifyGradleInitScriptVersion: line in gradle-init-version.log (gradle rc=$girc) — the task never ran, so no verdict exists"
+  elif [ "$girc" -eq 0 ]; then
+    ok "jar:gradle-init-version" "$sentinel"
+  else
+    bad "jar:gradle-init-version" "$sentinel (gradle rc=$girc)"
   fi
 }
 
@@ -435,7 +515,9 @@ run_jvm() {
     skip "jvm" "docker unavailable"; return
   fi
 
-  purge_basquin "$HOME/.m2/repository" "jvm-purge-proof.txt"
+  if ! purge_basquin "$HOME/.m2/repository" "jvm-purge-proof.txt"; then
+    bad "jvm" "com/basquin SURVIVED the purge of ~/.m2/repository — the build could resolve from the stale copy and measure nothing (jvm-purge-proof.txt)"; return
+  fi
   if ! serve_pages jvm; then bad "jvm" "could not publish/serve the scratch Pages repo (publish-jvm.log)"; return; fi
 
   local stage="$REPO_ROOT/build/tmp/verify-pr3-inj"
@@ -471,32 +553,9 @@ run_jvm() {
   grep -q "basquin-quarkus-deployment" "$OUT/http-access-jvm.log" \
     && ok "jvm:deployment-from-injected-repo" "$(grep -c 'basquin-quarkus-deployment' "$OUT/http-access-jvm.log") GET(s) in http-access-jvm.log" \
     || bad "jvm:deployment-from-injected-repo" "not fetched from the injected repo (see http-access-jvm.log)"
-  # The sentinel must bind to THIS claim, not merely prove the log is non-trivial. Two prior sentinels
-  # failed that test: "Downloading from" (only shows Maven fetched something), and
-  # "com/basquin|com\.basquin" — satisfied by the injector's OWN "[basquin-injector] instrumented …
-  # (com.basquin:…)" stdout, printed at afterProjectsRead BEFORE any resolution, so a build whose
-  # injected repo never reached Aether still PASSed this row while resolving nothing from anywhere.
-  # Binding requires resolver evidence on both sides:
-  #   * sentinel: a com/basquin artifact actually DOWNLOADED from basquin-injected at the served URL.
-  #     The injector never prints "Downloaded from" (its every line is "[basquin-injector] "-prefixed),
-  #     so only Maven's resolver can satisfy this — and if the purge failed and everything resolved
-  #     from a stale local copy, this is absent and the row honestly reports UNMEASURED.
-  #   * failure: any com/basquin download under any other id:URL. Matching the artifact PATH in the
-  #     URL rather than the literal id "central" is what catches a <mirrorOf>*</mirrorOf> in the build
-  #     host's settings.xml: the mirror relabels the line with its own id — including for
-  #     basquin-injected itself, which a catch-all mirror also captures, and that IS a failure,
-  #     because the build then did not resolve from the injected repo and the acceptance is confounded.
-  local inj_dl foreign_dl
-  inj_dl="$(grep -cE "Downloaded from basquin-injected: http://localhost:$PORT/com/basquin/" "$OUT/jvm-build.log" 2>/dev/null)"
-  foreign_dl="$(grep -E 'Downloaded from [^:]+: [^ ]*/com/basquin/' "$OUT/jvm-build.log" 2>/dev/null \
-                 | grep -v "Downloaded from basquin-injected: http://localhost:$PORT/")"
-  if [ -n "$foreign_dl" ]; then
-    bad "jvm:not-from-central" "com/basquin downloaded from a repository other than basquin-injected: $(echo "$foreign_dl" | head -1)"
-  elif [ "${inj_dl:-0}" -gt 0 ]; then
-    ok "jvm:not-from-central" "$inj_dl com/basquin download(s), every one from basquin-injected; none from central or any mirror id"
-  else
-    bad "jvm:not-from-central" "UNMEASURED: no com/basquin artifact was ever Downloaded from basquin-injected — cannot tell 'none came from central' from 'nothing resolved at all' (see jvm-build.log)"
-  fi
+  # Provenance, not build success, is what attributes this half of §5.2 to injection — see
+  # assert_resolved_from_injected for the sentinel doctrine and the two prior sentinels that failed it.
+  assert_resolved_from_injected "$OUT/jvm-build.log" "jvm:not-from-central"
 
   APP_CONTAINER=verify-pr3-app DB_CONTAINER=verify-pr3-db DB_NETWORK=verify-pr3-net APP_DIR="$app" \
     bash bench-results/dd043-pr2-restvillains-2026-07-26/run-app.sh > "$OUT/jvm-run-app.log" 2>&1
@@ -558,7 +617,9 @@ run_native() {
   fi
   echo "  (native compilation is serialized on a mutex and takes 15+ minutes; nothing else CPU-heavy should run)"
 
-  purge_basquin "$REPO_ROOT/bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository" "native-purge-proof.txt"
+  if ! purge_basquin "$REPO_ROOT/bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository" "native-purge-proof.txt"; then
+    bad "native" "com/basquin SURVIVED the purge of the fixture's local repo — the build could resolve from the stale copy and measure nothing (native-purge-proof.txt)"; return
+  fi
   if ! serve_pages native; then bad "native" "could not publish/serve the scratch Pages repo (publish-native.log)"; return; fi
 
   local stage="$REPO_ROOT/build/tmp/verify-pr3-inj"
@@ -572,6 +633,12 @@ run_native() {
 
   grep -q "BUILD SUCCESS" "$OUT/native-build.log" \
     && ok "native:build" "BUILD SUCCESS" || { bad "native:build" "see native-build.log"; stop_server; return; }
+
+  # The row PR #103's approver found missing (finding 3): without it, every remaining check in this
+  # stage still PASSes off a stale local repo or a mirror capture — greens that establish nothing
+  # about injection, which is the entire point of this half of §5.2. Same doctrine, same helper,
+  # same binding as jvm:not-from-central, graded from THIS stage's own build log.
+  assert_resolved_from_injected "$OUT/native-build.log" "native:not-from-central"
 
   local bin="$fx/target/fixture-1.0.0-SNAPSHOT-runner"
   if [ ! -x "$bin" ]; then bad "native:binary" "no runner binary at $bin"; stop_server; return; fi

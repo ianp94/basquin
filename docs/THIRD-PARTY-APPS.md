@@ -229,11 +229,18 @@ properties:
 ./gradlew -I /path/to/basquin-init.gradle build
 ```
 
-**It implements only the `skip` opt-out.** The Maven injector's other five guards — conflicting
-managed version, conflicting managed exclusions, conflicting declared version, an unusable
-declaration shape (§5.1), and an unusable *sibling* declaration (a directly declared `com.basquin`
-artifact other than `basquin-quarkus` — `basquin-core` above all — at a non-`compile`/`runtime`
-scope or a conflicting version) — have no Gradle equivalent: the script does not even check whether
+**It implements only the `skip` opt-out.** `BasquinInjector.java` has four private methods that can
+throw `MavenExecutionException` (`failOnUnusableDeclaration`, `failOnConflictingDeclaredVersion`,
+`failOnConflictingManagedVersion`, `failOnUnusableSiblingDeclaration`), but two of those four each
+guard two independent conditions with their own separate `throw` — `failOnConflictingManagedVersion`
+throws once for a managed exclusion and once for a managed version conflict; `failOnUnusableSiblingDeclaration`
+throws once for an unusable sibling scope and once for a conflicting sibling version — so the
+fail-loudly surface is **six conditions, each an independently-triggerable `throw`, across those four
+methods**: conflicting managed version, conflicting managed exclusions, conflicting declared version,
+an unusable declaration shape (§5.1, one `throw` covering four sub-shapes — scope/type/classifier/exclusions),
+an unusable *sibling* scope, and a conflicting *sibling* version (the last two on a directly declared
+`com.basquin` artifact other than `basquin-quarkus` — `basquin-core` above all). None of those six has
+a Gradle equivalent: the script does not even check whether
 `com.basquin:basquin-quarkus` is already declared before adding another `implementation`
 dependency, and it does not look at any other `com.basquin` artifact at all. A Gradle target that
 already declares the artifact — at another version, with exclusions, or in a non-resolving

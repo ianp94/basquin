@@ -113,6 +113,56 @@ def verifyInjectorIsDiscoverable = tasks.register('verifyInjectorIsDiscoverable'
 }
 tasks.named('jar') { finalizedBy verifyInjectorIsDiscoverable }
 
+// PR #103's approver (finding 2): basquin-init.gradle:22 hand-types the injected version's default
+// ('0.3.0') where the Maven path deliberately does not — InjectorVersion reads a resource baked from
+// THIS module's `project.version` (above), so the Maven default can never drift from it. An init
+// script cannot do the same: it runs before any project classpath exists, which is before this jar's
+// baked resource could even be on a classpath to read (TODO.md:1068), so the literal itself cannot be
+// eliminated the way the Maven one was. What can be added is an assertion that the literal has not
+// drifted from the one thing it is supposed to mirror — this module's own `version`, which
+// release.yml (`Assert every published module's version matches the release tag`) already keeps
+// equal to every other published module's, including basquin-quarkus, the artifact this default
+// names. Read the literal back out of the checked-in script text and compare, rather than trusting a
+// comment asking a human to keep the two in sync.
+def basquinInitGradleFile = rootProject.layout.projectDirectory.file('basquin-init.gradle')
+def verifyGradleInitScriptVersion = tasks.register('verifyGradleInitScriptVersion') {
+    group = 'verification'
+    description = "Fails if basquin-init.gradle's hard-coded default injected version has drifted " +
+            "from this module's version."
+    inputs.file(basquinInitGradleFile)
+    doLast {
+        File initFile = basquinInitGradleFile.asFile
+        if (!initFile.isFile()) {
+            throw new GradleException("verifyGradleInitScriptVersion: ${initFile} does not exist; " +
+                    "cannot check its default injected version against project.version " +
+                    "'${project.version}'. Update this task if the file moved.")
+        }
+        // Matches:  System.getProperty('basquin.inject.version') ?: '0.3.0'
+        def matcher = initFile.text =~ /basquin\.inject\.version'\)\s*\?:\s*'([^']*)'/
+        if (!matcher.find()) {
+            throw new GradleException("verifyGradleInitScriptVersion: could not find the " +
+                    "'basquin.inject.version ?: <literal>' default in ${initFile.name}. Either the " +
+                    "script was rewritten in a way this regex no longer parses, or the fallback " +
+                    "literal was removed entirely — update this task to match its new shape.")
+        }
+        String literalVersion = matcher.group(1)
+        String moduleVersion = project.version.toString()
+        if (literalVersion != moduleVersion) {
+            throw new GradleException("verifyGradleInitScriptVersion: ${initFile.name}'s hard-coded " +
+                    "default version '${literalVersion}' != ${project.name}'s version " +
+                    "'${moduleVersion}'. A Gradle target built without -Dbasquin.inject.version would " +
+                    "resolve the STALE coordinate com.basquin:basquin-quarkus:${literalVersion} — the " +
+                    "build succeeds and /__basquin/result returns \"miss\". Update the literal at " +
+                    "${initFile.name} to '${moduleVersion}' as part of this release's version bump.")
+        }
+        logger.lifecycle("verifyGradleInitScriptVersion: ${initFile.name} default version " +
+                "'${literalVersion}' matches ${project.name} '${moduleVersion}'.")
+    }
+}
+// Same reasoning as verifyInjectorIsDiscoverable just above: finalizedBy on `jar`, not only wired
+// into `check`, because the release path builds/publishes without ever running `check`.
+tasks.named('jar') { finalizedBy verifyGradleInitScriptVersion }
+
 publishing {
     publications {
         injector(MavenPublication) {

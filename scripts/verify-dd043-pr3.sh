@@ -683,7 +683,7 @@ run_jvm() {
   # optional sign). "miss" (ResultStore.MISS) is the only non-CSV body the boundary itself can ever
   # legitimately produce, for "never ran" — anything else that isn't this shape is a transport failure
   # or an error page riding a 200, not a measurement. The run of record's `782,-767,9|0||`
-  # (bench-results/verify-20260730T054112Z/jvm-result-poll.txt) is this shape: costCsv="782,-767,9",
+  # (bench-results/verify-20260730T102725Z/jvm-result-poll.txt) is this shape: costCsv="782,-767,9",
   # invariantCount="0", detail="", leak="".
   local poll; poll="$(tr -d '\r\n' < "$OUT/jvm-result-poll.txt")"
   if [ "$poll_rc" -eq 0 ] && printf '%s' "$poll" | grep -qE '^-?[0-9]+,-?[0-9]+,-?[0-9]+\|[0-9]+\|[^|]*\|(leak)?$'; then

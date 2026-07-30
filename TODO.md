@@ -1114,8 +1114,8 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       committed unexercised (the native mutex was held, and the `guards` stage mutates source a running
       build was compiling). **Resolved 2026-07-30**: both stages ran end-to-end in the run of record,
       stamped `20260730T054112Z` and made against `9f1e990` on a clean tree (that run's `RESULTS.md:3`).
-      `bench-results/verify-20260730T054112Z/RESULTS.md:4` records `Stages run: unit jar guards jvm native`
-      and `:6` **25 passed, 0 failed, 0 skipped**, including the `jvm:build`, `jvm:banner`,
+      `bench-results/verify-20260730T102725Z/RESULTS.md:4` records `Stages run: unit jar guards jvm native`
+      and `:6` **26 passed, 0 failed, 0 skipped**, including the `jvm:build`, `jvm:banner`,
       `native:build` and `native:banner` rows — cited by row key, because inserting a guard row renumbers
       that whole table and these four citations went stale twice that way already. The original entry's
       sub-claim that "the script's
@@ -1123,7 +1123,7 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       its only such section (the `## What a pass here does and does not establish` heading, `:36-45` in
       the current run of record — read the heading, not the range)
       states what a pass does and does not establish. Do not re-run the
-      native stage on the strength of this entry; check `bench-results/verify-20260730T054112Z/` first.
+      native stage on the strength of this entry; check `bench-results/verify-20260730T102725Z/` first.
       (An earlier run, `verify-20260729T153141Z`, was **deleted** in `8cadf8a` — its B1 and B2 checks could
       not fail, so it certified nothing. Do not cite it; it is not in the tree.)
 - [ ] **A repo-wide line-citation audit (PR #103 round 7) found 135 wrong citations out of 547

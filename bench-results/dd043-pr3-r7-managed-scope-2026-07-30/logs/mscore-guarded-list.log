@@ -1,0 +1,8 @@
+[INFO] Scanning for projects...
+[ERROR] basquin-injector: probe-mscore's dependencyManagement pins com.basquin:basquin-core to scope 'provided'. A managed scope applies to the Basquin artifacts the extension resolves transitively — basquin-core above all — so it would keep them off the application's runtime classpath while the extension jar itself still loads: the build would succeed, Installed features would still list basquin, and the application would run UNINSTRUMENTED, with /__basquin/result returning "miss". Only 'compile' and 'runtime' reach the application. Remove the managed scope, or pass -Dbasquin.inject.skip=true to leave this build uninstrumented deliberately. -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MavenExecutionException

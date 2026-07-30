@@ -145,7 +145,9 @@ PY
 # than through this helper: their failure condition is "downloaded from any id OTHER than
 # basquin-injected", which a single ERE cannot express, and round 4 showed a sentinel loose enough to
 # fit one regex here was loose enough to be satisfied by the injector's own stdout. Any future absence
-# row that CAN bind with one regex should use this helper.)
+# row that CAN bind with one regex should use this helper — jvm:injected-not-predeclared is one, and
+# is currently this helper's only call site: round 7 found the helper defined with zero callers while
+# the PR description sold it as live protection, which is the unexercised-code hazard itself.)
 assert_absent() {  # $1=file  $2=must-be-absent regex  $3=sentinel regex  $4=label  $5=pass message
   local f="$1" bad_re="$2" sentinel="$3" label="$4" msg="$5"
   if [ ! -s "$f" ]; then
@@ -413,6 +415,15 @@ PY
   # neuters ONLY that branch's condition, leaving the dm lookup and the version check intact.
   _mutate '("            if (managed.getExclusions() != null && !managed.getExclusions().isEmpty()) {", "            if (false) {")' \
           "failsLoudlyWhenDependencyManagementCarriesExclusions" "managed-exclusions"
+  # The managed-version mutation (dm = null) takes the whole managed loop down and only asserts the
+  # version test among the failures — the same reason the managed-exclusions branch needed its own row
+  # applies verbatim to the managed-scope branch added for the eighth bypass: without this row it could
+  # be deleted entirely and this stage would still report all-PASS. Nulling the branch's own input
+  # neuters ONLY the scope check (the condition starts managedScope != null), leaving the dm lookup and
+  # the exclusions and version branches intact. The anchor is unique: the sibling guard's scope check
+  # reads from a Dependency named d into a variable named scope, never managedScope.
+  _mutate '("            String managedScope = managed.getScope();", "            String managedScope = null;")' \
+          "failsLoudlyWhenDependencyManagementPinsOurGroupToAnUnusableScope" "managed-scope"
   _mutate '("if (declared == null || declared.equals(version))", "if (true)")' \
           "failsLoudlyWhenTheProjectDeclaresOurArtifactAtADifferentVersion" "declared-version"
   # The fourth guard. PR #103's approver found the header comment claimed to mutation-check "each"
@@ -546,6 +557,19 @@ run_jvm() {
   grep -q "\[basquin-injector\] instrumented" "$OUT/jvm-build.log" \
     && ok "jvm:participant-ran" "$(grep -o '\[basquin-injector\] instrumented.*' "$OUT/jvm-build.log" | head -1)" \
     || bad "jvm:participant-ran" "no injector log line — check the jar's sisu index; Maven ignores a bad ext.class.path SILENTLY"
+
+  # The injector prints its "instrumented" line on BOTH paths — the already-declares path falls
+  # through to it reporting effective = declared — so participant-ran above cannot attribute the
+  # instrumentation to INJECTION. Only the absence of the "already declares" line can: if the target
+  # pom carried its own basquin-quarkus declaration (DD-044's whole territory), the injector would
+  # print it, the build would look identical everywhere else, and §5.2's "injection did this" claim
+  # would be confounded while every other row here still passed. Sentinel: the injector's own
+  # instrumented line, so a build where the participant never ran reports UNMEASURED, not PASS.
+  assert_absent "$OUT/jvm-build.log" \
+    "\[basquin-injector\] .* already declares" \
+    "\[basquin-injector\] instrumented" \
+    "jvm:injected-not-predeclared" \
+    "injector ran and never took the already-declares path — the dependency came from injection, not the pom"
 
   # The unconfounded evidence: no pom anywhere names the deployment artifact. Counted from the
   # JVM stage's OWN access log — see the round-5 B1 note on serve_pages for why the file is

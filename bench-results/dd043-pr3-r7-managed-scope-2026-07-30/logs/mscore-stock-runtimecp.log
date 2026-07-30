@@ -1,0 +1,16 @@
+[INFO] Scanning for projects...
+[basquin-injector] instrumented probe-mscore (com.basquin:basquin-quarkus:0.3.0 from file:///tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/b754fc8b-9424-4ced-b01f-1265076cc490/scratchpad/r7-managed-scope/basquinrepo/)
+[INFO] 
+[INFO] -------------------< com.example.probe:probe-mscore >-------------------
+[INFO] Building probe-mscore 1.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- dependency:3.6.1:build-classpath (default-cli) @ probe-mscore ---
+[INFO] Wrote classpath file '/tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/b754fc8b-9424-4ced-b01f-1265076cc490/scratchpad/r7-managed-scope/work/mscore-stock/runtime-cp.txt'.
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  0.754 s
+[INFO] Finished at: 2026-07-30T00:59:12-04:00
+[INFO] ------------------------------------------------------------------------

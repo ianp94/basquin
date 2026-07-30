@@ -10,8 +10,13 @@ empty of `com.basquin`?
 **Verdict: CONFIRMED — all five acceptance checks passed.** This directory's own artifact
 (`pristine-proof.txt:6,11`) is a single post-hoc `git status --porcelain` check, empty, taken after
 the build and the app run had already happened. The two-sided before-and-after property check 5 names
-is established separately, by `scripts/verify-dd043-pr3.sh`'s `jvm` stage (dirty-tree refusal
-before, `:284-289`; `jvm:zero-edits` after, `:357-363`; `RESULTS.md:25`), not by this directory. The
+is established separately, by `scripts/verify-dd043-pr3.sh`'s `jvm` stage — dirty-tree refusal before
+the build (the preflight `git -C "$app" status --porcelain -- .`, whose non-zero `rc` `skip`s the whole
+stage as UNMEASURED) and `jvm:zero-edits` after it
+(`git status --porcelain=v2 --branch -- .` into `jvm-target-status-after.txt`), graded in
+`bench-results/verify-20260730T042822Z/RESULTS.md`'s `jvm:zero-edits` row. All three are cited by
+command text and row key, not by line: the script's line numbers went stale twice while this very
+citation was being fixed, and any added guard row renumbers that table. Not by this directory. The
 local repo was purged of `com.basquin` first so resolution could not succeed for the wrong reason;
 and the **deployment** artifact — named by no pom anywhere — was fetched from the injected repository
 by the Quarkus bootstrap resolver on its own. **JVM mode only — the native cell is separate evidence
@@ -25,7 +30,7 @@ by the Quarkus bootstrap resolver on its own. **JVM mode only — the native cel
 | 2 | Startup banner lists `basquin` under `Installed features` | `app-startup.log:25`, extracted to `banner.txt` |
 | 3 | The boundary works, not just loads: driven request returns a cost line, not `miss` | `result-poll.txt`: `X-Basquin-Req: pr3-accept-1` → `/__basquin/result?id=pr3-accept-1` → `787,-684,9|0||` |
 | 4 | `basquin-quarkus-deployment` fetched from the injected repo | `http-access.log` (4 GETs for it, all `200`); `build.log:31-36` (`Downloaded from basquin-injected`) |
-| 5 | App tree pristine, checked once, post-hoc | `pristine-proof.txt:6,11`: a single `git status --porcelain`, empty, taken after `clean package` and after the app container ran. The before-**and**-after property (not merely after) is established by the verify run, not this artifact — `scripts/verify-dd043-pr3.sh:284-289` (before), `:357-363` (after), `RESULTS.md:25` |
+| 5 | App tree pristine, checked once, post-hoc | `pristine-proof.txt:6,11`: a single `git status --porcelain`, empty, taken after `clean package` and after the app container ran. The before-**and**-after property (not merely after) is established by the verify run, not this artifact — in `scripts/verify-dd043-pr3.sh`, the preflight `git -C "$app" status --porcelain -- .` (before; a non-zero `rc` `skip`s the stage as UNMEASURED) and `git status --porcelain=v2 --branch -- .` into `jvm-target-status-after.txt` (after). Each is that file's only occurrence, so it is cited by command text, not by a line number that edits keep invalidating. Graded `PASS` at `bench-results/verify-20260730T042822Z/RESULTS.md`'s `jvm:zero-edits` row (row key, not line — an added guard row renumbers the table) |
 
 Build wall time 01:03 min (`build.log`, `Total time`). On check 3's numbers: 787 ms elapsed is a
 first-hit (Hibernate/Agroal warmup) figure, the −684 KB heap delta is the reactive-path GC-in-window
@@ -34,7 +39,7 @@ pool warmup. The point here is the line's *shape* — `costCsv|invariantCount|de
 proving the filter sat on the request path.
 
 **Do not read the −684 KB as a measurement.** The spec assigns negative heap deltas to **PR-5** as an
-`UNMEASURED` producer (design doc §9's PR-5 row, `:1409`), precisely because the in-flight counter
+`UNMEASURED` producer (§9's PR-5 row — `docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md:1426`), because the in-flight counter
 structurally cannot detect them — a GC is not a request. This run is the second independent sighting on
 a different code path (PR-2 measured −16,456 KB on this same target), which makes the gap systematic
 rather than incidental, and is a data point for PR-5 rather than a defect in this acceptance. Until
@@ -98,8 +103,9 @@ confounded exactly the check that matters.
 ## What this establishes, and what it does not
 
 **Establishes:** on the pinned toolchain (the app's own Maven wrapper, `apache-maven-3.9.15` —
-`bench-results/dd043-pr3-optional-declaration-2026-07-29/provenance.txt:57`, `BasquinInjector.java:171`
-— containerised, Quarkus 3.37.3, JVM
+`bench-results/dd043-pr3-optional-declaration-2026-07-29/provenance.txt:57` = the wrapper's
+`distributionUrl=…/apache-maven/3.9.15/apache-maven-3.9.15-bin.zip`, restated in
+`BasquinInjector.java`'s `failOnUnusableDeclaration` javadoc — containerised, Quarkus 3.37.3, JVM
 packaging, JDK 25 Mandrel image), `basquin-maven-injector` instruments a real third-party
 application — datasource, Hibernate, contract-first generated resources — with zero edits to any
 file in the application's tree, no settings.xml, and no operator pre-populate step: one system
@@ -126,7 +132,7 @@ boundary filter answered on a real route.
 | `build.sh` | PR-2's containerized build entrypoint plus the one documented change: `${EXTRA_DOCKER_ARGS:-}` before `"$IMAGE"` |
 | `build.log` | full decisive build (`clean package -DskipTests`) — injector line at :2, `BUILD SUCCESS` at :125 |
 | `purge-proof.txt` | host `~/.m2` `com/basquin` before-listing, purge, failing `find` after |
-| `pristine-proof.txt` | check 5's artifact: the clone's commit + empty `git status`, plus the build-log argument that `rest-villains/pom.xml` carried no Basquin declaration at the moment Maven read the model (the injector's `instrumented` line is printed only when the model carried no Basquin declaration, and `already declares` appears 0 times) |
+| `pristine-proof.txt` | check 5's artifact: the clone's commit + empty `git status`, plus the build-log argument that the model Maven built for `rest-villains` carried no `com.basquin:basquin-quarkus` dependency when the injector read it. The discriminator is the **absence** of the `already declares` line (`grep -c` = 0), not the presence of `instrumented` — that line prints on both paths (`BasquinInjector.java:108-109`). `instrumented` establishes only that the loop body ran, which is what makes the absence non-vacuous; see that file's "Amended 2026-07-30" section |
 | `http-access.log` | the HTTP server's request log — every remote fetch with status codes; the deployment artifact's 4 GETs are check 4 |
 | `app-startup.log` | app container log from boot through the banner |
 | `banner.txt` | the extracted `Installed features` line |
@@ -174,6 +180,10 @@ EXTRA_MAVEN_OPTS="-Dmaven.ext.class.path=/inj/basquin-maven-injector-0.3.0.jar -
   2>&1 | tee bench-results/dd043-pr3-restvillains-2026-07-26/build.log
 grep '\[basquin-injector\] instrumented rest-villains' \
   bench-results/dd043-pr3-restvillains-2026-07-26/build.log   # absent => STOP, uninstrumented build
+# The pristine discriminator (see pristine-proof.txt): the injector must NOT have found a
+# declaration. `instrumented` alone does not show this — it prints on both paths.
+grep -c 'already declares' \
+  bench-results/dd043-pr3-restvillains-2026-07-26/build.log   # must be 0 => model had no declaration
 
 # 5. The claim itself: still pristine AFTER the build
 (cd "$APP_DIR" && git status --porcelain)                 # must print nothing

@@ -94,14 +94,19 @@ In both rows no file in the application's source tree is created or modified. Wh
 the failure mode lives: a runtime agent can silently detach, while a build-time injection can
 silently *not happen* — so its presence is checked per build via the `basquin` entry in the startup
 banner's `Installed features`, never left unchecked. That check is **necessary but not
-sufficient**: two shapes — an `<exclusions>` entry on the declared, or on the managed,
-`com.basquin:basquin-quarkus` dependency, either of which can strip the transitive `basquin-core`
-the extension needs — leave `basquin` in the banner while the build is unusable, so no banner-only
-acceptance run would catch them. On the Maven path, `basquin-maven-injector`'s fail-loudly guards
+sufficient**: a class of shapes leaves `basquin-quarkus` loaded — so `Installed features` still lists
+it — while `basquin-core`, the sibling it needs transitively, ends up stripped or pushed off the
+runtime classpath, so no banner-only acceptance run would catch them. An `<exclusions>` entry
+(declared on `basquin-quarkus` itself, or managed on any `com.basquin:*` entry) and an unusable
+`<scope>` on a `com.basquin` sibling (declared directly, or managed) are each their own route into
+that same resolved state, and the class has grown every time review found another route — do not
+treat a specific count of them as stable; see THIRD-PARTY-APPS.md for the current enumeration and
+its source. On the Maven path, `basquin-maven-injector`'s fail-loudly guards
 close that gap by hard-failing the build itself, before any banner exists to check; on the Gradle
 path (`basquin-init.gradle`), which implements none of those guards, the banner is the only signal
-and is not sufficient on its own. Guard-by-guard detail: THIRD-PARTY-APPS.md's "Fail-loudly
-behaviours" section. Operator guide: [THIRD-PARTY-APPS.md](THIRD-PARTY-APPS.md); full design:
+and is not sufficient on its own. Guard-by-guard detail, including the current count and its
+checkable source: THIRD-PARTY-APPS.md's "Fail-loudly behaviours" section. Operator guide:
+[THIRD-PARTY-APPS.md](THIRD-PARTY-APPS.md); full design:
 `docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md` §5.
 
 ## Early Usage Pattern (preview)

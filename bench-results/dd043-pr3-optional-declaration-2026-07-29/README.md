@@ -30,7 +30,7 @@ drove, answers `miss` (`result-poll.txt:11-12`). So the cost line at `:8` is the
 that request, not the endpoint answering anything to anyone.
 
 **Do not read `176,-12207,10|0||` as a measurement.** It is a first-hit figure on a cold app, and its
-negative heap component is the same PR-5-owned artefact `bench-results/dd043-pr3-restvillains-2026-07-26/README.md:36-41`
+negative heap component is the same PR-5-owned artefact `bench-results/dd043-pr3-restvillains-2026-07-26/README.md:41-46`
 documents — a GC inside the window, which the in-flight counter structurally cannot detect. The only
 load-bearing property here is the line's **shape** (`costCsv|invariantCount|detail|leak`, not `miss`).
 
@@ -80,9 +80,10 @@ Verified in `provenance.txt`:
 ## The application clone was never touched
 
 The optional declaration exists only in a **scratchpad copy** of `rest-villains`. `pristine-proof.txt`
-captures the clone at `c9b46d7` with `git status --porcelain` returning **0 lines**
-(`pristine-proof.txt:7-8`) and `grep -c basquin rest-villains/pom.xml` returning **0**
-(`pristine-proof.txt:11-12`) — the clone's pom carries no Basquin declaration of any kind. Zero edits to
+captures the clone at `c9b46d7` (`pristine-proof.txt:4-5`) with `git status --porcelain | wc -l`
+returning **0 lines** (`pristine-proof.txt:7-8`) and `grep -c basquin rest-villains/pom.xml`
+returning **0** (`pristine-proof.txt:11-12`) — this directory's own 13-line `pristine-proof.txt`, not
+the restvillains one. The clone's pom carries no Basquin declaration of any kind. Zero edits to
 the target tree is a property PR-3 asserts, and it holds after this measurement as well.
 
 ## What this establishes, and what it does not

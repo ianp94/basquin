@@ -1354,7 +1354,9 @@ Expected: `server up: 200`.
 **Bind to `127.0.0.1` and reach it with `--network host`, exactly as spike S5 did — this is not an
 incidental detail.** Maven 3.9.15's default `maven-default-http-blocker` mirror matches
 `external:http:*` and **exempts localhost** — 3.9.15 is rest-villains' own wrapper version
-(`BasquinInjector.java:171`), not the Phase-0 fixture's 3.9.16 that Task 7's native cell targets;
+(`bench-results/dd043-pr3-optional-declaration-2026-07-29/provenance.txt:57`, the wrapper's
+`distributionUrl`; restated in `BasquinInjector.java`'s `failOnUnusableDeclaration` javadoc), not the
+Phase-0 fixture's 3.9.16 that Task 7's native cell targets;
 the two are different clones with different wrappers and the figure was originally conflated between
 them. Serving on `0.0.0.0` and pointing the build at the docker
 bridge gateway (`http://172.17.x.x:8000/`) is precisely the class that mirror matches, and whether any
@@ -1475,8 +1477,12 @@ PR #103's round-4 review found the directory's own artifact never supported the 
 `pristine-proof.txt` records a single post-hoc `git status --porcelain`, taken after both the build
 and the app run had already happened — there is no separate before-capture in this directory. The
 two-sided property is real, but is established by `scripts/verify-dd043-pr3.sh`, not by this
-directory: dirty-tree refusal before the build (`:284-289`) and `jvm:zero-edits` after (`:357-363`),
-surfaced in `RESULTS.md:25`. The current
+directory: dirty-tree refusal before the build (the preflight
+`git -C "$app" status --porcelain -- .`) and `jvm:zero-edits` after
+(`git status --porcelain=v2 --branch -- .`), surfaced in
+`bench-results/verify-20260730T042822Z/RESULTS.md`'s `jvm:zero-edits` row. All three are cited by
+command text and row key rather than by line, because the line numbers here were wrong once and went
+stale again while being fixed. The current
 `bench-results/dd043-pr3-restvillains-2026-07-26/README.md` verdict and check-5 row carry the
 corrected framing; this plan's step and commit-message template above are left as originally written
 and executed, per this file's own history-preservation rule.**

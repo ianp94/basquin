@@ -1,0 +1,16 @@
+[INFO] Scanning for projects...
+[basquin-injector] instrumented probe-ctl (com.basquin:basquin-quarkus:0.3.0 from file:///tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/b754fc8b-9424-4ced-b01f-1265076cc490/scratchpad/r7-managed-scope/basquinrepo/)
+[INFO] 
+[INFO] --------------------< com.example.probe:probe-ctl >---------------------
+[INFO] Building probe-ctl 1.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- dependency:3.6.1:build-classpath (default-cli) @ probe-ctl ---
+[INFO] Wrote classpath file '/tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/b754fc8b-9424-4ced-b01f-1265076cc490/scratchpad/r7-managed-scope/work/ctl-stock/runtime-cp.txt'.
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  0.770 s
+[INFO] Finished at: 2026-07-30T00:59:09-04:00
+[INFO] ------------------------------------------------------------------------

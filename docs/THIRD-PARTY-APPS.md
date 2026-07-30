@@ -185,6 +185,15 @@ wrong:
   tell the difference: the extension still appears in it, so a banner-only acceptance run would
   pass a build that ships broken. Fix: remove the managed exclusions, or
   `-Dbasquin.inject.skip=true` to leave the build uninstrumented deliberately.
+- **`dependencyManagement` pins a `com.basquin` sibling artifact — `basquin-core` above all — to a
+  scope other than `compile`/`runtime`.** Maven's resolver applies a managed `scope` from
+  dependency-resolution depth 2 down, and `basquin-core` is exactly that depth-2 node (reached
+  transitively through the injected `basquin-quarkus`), so a managed `test`/`provided` scope keeps
+  it off the application's runtime classpath while `basquin-quarkus` itself still loads at
+  `compile` — the identical resolved state the declared-sibling guard below hard-fails, reached
+  through `dependencyManagement` instead. Like the managed-exclusions case above, the
+  `Installed features` banner cannot tell the difference. Fix: remove the managed scope, or
+  `-Dbasquin.inject.skip=true` to leave the build uninstrumented deliberately.
 - **The pom declares `com.basquin:basquin-quarkus` in a shape that cannot carry the extension.** Four
   shapes fail: a scope other than `compile`/`runtime`; a `type` other than `jar` (a `pom` type resolves
   the POM and never the jar); any `classifier`; and any `<exclusions>`. Each would make the injector
@@ -193,10 +202,18 @@ wrong:
   `miss`. Fix: make it a plain `compile`/`runtime`, `jar`-type, unclassified, exclusion-free
   dependency, remove it and let the injector add it, or `-Dbasquin.inject.skip=true`.
 
-  The exclusions case deserves its own warning: together with the `dependencyManagement`-managed
-  exclusions case above, these are the **two shapes the `Installed features` banner cannot
-  detect**, because in both the extension still loads and still appears in the banner while a
-  stripped `basquin-core` leaves it unusable. Do not treat a banner check as sufficient for either.
+  The exclusions case deserves its own warning, and by now it is not alone: together with the
+  `dependencyManagement`-managed exclusions and managed-scope cases above, and the declared-sibling
+  scope case below, these are shapes the `Installed features` banner cannot detect — in every one the
+  extension still loads and still appears in the banner while a `basquin-core` that has been stripped
+  or pushed off the runtime classpath leaves the application uninstrumented. This class has grown
+  every time review found another route to that same resolved state, so treat any specific count here
+  as a snapshot, not a fact — the checkable enumeration is the javadoc on `failOnUnusableDeclaration`,
+  `failOnConflictingManagedVersion` and `failOnUnusableSiblingDeclaration` in `BasquinInjector.java`,
+  kept in sync with `BasquinInjectorGuardsTest.java`'s matching tests. As of this writing it is four
+  shapes: declared `basquin-quarkus` exclusions, managed `dependencyManagement` exclusions, a managed
+  sibling scope, and a declared sibling scope. Do not treat a banner check as sufficient for any of
+  them.
 
 - **The pom directly declares a *different* `com.basquin` artifact — `basquin-core` above all — at
   a scope other than `compile`/`runtime`, or at a version other than the one this injector
@@ -206,9 +223,15 @@ wrong:
   `test`/`provided` scope keeps `basquin-core` off the runtime classpath and a conflicting version
   pairs the extension with a `basquin-core` it was not built against — either way the build succeeds
   and `/__basquin/result` polls return `miss`. DD-044 / PR-3.5 is specifically about targets that
-  already carry Basquin, which makes this reachable rather than theoretical, not a corner case. (This
-  guard aborts the build before any banner is produced, so — unlike the two exclusions shapes above —
-  it is not something a banner check could ever have been asked to catch.) Fix: remove the
+  already carry Basquin, which makes this reachable rather than theoretical, not a corner case. (The
+  scope half of this hazard belongs to the same banner-blind class noted above: this guard is about a
+  *different* artifact than `basquin-quarkus`, so the injector still adds `basquin-quarkus` itself,
+  the extension still loads, and `Installed features` still lists `basquin` while `basquin-core` sits
+  off the runtime classpath at `test`/`provided` scope — the managed-scope guard above hard-fails the
+  identical resolved state reached through `dependencyManagement` instead. The version half is not in
+  that class: a conflicting version keeps `basquin-core` on the runtime classpath, just at the wrong
+  one, which is the same wire-format-skew hazard as the two version guards above, not a banner-blind
+  one.) Fix: remove the
   declaration and let the extension bring `basquin-core` in transitively, align the scope/version if
   the declaration is intentional, or `-Dbasquin.inject.skip=true` to leave the build uninstrumented
   deliberately.
@@ -231,15 +254,18 @@ properties:
 
 **It implements only the `skip` opt-out.** `BasquinInjector.java` has four private methods that can
 throw `MavenExecutionException` (`failOnUnusableDeclaration`, `failOnConflictingDeclaredVersion`,
-`failOnConflictingManagedVersion`, `failOnUnusableSiblingDeclaration`), but two of those four each
-guard two independent conditions with their own separate `throw` — `failOnConflictingManagedVersion`
-throws once for a managed exclusion and once for a managed version conflict; `failOnUnusableSiblingDeclaration`
-throws once for an unusable sibling scope and once for a conflicting sibling version — so the
-fail-loudly surface is **six conditions, each an independently-triggerable `throw`, across those four
-methods**: conflicting managed version, conflicting managed exclusions, conflicting declared version,
-an unusable declaration shape (§5.1, one `throw` covering four sub-shapes — scope/type/classifier/exclusions),
-an unusable *sibling* scope, and a conflicting *sibling* version (the last two on a directly declared
-`com.basquin` artifact other than `basquin-quarkus` — `basquin-core` above all). None of those six has
+`failOnConflictingManagedVersion`, `failOnUnusableSiblingDeclaration`), and two of those four each
+guard more than one independent condition with their own separate `throw` — `failOnConflictingManagedVersion`
+throws once for a managed exclusion, once for an unusable managed scope and once for a managed version
+conflict; `failOnUnusableSiblingDeclaration` throws once for an unusable sibling scope and once for a
+conflicting sibling version — so the fail-loudly surface is **seven conditions, each an
+independently-triggerable `throw`, across those four methods**: conflicting managed version,
+conflicting managed exclusions, an unusable managed scope, conflicting declared version, an unusable
+declaration shape (§5.1, one `throw` covering four sub-shapes — scope/type/classifier/exclusions), an
+unusable *sibling* scope, and a conflicting *sibling* version (the last two on a directly declared
+`com.basquin` artifact other than `basquin-quarkus` — `basquin-core` above all). This count moves
+whenever a guard is added — verify it against `BasquinInjector.java`'s own `throw` sites rather than
+trusting the number. None of those seven has
 a Gradle equivalent: the script does not even check whether
 `com.basquin:basquin-quarkus` is already declared before adding another `implementation`
 dependency, and it does not look at any other `com.basquin` artifact at all. A Gradle target that

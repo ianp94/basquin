@@ -58,8 +58,8 @@ Apicurio 2.6.x).
 GitHub's `404: Not Found` body **with exit 0**, and every `grep -c`/`grep -n` over it reads as a
 clean zero. Every load-bearing zero in §1.1/§1.3/§1.4 (`capture/12`'s `app/pom.xml`/`pom.xml` = 0,
 the 25 zero-hit workflow files in `capture/13` including `verify.yaml`) was therefore indistinguishable
-from a failed download rather than a checked absence. `capture.sh:30-138` already used the safe
-pattern (`%{http_code}` recorded explicitly) for the Dockerfile spot-check; it was not applied
+from a failed download rather than a checked absence. `capture.sh:182-199` already used the safe
+pattern (`%{http_code}` recorded explicitly at `:187` and `:195`) for the Dockerfile spot-check; it was not applied
 everywhere else.
 
 **Fixed:** `fetch()` now uses `curl -f` and records the HTTP status; every call site that turns its

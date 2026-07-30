@@ -59,10 +59,11 @@ public class BasquinInjectorGuardsTest {
     }
 
     /**
-     * The managed half of the exclusions hazard, and the second of the two shapes §5.2's banner
-     * acceptance cannot detect. Managed exclusions apply to the dependency THIS INJECTOR adds, so a
+     * The managed half of the exclusions hazard — another of the shapes §5.2's banner acceptance
+     * cannot detect (the extension still loads, so Installed features still lists it, while
+     * basquin-core is gone). Managed exclusions apply to the dependency THIS INJECTOR adds, so a
      * dependencyManagement entry carrying {@code <exclusions>} can strip basquin-core exactly as a
-     * declared one can — and the extension still loads, so Installed features still lists it.
+     * declared one can.
      *
      * <p>Without this test only {@code failOnConflictingManagedVersion}'s version branch was covered:
      * deleting the exclusions branch it gained in {@code a61a90c} failed nothing.
@@ -92,6 +93,77 @@ public class BasquinInjectorGuardsTest {
             assertTrue("message must name dependencyManagement as the path: " + m,
                     m.contains("dependencyManagement"));
             assertTrue("message must say the banner cannot detect this: " + m, m.contains("banner"));
+        }
+    }
+
+    /**
+     * The EIGHTH silent bypass, found by PR #103's round-6 approver and reproduced before this test was
+     * written. A managed {@code <scope>} DOES reach {@code basquin-core} — it is a depth-2 node, and
+     * Maven 3.9's {@code ClassicDependencyManager} applies managed scope from depth 2 down; the earlier
+     * "managed scope cannot reach us" conclusion had measured only the depth-1 injected artifact.
+     * Measured at depth 2 ({@code bench-results/dd043-pr3-r7-managed-scope-2026-07-30/}): a managed
+     * {@code basquin-core} at the AGREEING version resolved {@code :provided}
+     * ({@code logs/mscore-stock-list.log:13}) and {@code :test} ({@code logs/mtcore-stock-list.log:13}),
+     * each build SUCCEEDED with basquin-core absent from the runtime classpath (94 entries vs the
+     * control's 95, {@code logs/*-runtime-cp-entries.txt}) and the 865ba35 injector silent — while the
+     * extension still loads, so Installed features still lists basquin and §5.2's banner acceptance
+     * cannot detect it. The version agrees exactly, so the version branch cannot fire; only the scope
+     * branch stands in front of this. {@code system}/{@code import} ride the same compile/runtime
+     * whitelist unmeasured, as on the declared-sibling path.
+     */
+    @Test
+    public void failsLoudlyWhenDependencyManagementPinsOurGroupToAnUnusableScope() {
+        for (String scope : new String[] {"test", "provided", "system", "import"}) {
+            MavenProject p = project("app");
+            manage(p, "basquin-core", InjectorVersion.value());   // agreeing: only scope can fire
+            p.getModel().getDependencyManagement().getDependencies().get(0).setScope(scope);
+            try {
+                new BasquinInjector().inject(Arrays.asList(p), new Properties());
+                fail("a managed scope '" + scope + "' keeps basquin-core off the application's runtime "
+                        + "classpath while the extension still loads, so it must not be accepted");
+            } catch (MavenExecutionException e) {
+                String m = e.getMessage();
+                assertTrue("message must name the offending scope: " + m, m.contains(scope));
+                assertTrue("message must name the artifact: " + m, m.contains("basquin-core"));
+                assertTrue("message must name dependencyManagement as the path: " + m,
+                        m.contains("dependencyManagement"));
+                assertTrue("message must say the build would be uninstrumented: " + m,
+                        m.contains("UNINSTRUMENTED"));
+                assertTrue("message must name an escape hatch: " + m,
+                        m.contains(BasquinInjector.PROP_SKIP));
+            }
+        }
+    }
+
+    /**
+     * The managed shapes deliberately NOT rejected, pinned so accepting them stays a decision.
+     * {@code optional=true} on a managed basquin-core is measured harmless: the core still resolves
+     * {@code runtime (optional)} and stays ON the runtime classpath
+     * ({@code bench-results/dd043-pr3-r7-managed-scope-2026-07-30/logs/moptcore-stock-list.log:13},
+     * {@code logs/moptcore-stock-runtime-cp-entries.txt:2} — 95 entries, like the control), so a guard
+     * would hard-fail a build that demonstrably works. Managed {@code compile}/{@code runtime} are the
+     * whitelist's two usable scopes — the control itself resolves the core at {@code runtime}
+     * ({@code logs/ctl-stock-list.log:13}) — so rejecting either would break working targets. If someone
+     * later widens the managed-scope branch, this fails and sends them to that evidence first.
+     */
+    @Test
+    public void acceptsTheManagedShapesMeasuredHarmless() throws Exception {
+        for (String shape : new String[] {"optional", "compile", "runtime"}) {
+            MavenProject p = project("app");
+            manage(p, "basquin-core", InjectorVersion.value());
+            Dependency managed = p.getModel().getDependencyManagement().getDependencies().get(0);
+            if ("optional".equals(shape)) {
+                managed.setOptional(true);
+            } else {
+                managed.setScope(shape);
+            }
+
+            new BasquinInjector().inject(Arrays.asList(p), new Properties());
+
+            assertEquals(shape + ": basquin-quarkus must still be injected",
+                    1, p.getModel().getDependencies().size());
+            assertEquals(shape + ": the repository is still required",
+                    1, p.getRemoteArtifactRepositories().size());
         }
     }
 
@@ -281,13 +353,15 @@ public class BasquinInjectorGuardsTest {
     }
 
     /**
-     * One of the TWO shapes §5.2's banner acceptance cannot detect, found by PR #103's independent
+     * One of the shapes §5.2's banner acceptance cannot detect, found by PR #103's independent
      * approver. Exclusions can strip the extension's own transitive dependencies — notably basquin-core —
      * leaving the extension jar present and the feature still listed in Installed features, while the
      * boundary cannot work. No acceptance run would fail, so a guard is the only thing standing in front
      * of it: {@code failOnUnusableDeclaration} for this, the DECLARED path, and
      * {@code failOnConflictingManagedVersion}'s exclusions branch for the managed one, pinned by
      * {@link #failsLoudlyWhenDependencyManagementCarriesExclusions}. Neither covers the other's path.
+     * (A managed or declared unusable scope on a com.basquin sibling reaches the same banner-invisible
+     * state; those have their own guards and their own tests.)
      */
     @Test
     public void failsLoudlyWhenTheDeclarationCarriesExclusions() {

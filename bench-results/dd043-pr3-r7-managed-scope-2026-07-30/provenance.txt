@@ -1,0 +1,38 @@
+# provenance — DD-043 PR-3 round-7 managed-scope measurement (the eighth silent bypass)
+
+captured_utc: 2026-07-30T05:14:17Z
+host_uname: Linux 6.18.33.2-microsoft-standard-WSL2 x86_64
+
+## maven
+  Apache Maven 3.9.15 (98b2cdbfdb5f1ac8781f537ea9acccaed7922349)
+  Maven home: /home/ian/.m2/wrapper/dists/apache-maven-3.9.15/9925cc1d
+  Java version: 17.0.19, vendor: Ubuntu, runtime: /usr/lib/jvm/java-17-openjdk-amd64
+  Default locale: en, platform encoding: UTF-8
+  OS name: "linux", version: "6.18.33.2-microsoft-standard-wsl2", arch: "amd64", family: "unix"
+
+## repo state when the STOCK jar was compiled (read-only)
+  HEAD: 865ba35603badb55378a405410799f54b14f7a95
+  branch: dd043-pr3-maven-injector
+  porcelain_lines_when_stock_jar_was_built: 0 (the tree was CLEAN at 865ba35 — the stock cells
+  therefore measure exactly the source the round-6 approver reviewed, byte-for-byte)
+  porcelain_lines_at_capture: 13 (the guarded jar was compiled AFTER the fix was
+  written into the working tree; injector-guard-added.diff is the full stock->guarded source diff)
+
+## injector jars under test (built in the scratchpad; javac against the Maven 3.9.15 lib/*,
+## with the real META-INF/sisu/javax.inject.Named and the baked version=0.3.0)
+  stock   = BasquinInjector.java exactly as committed at 865ba35 (clean tree)   md5=f4ee79dd52b49e8221412cc916931267
+  guarded = stock + the round-7 managed-scope branch (injector-guard-added.diff) md5=3cecf3f681870dbe41f7fe885a0b3b87
+
+## artifacts served from the file:// repository (copied out of ~/.m2, read-only; no synthetic
+## artifacts this time — every cell uses the agreeing version 0.3.0, so the version branch
+## provably CANNOT be what fires or stays silent)
+  61a9d9b5296d54ce0e75c7d02b8dcb83  ./com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.jar
+  94228e06f8d2e19e964e9d34592b0f50  ./com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.pom
+  43e3727c34949ee0adde2c46b3c1ca1f  ./com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.jar
+  acfbf471a3ff38f2a89888ac98f501d9  ./com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.pom
+  a7e12a31f0969b8837fa143f473650cc  ./com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.jar
+  e929461ea7e41d13735804e269bd424e  ./com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.pom
+
+## local repository
+  isolated, created empty for this run: <scratchpad>/r7-managed-scope/localrepo
+  the user's ~/.m2/repository was NOT used as the local repo and was not written to

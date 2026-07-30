@@ -112,36 +112,46 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
      A Gradle task `finalizedBy('jar')` guards it — deliberately not only `check`, since the release
      path publishes without running `check`.
 
-   **Seven silent-bypass shapes are closed** across **four** guard methods, and the shape of that
+   **Eight silent-bypass shapes are closed** across **four** guard methods, and the shape of that
    history is the lesson: the first three shipped with the original guard commit (`68714ed`), and
-   **shapes four through seven were each found *after* implementation, by review** — none by the design
-   or a self-review. The code keeps its own running count, so read it there rather than here:
-   `basquin-maven-injector/src/main/java/com/basquin/maven/BasquinInjector.java:332` ("Sixth shape") and
-   `:366` ("The seventh silent bypass").
-   - `failOnUnusableDeclaration` (`:193`) closes four shapes on the *declared* `basquin-quarkus` as a
-     **whitelist** of usable declarations — scope, type, classifier, exclusions (`:199-213`) — rather
+   **shapes four through eight were each found *after* implementation, by review** — none by the design
+   or a self-review. The code keeps its own running count, so read it there rather than here — it is
+   drift-proof against line-number churn a further guard addition causes; a line number pinned in this
+   doc is not.
+   - `failOnUnusableDeclaration` closes four shapes on the *declared* `basquin-quarkus` as a
+     **whitelist** of usable declarations — scope, type, classifier, exclusions — rather
      than a list of known-bad values, because narrowing the guard to specific bad values kept shipping
      the next variant. `optional=true` is the one field it deliberately accepts, measured rather than
-     reasoned (`:157-191`).
-   - `failOnConflictingManagedVersion` (`:322`) closes the sixth — `<exclusions>` on a *managed* (not
-     declared) `com.basquin:*` entry (`:338`) — which surfaced only after that whitelist shipped, when
-     review showed the declared-path fix had been half a fix. It also carries the managed-version
-     conflict (`:351`), the shape the original design had.
-   - `failOnUnusableSiblingDeclaration` (`:416`) closes the seventh: a *sibling* `com.basquin` artifact
+     reasoned.
+   - `failOnConflictingManagedVersion` closes three: the sixth — `<exclusions>` on a *managed* (not
+     declared) `com.basquin:*` entry — which surfaced only after that whitelist shipped, when
+     review showed the declared-path fix had been half a fix; the managed-version
+     conflict, the shape the original design had; and the eighth — a managed `<scope>` on a
+     `com.basquin` sibling reaching `basquin-core` at dependency-resolution depth 2, found in round 7
+     after the same "half a fix" pattern repeated once more.
+   - `failOnUnusableSiblingDeclaration` closes the seventh: a *sibling* `com.basquin` artifact
      declared directly — `basquin-core` above all — which every guard above missed, because they match
      either `basquin-quarkus` specifically or `dependencyManagement`. It fails on a scope that cannot
-     reach the application (`:425`) and on a conflicting version (`:439`), and deliberately accepts
+     reach the application and on a conflicting version, and deliberately accepts
      `type`, `classifier` and `exclusions` there because those were measured not to be hazards.
-   - `failOnConflictingDeclaredVersion` (`:255`) is the fourth method — the declared-path counterpart of
+   - `failOnConflictingDeclaredVersion` is the fourth method — the declared-path counterpart of
      the managed-version conflict.
 
-   Seven of these conditions are mutation-checked by `scripts/verify-dd043-pr3.sh` (`skip`,
+   Seven of these eight conditions are mutation-checked by `scripts/verify-dd043-pr3.sh` (`skip`,
    `managed-version`, `managed-exclusions`, `declared-version`, `declaration-usability`,
    `sibling-scope`, `sibling-version`), each proven able to fail when its own branch is neutered —
-   `bench-results/verify-20260730T042822Z/RESULTS.md:14-20`, plus `guards:restored` at `:21`. **Two
-   shapes, not one, are what §5.2's banner acceptance cannot detect:** declared exclusions and managed
-   exclusions both leave the extension jar present — so `Installed features` still lists it — while a
-   stripped `basquin-core` leaves it unusable.
+   `bench-results/verify-20260730T042822Z/RESULTS.md:14-20`, plus `guards:restored` at `:21`. The eighth
+   (managed scope) has no `_mutate` row yet — tracked in `TODO.md`. **Four shapes, not one, are what
+   §5.2's banner acceptance cannot detect, and the class keeps growing because each is a different route
+   to the same resolved state — `basquin-quarkus` still loads, `basquin-core` doesn't:** a declared
+   `basquin-quarkus` with `<exclusions>` stripping its own transitive `basquin-core`; a managed
+   `dependencyManagement` entry on `com.basquin:*` carrying `<exclusions>`; a managed
+   `dependencyManagement` entry pinning a `com.basquin` sibling to an unusable `<scope>`; and a directly
+   declared `com.basquin` sibling (`basquin-core` above all) pinned to an unusable `<scope>`. Do not
+   restate this as a bare count elsewhere — the checkable enumeration is the javadoc on
+   `failOnUnusableDeclaration`, `failOnConflictingManagedVersion` and `failOnUnusableSiblingDeclaration`
+   in `BasquinInjector.java`, cross-referenced by `BasquinInjectorGuardsTest.java`'s matching tests, both
+   of which change before this doc can.
 
    **Next: PR-4** (coverage — offline-JaCoCo execution injection, `/__basquin/coverage`, the native 2×2
    cells). Its **entry gate is spec §8.2** — whether `afterProjectsRead` model mutation reaches the

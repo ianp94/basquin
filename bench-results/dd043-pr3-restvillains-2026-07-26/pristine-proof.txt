@@ -13,21 +13,84 @@ $ grep -c 'basquin' rest-villains/pom.xml
 0
 ```
 
-## Why the build log independently proves rest-villains/pom.xml carried no Basquin declaration when Maven read it
+## Why the build log independently proves rest-villains' model carried no Basquin declaration when Maven read it
 
-A post-hoc check cannot by itself distinguish "never modified" from "modified and reverted".
-The build log settles it, because the injector's two paths print different lines:
+**Amended 2026-07-30 — the original argument in this section named the wrong log line, and PR #103's
+approver was right to reject it.** It claimed the plain `instrumented` line prints "only when" the
+model does not already carry the dependency. It does not. `BasquinInjector.java:108-109` prints that
+line **unconditionally**, after the `if`/`else` at `:93-106` rejoins, so it prints on the
+already-declares path too. The branch's own evidence shows it directly: in
+`bench-results/dd043-pr3-optional-declaration-2026-07-29/build-optional-injector.log`, `:2` is the
+already-declares line and `:3` of that same log is the `instrumented` line. The verdict below is
+unchanged — the run was not confounded — but it is now derived from the discriminator that actually
+discriminates: the **absence** of the already-declares line, not the presence of `instrumented`.
+
+A post-hoc `git status` cannot by itself distinguish "never modified" from "modified and reverted".
+The build log settles that, because it was written *while* Maven held the model. Two facts are needed
+and neither is sufficient alone.
+
+### Fact 1 — the test ran at all
+
+`build.log:2`:
 
 ```
 [basquin-injector] instrumented rest-villains (com.basquin:basquin-quarkus:0.3.0 from http://localhost:8000/)
 ```
 
-The injector prints `already declares basquin-quarkus; adding the repository only` when the
-project's model already carries the dependency, and the plain `instrumented` line only when it
-does not. The log carries the latter, so at the moment Maven read the POM it contained no
-Basquin declaration — which is what PR-2's patch had added and what this run had to do without.
+This is printed at `BasquinInjector.java:108-109`, the last statement of the per-project loop body.
+Reaching it proves the injector was loaded and ran that body to completion for `rest-villains`:
+`basquin.inject.skip` (`BasquinInjector.java:60`) was not set, because that path returns at `:78`
+before the loop is entered; and no guard fired, because every guard aborts the build by throwing
+`MavenExecutionException` (`grep -c 'throw new MavenExecutionException' BasquinInjector.java` — the
+count tracks the guard set, so it is not pinned to a line here) and this build reported `BUILD SUCCESS`
+(`build.log:125`). Fact 1 is what makes the absence in Fact 2 meaningful rather than vacuous. On its
+own it says nothing whatever about the pom.
 
-Occurrences of the already-declares line in this build: 0
+### Fact 2 — the result the run produced
+
+The already-declares line, printed at `BasquinInjector.java:100-101`, does not appear anywhere in the
+log, and the `instrumented` line is the only injector line in it:
+
+```
+$ grep -c 'already declares' build.log
+0
+$ grep -c '\[basquin-injector\]' build.log
+1
+```
+
+Between `BasquinInjector.java:100-101` and the `instrumented` print at `:108-109` there is no branch,
+no `continue` and no early return — `:103` sets `effective = declared`, `:104-106` is the other arm,
+`:107` adds the repository. So on the already-declares path **both** lines print, in that order. One
+`[basquin-injector]` line, and it being the `instrumented` one, therefore means the `else` at
+`:104-106` was taken: `declaredDependency` returned `null`.
+
+### What the two facts together establish
+
+`declaredDependency` (`BasquinInjector.java:229-236`) scans `p.getModel().getDependencies()` and
+matches on `GROUP_ID`/`ARTIFACT_ID` (`:231`) — `com.basquin` (`:55`) and `basquin-quarkus` (`:56`).
+So the sound claim is precisely this: **the effective model Maven built for `rest-villains` contained
+no `com.basquin:basquin-quarkus` dependency at the moment the injector read it.**
+
+That is exactly the confound worth excluding, because a `com.basquin:basquin-quarkus` `<dependency>` is
+what PR-2's `pom-deviation.patch` added and what this run had to do without. Had that patch been
+applied for the build and reverted afterwards, `:100-101` would have printed and `grep -c` above would
+not have returned 0.
+
+### What it does not establish
+
+`declaredDependency` matches that one coordinate in the model's `<dependencies>`. It would not have
+printed for a `<dependencyManagement>` entry, for a different `com.basquin` artifact such as
+`basquin-core`, or for any edit elsewhere in the application tree. Those are excluded by the direct
+check above, not by this line of reasoning: `git status --porcelain` empty (this file's `:11`) and
+`grep -c 'basquin' rest-villains/pom.xml` = 0 (this file's `:12-13`).
+
+### Independently reproduced by the scripted run of record
+
+`bench-results/verify-20260730T042822Z/jvm-build.log:2` is the `instrumented` line, and the same two
+greps against that log return 0 already-declares lines and 1 injector line. That run also grades the
+target tree **before and after** the build rather than only after, which this directory does not:
+`bench-results/verify-20260730T042822Z/jvm-target-status-after.txt:1-4` is branch headers only
+(`# branch.oid c9b46d745620708e1519859bb4775469114381e5` at `:1`).
 
 ## Scope
 

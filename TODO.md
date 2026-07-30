@@ -1087,7 +1087,35 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       and `:6` **23 passed, 0 failed, 0 skipped**, including `jvm:build` (`:22`), `jvm:banner` (`:26`),
       `native:build` (`:29`) and `native:banner` (`:32`). The original entry's sub-claim that "the script's
       own `RESULTS.md` discloses this" was also false — that file does not say the stages were unexercised;
-      its only such section (`:32-41`) states what a pass does and does not establish. Do not re-run the
+      its only such section (`:34-43`, heading `## What a pass here does and does not establish`)
+      states what a pass does and does not establish. Do not re-run the
       native stage on the strength of this entry; check `bench-results/verify-20260730T042822Z/` first.
       (An earlier run, `verify-20260729T153141Z`, was **deleted** in `8cadf8a` — its B1 and B2 checks could
       not fail, so it certified nothing. Do not cite it; it is not in the tree.)
+- [ ] **A repo-wide line-citation audit (PR #103 round 7) found 135 wrong citations out of 547
+      checked — roughly 1 in 4.** Method: every `file:line`/`file:line-line`/bare `:N` citation
+      reachable from `docs/**`, `TODO.md` and `bench-results/**` (excluding this round's own
+      concurrently-edited files) was resolved against the cited file and judged on content, not mere
+      existence. Breakdown: 343 OK, **135 WRONG** (resolves, but not to the claimed content), 21
+      STALE-BY-REFACTOR (the claimed content no longer exists anywhere in that file — repointing would
+      launder a false statement into a true-looking one, so these were left alone), 48 UNVERIFIABLE
+      (targets outside this repo — upstream Apicurio/Hono/Debezium sources, one JDK class, two upstream
+      workflow files). 119 of the 135 wrong ones sit in historical `docs/superpowers/{plans,specs}/`
+      documents for already-shipped work and were deliberately left unfixed — repointing citations into
+      source that has since moved is its own review surface, separate from this one. The single worst
+      file is `docs/superpowers/plans/2026-07-23-redirect-session-carry.md`, at **52 wrong** (10 also
+      stale), almost all traceable to one cause: `CoverageGuidedRun.java` growing 1088 → 1495 lines in
+      `a0595b9` (DD-039), which shifted every citation past roughly `:500` in that plan by +300..+400
+      lines. `docs/THIRD-PARTY-APPS.md` and `docs/ARCHITECTURE.md` carry zero line-numbered citations,
+      so the operator-facing docs have none of this exposure. Full per-file correction tables were
+      written to `.superpowers/sdd/pr103-r7-citations-report.md` — that directory is gitignored and will
+      not survive on its own, hence recording the numbers here rather than only a pointer to it.
+      **The fix that would have caught all 135**: one evidence directory,
+      `bench-results/dd043-pr3-r4-guard-measurement-2026-07-29/citations.txt`, pins its citations as
+      `file:line: expected-text` instead of a bare `file:line`, and an independent re-check confirmed
+      **66/66 resolve exactly** (33 exact matches, 33 as prefixes/`[INFO] `-stripped substrings). A bare
+      line number has no guard against an unrelated edit silently invalidating it while the path still
+      resolves; a pinned-text citation is script-checkable. Proposal: a CI check that extracts every
+      `file:line: expected-text` citation in that format and fails if the text is absent at that line,
+      plus migrating the highest-traffic living docs (`ROADMAP.md`, `TODO.md`, `THIRD-PARTY-APPS.md`,
+      `ARCHITECTURE.md`) to the pinned format so the check has something to enforce there too.

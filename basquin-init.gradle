@@ -33,8 +33,15 @@ if (skip) {
         }
         proj.plugins.withId('java') {
             proj.dependencies.add('implementation', "com.basquin:basquin-quarkus:${version}")
-            logger.lifecycle("[basquin-injector] instrumented ${proj.path} " +
-                    "(com.basquin:basquin-quarkus:${version} from ${repoUrl})")
+            // Log the REQUEST, never a result: nothing on this path reads back what Gradle actually
+            // resolved, and under Gradle's highest-wins conflict resolution a project already
+            // declaring a newer com.basquin:basquin-quarkus resolves THAT version while this line
+            // runs unchanged. The old message asserted "instrumented ... :${version}" as fact —
+            // a version this script never verified, on the path with no guards at all (PR #103
+            // round 9, should-fix 8).
+            logger.lifecycle("[basquin-injector] requested com.basquin:basquin-quarkus:${version} " +
+                    "from ${repoUrl} for ${proj.path} — the RESOLVED version is not verified on " +
+                    "this path (Gradle picks the highest version on conflict)")
         }
     }
 }

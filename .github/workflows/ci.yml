@@ -28,6 +28,19 @@ on:
       # no CI at all, so that guard could drift undetected. Same gap class as basquin-quarkus/** above.
       - 'basquin-init.gradle'
       - 'deploy/bench/**'
+      # DD-045 item 1: the citation-integrity job checks every tracked *.md, */citations.txt and
+      # the '#'-comments of scripts/*.sh and workflow files, resolving citations against the
+      # files they cite (mostly under bench-results/). All of those classes must trigger CI, or
+      # the guard cannot see the very edits that stale citations — a doc-only push previously
+      # ran NO CI at all, which is how 135 wrong citations accumulated (see
+      # bench-results/dd043-pr3-citation-audit-2026-07-30/). Deliberate trade-off: the Gradle
+      # jobs now also run on doc-only pushes; correctness of the certification machinery was
+      # judged worth the CI minutes (DD-045's whole thesis).
+      - '**/*.md'
+      - '**/citations.txt'
+      - 'scripts/**'
+      - 'bench-results/**'
+      - '.github/workflows/**'
   pull_request:
     paths:
       - 'agent/**'
@@ -48,8 +61,30 @@ on:
       - 'gradlew.bat'
       - 'basquin-init.gradle'
       - 'deploy/bench/**'
+      # See the push block above — both lists must carry these or the citation gap persists on
+      # one trigger (same dual-list rule as basquin-quarkus/** etc.).
+      - '**/*.md'
+      - '**/citations.txt'
+      - 'scripts/**'
+      - 'bench-results/**'
+      - '.github/workflows/**'
 
 jobs:
+  # DD-045 item 1 — whole-tree citation integrity. A repo-wide audit found 135 of 547 citations
+  # wrong (1 in 4), and wrong citations were review findings in five consecutive PR #103 rounds.
+  # The check is whole-tree, not diff-scoped: a diff-scoped run missed four dead citations that
+  # sat in files the commit did not touch. Pure Python stdlib, no JDK, finishes in ~1s; its
+  # scope and conscious exclusions are documented in the script's docstring, and every exemption
+  # in scripts/check-citations-allowlist.txt carries a reason.
+  citation-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check citations resolve against cited file content
+        run: python3 scripts/check-citations.py
+
+
   build-and-test:
     runs-on: ubuntu-latest
     strategy:

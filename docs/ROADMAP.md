@@ -213,7 +213,7 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
    | A citation that no longer resolves | **135 wrong of 547** checked repo-wide — roughly 1 in 4 — and wrong citations were findings in rounds 5, 6, 7 **and** 8 |
    | A derived number restated in prose | guard counts stale in **seven** documents across **three** consecutive rounds; then a shapes-vs-throw-sites conflation (8 shapes closed by 7 throws) produced a fresh wrong count in round 8 |
    | Parallel agents each correct alone, contradictory together | round 5's B3 (one change deleted a run directory while another, same commit, cited it); two agents disagreeing whether the `managed-scope` mutation row existed; and a false debt removed from `TODO.md` while the identical false claim was left in `ROADMAP.md` |
-   | Evidence whose *name* changes every time it is regenerated | each run of record is `verify-<UTC timestamp>/`, so producing a new one stales **every** citation to the old one at once — 13 in one round, 17 in the next |
+   | Evidence whose *name* changes every time it is regenerated | each run of record is `verify-<UTC timestamp>/`, so producing a new one stales **every** citation to the old one at once — **10, 10, 13 and 18** occurrences repointed by the four supersession commits, each count taken from that commit's own message (`16da079`, `865ba35`, `1c3ce88`, `572282a`); counted as occurrences, not matching lines, because `grep -c` undercounted the first one |
 
    All five are one defect — **a claim and its check drifting apart** — attacked at five layers.
 
@@ -227,13 +227,21 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
       those into CI and the whole first row becomes a push-time failure rather than a review-round finding.
       Everything below is detection; this is the one that changes when detection happens.
 
-   1. **A citation-resolution CI check, whole-tree scoped.** The fix already exists here and was never
+   1. **A citation-resolution CI check, whole-tree scoped. Built** as `scripts/check-citations.py` plus
+      `scripts/check-citations-allowlist.txt`, wired into `.github/workflows/ci.yml` as the
+      `citation-integrity` job (runs on both `push` and `pull_request`; both path-filter lists carry
+      `scripts/**`, `**/*.md`, `**/citations.txt` and `bench-results/**`, so the script, the allowlist,
+      and the files it checks all trigger it). The fix already existed for one format and was
       generalised: `citations.txt` uses a pinned `file:line: expected-text` format and re-verified
-      **66/66**, while free-form line references failed 1-in-4. Two scoping rules learned the hard way:
-      it must resolve each citation against the file's *current text*, not merely check the path exists;
-      and it must run over the **whole tree**, not the diff. A diff-scoped check was run in round 7 and
-      missed four dead citations — including the PR's central "app tree pristine" claim — because they
-      lived in files that commit did not modify.
+      **66/66**, while free-form line references failed 1-in-4. It resolves each citation against the
+      file's *current text*, not merely the path existing, and runs over the **whole tree**, not the
+      diff — a diff-scoped check was run in round 7 and missed four dead citations — including the PR's
+      central "app tree pristine" claim — because they lived in files that commit did not modify.
+      Measured by running it 2026-07-30: **1,207** citations checked across 91 md + 2 pinned + 27
+      comment-scanned files, under a second, exit **0**. It found a defect class hand-checking could
+      not: a citation to agents.md in `docs/DESIGN-DECISIONS.md`'s DD-021 entry, a file that exists on
+      the authoring machine but is gitignored, so it resolved for its author and was dead on a fresh
+      clone (fixed in the same pass).
    2. **A stable pointer to the run of record.** Timestamped directory names are why citations rot in
       bulk. Add `bench-results/RUN-OF-RECORD` (a pointer file or symlink) and cite *that*, so
       regenerating evidence does not invalidate every reference to it. This is the cheapest structural
@@ -244,10 +252,15 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
       table above would have been caught pre-review. Related: the guards stage currently mutates **tracked
       source in place**, which makes any commit during a run unsafe — one was observed mid-mutation. It
       should mutate a copy, or hold a lock that blocks commits.
-   4. **A "what depended on this?" pre-commit pass.** Not "is the diff internally consistent" — that is
-      the narrower question, and asking it is what let items above through. For every path, row key, or
-      claim a commit **removes**, search the whole tree for anything that still depends on it. Round 8
-      found two instances the diff-scoped version could not see.
+   4. **A "what depended on this?" pre-commit pass, and its mirror image.** Not "is the diff internally
+      consistent" — that is the narrower question, and asking it is what let items above through. For
+      every path, row key, or claim a commit **removes**, search the whole tree for anything that still
+      depends on it. Round 8 found two instances the diff-scoped version could not see. The mirror image
+      is **resolving open debt against the code**: round 9 swept all 91 `- [ ]` entries in `TODO.md`
+      against the tree and ten were already satisfied, two of them false for the whole span of DD-043,
+      one of them refuted by an already-`[x]` entry in the same file. An unchecked box is a claim about
+      the current tree exactly like a citation is, so item 1's checker should resolve both. Full account
+      in `TODO.md`'s DD-045 item 4.
    5. **Stop restating derived numbers in prose.** Generate the fragment from the code, or state the class
       and point at one authoritative enumeration. Standing rule adopted in round 7: a count that must be
       updated in N places when the code changes is a defect generator, not documentation. Where a count is
@@ -260,8 +273,8 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
 
    **Entry condition:** none — this is tooling over the existing tree, and it is independently useful
    before PR-4 begins. Do **0 first**: until CI runs the harness, every other item here only shortens
-   the feedback loop for defects that still reach review. Then 1-3, which are structural. 4-6 are cheap
-   once those exist.
+   the feedback loop for defects that still reach review. 1 is now built; 2-3 are the remaining
+   structural pieces. 4-6 are cheap once those exist.
 
    **Also worth noting for whoever picks this up:** `scripts/verify-dd043-pr3.sh` is itself outside
    `ci.yml`'s path filters, so a commit touching only the harness triggers no job — harmless today
@@ -280,10 +293,13 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
    Designed in `TODO.md` "Future: DD-042" (an out-of-band `/__basquin/threads` census, analysis in
    the driver). Its latency-budget half already exists inside DD-040.
 
-4. **Small, cheap wins** — the follow-up sections in `TODO.md`: wire `check_claims.py`/`test_redact.py`
-   into CI (they exist but only fire by hand), the three PR-97 prose tidies in `render_page.py`, and
-   the redaction min-length guard from PR #96. Good warm-up work; the CI-guard one has real value
-   (it would have caught several review rounds automatically).
+4. **Small, cheap wins** — the follow-up sections in `TODO.md`: the three PR-97 prose tidies in
+   `render_page.py`, and the redaction min-length guard from PR #96. Good warm-up work.
+   (This bullet used to lead with "wire `check_claims.py`/`test_redact.py` into CI (they exist but
+   only fire by hand)". That is false and has been since `a0595b9`: `.github/workflows/ci.yml`'s
+   `Bench artifact drift guards` step runs both on every push. Found by the round-9 sweep of open
+   debt against the code — the same shape as the row above, a false debt surviving in `ROADMAP.md`
+   after being fixed in the tree.)
 
 Also standing, not on the critical path: send the **JSPWiki `WeakHashMap` spin** report upstream
 (`bench-results/jspwiki/incident-2026-07-23-login-hang/ANALYSIS.md` — reproduced, publishable), and
@@ -299,12 +315,15 @@ time, nothing CPU-heavy during a run.
 **[#103](https://github.com/ianp94/basquin/pull/103) — DD-043 PR-3, `basquin-maven-injector`.**
 Build-time injection with zero edits to the target's source; both halves of spec §5.2 passed; 389 tests,
 0 failures (`bench-results/verify-20260730T102725Z/suite-counts.txt:1`). Labelled `ready-for-approver`.
-Six follow-ups are recorded in `TODO.md` under "DD-043 PR-3 follow-ups", each with why it was deferred.
-One of them — that the verify script's `jvm` and `native` stages had never been executed — is now
-resolved: both ran end-to-end in the run of record, stamped `20260730T054112Z`
-(`bench-results/verify-20260730T102725Z/RESULTS.md:4,6` — `Stages run: unit jar guards jvm native`,
-**26 passed, 0 failed, 0 skipped**); the other five remain open. Keep this count derived from the
-checkboxes in that section, not restated — round 7 added the sixth and this line went stale.
+Six follow-ups are recorded in `TODO.md` under "DD-043 PR-3 follow-ups", of which **two** are now
+resolved and **four** remain open — count the `- [ ]`/`- [x]` boxes in that section rather than
+trusting this sentence, which has gone stale twice (round 7 added the sixth; round 9 closed the
+second). The two resolved: the verify script's `jvm` and `native` stages had never been executed —
+both now ran end-to-end in the run of record, stamped `20260730T102725Z`
+(`bench-results/verify-20260730T102725Z/RESULTS.md`, its `Stages run:` and
+`26 passed, 0 failed, 0 skipped` header lines — cited by label, not line number, because the header
+gains lines) — and `jvm:boundary` no longer accepts an error page, since it now runs `curl -sf` and
+requires `ResultStore.format`'s CSV shape.
 
 #100 (PR-1, `basquin-core` extraction) and #102 (PR-2, `basquin-quarkus` extension) are **merged**.
 

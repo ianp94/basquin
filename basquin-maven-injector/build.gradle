@@ -94,6 +94,59 @@ def verifyInjectorIsDiscoverable = tasks.register('verifyInjectorIsDiscoverable'
                 throw new GradleException("${index} names ${named[0]} but ${classEntry} is not in the " +
                         "jar — a stale index is as silent as a missing one.")
             }
+            // The index and the class EXISTING is necessary, not sufficient (PR #103 round 9): Sisu's
+            // index-based discovery still reads @Named off the class itself, and the participant
+            // contract is the AbstractMavenLifecycleParticipant supertype. Remove either — a
+            // plausible IDE "unused annotation" cleanup, since javax.inject is compileOnly and
+            // nothing else references it — and this jar still builds, the index still names the
+            // class, every unit test still passes (they drive inject() directly), and Maven silently
+            // never calls the participant: the exact uninstrumented-green failure this task exists
+            // to prevent. The superclass is resolved from the classfile's own constant pool
+            // (super_class -> Class -> Utf8), so an incidental mention of the type elsewhere in the
+            // class cannot satisfy it. @Named is required as its annotation DESCRIPTOR among the
+            // constant-pool UTF-8 entries — the compiler emits `Ljavax/inject/Named;` iff the
+            // annotation (or an explicit reference to the type) survives compilation.
+            def classBytes = zip.getInputStream(zip.getEntry(classEntry)).bytes
+            def dis = new DataInputStream(new ByteArrayInputStream(classBytes))
+            // Groovy promotes 0xCAFEBABE to a Long (no silent int overflow), so compare unsigned.
+            if ((dis.readInt() & 0xFFFFFFFFL) != 0xCAFEBABEL) {
+                throw new GradleException("${classEntry} is not a classfile (bad magic).")
+            }
+            dis.readUnsignedShort(); dis.readUnsignedShort()          // minor, major
+            int cpCount = dis.readUnsignedShort()
+            Map<Integer, String> utf8 = [:]
+            Map<Integer, Integer> classRefs = [:]
+            int ci = 1
+            while (ci < cpCount) {
+                int tag = dis.readUnsignedByte()
+                if (tag == 1) { utf8[ci] = dis.readUTF() }            // Utf8: same u2-length format as readUTF
+                else if (tag == 7) { classRefs[ci] = dis.readUnsignedShort() }
+                else if (tag in [8, 16, 19, 20]) { dis.skipBytes(2) } // String, MethodType, Module, Package
+                else if (tag == 15) { dis.skipBytes(3) }              // MethodHandle
+                else if (tag in [3, 4, 9, 10, 11, 12, 17, 18]) { dis.skipBytes(4) }
+                else if (tag in [5, 6]) { dis.skipBytes(8); ci++ }    // long/double occupy TWO pool slots
+                else {
+                    throw new GradleException("unparseable constant-pool tag ${tag} in ${classEntry} — " +
+                            "update this task's classfile walker before trusting its verdict.")
+                }
+                ci++
+            }
+            dis.readUnsignedShort()                                   // access_flags
+            dis.readUnsignedShort()                                   // this_class
+            int superIdx = dis.readUnsignedShort()
+            String superName = utf8[classRefs[superIdx]]
+            String wantSuper = 'org/apache/maven/AbstractMavenLifecycleParticipant'
+            if (superName != wantSuper) {
+                throw new GradleException("${named[0]} extends '${superName}', not ${wantSuper}. Maven " +
+                        "looks the discovered component up BY that supertype; without it the " +
+                        "participant is never called and an injected build succeeds UNINSTRUMENTED.")
+            }
+            if (!utf8.values().contains('Ljavax/inject/Named;')) {
+                throw new GradleException("${named[0]} no longer carries @javax.inject.Named — the Sisu " +
+                        "index names it, but index-based discovery still reads the annotation off the " +
+                        "class, so Maven would never instantiate the participant and an injected build " +
+                        "would succeed UNINSTRUMENTED. Restore @Named(\"basquin-injector\") on the class.")
+            }
             def props = zip.getEntry('basquin-injector.properties')
             if (props == null) {
                 throw new GradleException("basquin-injector.properties missing from the jar; " +
@@ -105,7 +158,8 @@ def verifyInjectorIsDiscoverable = tasks.register('verifyInjectorIsDiscoverable'
                 throw new GradleException("baked version '${p.getProperty('version')}' != project " +
                         "version '${project.version}'.")
             }
-            logger.lifecycle("verifyInjectorIsDiscoverable: ${index} -> ${named[0]}, version ${p.getProperty('version')}")
+            logger.lifecycle("verifyInjectorIsDiscoverable: ${index} -> ${named[0]} (@Named present, " +
+                    "extends ${wantSuper}), version ${p.getProperty('version')}")
         } finally {
             zip.close()
         }
@@ -117,7 +171,9 @@ tasks.named('jar') { finalizedBy verifyInjectorIsDiscoverable }
 // ('0.3.0') where the Maven path deliberately does not — InjectorVersion reads a resource baked from
 // THIS module's `project.version` (above), so the Maven default can never drift from it. An init
 // script cannot do the same: it runs before any project classpath exists, which is before this jar's
-// baked resource could even be on a classpath to read (TODO.md:1068), so the literal itself cannot be
+// baked resource could even be on a classpath to read (TODO.md, the PR-3 follow-up
+// "basquin-init.gradle hand-types '0.3.0'" — cited by title, not line number: the line drifted once
+// already, and that section is actively edited), so the literal itself cannot be
 // eliminated the way the Maven one was. What can be added is an assertion that the literal has not
 // drifted from the one thing it is supposed to mirror — this module's own `version`, which
 // release.yml (`Assert every published module's version matches the release tag`) already keeps

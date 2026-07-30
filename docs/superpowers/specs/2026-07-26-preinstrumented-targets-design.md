@@ -20,8 +20,14 @@ driver simply drives the app and reads `/__basquin/result`, the DD-040 channel P
 The obvious idea is to create a `BasquinTarget` with no agents enabled and let the operator no-op.
 **That is not what happens.** `buildAgentArgs` appends `-javaagent:…basquin-agent.jar`,
 `-Xbootclasspath/a:…` and `-Dbasquin.boundary=agent` **unconditionally**
-(`operator/internal/controller/injection.go:108-115`); only `-agentpath` (threadTracker) and the JaCoCo
-flags are gated by spec fields. So with every agent disabled the appended value is still non-empty,
+(`operator/internal/controller/injection.go:108-115`); those three are unconditional, but they are
+not the only flags `buildAgentArgs` can append. Six more are gated by spec fields: `-agentpath`
+(`spec.Agents.ThreadTracker`, `:104-106`), the JaCoCo coverage flag
+(`spec.Agents.Coverage.Enabled`, `:117-125`), `-Dbasquin.invariant.mode=`
+(`spec.Invariants.Mode`, `:127-128`), `-Dbasquin.invariant.latency.maxMs=`
+(`spec.Invariants.LatencyMaxMs`, `:130-131`), `-Dbasquin.invariant.heapDelta.maxKb=`
+(`spec.Invariants.HeapDeltaMaxKb`, `:133-134`) and `-Dbasquin.dashboard.push=`
+(`spec.DashboardPush`, `:136-137`). So with every agent disabled the appended value is still non-empty,
 `applyInjection` still adds the initContainer, volume and env var (`injection.go:228-304`), and the
 target still reaches `Phase=Injected` / `Ready=True` (`basquintarget_controller.go:174-197`).
 
@@ -183,8 +189,14 @@ are the in-flight states of §2.2a and §2.2b and must keep the campaign `Pendin
 
 `TargetGone` handling (dropping out of the accepted set mid-run) must treat the accepted set as a set: a
 target leaving `{Injected, Observed}` fails a Running campaign, exactly as leaving `Injected` does today.
-Note this changes the message text `"dropped out of Injected (now %q)"` (`:114`), which
-`basquincampaign_controller_test.go` asserts — see §6.5.
+The message text at `basquincampaign_controller.go:114`, `"dropped out of Injected (now %q)"`, no
+longer names the accepted set precisely once `Observed` joins it; update it if that precision is
+worth keeping. **Correction:** an earlier draft of this paragraph said
+`basquincampaign_controller_test.go` asserts that message text and pointed to "§6.5" for the
+assertion. Neither is true: the test file asserts only `Status.Phase` and the `Ready` condition's
+`Reason` (`"TargetGone"`) for this case — never the message string
+(`basquincampaign_controller_test.go:571-572`, and `:455-456` for the target-deleted case) — and §6
+below is a flat numbered list with no subsections, so "§6.5" resolved to nothing. See §6 item 6.
 
 `targetAppImage` (`:421`) needs no change — a pre-instrumented target has a readable image like any other.
 
@@ -287,9 +299,11 @@ target for reasons unrelated to this feature. Whether the extension should grow 
    controller (not left Pending), with a reason naming PR-4.
 6. The existing runtime path is untouched: every current `basquintarget_controller_test.go` assertion
    still passes, including the `-Dbasquin.boundary=agent` contract (`:148-153`), idempotency
-   (`:163-177`) and exact revert (`:179-206`). Where `basquincampaign_controller_test.go` asserts the
-   `"dropped out of Injected"` message text (§2.3), that expectation is updated — a deliberate,
-   reviewed change, not an incidental one.
+   (`:163-177`) and exact revert (`:179-206`). `basquincampaign_controller_test.go`'s `TargetGone`
+   cases assert only `Status.Phase` and the `Ready` condition's `Reason` (`:571-572`, `:455-456`) —
+   they do not pin the `"dropped out of Injected"` message text (§2.3), so there is no existing test
+   expectation to update. If that message is reworded for accuracy once `Observed` joins the accepted
+   set, that is a new assertion for an implementer to add, not an existing one to revise.
 7. A test pins the **all-agents-disabled, not pre-instrumented** case to today's behaviour (it still
    injects), so the distinction between the two is asserted rather than assumed. Today nothing pins it.
 8. The regenerated CRD manifest is committed and its `phase` enum contains the new values (§2.1a) —

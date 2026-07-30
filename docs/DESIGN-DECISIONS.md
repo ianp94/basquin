@@ -684,8 +684,9 @@ nothing exercised any of it. Four real bugs were found in that code during devel
 by hand: a regex that stack-overflowed on realistic input, an error-page parser reading the wrong
 `<pre>` block, a frame parser requiring an `at ` prefix Tomcat doesn't emit, and a kind extractor
 that only understood one of the two saved-finding formats. None of those were caught by anything
-repeatable, and `agents.md` already says a feature is done when it has a minimal test. A tool whose
-job is finding other people's bugs cannot credibly ship untested parsing logic.
+repeatable, and this project's own definition of done already requires a minimal test before a
+feature ships. A tool whose job is finding other people's bugs cannot credibly ship untested
+parsing logic.
 
 **Decision.** Unit-test the pure logic that decides what the tool can find and how it reports it:
 `JsonScan`, `FindingsClusterer`, `RequestGrammar`. Prefer regression tests tied to bugs that

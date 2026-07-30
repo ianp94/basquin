@@ -490,7 +490,7 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
   signal is *already computed* — this is about feeding it back into selection. Likely its own DD.
 - [ ] POST support with form bodies — several JPetStore handlers are POST-only in real usage *(v0.10)*
 - [ ] Session affinity for multi-pod sequences (`sessionAffinity: ClientIP` or per-pod addressing) — a round-robin Service breaks `@sequence` transactions *(v0.10, DD-020 limit)*
-- [ ] Per-instance finding attribution — valve stamps `HOSTNAME` into a response header the driver already parses, so "one sick pod" ≠ "systemic" *(v0.10, DD-020 limit)*
+- [x] Per-instance finding attribution — valve stamps `HOSTNAME` into a response header the driver already parses, so "one sick pod" ≠ "systemic" *(v0.10, DD-020 limit)*. **Done by DD-040 §A.6**: `agent/RequestBoundary.java` resolves `HOSTNAME` once at class load and puts it on the response as `X-Basquin-Pod`; `runner/coverage/CoverageGuidedRun.java` reads it back with `getHeaderField("X-Basquin-Pod")`. `runner/coverage/PodPollTargets.java` documents why the *poll* fans out rather than following that header — a separate concern from attribution. Found still open by the round-9 sweep.
 - [ ] Optional in-process JaCoCo coverage % for the local JQF targets (no HTTP round-trip) *(v0.10)*
 
 ### Load / soak mode — replay the interesting corpus under load *(post-v0.11 idea, user 2026-07-20)*
@@ -498,7 +498,7 @@ operator **P1–P4** checklist (in the v0.10 operator entry) and the **Post-v1.0
 - [x] **PR 0 — design note ([DD-026](docs/LOAD-MODE-DESIGN.md)).** Decided (user 2026-07-20): **`mode: explore|load` on `BasquinCampaign`** (not a separate CRD — fuzz/load differ in objective, not infra) + **ConfigMap-emitted corpus** (`status.corpusConfigMap`, consumed via the existing corpus path). Load metrics = throughput/latency-percentiles/heap-thread-drift. Producer→consumer PR split.
 - [x] **PR 1 — persist the corpus (producer).** Merged (#33). The driver splices a byte-capped `replayCorpus` into the summary it already writes to the termination message (no sidecar / driver credentials); the operator materializes a campaign-owned `<campaign>-corpus-out` ConfigMap + `status.corpusConfigMap`. Validated in-cluster (24-route corpus emitted). Closes "corpus vanishes on teardown"; unblocks the dashboard **corpus view** + load replay.
 - [x] **PR 2 — load/soak mode (consumer).** `spec.mode: load` + `driver.concurrency`/`warmup`; `runner.coverage.LoadRun` replays the corpus at a fixed concurrency for a duration (keep-alive, warmup-excluded), reporting throughput + latency percentiles + heap/thread drift → `status.load`. Coverage-free driver Job in load mode; CLI `--mode load`. Validated envtest + in-cluster (replayed the emitted corpus → Completed with load metrics). Follow-ups: periodic drift sampling; target-side heap/thread; concurrency ramp.
-- [ ] Surface `status.load` in the CLI `status` / `run --watch` output — the backend is DONE (`LoadRun` computes throughput/RPS, p50/p90/p99/max latency, heap+thread drift → `status.load` via the reconciler, and the `Ready` condition message carries a human summary); the only gap is `operator/cmd/basquin/status.go`'s table showing just COVERAGE/FINDINGS, so a load-mode row is blank in those columns. *(narrowed 2026-07-21 — was "report load stats", mostly built)*
+- [ ] Surface `status.load` in the **`run --watch`** output. The backend is DONE (`LoadRun` computes throughput/RPS, p50/p90/p99/max latency, heap+thread drift → `status.load` via the reconciler, and the `Ready` condition message carries a human summary), and **the `status` table half is now done too**: `campaignRow` in `operator/cmd/basquin/status.go` switches on mode and renders `<rps> rps · p99 <n>ms` from `cp.Status.Load` in the METRICS column, `pending` while a load campaign has published nothing yet, and coverage/findings otherwise — covered by `status_test.go`'s `TestCampaignRowLoadPending`. What remains is `watchCampaign` in `operator/cmd/basquin/run.go`, whose `Completed ✓` line still prints only `coverage=…  findings=…  dashboard=…`, so a finished load campaign reports an empty coverage and zero findings there. *(narrowed 2026-07-21 — was "report load stats", mostly built; narrowed again by the PR #103 round-9 sweep, which found the `status`-table half had landed and the entry still claimed it as the gap)*
 - [ ] **Lock-free load-mode instrumentation profile (keep instrumentation in play, scale throughput)** *(user idea, 2026-07-21; design-note first, likely its own DD).* **The problem, proven empirically by the 2026-07-21 benchmark:** load mode drives an *Injected* target whose valve **serializes** requests (`ITERATION_LOCK`, DD-005/DD-010) so per-request heap/thread deltas are attributable — but that caps concurrency at 1, so a "load" test can't actually load the app. (Benchmark: k6 at 10 VUs showed ~256ms = 10×26ms *queueing behind the lock*, not app throughput.) Naively uninstrumenting to go fast throws away the whole availability oracle → load mode degrades to plain k6. **The fix keeps closure's thesis — measurement boundary stays in play while throughput scales — by splitting instrumentation by what concurrency allows:**
   - **Drop the serialization lock in load mode.** Real concurrency, real aggregate RPS.
   - **Keep the lock-free per-request latency** (each request times itself — context-scoped, no lock, safe under concurrency per DD-010) **and ADD 5xx/crash detection** — new work, not a "keep": `LoadRun.fire()` currently swallows exceptions and never checks the HTTP status (`runner/coverage/LoadRun.java`, "a load run measures behavior, not crashes"). *(#63 review)*
@@ -640,21 +640,27 @@ parenthetical receipts whose surrounding prose already carries the claim.
 
 DD-043's own documents were cleaned in #99 and cite nothing under that path.
 
-- [ ] **Bot profile as a GitHub App** (user, 2026-07-21 — tackle 2026-07-22): PRs are currently
-      authored by the owner's token, so the owner can't approve them and every merge needs an admin
+- [x] **Bot profile as a GitHub App** (user, 2026-07-21 — tackle 2026-07-22): PRs used to be
+      authored by the owner's token, so the owner couldn't approve them and every merge needed an admin
       bypass. Decision: a **full GitHub App** (not a machine-user account) — cleaner `app[bot]`
       identity, no second account. Owner's part: create the app (contents + pull-requests write),
       install it on the repo, hand over the app ID + private key. Claude's part: installation-token
       minting plumbing (tokens expire hourly), wire git/gh to use it for branches/PRs/commits, and
       the bot's commit identity — after which the protect-main required-approval flow works as
       designed: bot authors, owner approves, auto-merge lands it.
-      **Must also fix the release pages job**: its direct chart-commit push to main is blocked by
-      protect-main, and the GitHub Actions app **cannot** be a ruleset bypass actor on a personal
-      repo (API: "must be part of the ruleset source or owner organization" — verified 2026-07-21;
-      the v0.2.0 pages job failed twice on this, chart was published manually via #47). Fix: the
-      pages job pushes with the bot app's installation token, and the bot app goes on the ruleset
-      bypass list (user-owned apps are accepted there). Also revisit the two app integrations
-      currently on the bypass list — added while debugging this; keep only what's intended.
+      **Done**, and checkable two ways: every commit on the DD-043 branches is authored by
+      `basquin-bot[bot] <307641014+basquin-bot[bot]@users.noreply.github.com>` (`git log --format=%an`),
+      and the release **pages job** — whose direct chart-commit push to main was blocked by protect-main,
+      because the GitHub Actions app **cannot** be a ruleset bypass actor on a personal repo (API: "must
+      be part of the ruleset source or owner organization", verified 2026-07-21; the v0.2.0 pages job
+      failed twice on this and the chart was published manually via #47) — now mints a bot installation
+      token with `actions/create-github-app-token@v1` from `secrets.BOT_APP_ID` /
+      `secrets.BOT_PRIVATE_KEY` and checks out `main` with it, so the push is attributed to the
+      bypass-actor bot. See the `Mint basquin-bot token` step in `.github/workflows/release.yml` and
+      `docs/BOT-SETUP.md`. Found still open by the PR #103 round-9 sweep.
+  - [ ] The one residual, and it is **not** verifiable from the tree: revisit the two app integrations
+        on the protect-main ruleset bypass list — added while debugging the above; keep only what is
+        intended. This needs the repo's ruleset settings, so it stays open until someone reads them.
 
 ### Calibration & real-app targets
 - [ ] WebGoat / OWASP Benchmark for guaranteed-findings calibration of triage output *(v0.5)*
@@ -706,10 +712,14 @@ theorized. Recorded here so the evidence isn't lost with the session that found 
       reads alone swung raw used-heap by +684 MB, all of it collectable. Bracketing with a forced
       collection (or taking a min-envelope over many polls) showed no unbounded growth at all.
       Until this lands, no drift number is publishable — the benchmark page deliberately omits one.
-- [ ] **`violations.heap` is hardcoded 0 in load mode.** `summaryJson` reports a heap violation
-      count that no code ever increments — load mode has no heap gate. "0 violations" therefore is
+- [x] **`violations.heap` was hardcoded 0 in load mode.** `summaryJson` reported a heap violation
+      count that no code ever incremented — load mode has no heap gate. "0 violations" was therefore
       not a check that passed, which is exactly the kind of reassuring-but-empty signal this project
-      exists to eliminate. Either gate it or stop reporting it.
+      exists to eliminate. Either gate it or stop reporting it. **Fixed by DD-040 in
+      `runner/coverage/LoadRun.java`**, taking the second option: `summaryJson` emits `"heap"` and
+      `"thread"` inside a `notEvaluated` array instead of a fabricated `0`, and prints `"latency"` only
+      when a threshold was actually configured. Absent is now data rather than something inferred from a
+      missing key. Found still open by the round-9 sweep.
 - [ ] **`readCorpus` counts each ConfigMap corpus file twice.** `Files.walk` sees both the
       `corpus.txt` symlink and the same file inside the volume's `..<timestamp>` real directory, so
       the driver logs "54 sequence(s)" for a 27-line corpus. Uniformly 2×, so no selection skew —
@@ -746,8 +756,11 @@ theorized. Recorded here so the evidence isn't lost with the session that found 
 
 - [ ] **CRITICAL — the invariant reporting channel drops most violations.** The valve evaluates
       every invariant server-side and logs it, then attaches `X-Basquin-Invariant-Count` to the
-      response *only* `if (!response.isCommitted())` (`BasquinValve.java:66`,
-      `TomcatBoundaryAdvice.java:43`). The driver learns about violations **solely** by reading that
+      response *only* under `if (!r.headers.isEmpty() && !response.isCommitted())` — one site in
+      `tomcat-valve/src/main/java/com/basquin/valve/BasquinValve.java` and one in
+      `agent/TomcatBoundaryAdvice.java`, cited by that expression rather than by line number, because
+      the `:66`/`:43` this entry carried have since drifted (both conditions verified present
+      2026-07-30). The driver learns about violations **solely** by reading that
       header, so a committed response silently discards the finding. Evaluation is intact; only
       reporting is lost.
 
@@ -788,22 +801,41 @@ theorized. Recorded here so the evidence isn't lost with the session that found 
       dashboard (the *driver* does), so a target-side dashboard push would be new infrastructure.
       Cumulative counters alone are not enough — per-input attribution is what the corpus cost model
       needs, and losing it is why Roller's corpus collapsed to 2 search entries.
-- [ ] **Load mode never evaluates invariants at all** (passthrough by design, DD-029) *and* the
-      load driver JVM is never given `-Dbasquin.invariant.latency.maxMs` (`LoadRun.java:52` defaults
-      to 0 = disabled). Roller's load `violations.latency: 0` at p50 503 ms against an intended
-      250 ms budget is structural, not empirical. The fix needs the operator to propagate
-      `latencyMaxMs` into the load driver's JVM opts.
-- [ ] **The explore summary's `invariants` block is the driver measuring itself** with no thresholds
-      configured, so it is structurally 0 too. Two different reported zeros, neither meaning what a
-      reader would assume.
-- [ ] **The leak detector throws unconditionally at `agent/Agent.java:249`, ignoring
+- [x] **Load mode never evaluates invariants at all** (passthrough by design, DD-029 — that half stands
+      and is not a defect) *and* the load driver JVM was never given
+      `-Dbasquin.invariant.latency.maxMs`, so Roller's load `violations.latency: 0` at p50 503 ms against
+      an intended 250 ms budget was structural, not empirical. The named fix — the operator propagating
+      `latencyMaxMs` into the load driver's JVM opts — **landed with DD-040**:
+      `operator/internal/controller/campaign_resources.go` falls back to the *target's*
+      `Invariants.LatencyMaxMs` when the campaign sets none and appends
+      `-Dbasquin.invariant.latency.maxMs=<n>`, with `TestLoadDriverInheritsTargetLatencyThreshold` in
+      `load_honesty_test.go` pinning both the inherit and the campaign-override case. The reported zero is
+      gone too: see the `violations.heap` entry above. Found still open by the round-9 sweep.
+- [x] **The explore summary's `invariants` block is the driver measuring itself** with no thresholds
+      configured, so it was structurally 0 too. Two different reported zeros, neither meaning what a
+      reader would assume. **Fixed by DD-040**: `driverInvariantsJson` in `runner/util/StatusReporter.java`
+      now prints a count only for an invariant whose property was actually configured and names every
+      other one in a `notEvaluated` array, so the block no longer reports a zero it never checked. That
+      the driver is measuring *itself* remains true by construction and is a documented limit, not debt.
+      Found still open by the round-9 sweep.
+- [x] **The leak detector threw unconditionally in `agent/Agent.java`, ignoring
       `invariant.mode=soft`**, turning a response the app had already written
       into an empty 500. Observed while publishing a Roller entry manually: the row was written and
-      the client got a 500. Soft mode must record and continue, never alter the response.
-- [ ] **Roller's `login_publish` sequence has never published a single row.** Explore's `request()`
-      still follows redirects, so the login 302's `Set-Cookie` is eaten, the salt capture misses, and
-      the step is silently skipped — the exact bug class DD-038 fixed in `LoadRun.fireR` but not in
-      explore. This is live confirmation that DD-039 is worth doing.
+      the client got a 500. Soft mode must record and continue, never alter the response. **Fixed by
+      DD-040**: the throw is now gated on hard mode — the code's own comment says "this throw used to be
+      unconditional" — and soft mode logs `soft mode: recorded, not thrown (the app's response is left
+      untouched)` after writing the evidence to the context first, so nothing is lost. Grep
+      `agent/Agent.java` for `soft mode: recorded, not thrown`; the entry's old `:249` citation now lands
+      in a comment. Found still open by the round-9 sweep.
+- [x] **Roller's `login_publish` sequence had never published a single row.** Explore's `request()`
+      followed redirects, so the login 302's `Set-Cookie` was eaten, the salt capture missed, and
+      the step was silently skipped — the exact bug class DD-038 fixed in `LoadRun.fireR` but not in
+      explore. This was live confirmation that DD-039 was worth doing, **and DD-039 shipped**:
+      `CoverageGuidedRun.java`'s explore loop now calls `c.setInstanceFollowRedirects(false)` and
+      re-sends both headers on every hop, and the DD-039 Task-7 acceptance recorded **84 `login_publish`
+      DB rows** — see the `[x]` DD-039 entry above in this same section, which is where that figure
+      comes from. Found still open by the PR #103 round-9 sweep, which is the sharpest case in the set:
+      this entry sat 91 lines below an already-checked entry that refuted it.
 - [ ] **The jspwiki readiness probe violates heapDelta ~12/min at idle** — a noise source that any
       server-side counting fix will pick up.
 
@@ -819,15 +851,22 @@ touching the tip would have put it outside what was reviewed.
 
 **The one that matters — do this first.**
 
-- [ ] **Wire `deploy/bench/check_claims.py` and `deploy/bench/test_redact.py` into CI.** Both exist
+- [x] **Wire `deploy/bench/check_claims.py` and `deploy/bench/test_redact.py` into CI.** Both exist
       because reviewers were doing a script's job: four consecutive review rounds on #93 blocked on a
       hand-written number, and one misquote survived all four. A guard that fires only when someone
-      remembers to run it will drift, and then the reason for adding it is gone.
+      remembers to run it will drift, and then the reason for adding it is gone. **Done in `a0595b9`**
+      (PR #96): `.github/workflows/ci.yml`'s `Bench artifact drift guards` step runs both, before the
+      Gradle steps because they need no JDK. Found still open by the PR #103 round-9 sweep of this file
+      against the code — it had been false for the whole of DD-043, and `ROADMAP.md`'s "cheap wins"
+      bullet was repeating it.
 
 **From #93 (round-5 approval)**
 
-- [ ] Add the `X-Basquin-Token` case to `test_redact.py`'s `MUST_REDACT` set — the shape was restored
-      after a narrowing dropped it and is currently unpinned, so the next narrowing drops it silently.
+- [x] Add the `X-Basquin-Token` case to `test_redact.py`'s `MUST_REDACT` set — the shape was restored
+      after a narrowing dropped it and was then unpinned, so the next narrowing would have dropped it
+      silently. **Done in `a0595b9`** (PR #96): `MUST_REDACT` now carries
+      `("X-Basquin-Token: …", "the dashboard token as a header — collect.py redacts it, and nothing pinned
+      that it must")`. Also found still open by the round-9 sweep.
 - [ ] `deploy/bench/roller/README.md:177` — "corroborated in `evidence.txt`" overreaches; that file
       backs the write path, not the count of 16 or the nonce distinctness.
 - [ ] The benchmark page's "Two observations … reported, not explained" lead half-overstates now that
@@ -1065,13 +1104,27 @@ the feature held in every one, and almost every finding was in the machinery tha
       checkout for three rounds and why the `jar` stage passed against a jar it never built until round
       8 ran it deliberately. `unit jar guards` needs no docker and finishes in minutes. Do this first —
       the rest shorten the feedback loop; this changes when the loop closes.
-- [ ] **1 — citation-resolution CI check, whole-tree scoped.** Resolve each citation against the
-      file's current text, not just the path, and scan the whole tree rather than the diff. A
-      diff-scoped version missed four dead citations in round 7 because they sat in unmodified files.
-      Evidence for the scale: `bench-results/dd043-pr3-citation-audit-2026-07-30/`.
+- [x] **1 — citation-resolution CI check, whole-tree scoped. Delivered.** Built as
+      `scripts/check-citations.py` (resolves each citation against the cited file's current text, not
+      just the path; whole-tree, not diff-scoped — a diff-scoped version missed four dead citations in
+      round 7 because they sat in unmodified files) plus `scripts/check-citations-allowlist.txt` for
+      deliberate exemptions (frozen historical files, external/generated paths, per-finding
+      suppressions, each with a reason). Wired into `.github/workflows/ci.yml` as the
+      `citation-integrity` job, which runs on both `push` and `pull_request`; both path-filter lists
+      carry `scripts/**`, `**/*.md`, `**/citations.txt` and `bench-results/**`, so the script, the
+      allowlist, and the files it checks all trigger the job. Measured by running it 2026-07-30:
+      **1,207** citations checked across 91 md + 2 pinned + 27 comment-scanned files, finishes in
+      under a second, exits **0**. It caught a defect class hand-checking never would have: DD-021's
+      entry in `docs/DESIGN-DECISIONS.md` cited agents.md, a file that exists on the authoring machine
+      but is gitignored — the citation resolved for its author and was dead on every fresh clone
+      (fixed in the same pass that added this entry). Evidence for the scale that motivated building
+      it: `bench-results/dd043-pr3-citation-audit-2026-07-30/`.
 - [ ] **2 — a stable pointer to the run of record.** Timestamped `verify-<UTC>/` names mean each new
-      run stales every citation to the previous one at once (13 occurrences in one round, 17 the next).
-      Add `bench-results/RUN-OF-RECORD` and cite that.
+      run stales every citation to the previous one at once: **10, 10, 13 and 18** occurrences had to be
+      repointed by the four supersession commits, each figure read out of that commit's own message
+      (`16da079`, `865ba35`, `1c3ce88`, `572282a`) and counted as occurrences rather than matching lines
+      — `16da079` records `grep -c` reporting eight where there were ten. Add
+      `bench-results/RUN-OF-RECORD` and cite that.
 - [ ] **3 — mutation-test the harness, not only the guards.** The script proves each of the injector's
       8 guards fails when neutered; nothing proves the script's own rows do. Also: the guards stage
       mutates tracked source in place, so a commit during a run is unsafe — one was observed
@@ -1079,6 +1132,15 @@ the feature held in every one, and almost every finding was in the machinery tha
 - [ ] **4 — a "what depended on this?" pre-commit pass.** For every path, row key or claim a commit
       removes, search the whole tree for what still depends on it. Diff-internal consistency is the
       narrower question and asking it is what let round 8's findings through.
+      **Add its mirror image: resolve open debt against the code.** Round 9 swept all **91** `- [ ]`
+      entries in this file against the tree and found **ten** the code already satisfied — the box count
+      went 91 open / 152 closed to 82 / 162 — plus one (`status.load` in the CLI) whose named gap had
+      half closed and needed narrowing rather than checking off. Two had been false since `a0595b9`,
+      the whole span of DD-043. The sharpest was "Roller's `login_publish` sequence has never published
+      a single row", sitting 91 lines below an already-`[x]` DD-039 entry recording 84 such rows: the
+      file refuted itself and no one re-read it. **A `- [ ]` is a claim about the current tree exactly
+      like a citation is**, and the tooling in item 1 should resolve both. The check is cheap when each
+      entry names a symbol, a file or a workflow step — so write them that way.
 - [ ] **5 — stop restating derived numbers in prose**, and where a count stays, say what unit it
       counts. Round 8's miscount came from documents counting shapes, throw sites and methods
       interchangeably.
@@ -1091,11 +1153,21 @@ These were judged non-blocking during PR #103's review and deliberately not fixe
 written down here because the review caught me claiming they were "recorded rather than bodged" when they
 were recorded nowhere — the same evaporation that #95 had to go back and fix.
 
-- [ ] **`scripts/verify-dd043-pr3.sh`'s `jvm:boundary` check can pass on an error page.** It accepts any
-      non-empty, non-`miss` body, so an HTML error response would read as a pass. It must assert the
+- [x] **`scripts/verify-dd043-pr3.sh`'s `jvm:boundary` check can pass on an error page.** It accepted any
+      non-empty, non-`miss` body, so an HTML error response would read as a pass. It had to assert the
       **shape** — `ResultStore.format`'s `costCsv|invariantCount|detail|leak`, i.e. three comma-separated
       numbers before the first `|`. A check that passes on the wrong thing is worse than no check in the one
-      stage whose job is proving the boundary sat on the request path.
+      stage whose job is proving the boundary sat on the request path. **Resolved in `6e67ca7`**, which
+      overrode this deferral: the poll now runs `curl -sf`, so a non-2xx fails the row outright instead of
+      letting its error body ride through, and the verdict additionally requires the wire shape via the
+      `boundary_poll_shape_ok` helper, which passes only when the body holds at least one line and
+      **every** line matches `ResultStore.format`'s `costCsv|invariantCount|detail|leak`. Grep for
+      `boundary_poll_shape_ok` and `curl -sf` — not for a line number, and **not for the regex text**: an
+      earlier draft of this entry pasted the pattern verbatim and it drifted the same day the helper was
+      extracted. Recording the closure late is itself the
+      defect PR #103 round 9 filed as blocking: this entry stayed `[ ]` for two commits after the fix
+      landed, so a committed document said the one row proving the boundary was on the request path was
+      broken when it was not. **When a deferral is overridden, close it in the same commit as the fix.**
 - [ ] **`basquin-init.gradle` hand-types `0.3.0`.** Same defect class as the spec's drifted counts, and it
       will silently inject a stale coordinate the first time the version is bumped. Not a quick fix: a
       Gradle init script cannot read the injector jar's baked `basquin-injector.properties`, because it runs
@@ -1113,16 +1185,22 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
 - [x] **`scripts/verify-dd043-pr3.sh`'s `jvm` and `native` stages have never been executed.** Written and
       committed unexercised (the native mutex was held, and the `guards` stage mutates source a running
       build was compiling). **Resolved 2026-07-30**: both stages ran end-to-end in the run of record,
-      stamped `20260730T054112Z` and made against `9f1e990` on a clean tree (that run's `RESULTS.md:3`).
-      `bench-results/verify-20260730T102725Z/RESULTS.md:4` records `Stages run: unit jar guards jvm native`
-      and `:6` **26 passed, 0 failed, 0 skipped**, including the `jvm:build`, `jvm:banner`,
-      `native:build` and `native:banner` rows — cited by row key, because inserting a guard row renumbers
-      that whole table and these four citations went stale twice that way already. The original entry's
-      sub-claim that "the script's
-      own `RESULTS.md` discloses this" was also false — that file does not say the stages were unexercised;
-      its only such section (the `## What a pass here does and does not establish` heading, `:36-45` in
-      the current run of record — read the heading, not the range)
-      states what a pass does and does not establish. Do not re-run the
+      stamped `20260730T102725Z` and made against `6e67ca7` on a clean tree. All four figures come from
+      `bench-results/verify-20260730T102725Z/RESULTS.md`, read by label rather than by line number because
+      that header gains lines: its title line carries the stamp, its `Commit:` line the SHA and
+      `tree clean at run start`, its `Stages run:` line `unit jar guards jvm native`, and the line after
+      that **26 passed, 0 failed, 0 skipped** — including the `jvm:build`, `jvm:banner`, `native:build` and
+      `native:banner` rows, cited by row key because inserting a guard row renumbers that whole table and
+      these four citations went stale twice that way already. This entry previously stamped the run
+      `20260730T054112Z` at `9f1e990` — a run `572282a` **deleted**, and a SHA contradicted by the very
+      `RESULTS.md` line it cited. Cause: an earlier supersession repointed the `verify-`-prefixed *path*
+      and left the bare stamp and commit label attached to it. **A repoint must re-read every value it
+      carries — stamp, SHA, figure — out of the new target's text, not merely confirm the path resolves.**
+      The original entry's sub-claim that "the script's own `RESULTS.md` discloses this" was also false —
+      that file does not say the stages were unexercised; its only such section is the
+      `## What a pass here does and does not establish` heading, which states what a pass does and does not
+      establish. (Cited by heading with no line range at all: the range given here was off by one at both
+      ends, and a limitations list that gains a bullet invalidates any range.) Do not re-run the
       native stage on the strength of this entry; check `bench-results/verify-20260730T102725Z/` first.
       (An earlier run, `verify-20260729T153141Z`, was **deleted** in `8cadf8a` — its B1 and B2 checks could
       not fail, so it certified nothing. Do not cite it; it is not in the tree.)
@@ -1151,8 +1229,12 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       this entry previously relied on that file alone, which is exactly the defect being fixed here.
       **The fix that would have caught all 135**: one evidence directory,
       `bench-results/dd043-pr3-r4-guard-measurement-2026-07-29/citations.txt`, pins its citations as
-      `file:line: expected-text` instead of a bare `file:line`, and an independent re-check confirmed
-      **66/66 resolve exactly** (33 exact matches, 33 as prefixes/`[INFO] `-stripped substrings). A bare
+      `file:line: expected-text` instead of a bare `file:line`, and an independent re-check recorded in
+      `bench-results/dd043-pr3-citation-audit-2026-07-30/provenance.txt` confirmed **rows parsed: 66 /
+      resolved OK: 66 / failed: 0**. Quote no finer breakdown than that: the audit's method is a
+      "substring match either direction", which yields no exact-vs-prefix split, and an earlier version of
+      this entry claimed "(33 exact / 33 prefix)" — a hand-typed pair that appears nowhere in the audit
+      directory, inside the very entry arguing for pinned, checkable citations. A bare
       line number has no guard against an unrelated edit silently invalidating it while the path still
       resolves; a pinned-text citation is script-checkable. Proposal: a CI check that extracts every
       `file:line: expected-text` citation in that format and fails if the text is absent at that line,

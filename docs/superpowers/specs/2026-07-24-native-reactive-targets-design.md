@@ -1350,12 +1350,23 @@ passing control is **not published**, matching the discipline that keeps `heapDr
 `Apicurio/apicurio-registry`; its §4 addendum spot-checked the load-bearing claims against primary
 sources). The verified facts:
 
-- Current `main` (`23159df`): `app/pom.xml` contains **zero** occurrences of the string `native`.
-  The only native profiles anywhere in the repository are under `cli/`, `examples/` and
-  `support-chat/` — none of them the registry server — and no `Dockerfile.native` exists outside
-  `examples/`.
+- Current `main` (`23159df`): `app/pom.xml` contains **zero** occurrences of the string `native`
+  (`capture/12-apicurio-main-no-native.txt`). The repository's only CI-exercised native declarations
+  on `main` are the CLI's — `verify-cli.yaml`, `release.yaml` and `verify-build.yaml`
+  (`capture/13-apicurio-main-workflows-native-grep.txt`) — none of them the registry server. The
+  server's only container recipe on `main` is `Dockerfile.jvm`; `Dockerfile.native` is 404 there
+  (`capture/30-dockerfile-native-http-status.txt`). *(An earlier draft of this bullet also asserted
+  "the only native profiles anywhere in the repository are under `cli/`, `examples/` and
+  `support-chat/`". No file under `capture/` mentions `support-chat` or `examples` at all — `grep -rc
+  support-chat capture/` returns 0 in every file — and `capture.sh` fetches fixed paths rather than
+  walking the tree, so it cannot back an "anywhere in the repository" claim in the first place. That
+  sentence's original backing, a sparse-clone README, was deleted when the README was re-derived
+  through the GitHub API; the claim is removed here rather than re-asserted. This does not change the
+  ranking below: "Target 5 as specced cannot be built native" rests on the registry server's own
+  pom/CI/Dockerfile evidence just cited, not on what `examples/` or `support-chat/` contain.)*
 - `-DcliSkipNative` is defined in `cli/pom.xml` and governs the **CLI's** native image only — exactly
-  the suspicion this section previously recorded, now verified.
+  the suspicion this section previously recorded, now verified
+  (`capture/15-apicurio-main-cli-pom-and-appprops.txt:19-23`).
 - The secondary source was describing the **2.6.x** line, which *did* build the server native:
   `app/pom.xml:590` on that branch carries the `native` profile, `Dockerfile.native` exists there
   (HTTP 200 on `2.6.x`, 404 on `main`), and its CI native jobs ("Build and Test In Memory/SQL native
@@ -1366,10 +1377,28 @@ application, not a reference demo) is what matters, not Apicurio specifically �
 substitute. Ranked by **risk to what row 5 is for** (a real product we can actually instrument), not
 by setup cost:
 
-1. **Debezium Server** — Quarkus **3.33.1.1**, the closest to the harness's 3.37.3; native build
-   verified in CI on every PR. Cost: a thin HTTP surface (a management API, not a full REST product
-   API) — acceptable, because the fuzz/load axes are already carried by heroes/villains and row 5
-   buys credibility that a real product can be instrumented natively.
+1. **Debezium Server** — Quarkus **3.33.1.1**, the closest to the harness's 3.37.3. **Not** "native
+   build verified in CI on every PR" — that overstates what the evidence shows, and the evidence
+   directory's own README rejects exactly this wording (`README.md:314-315`: *"'Green whenever it
+   runs' is the honest claim; 'green on every PR' is not"*). The accurate claim, at the level that
+   actually answers "does the native build pass" rather than the workflow's overall conclusion: over
+   a 12-run window (2026-07-16..28) the `native-build` job's `Verify native build` step was `success`
+   in all **7** runs it was exercised in, `skipped` in **4** (because its `needs: build` upstream job
+   failed first, so the native build never ran — it never *failed*), and **1** run had no matching
+   native job at all (a fork PR awaiting maintainer approval)
+   (`bench-results/dd043-apicurio-native-2026-07-26/capture/22-debezium-server-cross-maven-runs.txt:21-30`,
+   skip attribution in `capture/27-debezium-skip-attribution.txt`). The workflow *trigger* genuinely
+   does fire `on: pull_request` for every PR to `main` and release branches
+   (`capture/41-debezium-native-declarations.txt:8-21`) — that half of the claim is real; "verified in
+   CI on every PR" conflated the trigger firing with the native build actually running and passing.
+   Earlier drafts of this ranking tallied the *workflow's* overall conclusion (3 of the last 4 runs
+   succeeded) rather than the native-build step itself; re-derived at the step level the figure is
+   stronger, not weaker (0 exercised-and-failed, not 1-of-4-failed), which is why Debezium still ranks
+   first below — see `README.md`'s §0.2 discrepancy table (row D3) for how the two tallies diverge and
+   why the job/step level, not the workflow level, is the one that answers this question. Cost: a thin
+   HTTP surface (a management API, not a full REST product API) — acceptable, because the fuzz/load
+   axes are already carried by heroes/villains and row 5 buys credibility that a real product can be
+   instrumented natively.
 2. **Eclipse Hono, HTTP adapter** — Quarkus **3.27.4.1**, genuinely reactive, and the strongest
    native-CI signal of the three (a dedicated native-image workflow on a 3×/day cron). Cost: the
    heaviest infrastructure — Kafka (or an AMQP network) plus a device registry.

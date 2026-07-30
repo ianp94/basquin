@@ -212,6 +212,29 @@ assert_resolved_from_injected() {  # $1 = the stage's Maven build log  $2 = row 
   fi
 }
 
+# The boundary's wire shape, one grader for BOTH build stages' poll rows. ResultStore.format
+# (basquin-core/src/main/java/agent/ResultStore.java:141-154) emits ONE LINE PER HOP, each line
+# `costCsv|invariantCount|detail|leak`, where costCsv is `latencyMs,heapDeltaKb,threadDelta` — the
+# per-hop shape test/RequestBoundaryTest.java:81 already pins for the header path
+# (`^-?\d+,-?\d+,-?\d+$`; heapDelta and threadDelta can legitimately go negative, so both carry an
+# optional sign). `detail` is pipe- and newline-sanitised at the producer, so `[^|]*` is exact, and
+# the last field is `leak` or empty, nothing else. "miss" (ResultStore.MISS) is the only non-CSV
+# body the boundary itself can legitimately produce — for "never ran" — and it FAILS here,
+# correctly: these rows certify a measurement, not liveness. Anything else non-matching is a
+# transport failure or an error page riding a 200.
+#
+# Per-LINE grading, never a collapse to one line: the previous implementation stripped newlines and
+# matched a single hop, so a genuine multi-hop body — the wire format's own documented shape — was
+# rejected as "not the boundary's CSV shape" (PR #103 round 9, should-fix 9): a false negative on a
+# correct measurement. Every line must match; a truncated tail line fails its own match, and awk's
+# END{NR} counts a final unterminated line too, so truncation always diverges the two counts.
+boundary_poll_shape_ok() {  # $1 = poll body file; 0 iff the file holds >=1 line and EVERY line is one formatted hop
+  local f="$1" total match
+  total="$(awk 'END{print NR}' "$f" 2>/dev/null)"
+  match="$(grep -cE '^-?[0-9]+,-?[0-9]+,-?[0-9]+\|[0-9]+\|[^|]*\|(leak)?\r?$' "$f" 2>/dev/null)"
+  [ "${total:-0}" -ge 1 ] && [ "${match:-0}" -eq "$total" ]
+}
+
 purge_basquin() {  # $1 = a local maven repository root  $2 = proof file name; exit status asserts the purge
   local repo="$1" proof="$OUT/$2"
   { echo "# purge proof — $(date -u +%FT%TZ)"; echo "# repository: $repo"; echo
@@ -511,7 +534,7 @@ PY
           "failsLoudlyWhenAnotherBasquinArtifactIsDeclaredAtAConflictingVersion" "sibling-version"
 
   # guards:restored previously keyed on gradle's exit code alone — the precise trap _mutate
-  # refuses 45 lines up: rc=0 cannot distinguish "ran green" from "did not run", and its -q log
+  # refuses above: rc=0 cannot distinguish "ran green" from "did not run", and its -q log
   # carried neither a test count nor BUILD SUCCESSFUL, so the committed artifact could not
   # support the row (round-5 S3). Same discipline as _mutate now: clear, run, copy the JUnit XML
   # into $OUT, and grade fresh-XML presence + counts from the copy, not the exit code alone.
@@ -673,23 +696,25 @@ run_jvm() {
   curl -sf "http://localhost:8084/__basquin/result?id=$id" \
     > "$OUT/jvm-result-poll.txt" 2>"$OUT/jvm-result-poll-stderr.txt"
   poll_rc=$?
-  # A non-empty, non-"miss" body used to be the pass — but `curl -s` without `-f` writes error bodies
-  # too, so a 404 page or a diagnostic string satisfied it just as well as a real cost line (approver
-  # finding 13). The wire format is not "anything truthy": ResultStore.format
-  # (basquin-core/src/main/java/agent/ResultStore.java:141-154) emits ONE HOP PER LINE as
-  # `costCsv|invariantCount|detail|leak`, where costCsv itself is `latencyMs,heapDeltaKb,threadDelta`
-  # — the exact shape test/RequestBoundaryTest.java:81 already pins for the header path
-  # (`^-?\d+,-?\d+,-?\d+$`; threadDelta and heapDelta can legitimately go negative, so both carry an
-  # optional sign). "miss" (ResultStore.MISS) is the only non-CSV body the boundary itself can ever
-  # legitimately produce, for "never ran" — anything else that isn't this shape is a transport failure
-  # or an error page riding a 200, not a measurement. The run of record's `782,-767,9|0||`
-  # (bench-results/verify-20260730T102725Z/jvm-result-poll.txt) is this shape: costCsv="782,-767,9",
-  # invariantCount="0", detail="", leak="".
-  local poll; poll="$(tr -d '\r\n' < "$OUT/jvm-result-poll.txt")"
-  if [ "$poll_rc" -eq 0 ] && printf '%s' "$poll" | grep -qE '^-?[0-9]+,-?[0-9]+,-?[0-9]+\|[0-9]+\|[^|]*\|(leak)?$'; then
-    ok "jvm:boundary" "poll returned $poll"
+  # Shape, not truthiness: a non-empty, non-"miss" body used to be the pass — but `curl -s` without
+  # `-f` writes error bodies too, so a 404 page or a diagnostic string satisfied it just as well as a
+  # real cost line (approver finding 13). boundary_poll_shape_ok (above) holds the derivation from
+  # ResultStore.format and rejects error pages, "miss", empty and truncated bodies while accepting
+  # ANY hop count >= 1. The run of record's poll body is `794,2139,8|0||`
+  # (bench-results/verify-20260730T102725Z/jvm-result-poll.txt — quoted by re-reading that file's
+  # TEXT): one single-hop line of the wire shape, costCsv="794,2139,8", invariantCount="0",
+  # detail="", leak="". The shape is justified by ResultStore.format, never by any one measurement —
+  # so if a supersession ever repoints that citation, the quoted value MUST be re-read from the file
+  # at the new path (PR #103 round 9, blocking 1: a repoint carried the superseded run's value into a
+  # citation whose own file said otherwise, and the verification used was `ls` — the path's
+  # existence, not its text).
+  local poll hops
+  poll="$(tr -d '\r' < "$OUT/jvm-result-poll.txt" | paste -sd' ' -)"
+  if [ "$poll_rc" -eq 0 ] && boundary_poll_shape_ok "$OUT/jvm-result-poll.txt"; then
+    hops="$(awk 'END{print NR}' "$OUT/jvm-result-poll.txt")"
+    ok "jvm:boundary" "poll returned $hops formatted hop line(s): $poll"
   else
-    bad "jvm:boundary" "poll returned '${poll:-<empty>}' (curl rc=$poll_rc) — not the boundary's CSV shape, so the filter either never saw the request or the response was not its own output (see jvm-result-poll.txt, jvm-result-poll-stderr.txt)"
+    bad "jvm:boundary" "poll returned '${poll:-<empty>}' (curl rc=$poll_rc) — not the boundary's wire shape (one costCsv|invariantCount|detail|leak line per hop), so the filter either never saw the request or the response was not its own output (see jvm-result-poll.txt, jvm-result-poll-stderr.txt)"
   fi
 
   # The actual claim: zero edits AFTER the build, not merely before — and "pristine" must come
@@ -800,6 +825,25 @@ run_native() {
   grep -q "basquin" "$OUT/native-banner.txt" \
     && ok "native:banner" "$(cat "$OUT/native-banner.txt")" \
     || bad "native:banner" "banner does not list basquin"
+
+  # Round 9, should-fix 6 (approver finding 4): the native half of §5.2 had NO functional evidence —
+  # nothing in any committed artifact ever polled /__basquin/result on a native binary, so "survives
+  # AOT" was measured only up to LOAD (native:banner), and a native image whose basquin-core was
+  # stripped or evicted from the runtime classpath would still green every row above. Same
+  # request-then-poll protocol and same shape grader as jvm:boundary, but against THIS stage's own
+  # binary — a PASS here is the native cell's functional half, not an inference from the jvm cell's.
+  local nid="verify-native-$TS" npoll_rc npoll nhops
+  curl -s -H "X-Basquin-Req: $nid" "http://localhost:8080/ok" >/dev/null 2>&1
+  curl -sf "http://localhost:8080/__basquin/result?id=$nid" \
+    > "$OUT/native-result-poll.txt" 2>"$OUT/native-result-poll-stderr.txt"
+  npoll_rc=$?
+  npoll="$(tr -d '\r' < "$OUT/native-result-poll.txt" | paste -sd' ' -)"
+  if [ "$npoll_rc" -eq 0 ] && boundary_poll_shape_ok "$OUT/native-result-poll.txt"; then
+    nhops="$(awk 'END{print NR}' "$OUT/native-result-poll.txt")"
+    ok "native:boundary" "poll returned $nhops formatted hop line(s): $npoll"
+  else
+    bad "native:boundary" "poll returned '${npoll:-<empty>}' (curl rc=$npoll_rc) — the binary serves but its boundary never measured the tagged request, so native instrumentation is NOT functionally proven (see native-result-poll.txt, native-result-poll-stderr.txt)"
+  fi
   kill "$npid" 2>/dev/null
   stop_server
 }
@@ -843,20 +887,40 @@ fi
   echo "- \`jvm\` proves the injector instruments a real third-party Quarkus application with zero edits"
   echo "  to its source, **in JVM mode, on one target**, resolving over localhost HTTP."
   echo "- \`native\` proves the same mechanism survives AOT, **on the Phase-0 fixture** — not on a real"
-  echo "  product. Whether \`rest-villains\` builds native at all is still unmeasured."
+  echo "  product. Whether \`rest-villains\` builds native at all is still unmeasured. Native"
+  echo "  instrumentation is FUNCTIONALLY established only by a PASSing \`native:boundary\` row in this"
+  echo "  run's own table — \`native:banner\` is a LOAD check, blind to a stripped or classpath-evicted"
+  echo "  \`basquin-core\`. A table with no \`native:boundary\` PASS leaves the native half of §5.2"
+  echo "  functionally unmeasured."
   echo "- Neither exercises the real GitHub Pages HTTPS repository; both serve over localhost HTTP."
   echo "  Pages cannot be tested until the first \`v*\` tag populates \`docs/maven/\`."
   echo "- \`guards\` proves each fail-loudly guard's test can actually fail, not that the guards cover"
   echo "  every way injection could be defeated."
-  if [ -s "$OUT/jvm-result-poll.txt" ]; then
+  for pf in jvm-result-poll.txt native-result-poll.txt; do
+    [ -s "$OUT/$pf" ] || continue
+    ptag="${pf%-result-poll.txt}"
     echo
-    echo "## Note on the boundary poll"
+    echo "## Note on the \`$ptag\` boundary poll"
     echo
-    echo "Poll returned \`$(cat "$OUT/jvm-result-poll.txt")\`. The fields are latency, heap delta, threads."
-    echo "**A negative heap delta is expected to appear and is a known gap, not a bug in this run:** the"
-    echo "spec assigns negative deltas to PR-5 as an \`UNMEASURED\` producer, and they have now been"
-    echo "observed on more than one code path. Do not read the heap figure as a clean measurement."
-  fi
+    echo "Poll returned \`$(tr -d '\r' < "$OUT/$pf" | paste -sd' ' -)\` (\`$pf\`; per hop line:"
+    echo "latencyMs, heapDeltaKb, threadDelta \\| invariant count \\| detail \\| leak)."
+    # Derived, never asserted: the old note stated unconditionally that a negative heap delta "is
+    # expected to appear", hand-written prose about a figure in the one document whose header
+    # promises every figure is derived — and the run of record's delta is positive (PR #103 round 9,
+    # should-fix 10). The sign is read from the artifact; only the branch it supports is emitted.
+    neg="$(awk -F'[,|]' '$2 ~ /^-[0-9]+$/ {print $2}' "$OUT/$pf" | paste -sd' ' -)"
+    if [ -n "$neg" ]; then
+      echo "**This poll carries negative heap delta(s) (\`$neg\`) — a known gap, not a bug in this run:**"
+      echo "the spec assigns negative heap deltas to PR-5 as an \`UNMEASURED\` producer (the PR-5 row of"
+      echo "\`docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md\`). Do not read the heap"
+      echo "figure as a clean measurement."
+    else
+      echo "Every heap delta in this poll is non-negative (sign derived from \`$pf\`, not hand-typed)."
+      echo "Negative deltas remain a known gap the spec assigns to PR-5 as an \`UNMEASURED\` producer (the"
+      echo "PR-5 row of \`docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md\`) — the heap"
+      echo "figure is still not a clean measurement until PR-5's controls land."
+    fi
+  done
 } > "$OUT/RESULTS.md"
 
 log "results"

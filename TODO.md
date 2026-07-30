@@ -1054,6 +1054,37 @@ that is a DD-041 spec decision, with this measurement as its input.
   gives `302 /Wiki.jsp?page=SessionExpired`; a missing CSRF token gives `302 /error/Forbidden.html`.
 - Tomcat rejects a request line containing a raw `"` or `<` with a 400 before JSPWiki sees it.
 
+## DD-045 — verification-integrity tooling (next, user-directed 2026-07-30)
+
+Full rationale and the ordered item list are in `docs/ROADMAP.md`'s "Start here next" — this is the
+pointer so the debt is visible from here too. The one-line version: **PR-3 took eight approver rounds,
+the feature held in every one, and almost every finding was in the machinery that certifies it.**
+
+- [ ] **0 — run the harness in CI.** No job invokes `scripts/verify-dd043-pr3.sh`; it is manual-only
+      and outside `ci.yml`'s path filters. This is why `jar:baked-version` could not pass on a CRLF
+      checkout for three rounds and why the `jar` stage passed against a jar it never built until round
+      8 ran it deliberately. `unit jar guards` needs no docker and finishes in minutes. Do this first —
+      the rest shorten the feedback loop; this changes when the loop closes.
+- [ ] **1 — citation-resolution CI check, whole-tree scoped.** Resolve each citation against the
+      file's current text, not just the path, and scan the whole tree rather than the diff. A
+      diff-scoped version missed four dead citations in round 7 because they sat in unmodified files.
+      Evidence for the scale: `bench-results/dd043-pr3-citation-audit-2026-07-30/`.
+- [ ] **2 — a stable pointer to the run of record.** Timestamped `verify-<UTC>/` names mean each new
+      run stales every citation to the previous one at once (13 occurrences in one round, 17 the next).
+      Add `bench-results/RUN-OF-RECORD` and cite that.
+- [ ] **3 — mutation-test the harness, not only the guards.** The script proves each of the injector's
+      8 guards fails when neutered; nothing proves the script's own rows do. Also: the guards stage
+      mutates tracked source in place, so a commit during a run is unsafe — one was observed
+      mid-mutation. Mutate a copy or hold a lock.
+- [ ] **4 — a "what depended on this?" pre-commit pass.** For every path, row key or claim a commit
+      removes, search the whole tree for what still depends on it. Diff-internal consistency is the
+      narrower question and asking it is what let round 8's findings through.
+- [ ] **5 — stop restating derived numbers in prose**, and where a count stays, say what unit it
+      counts. Round 8's miscount came from documents counting shapes, throw sites and methods
+      interchangeably.
+- [ ] **6 — an agent completion contract**: a report is accepted only with the pasted output of its own
+      verification; partial evidence is never committed.
+
 ## DD-043 PR-3 follow-ups (deferred during PR #103 review, recorded so they cannot evaporate)
 
 These were judged non-blocking during PR #103's review and deliberately not fixed in that PR. They are
@@ -1081,13 +1112,16 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       `scripts/`.
 - [x] **`scripts/verify-dd043-pr3.sh`'s `jvm` and `native` stages have never been executed.** Written and
       committed unexercised (the native mutex was held, and the `guards` stage mutates source a running
-      build was compiling). **Resolved 2026-07-29**: both stages ran end-to-end in the run of record,
-      made against `e959e7d` on a clean tree.
+      build was compiling). **Resolved 2026-07-30**: both stages ran end-to-end in the run of record,
+      stamped `20260730T054112Z` and made against `9f1e990` on a clean tree (that run's `RESULTS.md:3`).
       `bench-results/verify-20260730T054112Z/RESULTS.md:4` records `Stages run: unit jar guards jvm native`
-      and `:6` **25 passed, 0 failed, 0 skipped**, including `jvm:build` (`:23`), `jvm:banner` (`:28`),
-      `native:build` (`:31`) and `native:banner` (`:34`). The original entry's sub-claim that "the script's
+      and `:6` **25 passed, 0 failed, 0 skipped**, including the `jvm:build`, `jvm:banner`,
+      `native:build` and `native:banner` rows — cited by row key, because inserting a guard row renumbers
+      that whole table and these four citations went stale twice that way already. The original entry's
+      sub-claim that "the script's
       own `RESULTS.md` discloses this" was also false — that file does not say the stages were unexercised;
-      its only such section (`:34-43`, heading `## What a pass here does and does not establish`)
+      its only such section (the `## What a pass here does and does not establish` heading, `:36-45` in
+      the current run of record — read the heading, not the range)
       states what a pass does and does not establish. Do not re-run the
       native stage on the strength of this entry; check `bench-results/verify-20260730T054112Z/` first.
       (An earlier run, `verify-20260729T153141Z`, was **deleted** in `8cadf8a` — its B1 and B2 checks could
@@ -1107,9 +1141,14 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       stale), almost all traceable to one cause: `CoverageGuidedRun.java` growing 1088 → 1495 lines in
       `a0595b9` (DD-039), which shifted every citation past roughly `:500` in that plan by +300..+400
       lines. `docs/THIRD-PARTY-APPS.md` and `docs/ARCHITECTURE.md` carry zero line-numbered citations,
-      so the operator-facing docs have none of this exposure. Full per-file correction tables were
-      written to `.superpowers/sdd/pr103-r7-citations-report.md` — that directory is gitignored and will
-      not survive on its own, hence recording the numbers here rather than only a pointer to it.
+      so the operator-facing docs have none of this exposure. The full method, totals, per-group and
+      per-file breakdown now live in a **committed** artifact,
+      `bench-results/dd043-pr3-citation-audit-2026-07-30/README.md`, which also records what was
+      independently re-derived on 2026-07-30 (the `CoverageGuidedRun.java` 1088→1495 root cause and the
+      citations.txt 66/66 cross-check below both matched exactly) versus what is carried over from the
+      round-7 sweep without being re-run in full. The prior citation,
+      `.superpowers/sdd/pr103-r7-citations-report.md`, is gitignored and does not survive on its own —
+      this entry previously relied on that file alone, which is exactly the defect being fixed here.
       **The fix that would have caught all 135**: one evidence directory,
       `bench-results/dd043-pr3-r4-guard-measurement-2026-07-29/citations.txt`, pins its citations as
       `file:line: expected-text` instead of a bare `file:line`, and an independent re-check confirmed

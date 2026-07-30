@@ -102,6 +102,18 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
    run of record, not from either acceptance directory: `bench-results/verify-20260730T054112Z/`
    (`suite-counts.txt:1` reads `389 0`; `RESULTS.md:10`).
 
+   **Both acceptances are single-module, and no multi-module Maven reactor was ever built end-to-end
+   with the injector.** `rest-villains` is a standalone pom; so is the Phase-0 fixture. `inject()`
+   mutates a `MavenProject` instance per reactor member (`session.getProjects()`), and the two unit
+   tests that pin per-project freshness build a synthetic three-project list rather than driving a real
+   Maven reactor — parent-pom inheritance into the effective model and Maven's own per-module lifecycle
+   sequencing are paths only a live reactor exercises. The spec states the stakes directly: "the real
+   targets are multi-module" (`docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md`,
+   the paragraph beginning "The injector must construct a fresh `Dependency` per `MavenProject`"). The
+   run of record's own "What a pass here does and does not establish" section
+   (`bench-results/verify-20260730T054112Z/RESULTS.md`) omits this gap; that file is fixed evidence and
+   cannot be amended, so it is recorded here and in the spec instead.
+
    **What a fresh agent most needs to know about this branch.** Two mechanisms fail *silently* if
    touched carelessly, and both are load-bearing:
    - The repository injection is **two-level**. A `Repository` on the `Model` alone is a no-op at
@@ -113,11 +125,22 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
      path publishes without running `check`.
 
    **Eight silent-bypass shapes are closed** across **four** guard methods, and the shape of that
-   history is the lesson: the first three shipped with the original guard commit (`68714ed`), and
-   **shapes four through eight were each found *after* implementation, by review** — none by the design
-   or a self-review. The code keeps its own running count, so read it there rather than here — it is
-   drift-proof against line-number churn a further guard addition causes; a line number pinned in this
-   doc is not.
+   history is the lesson: **only one shipped with the original guard commit** (`68714ed`) — checked
+   directly against that commit's own tree (`git show 68714ed:basquin-maven-injector/src/main/java/com/basquin/maven/BasquinInjector.java`),
+   which contains exactly one guard method (`failOnConflictingManagedVersion`) and one `throw` site,
+   not three. **The other seven arrived after implementation — each added by review, or by measurement
+   review prompted — none by the design or a self-review**, derived from
+   `git log --reverse -S'<method>' -- basquin-maven-injector/.../BasquinInjector.java` (checkable the
+   same way): the declared-version conflict (`e457125` — "Task 4's review found this as a Minor");
+   the declared-scope shape (`c4b565b` — its own javadoc: "Found by review of PR #103, which was asked
+   to look for exactly this shape after two similar asymmetries had already been fixed"); the type and
+   classifier shapes, folded into a whitelist (`cff7f24` — "scope (Claude review), type (approver),
+   classifier (same)"); the exclusions shape added to that same whitelist (`95a6d57` — an unsteered
+   approver round); managed exclusions (`a61a90c` — the same approver's next round, "SIXTH bypass
+   shape"); the sibling-declaration guard (`8cadf8a` — "found by measuring", spike S2, "SEVENTH silent
+   bypass"); managed scope (`9f1e990` — round 7, "EIGHTH bypass"). The code keeps its own running
+   count, so read it there rather than here — it is drift-proof against line-number churn a further
+   guard addition causes; a line number pinned in this doc is not.
    - `failOnUnusableDeclaration` closes four shapes on the *declared* `basquin-quarkus` as a
      **whitelist** of usable declarations — scope, type, classifier, exclusions — rather
      than a list of known-bad values, because narrowing the guard to specific bad values kept shipping
@@ -137,11 +160,18 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
    - `failOnConflictingDeclaredVersion` is the fourth method — the declared-path counterpart of
      the managed-version conflict.
 
-   Seven of these eight conditions are mutation-checked by `scripts/verify-dd043-pr3.sh` (`skip`,
-   `managed-version`, `managed-exclusions`, `declared-version`, `declaration-usability`,
-   `sibling-scope`, `sibling-version`), each proven able to fail when its own branch is neutered —
-   `bench-results/verify-20260730T054112Z/RESULTS.md:14-21`, plus `guards:restored` at `:22`. The eighth
-   (managed scope) has no `_mutate` row yet — tracked in `TODO.md`. **Four shapes, not one, are what
+   **Every branch that can throw carries its own mutation row — there is no uncovered guard.**
+   `scripts/verify-dd043-pr3.sh` runs **eight** `_mutate` checks: one per `throw` site
+   (`managed-version`, `managed-exclusions`, `managed-scope`, `declared-version`,
+   `declaration-usability`, `sibling-scope`, `sibling-version` — seven, matching the seven
+   `throw new MavenExecutionException` sites in `BasquinInjector.java`), plus `skip` for the operator
+   opt-out, each proven able to fail when its own branch is neutered. All eight PASS in
+   `bench-results/verify-20260730T054112Z/RESULTS.md` as one `guards:<label>` row apiece, alongside
+   `guards:restored` recording the source restored and the module suite green. Cited by **row key, not
+   line**: mid-table insertions in rounds 6 and 7 invalidated that line range twice, and any further
+   guard renumbers it again. Mind the arithmetic when restating this — eight *shapes* are closed by
+   seven *throws*, because `failOnUnusableDeclaration`'s single `throw` bundles four shapes, so mutation
+   coverage is per-throw (one neutered branch per row), not per shape. **Four shapes, not one, are what
    §5.2's banner acceptance cannot detect, and the class keeps growing because each is a different route
    to the same resolved state — `basquin-quarkus` still loads, `basquin-core` doesn't:** a declared
    `basquin-quarkus` with `<exclusions>` stripping its own transitive `basquin-core`; a managed
@@ -170,7 +200,74 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
    dishonest signal the whole feature exists to prevent. Slots **before PR-4** only if the in-cluster
    verification matters sooner than coverage does; otherwise after.
 
-1. **DD-041 — clustered exploration across replicas (the one the user asked for, for service-backed
+1. **DD-045 — verification-integrity tooling. Start here once PR-3 merges** (user-directed,
+   2026-07-30: build these immediately after the merge).
+
+   **Why this is next, and not a cleanup task.** PR-3 took **eight** approver rounds. The feature's thesis
+   held in every one; almost every finding was in the machinery that certifies it, or in the bookkeeping
+   around it. Five shapes recurred, and every one is mechanically detectable:
+
+   | Shape | What it cost on PR-3 |
+   |---|---|
+   | A check that cannot fail | `jvm:not-from-central`'s sentinel wrong **three times**; `jar:baked-version` never passed on a CRLF checkout; `guards:managed-exclusions` could pass off the previous mutation's stale XML; `jvm:zero-edits` passed on a directory it never examined; `purge_basquin`'s proof written and never graded in **both** stages; the `jar` stage passing against a stale jar because the build's exit code was discarded |
+   | A citation that no longer resolves | **135 wrong of 547** checked repo-wide — roughly 1 in 4 — and wrong citations were findings in rounds 5, 6, 7 **and** 8 |
+   | A derived number restated in prose | guard counts stale in **seven** documents across **three** consecutive rounds; then a shapes-vs-throw-sites conflation (8 shapes closed by 7 throws) produced a fresh wrong count in round 8 |
+   | Parallel agents each correct alone, contradictory together | round 5's B3 (one change deleted a run directory while another, same commit, cited it); two agents disagreeing whether the `managed-scope` mutation row existed; and a false debt removed from `TODO.md` while the identical false claim was left in `ROADMAP.md` |
+   | Evidence whose *name* changes every time it is regenerated | each run of record is `verify-<UTC timestamp>/`, so producing a new one stales **every** citation to the old one at once — 13 in one round, 17 in the next |
+
+   All five are one defect — **a claim and its check drifting apart** — attacked at five layers.
+
+   **The pieces, in priority order:**
+
+   0. **Run the verification harness in CI.** No job invokes `scripts/verify-dd043-pr3.sh` — it is
+      manual-only, and it is also outside `ci.yml`'s path filters. That is the root cause behind most of
+      the findings in row 1 of the table: `jar:baked-version` could not pass on a CRLF checkout for three
+      rounds because nothing ran it, and the `jar` stage passed against a jar it never built until round 8
+      executed it deliberately. The `unit jar guards` stages need no docker and complete in minutes; wire
+      those into CI and the whole first row becomes a push-time failure rather than a review-round finding.
+      Everything below is detection; this is the one that changes when detection happens.
+
+   1. **A citation-resolution CI check, whole-tree scoped.** The fix already exists here and was never
+      generalised: `citations.txt` uses a pinned `file:line: expected-text` format and re-verified
+      **66/66**, while free-form line references failed 1-in-4. Two scoping rules learned the hard way:
+      it must resolve each citation against the file's *current text*, not merely check the path exists;
+      and it must run over the **whole tree**, not the diff. A diff-scoped check was run in round 7 and
+      missed four dead citations — including the PR's central "app tree pristine" claim — because they
+      lived in files that commit did not modify.
+   2. **A stable pointer to the run of record.** Timestamped directory names are why citations rot in
+      bulk. Add `bench-results/RUN-OF-RECORD` (a pointer file or symlink) and cite *that*, so
+      regenerating evidence does not invalidate every reference to it. This is the cheapest structural
+      fix on the list and it removes the cause rather than detecting the symptom.
+   3. **Mutation-test the harness, not only the guards.** The script mutation-tests the injector's guards
+      (8 rows, each proven to fail when its own branch is neutered) but nothing mutation-tests the
+      *script's own rows*. Neuter each assertion; require its row to go red. Every entry in row 1 of the
+      table above would have been caught pre-review. Related: the guards stage currently mutates **tracked
+      source in place**, which makes any commit during a run unsafe — one was observed mid-mutation. It
+      should mutate a copy, or hold a lock that blocks commits.
+   4. **A "what depended on this?" pre-commit pass.** Not "is the diff internally consistent" — that is
+      the narrower question, and asking it is what let items above through. For every path, row key, or
+      claim a commit **removes**, search the whole tree for anything that still depends on it. Round 8
+      found two instances the diff-scoped version could not see.
+   5. **Stop restating derived numbers in prose.** Generate the fragment from the code, or state the class
+      and point at one authoritative enumeration. Standing rule adopted in round 7: a count that must be
+      updated in N places when the code changes is a defect generator, not documentation. Where a count is
+      genuinely useful, name the items so drift is visible, and say what unit is being counted — the
+      round-8 miscount came from three documents counting shapes, throw sites, and methods without saying
+      which.
+   6. **An agent completion contract.** Three subagents were killed mid-work by a session limit; one had
+      already reported success on work whose verification step never ran. A report is accepted only when
+      it contains the pasted output of its own verification, and partial evidence is never committed.
+
+   **Entry condition:** none — this is tooling over the existing tree, and it is independently useful
+   before PR-4 begins. Do **0 first**: until CI runs the harness, every other item here only shortens
+   the feedback loop for defects that still reach review. Then 1-3, which are structural. 4-6 are cheap
+   once those exist.
+
+   **Also worth noting for whoever picks this up:** `scripts/verify-dd043-pr3.sh` is itself outside
+   `ci.yml`'s path filters, so a commit touching only the harness triggers no job — harmless today
+   because no job runs it, and a gap the moment item 0 lands.
+
+2. **DD-041 — clustered exploration across replicas (the one the user asked for, for service-backed
    apps).** Not specced yet — so the next step is *brainstorm → spec → plan*, NOT code. DD-039 leaves
    the clean entry point: its single residual is that `hops > 1` re-uses one id across pods behind a
    Service, so the §A.6 fan-out can return the wrong hop's measurement (documented in the DD-039
@@ -178,12 +275,12 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
    reading the code, and spike the risky integration before committing to a full build** — three
    plans written from memory were rejected before one written from the code worked.
 
-2. **DD-042 — a load-mode failure oracle.** Independent of DD-041; could go first. Load mode counts
+3. **DD-042 — a load-mode failure oracle.** Independent of DD-041; could go first. Load mode counts
    but never *asserts* — a JSPWiki with two pinned cores and a dead Poller was marked **Completed**.
    Designed in `TODO.md` "Future: DD-042" (an out-of-band `/__basquin/threads` census, analysis in
    the driver). Its latency-budget half already exists inside DD-040.
 
-3. **Small, cheap wins** — the follow-up sections in `TODO.md`: wire `check_claims.py`/`test_redact.py`
+4. **Small, cheap wins** — the follow-up sections in `TODO.md`: wire `check_claims.py`/`test_redact.py`
    into CI (they exist but only fire by hand), the three PR-97 prose tidies in `render_page.py`, and
    the redaction min-length guard from PR #96. Good warm-up work; the CI-guard one has real value
    (it would have caught several review rounds automatically).
@@ -202,10 +299,12 @@ time, nothing CPU-heavy during a run.
 **[#103](https://github.com/ianp94/basquin/pull/103) — DD-043 PR-3, `basquin-maven-injector`.**
 Build-time injection with zero edits to the target's source; both halves of spec §5.2 passed; 389 tests,
 0 failures (`bench-results/verify-20260730T054112Z/suite-counts.txt:1`). Labelled `ready-for-approver`.
-Five follow-ups are recorded in `TODO.md` under "DD-043 PR-3 follow-ups", each with why it was deferred.
+Six follow-ups are recorded in `TODO.md` under "DD-043 PR-3 follow-ups", each with why it was deferred.
 One of them — that the verify script's `jvm` and `native` stages had never been executed — is now
-resolved: both ran end-to-end on 2026-07-29 (`bench-results/verify-20260730T054112Z/RESULTS.md:4,6` —
-`Stages run: unit jar guards jvm native`, **25 passed, 0 failed, 0 skipped**); the other four remain open.
+resolved: both ran end-to-end in the run of record, stamped `20260730T054112Z`
+(`bench-results/verify-20260730T054112Z/RESULTS.md:4,6` — `Stages run: unit jar guards jvm native`,
+**25 passed, 0 failed, 0 skipped**); the other five remain open. Keep this count derived from the
+checkboxes in that section, not restated — round 7 added the sixth and this line went stale.
 
 #100 (PR-1, `basquin-core` extraction) and #102 (PR-2, `basquin-quarkus` extension) are **merged**.
 

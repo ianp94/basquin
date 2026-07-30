@@ -22,6 +22,11 @@ on:
       - 'gradle/**'
       - 'gradlew'
       - 'gradlew.bat'
+      # DD-043 PR-3, round 8: `basquin-init.gradle` is the root-level init script whose hard-coded
+      # default injected version verifyGradleInitScriptVersion (basquin-maven-injector/build.gradle)
+      # exists to guard, and it was missing from both lists — a commit touching only this file ran
+      # no CI at all, so that guard could drift undetected. Same gap class as basquin-quarkus/** above.
+      - 'basquin-init.gradle'
       - 'deploy/bench/**'
   pull_request:
     paths:
@@ -41,6 +46,7 @@ on:
       - 'gradle/**'
       - 'gradlew'
       - 'gradlew.bat'
+      - 'basquin-init.gradle'
       - 'deploy/bench/**'
 
 jobs:

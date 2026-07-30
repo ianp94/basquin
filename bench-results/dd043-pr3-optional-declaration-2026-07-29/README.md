@@ -30,7 +30,9 @@ drove, answers `miss` (`result-poll.txt:11-12`). So the cost line at `:8` is the
 that request, not the endpoint answering anything to anyone.
 
 **Do not read `176,-12207,10|0||` as a measurement.** It is a first-hit figure on a cold app, and its
-negative heap component is the same PR-5-owned artefact `bench-results/dd043-pr3-restvillains-2026-07-26/README.md:41-46`
+negative heap component is the same PR-5-owned artefact that
+`bench-results/dd043-pr3-restvillains-2026-07-26/README.md`'s **"Do not read the −684 KB as a
+measurement"** paragraph
 documents — a GC inside the window, which the in-flight counter structurally cannot detect. The only
 load-bearing property here is the line's **shape** (`costCsv|invariantCount|detail|leak`, not `miss`).
 

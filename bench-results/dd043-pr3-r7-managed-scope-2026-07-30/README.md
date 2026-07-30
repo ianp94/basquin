@@ -105,6 +105,11 @@ cannot be what fires or stays silent; only the attribute under test varies
   `:compile` in every cell here), not a banner captured in this run.
 - **Maven 3.9.15 only.** Maven 4 replaces `ClassicDependencyManager` and re-opens every depth claim.
 - **A transitive/managed `optional` at other depths** is unmeasured; check 4 covers this graph only.
+- **Single-module reactor only, same as the r4 directory this one extends.** Every cell here is one
+  standalone jar pom; no multi-module Maven reactor was built. `inject()` mutates a `MavenProject`
+  instance per reactor member (`session.getProjects()`), so a managed `<scope>` inherited from a parent
+  pom into a child module's effective model — the shape a real multi-module reactor would exercise —
+  is not measured by any cell in this directory.
 
 ## Appendix — regenerating the derived files
 

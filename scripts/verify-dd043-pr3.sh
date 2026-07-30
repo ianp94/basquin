@@ -71,10 +71,20 @@ declare -a ROWS
 # drift is what breaks "checkout the commit and re-run", so it alone sets DIRTY; untracked files are
 # still recorded in git-status.txt for the reader (each run's own bench-results/verify-* output is
 # untracked, so counting untracked paths would mark EVERY run dirty and the marker would bind nothing).
+#
+# The verdict is rc-bound and graded from the CAPTURED file. The old shape read empty stdout as
+# clean — but `git status` prints NOTHING and exits non-zero under an index lock or a broken .git,
+# so a git failure stamped `tree clean at run start` on a tree nothing measured (round-5 B2's
+# vacuous-pass shape, in the header every row inherits). It also ran a SECOND live `git status`
+# for the verdict, so the graded state and the committed evidence could diverge; now one call
+# feeds both, and tracked drift is derived by filtering the untracked `??` lines from the capture.
 GIT_COMMIT="$(git rev-parse --short HEAD)"
 GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-git status --porcelain > "$OUT/git-status.txt" 2>&1
-if [ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+git status --porcelain > "$OUT/git-status.txt" 2>"$OUT/git-status-stderr.txt"
+GIT_STATUS_RC=$?
+if [ "$GIT_STATUS_RC" -ne 0 ]; then
+  TREE_STATE="UNMEASURED"
+elif grep -qv '^??' "$OUT/git-status.txt"; then
   TREE_STATE="DIRTY"
 else
   TREE_STATE="clean"
@@ -145,9 +155,11 @@ PY
 # than through this helper: their failure condition is "downloaded from any id OTHER than
 # basquin-injected", which a single ERE cannot express, and round 4 showed a sentinel loose enough to
 # fit one regex here was loose enough to be satisfied by the injector's own stdout. Any future absence
-# row that CAN bind with one regex should use this helper — jvm:injected-not-predeclared is one, and
-# is currently this helper's only call site: round 7 found the helper defined with zero callers while
-# the PR description sold it as live protection, which is the unexercised-code hazard itself.)
+# row that CAN bind with one regex should use this helper — jvm:injected-not-predeclared and
+# native:injected-not-predeclared are its call sites: round 7 found the helper defined with zero
+# callers while the PR description sold it as live protection, and round 8 found the native stage
+# attributing injection to a bare `if grep` over the fixture pom — the vacuous-absence shape this
+# helper exists to prevent.)
 assert_absent() {  # $1=file  $2=must-be-absent regex  $3=sentinel regex  $4=label  $5=pass message
   local f="$1" bad_re="$2" sentinel="$3" label="$4" msg="$5"
   if [ ! -s "$f" ]; then
@@ -218,6 +230,32 @@ purge_basquin() {  # $1 = a local maven repository root  $2 = proof file name; e
   [ ! -e "$repo/com/basquin" ]
 }
 
+# Stage the injector jar that will ride maven.ext.class.path — one implementation for BOTH build
+# stages. Three defects lived in the old inline copies (approver finding 6, round 8): the staging
+# dir was never cleared, so a previous run's jar sat there ready to be selected; the cp's exit
+# status was discarded, so with build/libs empty (./gradlew clean, fresh checkout) the glob failed
+# to expand, cp failed silently, and `ls | head -1` served up the STALE jar — every row in the
+# stage then grades bytes the stamped commit never produced; and the -sources.jar exclusion
+# run_jar applies was omitted here, and '-' (0x2D) sorts before '.' (0x2E), so `head -1` preferred
+# the classless sources jar outright whenever one existed. Now: clear the dir, select from
+# build/libs with the same exclusion run_jar uses, verify the copy landed, and record the staged
+# bytes' sha256 in the run directory so a reader can tie the build's extension to an exact
+# artifact rather than to a filename. Non-zero means NOTHING trustworthy got staged and the
+# caller must refuse the stage.
+STAGE_DIR=""; STAGE_JAR=""
+stage_injector_jar() {  # $1 = stage tag; sets STAGE_DIR and STAGE_JAR on success
+  local tag="$1" src
+  STAGE_DIR="$REPO_ROOT/build/tmp/verify-pr3-inj"; STAGE_JAR=""
+  rm -rf "$STAGE_DIR" && mkdir -p "$STAGE_DIR" || return 1
+  src="$(ls basquin-maven-injector/build/libs/basquin-maven-injector-*.jar 2>/dev/null \
+        | grep -vE -- '-(sources|javadoc)\.jar$' | head -1)"
+  [ -n "$src" ] || return 1
+  cp "$src" "$STAGE_DIR/" || return 1
+  STAGE_JAR="$(basename "$src")"
+  [ -s "$STAGE_DIR/$STAGE_JAR" ] || return 1
+  sha256sum "$STAGE_DIR/$STAGE_JAR" > "$OUT/injected-jar-sha256-$tag.txt" || return 1
+}
+
 serve_pages() {  # $1 = stage tag; publishes the chain to a scratch dir and serves it on 127.0.0.1
   # PER-STAGE log files, never a shared one: `>` TRUNCATES, and `native` runs after `jvm` in the
   # default `all` order, so with a shared $OUT/http-access.log the native stage's serve_pages
@@ -227,7 +265,7 @@ serve_pages() {  # $1 = stage tag; publishes the chain to a scratch dir and serv
   # the same number of deployment GETs). Any row citing one of these logs must cite the file
   # tagged with ITS OWN stage.
   local tag="$1" dir="$OUT/pages-repo"
-  rm -rf "$dir"
+  rm -rf "$dir" || return 1
   ./gradlew -q --no-daemon "-PbasquinPagesDir=$dir" \
     :basquin-core:publishAllPublicationsToPagesRepository \
     :basquin-quarkus:runtime:publishAllPublicationsToPagesRepository \
@@ -261,8 +299,11 @@ run_unit() {
   # under a header promising every number is derived from an artifact (see top of file). Clearing
   # every module's test-results dir before the run is the fix: it requires no change to build.gradle
   # (redirecting Gradle's test output to a per-run directory would), and nothing later in this script
-  # reads test-results before run_unit repopulates it.
-  find . -type d -path '*/build/test-results' -prune -exec rm -rf {} +
+  # reads test-results before run_unit repopulates it. rc-checked: a clear that silently failed
+  # leaves stale XML feeding suite_counts, and the totals below would blend runs.
+  if ! find . -type d -path '*/build/test-results' -prune -exec rm -rf {} +; then
+    bad "unit" "UNMEASURED: could not clear stale test-results dirs — suite counts could include a previous run's XML"; return
+  fi
   ./gradlew check --console=plain --no-daemon > "$OUT/gradle-check.log" 2>&1
   local rc=$? counts; counts="$(suite_counts)"
   local tot="${counts% *}" f="${counts#* }"
@@ -276,7 +317,18 @@ run_unit() {
 
 run_jar() {
   log "jar — injector discoverability and baked version"
+  # The build's exit code decides whether there is anything TO grade. A failed build does not
+  # delete the previous archive — so with rc unread, every row below graded whatever jar was
+  # already sitting in build/libs: three PASSes against a stale artifact, RESULTS.md stamping a
+  # commit that never produced those bytes, in the one stage that exists to catch silent
+  # non-discovery (approver finding 1, round 8). rc gates the stage, and the graded jar's sha256
+  # goes into jar-integrity.txt so the certified bytes are identifiable, not just a filename.
   ./gradlew -q --no-daemon :basquin-maven-injector:jar > "$OUT/jar-build.log" 2>&1
+  local jrc=$?
+  if [ "$jrc" -ne 0 ]; then
+    bad "jar" "UNMEASURED: the jar build FAILED (gradle rc=$jrc, see jar-build.log) — any jar under build/libs is a previous build's artifact, and grading it would certify bytes this run never produced"
+    return
+  fi
   # Exclude -sources.jar / -javadoc.jar: build.gradle enables withSourcesJar(), and '-' (0x2D) sorts
   # BEFORE '.' (0x2E), so a plain `head -1` picks basquin-maven-injector-X-sources.jar when it exists —
   # which has no .class files and no baked properties, so both checks below would spuriously FAIL against
@@ -285,10 +337,11 @@ run_jar() {
         | grep -vE -- '-(sources|javadoc)\.jar$' | head -1)"
   if [ -z "$j" ]; then bad "jar" "no jar produced"; return; fi
 
-  local idx cls ver
+  local idx cls ver jsha
   idx="$(unzip -p "$j" META-INF/sisu/javax.inject.Named 2>/dev/null | tr -d '\r' | head -1)"
   ver="$(unzip -p "$j" basquin-injector.properties 2>/dev/null | tr -d '\r' | sed -n 's/^version=//p')"
-  { echo "jar: $j"; echo "sisu index: ${idx:-<MISSING>}"; echo "baked version: ${ver:-<MISSING>}"; } \
+  jsha="$(sha256sum "$j" 2>/dev/null | awk '{print $1}')"
+  { echo "jar: $j"; echo "sha256: ${jsha:-<UNREADABLE>}"; echo "sisu index: ${idx:-<MISSING>}"; echo "baked version: ${ver:-<MISSING>}"; } \
     > "$OUT/jar-integrity.txt"
 
   if [ -z "$idx" ]; then
@@ -312,12 +365,12 @@ run_jar() {
   # basquin-init.gradle (the Gradle counterpart to this jar) hand-types the injected version's
   # default where the Maven path above does not — see verifyGradleInitScriptVersion's comment in
   # build.gradle. That task is finalizedBy('jar'), so it already ran once, silently, as a side effect
-  # of the `:basquin-maven-injector:jar` invocation at the top of this function — but this function
-  # never checks THAT invocation's exit code, and a jar archive still lands in build/libs/ even when
-  # a finalizer fails afterward (the archive task itself already succeeded), so a drifted literal
-  # would sail through unreported. Rather than trust an implicit run this script never inspects, give
-  # the check its own dedicated, log-backed invocation: it's cheap (a regex over one checked-in text
-  # file, no compilation), and it gives this row an artifact of its own to derive its detail from.
+  # of the `:basquin-maven-injector:jar` invocation at the top of this function. That invocation's
+  # exit code is NOW gated (the stale-jar fix above), so a failing finalizer refuses the whole stage
+  # rather than sailing through — but the shared rc still cannot say WHICH task failed or show the
+  # drift, so the check keeps its own dedicated, log-backed invocation: it's cheap (a regex over one
+  # checked-in text file, no compilation), and it gives this row an artifact of its own to derive
+  # its detail from.
   #
   # No `-q`: with it, Gradle suppresses LIFECYCLE output entirely (verified empirically — the PASS
   # message never appears in a `-q` log, only a FAILURE would), so a quiet log carries a sentinel on
@@ -351,7 +404,13 @@ run_guards() {
   log "guards — mutation checks"
   local src=basquin-maven-injector/src/main/java/com/basquin/maven/BasquinInjector.java
   local backup="$OUT/BasquinInjector.java.orig"
-  cp "$src" "$backup"
+  # An unchecked backup here is worse than a wrong verdict: if this cp fails, every _mutate below
+  # still mutates the source and every restore silently cp's from a file that does not exist,
+  # leaving the TREE mutated after the script exits. No backup, no mutations.
+  if ! cp "$src" "$backup"; then
+    bad "guards" "UNMEASURED: could not back up $src into $OUT — refusing to mutate a source file with no restore copy"
+    return
+  fi
 
   # $2 asserts MEMBERSHIP, not exclusivity: neutering one guard can legitimately take a shared
   # helper down with it and fail more than one test (declaration-usability does — the scope, type,
@@ -375,8 +434,13 @@ PY
     # set contains managed-exclusions' expected test — measured, not hypothetical). If this run then
     # produces no fresh XML (compile error, daemon or lock failure, OOM), the old code read the stale
     # set and printed PASS off a run that never happened. So: clear before the run, and refuse to read
-    # a verdict out of a dir the run did not repopulate.
-    rm -rf basquin-maven-injector/build/test-results
+    # a verdict out of a dir the run did not repopulate. The clear itself is rc-checked: an rm that
+    # fails leaves the stale set in place, and the fresh-XML count below cannot tell survivors from
+    # fresh output — restore the source and refuse rather than let last mutation's verdict answer.
+    if ! rm -rf basquin-maven-injector/build/test-results; then
+      cp "$backup" "$src"
+      bad "guards:$3" "UNMEASURED: could not clear stale test-results — a previous run's XML could impersonate this mutation's verdict"; return
+    fi
     # No -q: at lifecycle level the log carries "N tests completed, M failed" and a FAILED line per
     # failing test, so the committed guard-$3.log can support the row's named test on its own
     # (round-5 S3: the -q logs showed only a count and a pointer to an uncommitted HTML report).
@@ -390,10 +454,14 @@ PY
     find basquin-maven-injector/build/test-results -name '*.xml' -type f -exec cp {} "$xmldir/" \; 2>/dev/null
     local names; names="$(failing_test_names "$xmldir")"
     local fresh; fresh="$(find "$xmldir" -name '*.xml' -type f | wc -l)"
-    cp "$backup" "$src"
+    cp "$backup" "$src"; local resrc=$?
     # Gradle's exit code alone cannot say "the test task did not execute": tests-ran-and-failed (the
     # expected outcome under a mutation) and never-compiled BOTH exit 1. Fresh XML is the discriminator.
-    if [ "$fresh" -eq 0 ]; then
+    # A failed RESTORE outranks any verdict: the next mutation would then stack on this one and
+    # guards:restored would grade a tree nobody intended — flag it before anything else can pass.
+    if [ "$resrc" -ne 0 ]; then
+      bad "guards:$3" "RESTORE FAILED (cp rc=$resrc): $src may still carry this mutation — restore it from $backup before trusting ANY later row"
+    elif [ "$fresh" -eq 0 ]; then
       bad "guards:$3" "UNMEASURED: no fresh JUnit XML (gradle rc=$rc) — the mutated suite never ran, so no verdict exists; see guard-$3.log"
     elif [ "$rc" -eq 0 ]; then
       bad "guards:$3" "module suite GREEN (rc=0) with the guard neutered — $2 cannot fail, the guard is dead"
@@ -447,7 +515,12 @@ PY
   # carried neither a test count nor BUILD SUCCESSFUL, so the committed artifact could not
   # support the row (round-5 S3). Same discipline as _mutate now: clear, run, copy the JUnit XML
   # into $OUT, and grade fresh-XML presence + counts from the copy, not the exit code alone.
-  rm -rf basquin-maven-injector/build/test-results
+  # The clear is rc-checked for the same reason as _mutate's: a stale green surviving a failed rm
+  # could impersonate the restore run.
+  if ! rm -rf basquin-maven-injector/build/test-results; then
+    bad "guards:restored" "UNMEASURED: could not clear stale test-results before the restore run — a stale green could impersonate it"
+    return
+  fi
   ./gradlew :basquin-maven-injector:test --no-daemon --console=plain > "$OUT/guard-restore.log" 2>&1
   local rrc=$?
   local rxml="$OUT/guard-restore-junit"
@@ -531,9 +604,11 @@ run_jvm() {
   fi
   if ! serve_pages jvm; then bad "jvm" "could not publish/serve the scratch Pages repo (publish-jvm.log)"; return; fi
 
-  local stage="$REPO_ROOT/build/tmp/verify-pr3-inj"
-  mkdir -p "$stage"; cp basquin-maven-injector/build/libs/basquin-maven-injector-*.jar "$stage/"
-  local jar; jar="$(basename "$(ls "$stage"/*.jar | head -1)")"
+  if ! stage_injector_jar jvm; then
+    bad "jvm" "UNMEASURED: could not stage a fresh injector jar (no non-sources jar under build/libs, or the copy failed) — the build would have ridden whatever stale bytes sat in the staging dir"
+    stop_server; return
+  fi
+  local stage="$STAGE_DIR" jar="$STAGE_JAR"
 
   # Its own postgres, its own network, all named verify-pr3-* so cleanup can never touch anything else.
   docker network create verify-pr3-net >/dev/null 2>&1
@@ -592,14 +667,29 @@ run_jvm() {
 
   local id="verify-$TS"
   curl -s -H "X-Basquin-Req: $id" "http://localhost:8084/api/villains" >/dev/null 2>&1
-  curl -s "http://localhost:8084/__basquin/result?id=$id" > "$OUT/jvm-result-poll.txt" 2>&1
-  # A populated CSV cost line is the pass; "miss" is the documented sentinel for "the boundary never
-  # published a result for this id", and an empty body means the control surface answered nothing at all.
+  # `-f`: a non-2xx response (proxy fault, 500, a control-surface 403) must FAIL this row outright
+  # rather than let its error body ride through as if it were the boundary's own output.
+  local poll_rc
+  curl -sf "http://localhost:8084/__basquin/result?id=$id" \
+    > "$OUT/jvm-result-poll.txt" 2>"$OUT/jvm-result-poll-stderr.txt"
+  poll_rc=$?
+  # A non-empty, non-"miss" body used to be the pass — but `curl -s` without `-f` writes error bodies
+  # too, so a 404 page or a diagnostic string satisfied it just as well as a real cost line (approver
+  # finding 13). The wire format is not "anything truthy": ResultStore.format
+  # (basquin-core/src/main/java/agent/ResultStore.java:141-154) emits ONE HOP PER LINE as
+  # `costCsv|invariantCount|detail|leak`, where costCsv itself is `latencyMs,heapDeltaKb,threadDelta`
+  # — the exact shape test/RequestBoundaryTest.java:81 already pins for the header path
+  # (`^-?\d+,-?\d+,-?\d+$`; threadDelta and heapDelta can legitimately go negative, so both carry an
+  # optional sign). "miss" (ResultStore.MISS) is the only non-CSV body the boundary itself can ever
+  # legitimately produce, for "never ran" — anything else that isn't this shape is a transport failure
+  # or an error page riding a 200, not a measurement. The run of record's `782,-767,9|0||`
+  # (bench-results/verify-20260730T054112Z/jvm-result-poll.txt) is this shape: costCsv="782,-767,9",
+  # invariantCount="0", detail="", leak="".
   local poll; poll="$(tr -d '\r\n' < "$OUT/jvm-result-poll.txt")"
-  if [ -n "$poll" ] && [ "$poll" != "miss" ]; then
+  if [ "$poll_rc" -eq 0 ] && printf '%s' "$poll" | grep -qE '^-?[0-9]+,-?[0-9]+,-?[0-9]+\|[0-9]+\|[^|]*\|(leak)?$'; then
     ok "jvm:boundary" "poll returned $poll"
   else
-    bad "jvm:boundary" "poll returned '${poll:-<empty>}' — the filter did not see the request"
+    bad "jvm:boundary" "poll returned '${poll:-<empty>}' (curl rc=$poll_rc) — not the boundary's CSV shape, so the filter either never saw the request or the response was not its own output (see jvm-result-poll.txt, jvm-result-poll-stderr.txt)"
   fi
 
   # The actual claim: zero edits AFTER the build, not merely before — and "pristine" must come
@@ -635,8 +725,27 @@ run_native() {
     skip "native" "docker unavailable"; return
   fi
   local fx=bench-results/dd043-spikes-2026-07-24/fixture
-  if grep -q "artifactId>basquin-quarkus<" "$fx/pom.xml" 2>/dev/null; then
+  # The predeclaration preflight must distinguish THREE outcomes, not two: the old bare `if grep`
+  # sent a missing pom, an unreadable pom, and a declaration its fixed string happened not to match
+  # all down the same branch as "verified absent" (approver finding 5, round 8) — and a predeclared
+  # fixture still builds green with the injector printing `instrumented` (the already-declares path
+  # falls through to addRepository and the instrumented line), so every later row would certify
+  # injection that never happened. rc=0 → declared, refuse; rc=1 on a readable, non-empty pom →
+  # genuinely absent; anything else → UNMEASURED, refuse. A pattern miss (a reformatted element) is
+  # still possible here, which is why attribution is ALSO bound post-build by
+  # native:injected-not-predeclared below — this preflight only exists to refuse cheaply, before
+  # the 15-minute compile, when the confound is already visible in the pom.
+  if [ ! -s "$fx/pom.xml" ]; then
+    skip "native" "UNMEASURED: $fx/pom.xml is missing or empty — cannot verify the fixture does not predeclare basquin-quarkus, so a pass could not be attributed to injection"
+    return
+  fi
+  grep -q "artifactId>basquin-quarkus<" "$fx/pom.xml"
+  local prerc=$?
+  if [ "$prerc" -eq 0 ]; then
     skip "native" "the fixture pom still DECLARES basquin-quarkus — a pass could not be attributed to injection"
+    return
+  elif [ "$prerc" -ne 1 ]; then
+    skip "native" "UNMEASURED: grep could not read $fx/pom.xml (rc=$prerc) — cannot verify the fixture does not predeclare basquin-quarkus"
     return
   fi
   echo "  (native compilation is serialized on a mutex and takes 15+ minutes; nothing else CPU-heavy should run)"
@@ -646,9 +755,11 @@ run_native() {
   fi
   if ! serve_pages native; then bad "native" "could not publish/serve the scratch Pages repo (publish-native.log)"; return; fi
 
-  local stage="$REPO_ROOT/build/tmp/verify-pr3-inj"
-  mkdir -p "$stage"; cp basquin-maven-injector/build/libs/basquin-maven-injector-*.jar "$stage/"
-  local jar; jar="$(basename "$(ls "$stage"/*.jar | head -1)")"
+  if ! stage_injector_jar native; then
+    bad "native" "UNMEASURED: could not stage a fresh injector jar (no non-sources jar under build/libs, or the copy failed) — the build would have ridden whatever stale bytes sat in the staging dir"
+    stop_server; return
+  fi
+  local stage="$STAGE_DIR" jar="$STAGE_JAR"
 
   EXTRA_DOCKER_ARGS="--network host -v $stage:/inj" \
   EXTRA_MAVEN_OPTS="-Dmaven.ext.class.path=/inj/$jar -Dbasquin.inject.repo.url=http://localhost:$PORT/" \
@@ -657,6 +768,18 @@ run_native() {
 
   grep -q "BUILD SUCCESS" "$OUT/native-build.log" \
     && ok "native:build" "BUILD SUCCESS" || { bad "native:build" "see native-build.log"; stop_server; return; }
+
+  # Finding 5's binding half: the pom preflight above can miss (a reformatted element) and cannot
+  # see what the build actually consumed; only the injector's own log can. On the already-declares
+  # path it prints `already declares` and STILL injects the repository and prints `instrumented`,
+  # so only the ABSENCE of that line — sentinel-bound to the instrumented line proving the
+  # participant ran at all — attributes THIS build to injection. Same row, same helper, same
+  # doctrine as jvm:injected-not-predeclared.
+  assert_absent "$OUT/native-build.log" \
+    "\[basquin-injector\] .* already declares" \
+    "\[basquin-injector\] instrumented" \
+    "native:injected-not-predeclared" \
+    "injector ran and never took the already-declares path — the dependency came from injection, not the fixture pom"
 
   # The row PR #103's approver found missing (finding 3): without it, every remaining check in this
   # stage still PASSes off a stale local repo or a mirror capture — greens that establish nothing
@@ -700,6 +823,10 @@ fi
     echo
     echo "**DIRTY: tracked files differed from \`$GIT_COMMIT\` when this run started (see \`git-status.txt\`)."
     echo "These results are NOT reproducible from that commit alone — do not cite this run against it.**"
+  elif [ "$TREE_STATE" != "clean" ]; then
+    echo
+    echo "**UNMEASURED: \`git status\` FAILED at run start (rc=$GIT_STATUS_RC, see \`git-status-stderr.txt\`) —"
+    echo "the state of the tree that produced these results is unknown. Do not cite this run against \`$GIT_COMMIT\`.**"
   fi
   echo
   echo "**$PASS passed, $FAIL failed, $SKIP skipped.**"
@@ -735,4 +862,10 @@ fi
 log "results"
 echo "  $OUT/RESULTS.md"
 echo "  $PASS passed, $FAIL failed, $SKIP skipped"
-[ "$FAIL" -eq 0 ]
+# FAIL alone used to decide the exit status, and the skip paths never set FAIL — so `all` on a
+# docker-less machine printed "N passed, 0 failed, 2 skipped" and exited 0 with both §5.2
+# acceptance halves unmeasured; anything gating on this exit status read green off stages that
+# never ran (approver finding 18 — the same class as every other fix in round 8: a requested
+# check that did not happen must not report as a pass). SKIP now fails the exit status too; the
+# rows still distinguish SKIP from FAIL for the reader.
+[ "$FAIL" -eq 0 ] && [ "$SKIP" -eq 0 ]

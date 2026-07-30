@@ -81,7 +81,7 @@ as the `_remote.repositories` files record.
 
 ## The control cell (round 5, 2026-07-29)
 
-A round-5 approver review (`.superpowers/sdd/approver-pr103.md` S2) found that this spike, as
+A round-5 approver review of PR #103 found that this spike, as
 originally captured, had **no control**: `RepoInjectProbe.java` applies both the model-level and
 effective-list mutations unconditionally, so no build had ever been captured with the effective-list
 half (`2b`) omitted. `BasquinInjector.java`, `docs/ROADMAP.md` and the PR description all called the

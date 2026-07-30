@@ -73,8 +73,8 @@ Three consequences, in descending order of severity:
 2. **The status would lie.** `Phase=Injected` with `Reason=Injected` and a message saying "all N
    replica(s) instrumented" would be reported for an application the operator did not modify. This is the
    silently-wrong-signal class DD-043 §1.1 exists to prevent, and it is surfaced where humans and CI read
-   it — kubectl printer columns, the condition, `basquin status` (`cmd/basquin/status.go:86`) and
-   `basquin instrument`'s wait (`instrument.go:167-196`).
+   it — kubectl printer columns, the condition, `basquin status` (`operator/cmd/basquin/status.go:86`) and
+   `basquin instrument`'s wait (`operator/cmd/basquin/instrument.go:167-196`).
 3. **A verification script resting on this would encode the lie as its expected output.** That is the
    reason this spec exists rather than a script.
 
@@ -325,7 +325,7 @@ target for reasons unrelated to this feature. Whether the extension should grow 
    correct but unrelated; separate cleanup.
 6. **An `EventRecorder`** (§4).
 7. **The CLI's `--wait` semantics.** `basquin instrument --wait` blocks until `Injected`
-   (`cmd/basquin/instrument.go:167-196`) and `basquin status` prints the raw phase (`status.go:86`).
+   (`operator/cmd/basquin/instrument.go:167-196`) and `basquin status` prints the raw phase (`operator/cmd/basquin/status.go:86`).
    Against a pre-instrumented target the wait would **hang forever**, since that target never
    reaches `Injected`. This is NOT out of scope in the sense the others are — it is a real break
    this feature introduces, and it must be handled: the wait accepts the `{Injected, Observed}` set

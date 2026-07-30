@@ -1,8 +1,10 @@
 # DD-043 PR-3 — repo-wide citation audit (round 7): committed source for TODO.md's figures
 
-This directory exists because of approver-pr103.md should-fix **12**: `TODO.md`'s citation-audit
-entry ("135 wrong out of 547 checked") cited only `.superpowers/sdd/pr103-r7-citations-report.md` —
-gitignored, so a fresh clone has no file backing those numbers at all. This directory is that backing
+This directory exists because of `approver-pr103.md`'s should-fix **12** (that review is itself a
+gitignored local file under `.superpowers/sdd/`, not present in this or any clone — cited here for
+provenance only): `TODO.md`'s citation-audit entry ("135 wrong out of 547 checked") cited only
+`.superpowers/sdd/pr103-r7-citations-report.md` — also gitignored, so a fresh clone has no file
+backing those numbers at all. This directory is that backing
 file. It ports the round-7 audit's method, totals and per-group/per-file breakdown out of the
 gitignored report, and separately records what could actually be independently re-verified on
 2026-07-30, rather than just re-asserting the original numbers.

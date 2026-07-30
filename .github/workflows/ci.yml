@@ -27,7 +27,17 @@ on:
       # exists to guard, and it was missing from both lists — a commit touching only this file ran
       # no CI at all, so that guard could drift undetected. Same gap class as basquin-quarkus/** above.
       - 'basquin-init.gradle'
-      - 'deploy/bench/**'
+      # Round 10: was 'deploy/bench/**' only, so the seven tracked citing *.sh files elsewhere under
+      # deploy/ (deploy/helm/{publish,sync-generated}.sh, deploy/e2e/e2e.sh, deploy/k8s/up.sh, and the
+      # three deploy/{agents,dashboard,runner}-image/build.sh — all scanned by check-citations.py's
+      # tracked-*.sh comment rule) sat outside every filter: a commit touching only one of them ran no
+      # CI at all, including the citation-integrity job that reads their '#'-comment citations.
+      # Broadened to the whole subtree so a future deploy/*.sh addition can't silently reopen this.
+      - 'deploy/**'
+      # Round 10: this PR modified .gitignore and it matched no filter — the one gap left in this
+      # list's own class (basquin-quarkus/**, basquin-init.gradle before it). Any tracked top-level
+      # path should trigger at least one CI job; this was the last one that didn't.
+      - '.gitignore'
       # DD-045 item 1: the citation-integrity job checks every tracked *.md, */citations.txt and
       # the '#'-comments of scripts/*.sh and workflow files, resolving citations against the
       # files they cite (mostly under bench-results/). All of those classes must trigger CI, or
@@ -60,7 +70,8 @@ on:
       - 'gradlew'
       - 'gradlew.bat'
       - 'basquin-init.gradle'
-      - 'deploy/bench/**'
+      - 'deploy/**'
+      - '.gitignore'
       # See the push block above — both lists must carry these or the citation gap persists on
       # one trigger (same dual-list rule as basquin-quarkus/** etc.).
       - '**/*.md'

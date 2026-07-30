@@ -59,15 +59,19 @@ java {
 
 // Maven discovers this core extension through META-INF/sisu/javax.inject.Named, NOT by scanning for
 // @Named. Nothing in the unit suite can catch that resource going missing: all tests drive inject()
-// directly and bypass container wiring entirely, so `./gradlew check` stays green while the shipped jar
-// is undiscoverable — and a target application then builds successfully and completely uninstrumented.
+// directly and bypass container wiring entirely, so a guard wired only into `jar` (and not `check`)
+// would let `./gradlew check` stay green while the shipped jar is undiscoverable — and a target
+// application then builds successfully and completely uninstrumented.
 //
 // PR #103's review found this guard existed only in scripts/verify-dd043-pr3.sh, which no workflow runs.
 // A guard outside CI is not a guard.
 //
-// finalizedBy on `jar` rather than only wiring into `check`, following the same reasoning recorded for
-// verifyShippedJarsContainCore in the root build.gradle: the release path publishes without running
-// `check`, so a check-only guard would let a regression ship through release without ever executing.
+// Wired BOTH ways, following the same reasoning recorded for verifyShippedJarsContainCore in the root
+// build.gradle: `check` depends on it (below `tasks.named('jar')`, so `./gradlew check` cannot go green
+// without it), AND `jar` is finalizedBy it, because the release path builds/publishes without ever
+// running `check` — a check-only guard would let a regression ship through release without ever
+// executing. PR #103 round 10 (finding 4): `finalizedBy('jar')` alone is an alternative to wiring into
+// `check`, not a superset of it — a `--dry-run` of `check` showed neither guard in its task graph.
 def verifyInjectorIsDiscoverable = tasks.register('verifyInjectorIsDiscoverable') {
     description = 'Fails if the built jar could not be discovered by Maven as a core extension.'
     def jarFile = tasks.named('jar', Jar).flatMap { it.archiveFile }
@@ -166,6 +170,7 @@ def verifyInjectorIsDiscoverable = tasks.register('verifyInjectorIsDiscoverable'
     }
 }
 tasks.named('jar') { finalizedBy verifyInjectorIsDiscoverable }
+tasks.named('check') { dependsOn verifyInjectorIsDiscoverable }
 
 // PR #103's approver (finding 2): basquin-init.gradle:22 hand-types the injected version's default
 // ('0.3.0') where the Maven path deliberately does not — InjectorVersion reads a resource baked from
@@ -215,9 +220,13 @@ def verifyGradleInitScriptVersion = tasks.register('verifyGradleInitScriptVersio
                 "'${literalVersion}' matches ${project.name} '${moduleVersion}'.")
     }
 }
-// Same reasoning as verifyInjectorIsDiscoverable just above: finalizedBy on `jar`, not only wired
-// into `check`, because the release path builds/publishes without ever running `check`.
+// Same reasoning as verifyInjectorIsDiscoverable just above: wired BOTH into `check` (dependsOn) and
+// `jar` (finalizedBy), because the release path builds/publishes without ever running `check`, so a
+// check-only guard would let a regression ship through release without ever executing. PR #103 round
+// 10 (finding 4): finalizedBy alone left this guard, despite its own `group = 'verification'`,
+// invisible to `./gradlew check` — the verification entry point it is grouped under.
 tasks.named('jar') { finalizedBy verifyGradleInitScriptVersion }
+tasks.named('check') { dependsOn verifyGradleInitScriptVersion }
 
 publishing {
     publications {

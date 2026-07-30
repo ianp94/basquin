@@ -2,7 +2,10 @@
 
 **Status:** design approved (encoding model A), 2026-07-22.
 **Builds on:** DD-036 response correlation (`runner/coverage/Capture.java`, `RequestLine`, `LoadRun.substitute`).
-**Motivation source:** `.superpowers/sdd/jspwiki-save-rootcause.md`.
+**Motivation source:** live root-cause investigation of Apache JSPWiki's `SpamFilter.checkHash`
+(bytecode read of the deployed jar + a live A/B against the running pod), which confirmed the
+hash field's name and value are both dynamic and the check cannot be disabled by configuration —
+not committed to the repo; see the Problem section below for the reproduced findings.
 
 ## Problem
 

@@ -1,6 +1,7 @@
 package com.basquin.maven;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -11,8 +12,11 @@ import java.util.List;
 import java.util.Properties;
 
 import org.apache.maven.artifact.repository.ArtifactRepository;
+import org.apache.maven.artifact.repository.ArtifactRepositoryPolicy;
+import org.apache.maven.artifact.repository.layout.DefaultRepositoryLayout;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Repository;
+import org.apache.maven.model.RepositoryPolicy;
 import org.apache.maven.project.MavenProject;
 import org.junit.Test;
 
@@ -87,6 +91,49 @@ public class BasquinInjectorTest {
         assertEquals("the effective list is the half that actually resolves", 1, effective.size());
         assertEquals(BasquinInjector.REPO_ID, effective.get(0).getId());
         assertEquals(BasquinInjector.DEFAULT_REPO_URL, effective.get(0).getUrl());
+    }
+
+    /**
+     * PR #103's approver, finding 5: the previous test above asserted only {@code id} and
+     * {@code url}, so a mutant flipping {@code releases.setEnabled(false)} at
+     * {@code BasquinInjector.java:527-531} (the model {@link RepositoryPolicy} pair) — or drifting
+     * either {@link ArtifactRepositoryPolicy} at {@code :540-545} (the effective pair, the half
+     * spike S5 exists to protect) — passed every test in this file while leaving the injected
+     * repository unable to serve the release artifacts it exists for. Pins every field
+     * {@code addRepository} actually sets, at both levels, so such a change fails loudly.
+     */
+    @Test
+    public void pinsTheInjectedRepositorysReleaseAndSnapshotPolicies() throws Exception {
+        MavenProject p = project("a");
+
+        new BasquinInjector().inject(Arrays.asList(p), props());
+
+        Repository modelRepo = p.getModel().getRepositories().get(0);
+        assertEquals(BasquinInjector.REPO_ID, modelRepo.getId());
+        assertEquals(BasquinInjector.DEFAULT_REPO_URL, modelRepo.getUrl());
+        assertTrue("model releases must be enabled — this is a release repository",
+                modelRepo.getReleases().isEnabled());
+        assertFalse("model snapshots must be disabled — S5 only measured releases",
+                modelRepo.getSnapshots().isEnabled());
+
+        ArtifactRepository effective = p.getRemoteArtifactRepositories().get(0);
+        assertEquals(BasquinInjector.REPO_ID, effective.getId());
+        assertEquals(BasquinInjector.DEFAULT_REPO_URL, effective.getUrl());
+        assertTrue("effective repository must use Maven's default layout",
+                effective.getLayout() instanceof DefaultRepositoryLayout);
+
+        ArtifactRepositoryPolicy effectiveReleases = effective.getReleases();
+        assertTrue("effective releases must be enabled — the half that actually resolves",
+                effectiveReleases.isEnabled());
+        assertEquals(ArtifactRepositoryPolicy.UPDATE_POLICY_DAILY, effectiveReleases.getUpdatePolicy());
+        assertEquals(ArtifactRepositoryPolicy.CHECKSUM_POLICY_WARN,
+                effectiveReleases.getChecksumPolicy());
+
+        ArtifactRepositoryPolicy effectiveSnapshots = effective.getSnapshots();
+        assertFalse("effective snapshots must be disabled", effectiveSnapshots.isEnabled());
+        assertEquals(ArtifactRepositoryPolicy.UPDATE_POLICY_DAILY, effectiveSnapshots.getUpdatePolicy());
+        assertEquals(ArtifactRepositoryPolicy.CHECKSUM_POLICY_WARN,
+                effectiveSnapshots.getChecksumPolicy());
     }
 
     @Test

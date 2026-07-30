@@ -8,6 +8,7 @@
 
 # --- deliberately absent (proposed, not yet built) ---
 bench-results/RUN-OF-RECORD proposed in DD-045 item 2 (docs/ROADMAP.md); deliberately not built yet — forward-looking reference, not a broken one
+snap/snapcraft.yaml planned file — TODO.md's snap-packaging checklist item says "Write" it; deliberately not in the tree yet
 
 # --- upstream repos: files that live in the target application's tree, not ours ---
 verify.yaml apicurio-registry's CI workflow (upstream repo), cited as evidence context
@@ -27,6 +28,18 @@ infra.yml quarkus rest-villains upstream compose file
 java25.yml quarkus rest-villains upstream compose file
 deploy/db-init/initialize-tables.sql quarkus rest-villains upstream path (collides with our deploy/ top dir but is theirs)
 WeakHashMap.java JDK source (java.util), cited in the jspwiki incident analysis
+# (round 10: the checker now examines multi-segment paths whose head is not a tracked top-level
+#  dir — the classes below are upstream-repo paths those citations name, cited as evidence about
+#  the target application's tree, never expected in ours)
+app/pom.xml apicurio-registry upstream repo path, cited with an upstream @sha in the apicurio-native README
+app/src/main/resources/application.properties apicurio-registry upstream repo path
+cli/pom.xml apicurio-registry upstream repo path
+bom/pom.xml apicurio-registry upstream repo path
+adapters/parent/pom.xml apicurio-registry upstream repo path
+services/parent/pom.xml apicurio-registry upstream repo path
+rest-villains/pom.xml quarkus-super-heroes upstream repo path
+src/main/resources/openapi/openapi.yml quarkus rest-villains upstream repo path
+.mvn/extensions.xml Maven core-extensions mechanism path inside a target app checkout, not this repo
 
 # --- external or generated config that never lives in this tree ---
 settings.xml Maven per-user/container settings, outside any repo tree by definition
@@ -41,6 +54,12 @@ basquin-injector.properties baked into the injector jar at build time (see verif
 corpus.txt runner output written into the run volume at run time
 run.json runner per-run output artifact, generated at run time
 k6.json k6 load-run output artifact, generated at run time
+META-INF/quarkus-extension.properties jar-internal extension descriptor inside built artifacts, never a tree file
+conf/context.xml Tomcat container configuration path inside the target image
+webapps/ROOT/ Tomcat container webapp deployment path inside the target image
+lib/main/ Quarkus fast-jar internal layout directory inside built/augmented images
+logs/ runtime log paths inside deployed containers (roller.log, localhost.<date>.log)
+fixture/fixture/ transient nesting during env setup; ENVIRONMENT.md describes flattening it away
 
 # --- disclosed-dead references in docs that catalogue them (the prose is ABOUT the deadness,
 #     but table rows put the disclosure outside the tool's +/-1-line negation window) ---
@@ -68,3 +87,14 @@ frozen docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md histo
 #     `20260730T054112Z`@`9f1e990` stamp — were fixed by their owners mid-session and the
 #     entries removed.) ---
 reported docs/DESIGN-DECISIONS.md agents.md cites an agents.md instruction file that is not in the tree (authoring-machine local); owner should inline the rule or point at a committed file
+
+# --- real defects surfaced 2026-07-30 by the round-10 blind-spot fix (the checker previously
+#     dropped citations whose head segment was not a tracked top-level dir, and never scanned
+#     bare unbackticked names); reported in .superpowers/sdd/pr103-r10-checker-report.md,
+#     suppressed here so the gate can land, visible in every run until the owner fixes them. ---
+reported TODO.md agents.md TODO.md:136 cites the gitignored agents.md for decision rationale; owner should point at a committed doc or disclose the absence
+reported docs/DESIGN-DECISIONS.md .superpowers/sdd/jspwiki-save-rootcause.md path-form citation of a gitignored session report (:1445); owner should cite committed evidence or disclose adjacently
+reported docs/DESIGN-DECISIONS.md .superpowers/sdd/dd039-spike-report.md path-form citation of a gitignored session report (:2028); owner should cite committed evidence or disclose adjacently
+reported docs/superpowers/specs/2026-07-22-inputpair-capture-design.md .superpowers/sdd/jspwiki-save-rootcause.md motivation-source line cites a gitignored session report; owner should inline the motivation or disclose
+reported docs/superpowers/specs/2026-07-22-nonce-and-3xx-design.md .superpowers/sdd/jspwiki-runner-save-rootcause.md motivation-source line cites a gitignored session report; owner should inline the motivation or disclose
+reported bench-results/dd043-pr3-citation-audit-2026-07-30/README.md approver-pr103.md README.md:3 cites the gitignored review by bare name; its gitignored-disclosure sits two lines below, outside the +/-1 disclosure window — owner should move the disclosure adjacent

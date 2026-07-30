@@ -1350,7 +1350,9 @@ passing control is **not published**, matching the discipline that keeps `heapDr
 `Apicurio/apicurio-registry`; its §4 addendum spot-checked the load-bearing claims against primary
 sources). The verified facts:
 
-- Current `main` (`23159df`): `app/pom.xml` contains **zero** occurrences of the string `native`
+- `main` at the ref pinned by the investigation (`23159df`, 2026-07-25 — not HEAD; the capture
+  manifest's `main (head at capture)` row records `5d1dd525` as of 2026-07-29): `app/pom.xml`
+  contains **zero** occurrences of the string `native`
   (`capture/12-apicurio-main-no-native.txt`). The repository's only CI-exercised native declarations
   on `main` are the CLI's — `verify-cli.yaml`, `release.yaml` and `verify-build.yaml`
   (`capture/13-apicurio-main-workflows-native-grep.txt`) — none of them the registry server. The

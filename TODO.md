@@ -133,7 +133,7 @@ Goal: Deliver a realistic web app slice that surfaces both crashes and availabil
 ## Milestone: v0.5 — "Observability core"
 
 Goal: Make the measurement layer trustworthy and cheap enough to point at real apps.
-(Decisions recorded 2026-07-19; rationale in agents.md Status Snapshot.)
+(Decisions recorded 2026-07-19; rationale for each item is inline below, not in an external file.)
 
 ### Measurement quality (done)
 - [x] Latency measured before the end-of-iteration grace sleep (was inflating all readings ~25ms)
@@ -602,39 +602,75 @@ containing `*`, which ignores itself — so the rule file is untracked too, and 
 rule **and** no directory. Anything committed that cites a path under it resolves to nothing for
 anyone but the machine that wrote it.
 
-Audited with `git grep -n "\.superpowers/sdd/[A-Za-z0-9]"` — **six citations in five committed files**:
+**Regenerate this yourself before trusting any number below — do not carry the figure forward by
+hand.** The command is `git grep -n "\.superpowers/sdd/[A-Za-z0-9]"`. This entry was itself stale:
+it claimed "six citations in five committed files" while PR #103 round 10 found the command actually
+returned **eleven citations in ten files** — five more mentions had been added across four PR-3
+rounds (round 9's sweep plus this branch) without this ledger being touched, and this ledger existing
+but wrong is worse than no ledger, because a gitignored citation resolves for its author and only the
+ledger tells a fresh clone it's dead. Fixed as of 2026-07-30: four of the five additions already
+disclose their own deadness inline (not additional debt, listed below so they aren't miscounted as
+such if re-encountered); the fifth — `bench-results/dd043-s5-repo-injection-2026-07-26/README.md:84`
+— was a genuinely new undisclosed dangling citation (fresh instance of this exact defect, introduced
+in `f872199`) and is fixed in the same pass as this paragraph, by dropping the dead path and keeping
+only the prose attribution it decorated.
 
-| File | Cites |
-|---|---|
-| `docs/DESIGN-DECISIONS.md` | `dd039-spike-report.md`, `jspwiki-save-rootcause.md` |
-| `docs/superpowers/plans/2026-07-22-inputpair-capture.md` | `jspwiki-save-rootcause.md` |
-| `docs/superpowers/plans/2026-07-23-redirect-session-carry.md` | `dd039-spike-report.md` |
-| `docs/superpowers/specs/2026-07-22-inputpair-capture-design.md` | `jspwiki-save-rootcause.md` |
-| `docs/superpowers/specs/2026-07-22-nonce-and-3xx-design.md` | `jspwiki-runner-save-rootcause.md` |
+**Update 2026-07-30 (checker round 10, reported items fixed):** the checker's round-10 fix (which can
+no longer report a clean verdict over citations it never examined) surfaced four of the six as
+`reported` defects; all four are now fixed by inlining the finding and dropping the dead path — the
+two `DESIGN-DECISIONS.md` sites and both specs' "Motivation source" lines. Re-running the command
+(`git grep -n "\.superpowers/sdd/[A-Za-z0-9]"`) now returns **11 citations across 6 files**: 3
+disclosed (unchanged, table below), 6 inside `scripts/check-citations-allowlist.txt` (tooling
+comments/reason-strings, not claims to a doc's reader — carved out below, grown from 1 to 6 as the
+checker's own `reported` entries were added there), and **2 citations in 2 files still open** —
+both are the ones this ledger could not touch this round:
+
+| File | Cites | Status |
+|---|---|---|
+| `docs/DESIGN-DECISIONS.md` (×2: `dd039-spike-report.md`, `jspwiki-save-rootcause.md`) | — | **fixed** 2026-07-30 |
+| `docs/superpowers/specs/2026-07-22-inputpair-capture-design.md` | `jspwiki-save-rootcause.md` | **fixed** 2026-07-30 |
+| `docs/superpowers/specs/2026-07-22-nonce-and-3xx-design.md` | `jspwiki-runner-save-rootcause.md` | **fixed** 2026-07-30 |
+| `docs/superpowers/plans/2026-07-22-inputpair-capture.md` | `jspwiki-save-rootcause.md` | still open |
+| `docs/superpowers/plans/2026-07-23-redirect-session-carry.md` | `dd039-spike-report.md` | still open |
 
 Two of the three targets still exist on the authoring machine; `dd039-spike-report.md` is gone even
-there. None are in the repo.
+there. Neither is in the repo.
 
-**Why this is not a mechanical find-and-replace.** **Three** of the six are load-bearing rather than
-decorative — in each, the dead pointer is the only stated provenance for a design decision:
+The three disclosed citations, one each in three files, are **not** part of this debt — each already
+tells a fresh-clone reader the pointer is dead, right where it's cited, so no ledger entry is needed
+to surface it:
 
-| Site | What the pointer is doing |
+| File:line | What it discloses at the site |
 |---|---|
-| `specs/2026-07-22-inputpair-capture-design.md` | the stated "Motivation source" |
-| `specs/2026-07-22-nonce-and-3xx-design.md` | the stated "Motivation source" |
-| `plans/2026-07-23-redirect-session-carry.md` | a bare "Proven by throwaway spike" — the spike *is* the proof |
+| `TODO.md:1228` | "is gitignored and does not survive on its own" |
+| `bench-results/dd043-pr3-citation-audit-2026-07-30/README.md:6` | "gitignored, so a fresh clone has no file backing those numbers at all" |
+| `bench-results/dd043-pr3-optional-declaration-2026-07-29/README.md:44` | "not part of the committed record — `.superpowers/` is gitignored ... so it is not cited as evidence here" |
 
-Deleting these removes the only stated provenance; keeping them promises evidence the reader cannot
-obtain. The fix is per-site: restate what the spike actually established, inline, from whatever
-survives — the DD record, the committed benchmark artifacts, or the code it was reasoning about.
+If a future re-run of the command doesn't split cleanly into "tracked debt" plus "the disclosed ones
+above" plus "tooling comments in `scripts/check-citations-allowlist.txt`," re-derive all three
+buckets from the command's actual output — don't edit any number by hand, and don't assume a new hit
+belongs in one bucket without reading whether it discloses itself.
 
-The other three (both `DESIGN-DECISIONS.md` sites and the `inputpair-capture` *plan*) are
-parenthetical receipts whose surrounding prose already carries the claim.
+**Why this was not a mechanical find-and-replace.** Of the four just fixed, two were load-bearing —
+in each, the dead pointer was the only stated provenance for a design decision (both specs' stated
+"Motivation source"); the fix restates what the investigation actually established, inline, since
+nothing committed carries the original file. The other two (both `DESIGN-DECISIONS.md` sites) were
+parenthetical receipts whose surrounding prose already carried the claim, so the pointer was simply
+dropped.
 
-- [ ] Restate the **three** load-bearing citations (the two specs above plus
-      `redirect-session-carry.md`) with inline evidence rather than a path
-- [ ] Decide the remaining **three** parenthetical receipts: inline the finding, or drop the pointer
-      and say the spike was throwaway so no provenance is implied
+The two still open are the same shape: `plans/2026-07-23-redirect-session-carry.md`'s bare "Proven by
+throwaway spike" is load-bearing (the spike *is* the proof); `plans/2026-07-22-inputpair-capture.md`
+is a parenthetical receipt. Neither was in this round's reported list, so neither was touched here —
+recorded as still-open debt rather than silently left inconsistent with the four that were fixed.
+
+- [x] Restate the two load-bearing citations that were reported this round (both specs) with inline
+      evidence rather than a path — done 2026-07-30
+- [ ] Restate the remaining load-bearing citation (`redirect-session-carry.md`) with inline evidence
+      rather than a path
+- [x] Decide two of the three parenthetical receipts (both `DESIGN-DECISIONS.md` sites): pointer
+      dropped, surrounding prose kept — done 2026-07-30
+- [ ] Decide the remaining parenthetical receipt (`inputpair-capture.md` plan): inline the finding, or
+      drop the pointer and say the spike was throwaway so no provenance is implied
 - [ ] Consider whether `.superpowers/sdd/` should be ignored by a **tracked** rule instead, so the
       convention is visible in a clone rather than inferred from a file that ignores itself
 

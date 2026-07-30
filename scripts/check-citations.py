@@ -35,6 +35,33 @@ Consciously EXCLUDED — citations there are NOT checked, so do not claim they w
     citations the 2026-07-30 audit deliberately left: repointing them would launder false
     statements — see the allowlist for the per-entry reasons).
 
+OUTPUT CONTRACT (round-10 blocking fix: this tool must never claim wider than it examined).
+Every citation it parses lands in EXACTLY ONE disposition —
+
+    verified            existence (and any cited lines) checked against a confident resolution:
+                        exact root-/citing-dir-relative path, unique same-directory basename,
+                        or a passing pinned row;
+    FAILED              a finding: dead path, gitignored path, stale line, carried value;
+    reported            a FAILED finding suppressed (but printed) via a `reported` allowlist
+                        entry: a real defect in a file owned by another agent, pending their fix;
+    allowlisted         cited path exempted by the allowlist, one written reason each;
+    UNCHECKED-ambiguous several tracked files match; the target is not mechanically decidable;
+    UNCHECKED-guessed   exactly one tracked file matches by basename/suffix/path-tail but NOT at
+                        the written path and NOT beside the citing file: a guess. Printed with
+                        the guessed target; NEVER counted verified, line/value checks NOT run
+                        (an earlier version counted 239 such guesses as "checked", some provably
+                        wrong — the count must mean something);
+    disclosed-absence   the surrounding prose says the path is gone/ignored/untracked, which is
+                        an explanation, not a defect;
+    untracked-on-disk   exists in the worktree but not in git: usually a file about to be
+                        committed with the citing doc — noted, not failed —
+
+and the run aborts (exit 2) if the dispositions do not sum to the parsed total, so a citation
+cannot be silently dropped. Non-citation token classes that are skipped (extension-less prose
+pairs, URL-shaped tokens, generated build output) are COUNTED and named in the summary. The
+final OK line claims "verified clean" only for the verified count and names everything it did
+not verify: a zero in this tool's output means checked-and-clean, never unexamined.
+
 MECHANICS. Prose is grouped into logical units — markdown paragraphs (blank-line delimited;
 each table row its own unit) and contiguous comment blocks — because a wrapped sentence puts
 the quoted value and its citation on adjacent physical lines. A quoted value passes if it
@@ -48,31 +75,43 @@ FALSE-POSITIVE CLASSES handled (each one was hit while tuning against the real t
     spans that are commands rather than a lone path token;
   * prose ellipses (`dd043-spikes-…/`) and brace/star globs (`s1b-t{0,1,2}-after-*.xml`);
   * trailing sentence punctuation (`campaigns.json.`), wrapping quotes/parens;
-  * URLs, `owner/repo@vN` refs, absolute machine-local paths (/tmp, /mnt, ~), env vars;
-  * generated build output (`/build/`, `/target/`, `/.m2/`, `/bin/`, `/node_modules/`) —
-    correctly absent from the tracked tree;
-  * multi-segment tokens whose head is not a real top-level dir (`jvm/native`, `and/or`);
+  * URLs, `owner/repo@vN` refs, absolute machine-local paths (/tmp, /mnt, ~), env vars; in
+    bare prose a token preceded by `/ : . $ ~ \\` is a fragment of one of those, not a citation;
+  * generated build output (`/build/`, `/target/`, `/.m2/`, `/bin/`, `/node_modules/`,
+    `/quarkus-app/`) — correctly absent from the tracked tree (counted in the summary);
+  * extension-less multi-segment tokens without a trailing slash (`jvm/native`, `and/or`,
+    `operator/CRD`) are prose pairs, not citations, and are counted in the summary. Tokens
+    that DO carry a recognised extension (or a trailing slash) are checked even when their
+    head is not a tracked top-level directory — the pre-round-10 head filter silently
+    swallowed dead citations like `cmd/basquin/status.go` and `.superpowers/sdd/*.md`;
   * comma line-lists (`Agent.java:96,126`) — every listed line is checked;
   * disclosed absences: a dead path is not reported when the surrounding line (+/-1) says so
-    ("does not exist", "no longer exists", "deleted", "never produced", "not in the tree") —
-    prose EXPLAINING a dead path is not itself a defect. Applies to dead-path findings only,
+    ("does not exist", "no longer exists", "deleted", "never produced", "not in the tree",
+    "gitignored", "untracked", "not present", "does not survive") — prose EXPLAINING a dead
+    path is not itself a defect; counted and printed. Applies to dead-path findings only,
     never to value checks (an entry disclosing one dead run must not shield a carried value);
-  * shorthand basenames: `redirect-session-carry.md` resolves to the dated plan file via
-    unique suffix match; ambiguous bare names (`pom.xml`, `README.md` with several unrelated
-    matches and none beside the citing file) are reported as non-failing UNVERIFIABLE notes,
-    since the true target (often in an upstream repo) is not mechanically decidable;
+  * shorthand basenames: a unique match inside the citing file's own directory subtree
+    verifies (`driver-summary.txt` in a run README is that run's copy). A unique match
+    anywhere ELSE — including a unique path-tail match for multi-segment shorthand like
+    `env/build.sh` — is a GUESS, reported UNCHECKED as above;
+  * a quoted value absent from every cited file but present in a tracked file of the citing
+    README's OWN bench-results run directory is counted and printed as SIBLING-BACKED, not
+    failed and no longer silently passed — see the narrow rationale at the check site;
   * deliberately-absent or external paths via scripts/check-citations-allowlist.txt — one
     reason per entry, three kinds: cited-path exemptions, `frozen` citing-file prefixes, and
     `reported` per-finding suppressions for real defects in files owned by other agents
     (visible in output, pending their owner's fix, non-failing so the gate can land).
 
-Exit 0 when clean (allowlisted/frozen/reported/unverifiable items are printed but do not fail);
-exit 1 with a file:line report of every finding otherwise.
+Exit 0 when no FAILED finding remains (allowlisted/frozen/reported/unchecked items are printed
+and counted but do not fail); exit 1 with a file:line report of every finding otherwise; exit 2
+if the disposition ledger does not balance.
 
 Run: python3 scripts/check-citations.py
 """
 
+import collections
 import pathlib
+import posixpath
 import re
 import subprocess
 import sys
@@ -81,7 +120,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 ALLOWLIST_FILE = ROOT / "scripts" / "check-citations-allowlist.txt"
 
 CITED_EXTS = (
-    "md|txt|log|java|sh|py|go|gradle|xml|yml|yaml|json|csv|properties|html|svg|bat|kts|exec"
+    "md|txt|log|java|sh|py|go|gradle|xml|yml|yaml|json|csv|tsv|properties|html|svg|bat|kts|exec"
 )
 TOKEN_RE = re.compile(
     r"[A-Za-z0-9_][A-Za-z0-9_.…{},*?/-]*\.(?:" + CITED_EXTS + r")(?::[\d,-]+)?"
@@ -89,6 +128,8 @@ TOKEN_RE = re.compile(
 DIR_TOKEN_RE = re.compile(r"[A-Za-z0-9_.][A-Za-z0-9_.…{},*?-]*(?:/[A-Za-z0-9_.…{},*?-]+)+/?")
 INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 LINELIST_RE = re.compile(r"^(.*?):(\d+(?:[,-]\d+)*)$")
+EXT_END_RE = re.compile(r"\.(?:" + CITED_EXTS + r")$")
+URLISH_HEAD_RE = re.compile(r"(?:[A-Za-z0-9-]+\.)+(?:com|org|io|net|dev|ai|co|edu)$")
 # Strong value shapes only — see docstring. Escaped pipes (`\|` in md tables) are normalised
 # before matching. Git hashes are deliberately NOT a value shape: a hash names repo history,
 # not the cited file's content (`Commit: 6e67ca7 ... (git-status.txt)` is true while the hash
@@ -104,11 +145,15 @@ VALUE_RE = re.compile(
 )
 NEG_RE = re.compile(
     r"(?:no longer exist|does not exist|do not exist|don't exist|never (?:produced|created|"
-    r"committed|existed)|not (?:in|part of) the (?:repo|tree)|deleted|removed|\bNo `)",
+    r"committed|existed)|not (?:in|part of) the (?:repo|tree)|not present|does not survive|"
+    r"\bgitignored?\b|\buntracked\b|\bignored\b|deleted|removed|\bNo `)",
     re.IGNORECASE,
 )
-GENERATED_SEGS = {"build", "target", ".m2", "bin", "node_modules"}
+GENERATED_SEGS = {"build", "target", ".m2", "bin", "node_modules", "quarkus-app"}
 PINNED_RE = re.compile(r"^([A-Za-z0-9_./-]+):(\d+): (.*)$")
+# In bare (unbackticked) prose, a token preceded by one of these is a fragment of a URL,
+# an absolute machine-local path, or a shell/env expansion — not a citation.
+FRAGMENT_PRECEDERS = ":/.$~\\"
 
 _file_cache: dict[str, list[str] | None] = {}
 
@@ -164,7 +209,6 @@ def main() -> int:
             ["git", "-C", str(ROOT), "ls-files", "-z"],
             capture_output=True, text=True, check=True).stdout.split("\0") if t
     }
-    top_dirs = {t.split("/", 1)[0] for t in tracked_set if "/" in t}
     tracked_dirs = set()
     for t in tracked_set:
         parts = t.split("/")
@@ -178,8 +222,27 @@ def main() -> int:
     findings: list[str] = []
     allowed_out: list[str] = []
     reported_out: list[str] = []
-    unverifiable: list[str] = []
-    n_citations = 0
+    ambiguous_out: list[str] = []
+    guess_rows: list[tuple[str, str, str, int]] = []
+    disclosed_out: list[str] = []
+    untracked_out: list[str] = []
+    sibling_out: list[str] = []
+    stats: collections.Counter = collections.Counter()
+
+    # Citation dispositions — every parsed citation lands in exactly one; the sum is asserted
+    # against the parsed total before printing, so nothing can be silently dropped.
+    K_EXACT = "verified (exact/relative path)"
+    K_NEAR = "verified (unique same-dir basename)"
+    K_PIN = "verified (pinned row)"
+    K_FAIL = "FAILED"
+    K_REP = "reported to owning agent (suppressed FAIL)"
+    K_ALLOW = "allowlisted cited path"
+    K_AMBIG = "UNCHECKED — ambiguous name"
+    K_GUESS = "UNCHECKED — resolved only by guess"
+    K_DISC = "disclosed absence"
+    K_DISK = "untracked-on-disk (not failed)"
+    DISPOSITIONS = (K_EXACT, K_NEAR, K_PIN, K_FAIL, K_REP, K_ALLOW,
+                    K_AMBIG, K_GUESS, K_DISC, K_DISK)
 
     def cited_allowed(path: str) -> str | None:
         for pat, reason in allow_cited:
@@ -188,39 +251,62 @@ def main() -> int:
                 return reason
         return None
 
-    def emit(citing: str, msg: str) -> None:
+    def emit(citing: str, msg: str) -> str:
+        """-> 'reported' if suppressed by a reported allowlist entry, else 'failed'."""
         for cite_pre, needle, reason in reported:
             if citing.startswith(cite_pre) and needle in msg:
                 reported_out.append(f"{msg}\n        [reported, pending owner fix: {reason}]")
-                return
+                return "reported"
         findings.append(msg)
+        return "failed"
+
+    def cite_emit(citing: str, msg: str) -> None:
+        stats[K_REP if emit(citing, msg) == "reported" else K_FAIL] += 1
 
     def resolve(citing: str, path: str):
-        """-> (candidates, ambiguous). Root-relative, citing-dir-relative, then unique
-        basename / unique '-'|'_'-suffix match (case-insensitive) for bare names."""
+        """-> (candidates, kind).
+             exact — root-relative or citing-dir-relative (incl. ../ normalised): verified;
+             near  — unique basename/suffix match inside the citing file's own directory
+                     subtree (an evidence README citing `driver-summary.txt` means the copy
+                     in its run directory): verified;
+             guess — unique basename/suffix match elsewhere, or unique path-tail match for a
+                     multi-segment token (`env/build.sh`, `cmd/basquin/status.go`): the
+                     written path names nothing, so this is reported UNCHECKED, not verified;
+             ambiguous — several matches, target not mechanically decidable;
+             none  — nothing matches anywhere."""
         if path in tracked_set or path in tracked_dirs:
-            return [path], False
+            return [path], "exact"
         cite_dir = citing.rsplit("/", 1)[0] if "/" in citing else ""
-        rel = f"{cite_dir}/{path}" if cite_dir else path
-        if rel in tracked_set or rel in tracked_dirs:
-            return [rel], False
+        if cite_dir:
+            rel = posixpath.normpath(f"{cite_dir}/{path}")
+            if rel in tracked_set or rel in tracked_dirs:
+                return [rel], "exact"
         if "/" not in path:
             low = path.lower()
             cands = list(by_basename.get(low, []))
             if not cands:
                 cands = [t for t in tracked_set
                          if t.lower().endswith(("-" + low, "_" + low, "/" + low))]
-            # Prefer matches under the citing file's own directory subtree: an evidence README
-            # citing `driver-summary.txt` means the copy in its run directory, not another run's.
             if cite_dir:
                 near = [c for c in cands if c.startswith(cite_dir + "/")]
-                if near:
-                    cands = near
+                if len(near) == 1:
+                    return near, "near"
+                if len(near) > 1:
+                    return near, "ambiguous"
             if len(cands) == 1:
-                return cands, False
+                return cands, "guess"
             if len(cands) > 1:
-                return cands, True
-        return [], False
+                return cands, "ambiguous"
+            return [], "none"
+        low = "/" + path.lower()
+        tails = [t for t in tracked_set if ("/" + t.lower()).endswith(low)]
+        if not tails:
+            tails = [d for d in tracked_dirs if ("/" + d.lower()).endswith(low)]
+        if len(tails) == 1:
+            return tails, "guess"
+        if len(tails) > 1:
+            return tails, "ambiguous"
+        return [], "none"
 
     def parse_token(token: str):
         token = token.strip("\"'")
@@ -245,17 +331,29 @@ def main() -> int:
         else:
             path, lines = token, []
         if "/" in path:
-            if path.split("/", 1)[0] not in top_dirs:
+            # No head filter here. Pre-round-10 this dropped any token whose first segment
+            # was not a tracked top-level directory — which silently swallowed DEAD citations
+            # (`cmd/basquin/status.go`, `.superpowers/sdd/*.md`) along with the prose pairs
+            # it was aimed at. Prose pairs are excluded by the extension rule below instead,
+            # and every skip is counted.
+            if re.fullmatch(r"(?:\.\./)+", path):
+                stats["skipped tokens: pure relative-dir prose (`../../../`)"] += 1
+                return None
+            if URLISH_HEAD_RE.fullmatch(path.split("/", 1)[0]):
+                stats["skipped tokens: URL-shaped (domain head)"] += 1
                 return None
             if any(seg in GENERATED_SEGS for seg in path.split("/")):
+                stats["skipped tokens: generated build output"] += 1
                 return None
             # An extension-less multi-segment token is a citation only when written with a
             # trailing slash (`bench-results/verify-20260730T102725Z/`). Without it, such
             # tokens are overwhelmingly prose shorthand for component pairs (`operator/CRD`,
-            # `agent/coverage`, `native/AOT` — 16 false positives in one tuning run).
+            # `agent/coverage`, `jvm/native` — 16 false positives in one tuning run).
             # CONSEQUENCE, documented: a dead DIRECTORY citation written without its trailing
             # slash is not caught; the repo convention is to write directories with one.
-            if not token.endswith("/") and not TOKEN_RE.fullmatch(token):
+            # These skips are counted in the summary.
+            if not token.endswith("/") and not EXT_END_RE.search(path):
+                stats["skipped tokens: extension-less prose pair (jvm/native, A/B)"] += 1
                 return None
         elif "." not in path:
             return None
@@ -263,7 +361,6 @@ def main() -> int:
 
     def check_unit(citing: str, unit: list[tuple[int, str]]) -> None:
         """unit: [(physical line number, text)] — one paragraph / table row / comment block."""
-        nonlocal n_citations
         citations = []  # (lineno, raw, path, [lines])
         values = []     # (lineno, normalised value)
         for lineno, text in unit:
@@ -282,65 +379,87 @@ def main() -> int:
             bare = INLINE_CODE_RE.sub(" ", text)
             for m in TOKEN_RE.finditer(bare):
                 tok = m.group(0)
-                if "/" in tok and tok not in spans:
-                    parsed = parse_token(tok)
-                    if parsed:
-                        citations.append((lineno, tok, *parsed))
+                # Round-10 fix: bare single-segment tokens (an unbackticked `agents.md's`,
+                # markdown link targets like `](USAGE.md)`) are citations too — the old
+                # `"/" in tok` gate made every slash-less bare token invisible.
+                if tok in spans:
+                    continue
+                if m.start() and bare[m.start() - 1] in FRAGMENT_PRECEDERS:
+                    continue
+                nxt = bare[m.end():m.end() + 1]
+                if nxt and (nxt.isalnum() or nxt == "_"):
+                    continue  # prefix of a longer word: `pom.sh` inside `pom.sha1`
+                parsed = parse_token(tok)
+                if parsed:
+                    citations.append((lineno, tok, *parsed))
             for m in DIR_TOKEN_RE.finditer(bare):
                 tok = m.group(0)
-                if tok not in spans and not TOKEN_RE.fullmatch(tok.rstrip("/")):
+                if (tok not in spans and not TOKEN_RE.fullmatch(tok.rstrip("/"))
+                        and not (m.start() and bare[m.start() - 1] in FRAGMENT_PRECEDERS)):
                     parsed = parse_token(tok)
                     if parsed and "/" in parsed[0]:
                         citations.append((lineno, tok, *parsed))
 
         unit_text = {ln: txt for ln, txt in unit}
-        resolved: list[tuple[str, list[int]]] = []
+        resolved: list[tuple[str, list[str], list[int], int]] = []
         seen = set()
         for lineno, raw, path, lns in citations:
             key = (path, tuple(lns))
             if key in seen:
                 continue
             seen.add(key)
-            n_citations += 1
+            stats["citations"] += 1
             reason = cited_allowed(path)
             if reason is not None:
+                stats[K_ALLOW] += 1
                 allowed_out.append(f"{citing}:{lineno}: `{raw}` — {reason}")
                 continue
-            cands, ambiguous = resolve(citing, path.rstrip("/"))
-            if ambiguous:
-                unverifiable.append(
-                    f"{citing}:{lineno}: `{raw}` — bare name matches {len(cands)} unrelated "
-                    f"tracked files, none beside the citing file; target (possibly in an "
-                    f"upstream repo) not mechanically decidable")
+            cands, kind = resolve(citing, path.rstrip("/"))
+            if kind == "ambiguous":
+                stats[K_AMBIG] += 1
+                ambiguous_out.append(
+                    f"{citing}:{lineno}: `{raw}` — matches {len(cands)} tracked paths, none "
+                    f"decisively; target (possibly in an upstream repo) not mechanically "
+                    f"decidable")
                 continue
-            if not cands:
+            if kind == "guess":
+                stats[K_GUESS] += 1
+                guess_rows.append((raw, cands[0], citing, lineno))
+                continue
+            if kind == "none":
                 window = [unit_text.get(lineno - 1, ""), unit_text[lineno],
                           unit_text.get(lineno + 1, "")]
                 if any(NEG_RE.search(w) for w in window):
-                    continue  # prose explicitly discloses the absence
+                    stats[K_DISC] += 1
+                    disclosed_out.append(
+                        f"{citing}:{lineno}: `{raw}` — surrounding prose discloses the absence")
+                    continue
                 # Not tracked — but maybe on disk. A gitignored citation is a hard failure
                 # (invisible on every fresh clone, the audit's should-fix 12); a merely
                 # untracked one is usually a file about to be committed alongside the citing
                 # doc, or another agent's in-flight run directory — noted, not failed.
                 p = path.rstrip("/")
                 cite_dir = citing.rsplit("/", 1)[0] if "/" in citing else ""
-                on_disk = next((c for c in (p, f"{cite_dir}/{p}" if cite_dir else p)
-                                if (ROOT / c).exists()), None)
+                on_disk = next(
+                    (c for c in (p, posixpath.normpath(f"{cite_dir}/{p}") if cite_dir else p)
+                     if not c.startswith("..") and (ROOT / c).exists()), None)
                 if on_disk is not None:
                     ignored = subprocess.run(
                         ["git", "-C", str(ROOT), "check-ignore", "-q", on_disk],
                         capture_output=True).returncode == 0
                     if ignored:
-                        emit(citing, f"{citing}:{lineno}: DEAD PATH `{raw}` — exists on disk "
-                                     f"but is GITIGNORED, so it is invisible on a fresh clone")
+                        cite_emit(citing, f"{citing}:{lineno}: DEAD PATH `{raw}` — exists on "
+                                          f"disk but is GITIGNORED, so it is invisible on a "
+                                          f"fresh clone")
                     else:
-                        unverifiable.append(
+                        stats[K_DISK] += 1
+                        untracked_out.append(
                             f"{citing}:{lineno}: `{raw}` — exists on disk but is not yet "
                             f"tracked; must be committed with the citing doc or it dies")
                     continue
-                emit(citing, f"{citing}:{lineno}: DEAD PATH `{raw}` — no tracked file or "
-                             f"directory matches (root-relative, citing-dir-relative, or by "
-                             f"basename/suffix)")
+                cite_emit(citing, f"{citing}:{lineno}: DEAD PATH `{raw}` — no tracked file or "
+                                  f"directory matches (root-relative, citing-dir-relative, or "
+                                  f"by unique name/tail)")
                 continue
             file_cands = [c for c in cands if c in tracked_set]
             if lns and file_cands:
@@ -349,10 +468,11 @@ def main() -> int:
                 if not ok:
                     lens = ", ".join(f"{c}: {len(read_lines(c) or [])} lines"
                                      for c in file_cands)
-                    emit(citing, f"{citing}:{lineno}: STALE LINE `{raw}` — cited line "
-                                 f"{max(lns)} is past end of file ({lens})")
+                    cite_emit(citing, f"{citing}:{lineno}: STALE LINE `{raw}` — cited line "
+                                      f"{max(lns)} is past end of file ({lens})")
                     continue
                 file_cands = ok
+            stats[K_EXACT if kind == "exact" else K_NEAR] += 1
             resolved.append((raw, file_cands, lns, lineno))
 
         for vline, val in values:
@@ -374,29 +494,46 @@ def main() -> int:
                         if not lns or set(hit_lines) & set(lns):
                             found_at_cited_line = True
             if not checked_files:
+                stats["values: beside no verified citation (not checked)"] += 1
                 continue
             if not found_somewhere and citing.startswith("bench-results/"):
-                # An evidence directory is a self-contained run record: its README quotes its
-                # own committed artifacts throughout, and a given paragraph may cite some OTHER
-                # run only for comparison. A value backed by any tracked file in the citing
-                # doc's own directory is not carried — its provenance is beside it.
+                # Round-10 fix (b) — NARROW, REPORTED exemption, no longer a silent pass.
+                # An evidence run directory is a self-contained record: a README paragraph
+                # may cite some OTHER run's file for comparison while quoting its own run's
+                # figure, whose provenance is a committed artifact beside it. When the figure
+                # is absent from every cited file but present in a tracked file inside the
+                # citing README's OWN directory, that is an imprecise citation rather than a
+                # carried value — and it is COUNTED and PRINTED as SIBLING-BACKED below, so
+                # the miss is visible instead of being converted into a clean verdict.
                 own_dir = citing.rsplit("/", 1)[0] + "/"
-                for sib in tracked_set:
-                    if sib.startswith(own_dir) and sib != citing:
-                        sl = read_lines(sib)
-                        if sl and any(v in ln.replace("\\|", "|")
-                                      for ln in sl for v in variants):
-                            found_somewhere = found_at_cited_line = True
-                            break
+                sib_hit = next(
+                    (sib for sib in sorted(tracked_set)
+                     if sib.startswith(own_dir) and sib != citing
+                     and (sl := read_lines(sib)) is not None
+                     and any(v in ln.replace("\\|", "|") for ln in sl for v in variants)),
+                    None)
+                if sib_hit is not None:
+                    stats["values: SIBLING-BACKED (bench-results; noted, not failed)"] += 1
+                    sibling_out.append(
+                        f"{citing}:{vline}: value `{val}` is in NO cited file "
+                        f"({', '.join(sorted(set(checked_files)))}) but is in same-run "
+                        f"sibling {sib_hit} — imprecise citation; cite the sibling")
+                    continue
             if not found_somewhere:
-                emit(citing, f"{citing}:{vline}: CARRIED VALUE `{val}` — quoted beside "
-                             f"citation(s) of {', '.join(sorted(set(checked_files)))} but "
-                             f"appears nowhere in them; the figure came from somewhere else "
-                             f"(an older run?)")
+                stats["values: FAILED" if emit(
+                    citing, f"{citing}:{vline}: CARRIED VALUE `{val}` — quoted beside "
+                            f"citation(s) of {', '.join(sorted(set(checked_files)))} but "
+                            f"appears nowhere in them; the figure came from somewhere else "
+                            f"(an older run?)") == "failed"
+                    else "values: reported (suppressed FAIL)"] += 1
             elif not found_at_cited_line:
-                emit(citing, f"{citing}:{vline}: STALE LINE — quoted value `{val}` exists in "
-                             f"the cited file(s) but not at the cited line(s) "
-                             f"({', '.join(sorted(set(checked_files)))})")
+                stats["values: FAILED" if emit(
+                    citing, f"{citing}:{vline}: STALE LINE — quoted value `{val}` exists in "
+                            f"the cited file(s) but not at the cited line(s) "
+                            f"({', '.join(sorted(set(checked_files)))})") == "failed"
+                    else "values: reported (suppressed FAIL)"] += 1
+            else:
+                stats["values: verified in cited file(s)"] += 1
 
     def frozen_reason(citing: str) -> str | None:
         for pre, reason in frozen:
@@ -452,46 +589,75 @@ def main() -> int:
             pm = PINNED_RE.match(line)
             if not pm:
                 emit(citing, f"{citing}:{n}: UNPARSEABLE pinned row: {line[:90]!r}")
+                stats["pinned rows unparseable (FAILED, not counted as citations)"] += 1
                 continue
-            n_citations += 1
+            stats["citations"] += 1
             path, lno, expected = pm.group(1), int(pm.group(2)), pm.group(3)
             target = f"{cite_dir}/{path}" if cite_dir else path
             if target not in tracked_set:
                 target = path
             if target not in tracked_set:
-                emit(citing, f"{citing}:{n}: DEAD PATH `{path}` in pinned row")
+                cite_emit(citing, f"{citing}:{n}: DEAD PATH `{path}` in pinned row")
                 continue
             tlines = read_lines(target)
             if tlines is None or lno > len(tlines):
-                emit(citing, f"{citing}:{n}: STALE LINE pinned `{path}:{lno}` — file has "
-                             f"{len(tlines or [])} lines")
+                cite_emit(citing, f"{citing}:{n}: STALE LINE pinned `{path}:{lno}` — file has "
+                                  f"{len(tlines or [])} lines")
             elif expected.strip() and expected.strip() not in tlines[lno - 1]:
-                emit(citing, f"{citing}:{n}: STALE LINE pinned `{path}:{lno}` — expected "
-                             f"{expected.strip()[:60]!r}, line is "
-                             f"{tlines[lno - 1].strip()[:60]!r}")
-
-    for citing in citing_comments:
-        if frozen_reason(citing):
-            frozen_files += 1
-            continue
-        unit = []
-        for n, line in enumerate(read_lines(citing) or [], 1):
-            txt = line.strip()
-            if txt.startswith("#") and not txt.startswith("#!"):
-                unit.append((n, txt.lstrip("#").strip()))
+                cite_emit(citing, f"{citing}:{n}: STALE LINE pinned `{path}:{lno}` — expected "
+                                  f"{expected.strip()[:60]!r}, line is "
+                                  f"{tlines[lno - 1].strip()[:60]!r}")
             else:
-                if unit:
-                    check_unit(citing, unit)
-                    unit = []
-        if unit:
-            check_unit(citing, unit)
+                stats[K_PIN] += 1
 
-    print(f"check-citations: {n_citations} citations checked across {len(citing_md)} md + "
+    # The ledger must balance: every parsed citation has exactly one disposition. If this
+    # trips, the tool has a silent-drop bug — the round-10 blocking defect class — and no
+    # verdict it prints can be trusted, so abort loudly.
+    n_cit = stats["citations"]
+    disposed = sum(stats[k] for k in DISPOSITIONS)
+    if disposed != n_cit:
+        print(f"check-citations: INTERNAL ERROR — {n_cit} citations parsed but only "
+              f"{disposed} dispositioned; a citation was silently dropped. No verdict.")
+        return 2
+
+    n_verified = stats[K_EXACT] + stats[K_NEAR] + stats[K_PIN]
+    n_unchecked = stats[K_AMBIG] + stats[K_GUESS]
+    print(f"check-citations: {n_cit} citations parsed across {len(citing_md)} md + "
           f"{len(citing_pinned)} pinned + {len(citing_comments)} comment-scanned files "
-          f"({frozen_files} frozen by allowlist, with reasons)")
+          f"({frozen_files} citing files frozen by allowlist, with reasons)")
+    print("  citation dispositions (each citation lands in exactly one; sum equals total):")
+    for k in DISPOSITIONS:
+        print(f"    {stats[k]:5d}  {k}")
+    print("  value quotes beside citations:")
+    for k in sorted(k for k in stats if k.startswith("values:")):
+        print(f"    {stats[k]:5d}  {k}")
+    print("  non-citation tokens skipped (counted, per class):")
+    for k in sorted(k for k in stats if k.startswith("skipped tokens:")):
+        print(f"    {stats[k]:5d}  {k}")
+    for k in sorted(k for k in stats if k.startswith("pinned rows unparseable")):
+        print(f"    {stats[k]:5d}  {k}")
+
+    guess_out = []
+    agg: dict[tuple[str, str], list[str]] = {}
+    for raw, target, g_citing, g_line in guess_rows:
+        agg.setdefault((raw, target), []).append(f"{g_citing}:{g_line}")
+    for (raw, target), sites in sorted(agg.items()):
+        extra = f" and {len(sites) - 1} more site(s)" if len(sites) > 1 else ""
+        guess_out.append(f"`{raw}` — written path names nothing; unique guess {target} "
+                         f"({sites[0]}{extra})")
+
     for title, rows in (("allowlisted (deliberate absences/externals; reasons in "
                          "scripts/check-citations-allowlist.txt)", allowed_out),
-                        ("UNVERIFIABLE (ambiguous bare name; not failed)", unverifiable),
+                        ("UNCHECKED — ambiguous name (target not decidable; NOT verified)",
+                         ambiguous_out),
+                        ("UNCHECKED — resolved only by guess (existence of the written path "
+                         "NOT verified; line/value checks NOT run)", guess_out),
+                        ("disclosed absences (prose says the path is gone/ignored; dead-path "
+                         "check skipped)", disclosed_out),
+                        ("untracked-on-disk (must be committed with the citing doc; not "
+                         "failed)", untracked_out),
+                        ("SIBLING-BACKED values (bench-results run dir; imprecise citation, "
+                         "not failed)", sibling_out),
                         ("REPORTED to owning agent, pending their fix (not failed)",
                          reported_out)):
         if rows:
@@ -503,7 +669,11 @@ def main() -> int:
         for f in findings:
             print(f"  FAIL {f}")
         return 1
-    print("\nOK — no dead paths, stale lines, or carried values detected.")
+    print(f"\nOK — {n_verified} of {n_cit} citations verified clean (dead paths, stale "
+          f"lines, carried values); {n_unchecked} UNCHECKED, {stats[K_ALLOW]} allowlisted, "
+          f"{stats[K_REP]} reported to owners, {stats[K_DISC]} disclosed absences, "
+          f"{stats[K_DISK]} untracked-on-disk — all listed above. No claim is made about "
+          f"anything not counted as verified.")
     return 0
 
 

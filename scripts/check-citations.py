@@ -91,10 +91,15 @@ tracked_set first" — the identical bug, one branch later, because the two shap
 independent copies of the ordering instead of one shared, correctly-ordered check; folding both
 through `tracked_or_pointer()` is the fix, so a third citation shape reaching the tracked tree
 by some future route gets the correct ordering for free rather than needing its own patch. That
-was a real, review-found gap for the literal shape: three citations (`TODO.md:1200`,
-`TODO.md:1293`, `docs/ROADMAP.md:102`) name only the bare form, and none of the three was
-flagged when the pointer was deliberately pointed at a nonexistent directory, while sub-path
-citations of the same broken pointer were. For the citing-dir-relative shape no citation was
+was a real, review-found gap for the literal shape: several citations in TODO.md and
+docs/ROADMAP.md name only the bare form, and not one of them was flagged when the pointer was
+deliberately pointed at a nonexistent directory, while sub-path citations of the same broken
+pointer were. (Those sites were originally listed here by `file:line`; the list is deliberately
+gone. Two of the three line numbers were stale within one commit, because the same commit
+inserted lines earlier in TODO.md — a citation rotting inside the commit that fixed citation
+rot. Nothing scans this file: the corpus is *.md, */citations.txt and the '#'-comments of *.sh
+and workflow files, so a Python docstring's own citations are unguarded and must not carry line
+numbers. Find them with: git grep -nE '`bench-results/RUN-OF-RECORD/`' -- '*.md') For the citing-dir-relative shape no citation was
 ever written that way — but `bench-results/dd043-pr3-restvillains-2026-07-26/README.md` already
 cites the run of record from one level under bench-results/, so it was one edit away. A bare
 citation (literal or citing-dir-relative) now resolves to the target directory itself — a

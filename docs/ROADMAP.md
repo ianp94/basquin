@@ -229,16 +229,21 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
 
    **The pieces, in priority order:**
 
-   0. **Run the verification harness in CI.** No job invokes `scripts/verify-dd043-pr3.sh` — it is
-      manual-only. (It is no longer outside the path filters: this PR added `'scripts/**'` to both of
-      `ci.yml`'s lists, `.github/workflows/ci.yml:51` for `push` and `:79` for `pull_request`, so a
-      commit touching only the harness now triggers the workflow — it just triggers no job that runs
-      the harness.) Manual-only is the root cause behind most of
-      the findings in row 1 of the table: `jar:baked-version` could not pass on a CRLF checkout for three
-      rounds because nothing ran it, and the `jar` stage passed against a jar it never built until round 8
-      executed it deliberately. The `unit jar guards` stages need no docker and complete in minutes; wire
-      those into CI and the whole first row becomes a push-time failure rather than a review-round finding.
-      Everything below is detection; this is the one that changes when detection happens.
+   0. **Run the verification harness in CI. Delivered.** The `verify-dd043-pr3` job
+      (`.github/workflows/ci.yml:109`) runs `bash scripts/verify-dd043-pr3.sh unit jar guards` on the
+      existing `push`/`pull_request` path filters — `jvm` and `native` are deliberately out of scope
+      (docker, 15+ minutes), stated in a comment on the job — and uploads
+      `bench-results/verify-*/` via `actions/upload-artifact@v4` when it fails, so a red run is
+      diagnosable without reproducing it locally. Manual-only was the root cause behind most of the
+      findings in row 1 of the table: `jar:baked-version` could not pass on a CRLF checkout for three
+      rounds because nothing ran it, and the `jar` stage passed against a jar it never built until
+      round 8 executed it deliberately. Proved this can actually fail, not merely reasoned about: an
+      unmodified run passed 13/13, then naming a nonexistent class in
+      `basquin-maven-injector/src/main/resources/META-INF/sisu/javax.inject.Named` — a stale Sisu
+      index, the exact silent-non-discovery shape the `jar` stage exists to catch — dropped it to 9
+      passed / 2 failed / 0 skipped (exit 1: `unit` failed via `verifyInjectorIsDiscoverable`, `jar`
+      reported `UNMEASURED: the jar build FAILED`), and restoring the file brought it back to 13/13,
+      exit 0. Everything below is detection; this was the one that changed when detection happens.
 
    1. **A citation-resolution CI check, whole-tree scoped. Built** as `scripts/check-citations.py` plus
       `scripts/check-citations-allowlist.txt`, wired into `.github/workflows/ci.yml` as the
@@ -302,15 +307,14 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
       it contains the pasted output of its own verification, and partial evidence is never committed.
 
    **Entry condition:** none — this is tooling over the existing tree, and it is independently useful
-   before PR-4 begins. Do **0 first**: until CI runs the harness, every other item here only shortens
-   the feedback loop for defects that still reach review. 1 is now built; 2-3 are the remaining
-   structural pieces. 4-6 are cheap once those exist.
+   before PR-4 begins. 0 and 1 are now built; 2-3 are the remaining structural pieces. 4-6 are cheap
+   once those exist.
 
-   **Also worth noting for whoever picks this up:** `scripts/verify-dd043-pr3.sh` is now *inside*
-   `ci.yml`'s path filters — this PR added `'scripts/**'` to both lists
-   (`.github/workflows/ci.yml:51`, `:79`) so the `citation-integrity` job fires on script-only
-   commits. The remaining half of the gap is that no job invokes the harness, so a commit touching
-   only it still gets no harness run; item 0 is what closes that.
+   **Also worth noting for whoever picks this up:** `scripts/verify-dd043-pr3.sh` is *inside*
+   `ci.yml`'s path filters — `'scripts/**'` is in both lists
+   (`.github/workflows/ci.yml:51`, `:79`) — and, since item 0, a job actually runs it: the
+   `verify-dd043-pr3` job (`.github/workflows/ci.yml:109`) invokes `unit jar guards` on both
+   `push` and `pull_request`.
 
 2. **DD-041 — clustered exploration across replicas (the one the user asked for, for service-backed
    apps).** Not specced yet — so the next step is *brainstorm → spec → plan*, NOT code. DD-039 leaves

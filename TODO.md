@@ -1135,14 +1135,23 @@ Full rationale and the ordered item list are in `docs/ROADMAP.md`'s "Start here 
 pointer so the debt is visible from here too. The one-line version: **PR-3 took eight approver rounds,
 the feature held in every one, and almost every finding was in the machinery that certifies it.**
 
-- [ ] **0 — run the harness in CI.** No job invokes `scripts/verify-dd043-pr3.sh`; it is manual-only.
-      It is *not* outside the path filters any more — this PR put `'scripts/**'` in both of `ci.yml`'s
-      lists (`.github/workflows/ci.yml:51` push, `:79` pull_request), so a harness-only commit does
-      trigger the workflow; what it still does not trigger is any job that runs the harness. Being
-      manual-only is why `jar:baked-version` could not pass on a CRLF
-      checkout for three rounds and why the `jar` stage passed against a jar it never built until round
-      8 ran it deliberately. `unit jar guards` needs no docker and finishes in minutes. Do this first —
-      the rest shorten the feedback loop; this changes when the loop closes.
+- [x] **0 — run the harness in CI. Delivered.** `.github/workflows/ci.yml`'s `verify-dd043-pr3` job
+      (`.github/workflows/ci.yml:109`) now runs `bash scripts/verify-dd043-pr3.sh unit jar guards` on
+      every push and pull_request that matches the existing path filters — `jvm` and `native` stay out
+      of scope (docker, 15+ minutes) per a comment on the job. Both path-filter lists already covered
+      everything this invocation reads (`basquin-maven-injector/**`, `build.gradle`,
+      `basquin-init.gradle`, `gradle/**`, `gradlew`, `scripts/**`), so no filter changed. On failure the
+      job uploads `bench-results/verify-*/` via `actions/upload-artifact@v4` so a red run is
+      diagnosable from the Actions UI, not just locally.
+      **Proved empirically, not asserted:** an unmodified run on this branch passed 13/13 (0 failed, 0
+      skipped, exit 0). The injector jar's Sisu index
+      (`basquin-maven-injector/src/main/resources/META-INF/sisu/javax.inject.Named`) was then changed
+      to name a nonexistent class, which made the built jar's index stale — the exact silent-non-discovery
+      shape the `jar` stage exists to catch — and re-running failed 2 rows (`unit`: 359 tests but `gradle
+      rc=1` from `verifyInjectorIsDiscoverable`; `jar`: `UNMEASURED: the jar build FAILED`), tallying 9
+      passed / 2 failed / 0 skipped, exit 1. Restoring the file and re-running passed 13/13 again, exit 0
+      — captured live via `echo "exit=$?"` immediately after the invocation. All three runs were ad hoc
+      (not committed as run-of-record evidence; the CI job now produces those going forward).
 - [x] **1 — citation-resolution CI check, whole-tree scoped. Delivered.** Built as
       `scripts/check-citations.py` (resolves each citation against the cited file's current text, not
       just the path; whole-tree, not diff-scoped — a diff-scoped version missed four dead citations in

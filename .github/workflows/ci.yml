@@ -96,6 +96,38 @@ jobs:
         run: python3 scripts/check-citations.py
 
 
+  # DD-045 item 0 — the DD-043 PR-3 verification harness had never run anywhere but a developer's
+  # shell, so several of its own assertions (jar:baked-version on a CRLF checkout, the jar stage
+  # grading a stale build because the compile's exit code was discarded, jvm:zero-edits passing on
+  # a directory it never examined) stayed broken for multiple approver rounds before anyone
+  # noticed. Wiring it in here turns that class of defect into a push-time failure.
+  #
+  # Scope: only `unit jar guards` — deliberately NOT `jvm` or `native`. Those two need docker and
+  # take 15+ minutes (native alone is a serialized ~15-minute compile); they stay manual-only, run
+  # by hand per the script's own header. `unit jar guards` need no docker and are what would have
+  # caught the findings above.
+  verify-dd043-pr3:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify DD-043 PR-3 harness (unit jar guards)
+        run: bash scripts/verify-dd043-pr3.sh unit jar guards
+      - name: Upload verification run directory
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-dd043-pr3-results
+          path: bench-results/verify-*/
+          if-no-files-found: warn
+
   build-and-test:
     runs-on: ubuntu-latest
     strategy:

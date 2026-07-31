@@ -70,12 +70,29 @@ RUN-OF-RECORD POINTER (DD-045 item 2). `bench-results/RUN-OF-RECORD` is a tracke
 naming the current run-of-record directory (one non-comment line; not a symlink — this
 checkout has core.symlinks=false, so a tracked symlink would materialise as a plain-text file
 containing its target path). `resolve()` substitutes a cited `bench-results/RUN-OF-RECORD/...`
-prefix with that directory before matching against the tracked tree, so a supersession edits
-one file instead of repointing every citation. A missing pointer, a pointer with zero or more
-than one non-comment line, or a pointer naming a directory that is not tracked (dangling) is
-never a silent pass or a guess: `resolve_run_of_record()` reports it, and it is emitted as a
-FAILED DEAD PATH exactly like any other broken citation, so it fails the run (exit 1) whenever
-a RUN-OF-RECORD/ citation exists to need it.
+prefix — INCLUDING the bare form `bench-results/RUN-OF-RECORD/`, nothing after the slash,
+which names the directory itself rather than a sub-path within it — with that directory before
+matching against the tracked tree, so a supersession edits one file instead of repointing
+every citation. The substitution is checked FIRST in `resolve()`, ahead of the generic
+exact-path short-circuit (`path in tracked_set or path in tracked_dirs`), and it has to run
+first: the caller strips a citation's trailing slash before calling resolve(), so a bare
+citation's path is then IDENTICAL to `bench-results/RUN-OF-RECORD` — the pointer FILE's own
+tracked path. An earlier version of this tool checked the generic branch first; it matched the
+pointer's own tracked-ness and returned "exact" without `resolve_run_of_record()` ever running,
+so a dangling, missing, or malformed pointer verified clean for that one citation shape. That
+was a real, review-found gap: three citations (`TODO.md:1200`, `TODO.md:1293`,
+`docs/ROADMAP.md:102`) name only the bare form, and none of the three was flagged when the
+pointer was deliberately pointed at a nonexistent directory, while sub-path citations of the
+same broken pointer were. A bare citation now resolves to the target directory itself — a
+tracked DIRECTORY, never the pointer FILE — so the `file_cands` computed from it (candidates
+that are tracked FILES) is empty exactly as it is for any other directory citation: a quoted
+value beside a bare RUN-OF-RECORD/ citation has nothing to check against, rather than being
+silently checked against the pointer file's own one-line text. A missing pointer, a pointer
+with zero or more than one non-comment line, or a pointer naming a directory that is not
+tracked (dangling) is never a silent pass or a guess for any RUN-OF-RECORD/ citation
+`resolve()` reaches, bare or with a sub-path: `resolve_run_of_record()` reports it, and it is
+emitted as a FAILED DEAD PATH exactly like any other broken citation, so it fails the run
+(exit 1) whenever such a citation exists to need it.
   Scope boundary, stated so it is not mistaken for coverage: only `resolve()` substitutes the
 pointer. The separate pinned-row resolver that reads `*/citations.txt` does NOT, so a
 `bench-results/RUN-OF-RECORD/...` path written into a citations.txt would be treated as a
@@ -400,21 +417,50 @@ def main() -> int:
                      multi-segment token (`env/build.sh`, `cmd/basquin/status.go`): the
                      written path names nothing, so this is reported UNCHECKED, not verified;
              ambiguous — several matches, target not mechanically decidable;
-             pointer-error — path is bench-results/RUN-OF-RECORD/<rest> but the pointer is
-                     missing, malformed, or dangling: reported as a FAILED DEAD PATH, never a
-                     guess (see resolve_run_of_record());
+             pointer-error — path is bench-results/RUN-OF-RECORD (bare) or
+                     bench-results/RUN-OF-RECORD/<rest> but the pointer is missing,
+                     malformed, or dangling: reported as a FAILED DEAD PATH, never a guess
+                     (see resolve_run_of_record());
              none  — nothing matches anywhere."""
-        if path in tracked_set or path in tracked_dirs:
-            return [path], "exact"
-        if path.startswith(RUN_OF_RECORD_PREFIX):
+        # Checked FIRST, ahead of the generic "path in tracked_set" short-circuit below —
+        # not after it. RUN_OF_RECORD_FILE is itself a tracked FILE (the pointer), and the
+        # caller has already stripped a bare citation's trailing slash before calling
+        # resolve(), so a bare `bench-results/RUN-OF-RECORD/` citation arrives here with
+        # path == RUN_OF_RECORD_FILE — identical to that tracked file's own path. Checking
+        # tracked_set first (an earlier version of this tool did) would match the pointer's
+        # own tracked-ness and return "exact" without resolve_run_of_record() ever running,
+        # so a dangling/missing/malformed pointer would verify clean for that citation shape
+        # specifically. That was not hypothetical: three citations (TODO.md:1200,
+        # TODO.md:1293, docs/ROADMAP.md:102) name only the bare `bench-results/RUN-OF-RECORD/`
+        # form, and none of the three was flagged when the pointer was deliberately pointed
+        # at a nonexistent directory, while sub-path citations of the same broken pointer
+        # were — because only the prefix branch (not the tracked_set short-circuit) called
+        # resolve_run_of_record(). Ordering this branch first closes that gap for every
+        # RUN-OF-RECORD/ citation shape, bare or with a sub-path.
+        if path == RUN_OF_RECORD_FILE or path.startswith(RUN_OF_RECORD_PREFIX):
             target_dir, err = resolve_run_of_record()
             if err is not None:
                 return [err], "pointer-error"
+            if path == RUN_OF_RECORD_FILE:
+                # A bare `RUN-OF-RECORD/` citation names the DIRECTORY the pointer points
+                # to, not the pointer file's own one-line text — the same reading a
+                # sub-path citation gets, just with an empty remainder. Resolve to
+                # target_dir itself: a tracked DIRECTORY, never the pointer FILE, so the
+                # caller's `file_cands = [c for c in cands if c in tracked_set]` comes back
+                # empty, exactly as it does for every other directory citation (directories
+                # are never in tracked_set). Deliberate, not incidental: the alternative —
+                # resolving to RUN_OF_RECORD_FILE itself so `cands` is non-empty — would put
+                # the pointer file back into file_cands, and a quoted value in the same
+                # prose unit would then be silently checked against the pointer's own
+                # one-line content instead of correctly having nothing to check against.
+                return [target_dir], "exact"
             sub = target_dir + path[len(RUN_OF_RECORD_FILE):]
             if sub in tracked_set or sub in tracked_dirs:
                 return [sub], "exact"
             return ([f"{RUN_OF_RECORD_FILE} resolves to {target_dir!r}, but {sub!r} is not "
                      f"tracked"], "pointer-error")
+        if path in tracked_set or path in tracked_dirs:
+            return [path], "exact"
         cite_dir = citing.rsplit("/", 1)[0] if "/" in citing else ""
         if cite_dir:
             rel = posixpath.normpath(f"{cite_dir}/{path}")

@@ -1205,7 +1205,23 @@ the feature held in every one, and almost every finding was in the machinery tha
       restoring the pointer returned `exit=0` again every time. `scripts/verify-dd043-pr3.sh` was not
       touched and does not write this file — promoting a run to run-of-record stays a deliberate, manual
       edit made in the same commit that adds the new run directory, stated in the pointer file's own
-      comment header.
+      comment header. **Review found a gap in that proof and it is now fixed.** The four-mode
+      empirical proof above only ever broke the pointer against a **sub-path** citation
+      (`bench-results/RUN-OF-RECORD/RESULTS.md`); it never exercised the **bare** form — this
+      bullet's own `bench-results/RUN-OF-RECORD/` citation two sentences up, one more citation
+      further down this file ("check `bench-results/RUN-OF-RECORD/` first"), and one in
+      `docs/ROADMAP.md` all cite the pointer that way, with nothing after the slash. In `resolve()`,
+      the generic `path in tracked_set` check ran BEFORE the RUN-OF-RECORD substitution, and
+      `bench-results/RUN-OF-RECORD` is itself a tracked file (the pointer) — so a bare citation
+      matched the pointer's own tracked-ness and verified clean without `resolve_run_of_record()`
+      ever running. All three bare citations verified clean against a pointer deliberately pointed
+      at a nonexistent directory. **Fixed**: the RUN-OF-RECORD branch in `resolve()` now runs first,
+      and a bare citation resolves to the pointer's target DIRECTORY rather than the pointer FILE
+      itself, so `file_cands` stays empty for it exactly as for any other directory citation instead
+      of accidentally matching a nearby quoted value against the pointer's own one-line text.
+      Re-verified against all four break modes (dangling, missing, 0-line, 2-line pointer) with all
+      three bare citations now each producing a `DEAD PATH` finding and `exit=1`; restoring the
+      pointer returns `exit=0` again.
 - [ ] **3 — mutation-test the harness, not only the guards.** The script proves each of the injector's
       8 guards fails when neutered; nothing proves the script's own rows do. Also: the guards stage
       mutates tracked source in place, so a commit during a run is unsafe — one was observed

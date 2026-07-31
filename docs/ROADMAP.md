@@ -287,8 +287,14 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
       dangling, missing, or malformed (0 or 2+ non-comment-line) pointer fails the checker loudly
       (`exit=1`, a `DEAD PATH` finding naming the reason) rather than passing silently — proved
       empirically for all three modes. `scripts/verify-dd043-pr3.sh` never writes this file; promoting a
-      run is a deliberate, manual edit in the same commit that adds the new run directory. Full account
-      in `TODO.md`'s DD-045 item 2.
+      run is a deliberate, manual edit in the same commit that adds the new run directory. **Correction
+      (review found this):** that proof only ever exercised a **sub-path** citation
+      (`bench-results/RUN-OF-RECORD/RESULTS.md`); a **bare** `bench-results/RUN-OF-RECORD/` citation —
+      the exact form this file cites at `docs/ROADMAP.md:102`, and TODO.md cites twice — reached
+      "exact" via the generic tracked-path check before the substitution ever ran, because the pointer
+      is itself a tracked file, so all three bare citations verified clean against a deliberately
+      broken pointer. Fixed by checking the substitution first. Full account in `TODO.md`'s DD-045
+      item 2.
    3. **Mutation-test the harness, not only the guards.** The script mutation-tests the injector's guards
       (8 rows, each proven to fail when its own branch is neutered) but nothing mutation-tests the
       *script's own rows*. Neuter each assertion; require its row to go red. Every entry in row 1 of the

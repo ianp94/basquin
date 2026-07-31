@@ -76,6 +76,14 @@ than one non-comment line, or a pointer naming a directory that is not tracked (
 never a silent pass or a guess: `resolve_run_of_record()` reports it, and it is emitted as a
 FAILED DEAD PATH exactly like any other broken citation, so it fails the run (exit 1) whenever
 a RUN-OF-RECORD/ citation exists to need it.
+  Scope boundary, stated so it is not mistaken for coverage: only `resolve()` substitutes the
+pointer. The separate pinned-row resolver that reads `*/citations.txt` does NOT, so a
+`bench-results/RUN-OF-RECORD/...` path written into a citations.txt would be treated as a
+literal path and reported DEAD rather than resolved. That is moot as written — no tracked
+citations.txt names the run of record (both under bench-results/dd043-pr3-r4-guard-measurement-
+2026-07-29/ and bench-results/dd043-pr3-r7-managed-scope-2026-07-30/ contain zero such
+references) — and it fails closed rather than open, which is the safe direction. Teach the
+pinned resolver the same substitution before writing the first such citation.
 
 MECHANICS. Prose is grouped into logical units — markdown paragraphs (blank-line delimited;
 each table row its own unit) and contiguous comment blocks — because a wrapped sentence puts

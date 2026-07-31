@@ -1,0 +1,10 @@
+# S2 control-cell purge proof (round-5), captured 2026-07-30T00:00:48Z
+# purges com/basquin from the shared spike local repo before the control build below,
+# per S5 README's 'ambiguity control' standard (README: 'The ambiguity control').
+
+## before (find):
+bfs: error: bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin: No such file or directory.
+
+## bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin already absent (no com.basquin cached) -- nothing to purge
+## after (find; must report No such file):
+bfs: error: bench-results/dd043-spikes-2026-07-24/.m2/.m2/repository/com/basquin: No such file or directory.

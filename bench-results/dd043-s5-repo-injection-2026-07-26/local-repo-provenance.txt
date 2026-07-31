@@ -1,0 +1,22 @@
+# DD-043 S5 — post-build local-repo provenance (Maven Resolver _remote.repositories files)
+# Captured 2026-07-26 07:28:37 UTC. The local repo was empty of com.basquin at build
+# start (see purge-proof.txt); these tracking files record which remote repository each
+# artifact was fetched from.
+
+== com/basquin/basquin-core/0.3.0/_remote.repositories
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Sun Jul 26 07:26:07 GMT 2026
+basquin-core-0.3.0.jar>basquin-injected=
+basquin-core-0.3.0.pom>basquin-injected=
+
+== com/basquin/basquin-quarkus-deployment/0.3.0/_remote.repositories
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Sun Jul 26 07:26:12 GMT 2026
+basquin-quarkus-deployment-0.3.0.jar>basquin-injected=
+basquin-quarkus-deployment-0.3.0.pom>basquin-injected=
+
+== com/basquin/basquin-quarkus/0.3.0/_remote.repositories
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Sun Jul 26 07:26:07 GMT 2026
+basquin-quarkus-0.3.0.jar>basquin-injected=
+basquin-quarkus-0.3.0.pom>basquin-injected=

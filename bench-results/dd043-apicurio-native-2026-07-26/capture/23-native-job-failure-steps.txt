@@ -1,0 +1,60 @@
+# Failing-native-job step attribution, captured 2026-07-29T15:16:38Z
+# For every run in 21-/22- whose native job concluded 'failure', the
+# per-step conclusions of that job.
+
+=== eclipse-hono/hono workflow 19566723 (last 15 runs) ===
+run 30372013196  job "Run integration tests with native images"  started 2026-07-28T15:10:12Z  url https://github.com/eclipse-hono/hono/actions/runs/30372013196/job/90318030748
+    step 1. Set up job -> success
+    step 2. Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 -> success
+    step 3. Set up Maven -> success
+    step 4. Set up JDK -> success
+    step 5. Build native images -> success
+    step 6. Run integration tests with Mongo DB and Kafka -> failure
+    step 7. Run integration tests with PostgreSQL DB and Kafka -> skipped
+    step 8. Run integration tests with Sandbox-like configuration -> skipped
+    step 9. Create CLI native executable -> skipped
+    step 17. Post Set up JDK -> success
+    step 18. Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 -> success
+    step 19. Complete job -> success
+run 30279722872  job "Run integration tests with native images"  started 2026-07-27T15:23:08Z  url https://github.com/eclipse-hono/hono/actions/runs/30279722872/job/90022719513
+    step 1. Set up job -> success
+    step 2. Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 -> success
+    step 3. Set up Maven -> success
+    step 4. Set up JDK -> success
+    step 5. Build native images -> success
+    step 6. Run integration tests with Mongo DB and Kafka -> failure
+    step 7. Run integration tests with PostgreSQL DB and Kafka -> skipped
+    step 8. Run integration tests with Sandbox-like configuration -> skipped
+    step 9. Create CLI native executable -> skipped
+    step 17. Post Set up JDK -> success
+    step 18. Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 -> success
+    step 19. Complete job -> success
+run 30237612865  job "Run integration tests with native images"  started 2026-07-27T04:37:28Z  url https://github.com/eclipse-hono/hono/actions/runs/30237612865/job/89888288815
+    step 1. Set up job -> success
+    step 2. Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 -> success
+    step 3. Set up Maven -> success
+    step 4. Set up JDK -> success
+    step 5. Build native images -> success
+    step 6. Run integration tests with Mongo DB and Kafka -> success
+    step 7. Run integration tests with PostgreSQL DB and Kafka -> failure
+    step 8. Run integration tests with Sandbox-like configuration -> skipped
+    step 9. Create CLI native executable -> skipped
+    step 17. Post Set up JDK -> success
+    step 18. Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 -> success
+    step 19. Complete job -> success
+run 30187997674  job "Run integration tests with native images"  started 2026-07-26T04:34:24Z  url https://github.com/eclipse-hono/hono/actions/runs/30187997674/job/89756017452
+    step 1. Set up job -> success
+    step 2. Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 -> success
+    step 3. Set up Maven -> success
+    step 4. Set up JDK -> success
+    step 5. Build native images -> success
+    step 6. Run integration tests with Mongo DB and Kafka -> failure
+    step 7. Run integration tests with PostgreSQL DB and Kafka -> skipped
+    step 8. Run integration tests with Sandbox-like configuration -> skipped
+    step 9. Create CLI native executable -> skipped
+    step 17. Post Set up JDK -> success
+    step 18. Post Run actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 -> success
+    step 19. Complete job -> success
+
+=== debezium/debezium-server workflow 46636201 (last 12 runs) ===
+

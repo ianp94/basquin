@@ -1,0 +1,45 @@
+# Apicurio Registry 2.6.x — every .github/workflows file grepped for 'native'
+# repo Apicurio/apicurio-registry @ b7f3e291fd5861717932294e4a08d94ddc6981fc, captured 2026-07-29T15:16:38Z
+# method: gh api repos/Apicurio/apicurio-registry/contents/.github/workflows?ref=<sha> to enumerate,
+#         then GET each file raw and 'grep -n native'.
+
+# workflow files found: 16
+
+## .github/workflows/dependabot-autoapprove.yaml  (0 hits)
+## .github/workflows/dependabot-automerge.yaml  (0 hits)
+## .github/workflows/image-scan.yaml  (0 hits)
+## .github/workflows/integration-tests.yaml  (0 hits)
+## .github/workflows/lint.yaml  (0 hits)
+## .github/workflows/maven-snapshot-release.yaml  (0 hits)
+## .github/workflows/python-sdk.yaml  (0 hits)
+## .github/workflows/registry-rhbq-build.yaml  (0 hits)
+## .github/workflows/release-images.yaml  (0 hits)
+## .github/workflows/release.yaml  (0 hits)
+## .github/workflows/tag-registry-examples.yaml  (0 hits)
+## .github/workflows/tool-exportV1-release.yaml  (0 hits)
+## .github/workflows/update-openapi.yaml  (0 hits)
+## .github/workflows/update-website.yaml  (0 hits)
+## .github/workflows/validate-openapi.yaml  (0 hits)
+## .github/workflows/verify.yaml  (20 hit(s))
+    205:  build-mem-native-images:
+    206:    name: Build and Test In Memory native images
+    245:        run: make SKIP_TESTS=true build-mem-native
+    249:#       run: make SKIP_TESTS=true BUILD_FLAGS='-DskipUiBuild' build-mem-native
+    256:        run: make build-mem-native-image push-mem-native-image
+    270:        run: make REGISTRY_IMAGE='-Dregistry-in-memory-image=ttl.sh/${{ github.sha }}/apicurio/apicurio-registry-mem-native:1d' run-in-memory-integration-tests
+    273:        run: make REGISTRY_IMAGE='-Dregistry-in-memory-image=ttl.sh/${{ github.sha }}/apicurio/apicurio-registry-mem-native:1d' run-in-memory-auth-tests
+    291:          make build-mem-native-image
+    304:          make push-mem-native-image
+    309:  build-sql-native-images:
+    310:    name: Build and Test SQL native images
+    349:        run: make SKIP_TESTS=true build-sql-native
+    353:#       run: make SKIP_TESTS=true BUILD_FLAGS='-DskipUiBuild' build-sql-native
+    360:        run: make build-sql-native-image push-sql-native-image
+    374:        run: make REGISTRY_IMAGE='-Dregistry-sql-image=ttl.sh/${{ github.sha }}/apicurio/apicurio-registry-sql-native:1d' run-sql-integration-tests
+    377:        run: make REGISTRY_IMAGE='-Dregistry-sql-image=ttl.sh/${{ github.sha }}/apicurio/apicurio-registry-sql-native:1d' run-sql-auth-tests
+    380:        run: make REGISTRY_IMAGE='-Dregistry-sql-image=ttl.sh/${{ github.sha }}/apicurio/apicurio-registry-sql-native:1d' run-sql-migration-integration-tests
+    383:        run: make REGISTRY_IMAGE='-Dregistry-sql-image=ttl.sh/${{ github.sha }}/apicurio/apicurio-registry-sql-native:1d' run-sql-multitenancy-integration-tests
+    401:          make build-sql-native-image
+    414:          make push-sql-native-image
+
+# total 'native' hits across all workflow files: 20

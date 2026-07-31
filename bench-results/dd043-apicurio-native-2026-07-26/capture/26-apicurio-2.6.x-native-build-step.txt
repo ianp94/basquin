@@ -1,0 +1,25 @@
+# Apicurio Registry 2.6.x — steps of the 'Build and Test In Memory native images' job, last 10 verify.yaml runs on branch 2.6.x
+# job filter:  /In Memory native images/i     step filter: /./i
+# query:       gh api "repos/Apicurio/apicurio-registry/actions/workflows/1200448/runs?per_page=10&status=completed&branch=2.6.x"
+#              then gh api repos/Apicurio/apicurio-registry/actions/runs/<id>/jobs  (.steps[])
+# captured:    2026-07-29T15:16:38Z
+
+RUN_ID         RUN_SHA   CREATED_AT             JOB                                                        BUILD_STEP
+16780646381    f52d8870  2025-08-06T14:59:43Z   Build and Test In Memory native images=success steps=0     NO STEP DATA
+16327722821    4be29ba5  2025-07-16T18:47:30Z   Build and Test In Memory native images=success steps=0     NO STEP DATA
+16327719706    cee5ea80  2025-07-16T18:47:20Z   Build and Test In Memory native images=cancelled steps=0   NO STEP DATA
+16266971865    5548c4f0  2025-07-14T12:34:04Z   Build and Test In Memory native images=success steps=0     NO STEP DATA
+15985387936    2471d8d7  2025-06-30T22:54:43Z   Build and Test In Memory native images=success steps=0     NO STEP DATA
+15740112725    9d99ecad  2025-06-18T17:57:47Z   Build and Test In Memory native images=failure steps=0     NO STEP DATA
+15708161273    b013d78e  2025-06-17T13:10:14Z   Build and Test In Memory native images=success steps=0     NO STEP DATA
+15708156492    46845b1f  2025-06-17T13:10:02Z   Build and Test In Memory native images=cancelled steps=0   NO STEP DATA
+15707237529    0289e1fe  2025-06-17T12:29:27Z   Build and Test In Memory native images=success steps=0     NO STEP DATA
+15634107481    dacc5221  2025-06-13T12:05:04Z   Build and Test In Memory native images=success steps=0     NO STEP DATA
+
+# ---- DERIVED TALLY (window 2025-06-13 .. 2025-08-06) ----
+# runs listed:                                10
+# runs where the matching job is absent:      0
+# runs with step-level data for that job:     0
+# runs whose job exists but has steps=0
+#   (GitHub pruned the step list — old run):  10
+# build-step conclusions (over runs with step data):

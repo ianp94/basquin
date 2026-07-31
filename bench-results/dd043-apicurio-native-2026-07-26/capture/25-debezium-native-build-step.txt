@@ -1,0 +1,28 @@
+# Debezium Server — conclusion of the 'Maven build Debezium Server Native' STEP, last 12 runs of cross-maven.yml
+# job filter:  /native build/i     step filter: /Debezium Server Native/i
+# query:       gh api "repos/debezium/debezium-server/actions/workflows/46636201/runs?per_page=12&status=completed"
+#              then gh api repos/debezium/debezium-server/actions/runs/<id>/jobs  (.steps[])
+# captured:    2026-07-29T15:16:38Z
+
+RUN_ID         RUN_SHA   CREATED_AT             JOB                                                        BUILD_STEP
+30319772988    4722fcca  2026-07-28T01:16:12Z   Verify native build=skipped steps=0                        NO STEP DATA
+30313669053    98d51ffc  2026-07-27T23:17:39Z   JOB ABSENT                                                 NO STEP DATA
+30254682282    cbae7c65  2026-07-27T09:36:32Z   Verify native build=success steps=9                        Maven build Debezium Server Native => success
+30254417005    ae0dc89c  2026-07-27T09:32:49Z   Verify native build=skipped steps=0                        NO STEP DATA
+30086164379    df098e49  2026-07-24T10:26:21Z   Verify native build=success steps=9                        Maven build Debezium Server Native => success
+30080771387    34046f7d  2026-07-24T08:57:12Z   Verify native build=skipped steps=0                        NO STEP DATA
+29940371103    a415bee9  2026-07-22T16:58:48Z   Verify native build=success steps=9                        Maven build Debezium Server Native => success
+29777270580    d6eda10a  2026-07-20T20:42:58Z   Verify native build=success steps=9                        Maven build Debezium Server Native => success
+29775033461    2d47ef56  2026-07-20T20:10:46Z   Verify native build=skipped steps=0                        NO STEP DATA
+29756389657    31a9b31d  2026-07-20T15:42:32Z   Verify native build=success steps=9                        Maven build Debezium Server Native => success
+29516539076    444efe0c  2026-07-16T16:40:09Z   Verify native build=success steps=9                        Maven build Debezium Server Native => success
+29516453141    5323af43  2026-07-16T16:38:55Z   Verify native build=success steps=9                        Maven build Debezium Server Native => success
+
+# ---- DERIVED TALLY (window 2026-07-16 .. 2026-07-28) ----
+# runs listed:                                12
+# runs where the matching job is absent:      1
+# runs with step-level data for that job:     7
+# runs whose job exists but has steps=0
+#   (GitHub pruned the step list — old run):  4
+# build-step conclusions (over runs with step data):
+#           7 success

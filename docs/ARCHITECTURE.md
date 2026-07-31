@@ -78,6 +78,37 @@ a *runtime-agnostic* control plane — the CR/reconcile/inject/revert machinery 
 the injected flags and the agents image are JVM-specific — so it can grow other runtime profiles later.
 Full design: [OPERATOR-DESIGN.md](OPERATOR-DESIGN.md); usage: [USAGE.md](USAGE.md#kubernetes-instrument-any-app-with-the-operator).
 
+### Build-time injection (Quarkus / GraalVM-native targets) — the symmetry with runtime attachment
+
+Everything above attaches at **runtime**. A GraalVM-native binary has no runtime attachment point, so
+for Quarkus targets Basquin's instrumentation (`basquin-quarkus`, a Quarkus extension) is compiled in
+at **build time** by a Maven core extension, `basquin-maven-injector` — the same
+never-modify-the-source thesis, met by a different mechanism (DD-043 spec §1.1, §5):
+
+| | Injection point | Mechanism |
+|---|---|---|
+| **Runtime** (Tomcat, JVM) | `CATALINA_OPTS` / `JAVA_TOOL_OPTIONS` | operator patches the pod template |
+| **Build** (Quarkus, native) | `MAVEN_OPTS` / `-Dmaven.ext.class.path` | lifecycle participant mutates the project model |
+
+In both rows no file in the application's source tree is created or modified. What changes is where
+the failure mode lives: a runtime agent can silently detach, while a build-time injection can
+silently *not happen* — so its presence is checked per build via the `basquin` entry in the startup
+banner's `Installed features`, never left unchecked. That check is **necessary but not
+sufficient**: a class of shapes leaves `basquin-quarkus` loaded — so `Installed features` still lists
+it — while `basquin-core`, the sibling it needs transitively, ends up stripped or pushed off the
+runtime classpath, so no banner-only acceptance run would catch them. An `<exclusions>` entry
+(declared on `basquin-quarkus` itself, or managed on any `com.basquin:*` entry) and an unusable
+`<scope>` on a `com.basquin` sibling (declared directly, or managed) are each their own route into
+that same resolved state, and the class has grown every time review found another route — do not
+treat a specific count of them as stable; see THIRD-PARTY-APPS.md for the current enumeration and
+its source. On the Maven path, `basquin-maven-injector`'s fail-loudly guards
+close that gap by hard-failing the build itself, before any banner exists to check; on the Gradle
+path (`basquin-init.gradle`), which implements none of those guards, the banner is the only signal
+and is not sufficient on its own. Guard-by-guard detail, including the current count and its
+checkable source: THIRD-PARTY-APPS.md's "Fail-loudly behaviours" section. Operator guide:
+[THIRD-PARTY-APPS.md](THIRD-PARTY-APPS.md); full design:
+`docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md` §5.
+
 ## Early Usage Pattern (preview)
 
 Call the target entrypoint per iteration, within begin/end boundaries:

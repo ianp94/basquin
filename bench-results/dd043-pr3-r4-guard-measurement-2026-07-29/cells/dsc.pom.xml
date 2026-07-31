@@ -1,0 +1,10 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example.probe</groupId>
+  <artifactId>probe-dsc</artifactId>
+  <version>1.0</version>
+  <packaging>jar</packaging>
+  <dependencies><dependency>
+      <groupId>com.basquin</groupId><artifactId>basquin-core</artifactId><version>0.3.0</version><scope>test</scope>
+    </dependency></dependencies>
+</project>

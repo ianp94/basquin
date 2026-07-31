@@ -1,0 +1,13 @@
+# The application clone was never edited — the optional declaration lives only in a scratchpad copy.
+# Captured 2026-07-29T15:03:53Z, after the runtime re-capture.
+
+$ git -C ../quarkus-super-heroes log --oneline -1
+c9b46d7 Generate deploy resources (from Build and Push Container images run # 1621) (#2221)
+
+$ git -C ../quarkus-super-heroes status --porcelain | wc -l
+0
+# (0 lines = pristine; the PR-3 acceptance's target/ output is gitignored and untouched)
+
+$ grep -c basquin ../quarkus-super-heroes/rest-villains/pom.xml
+0
+# (0 = the clone's pom carries no Basquin declaration of any kind, optional or otherwise)

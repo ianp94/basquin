@@ -7,8 +7,10 @@ name: Release
 #   - the packaged Helm chart as a release asset
 #   - the GitHub Pages Helm repo (docs/charts/) — the `pages` job repackages + reindexes + commits to
 #     main automatically (deploy/helm/publish.sh remains for a manual/bootstrap refresh).
-#   - the GitHub Pages Maven repo (docs/maven/) — the same `pages` job publishes basquin-core there
-#     and commits it, so a Maven build can depend on com.basquin:basquin-core with no credentials.
+#   - the GitHub Pages Maven repo (docs/maven/) — the same `pages` job publishes the whole Basquin
+#     extension chain there (basquin-core, basquin-quarkus, basquin-quarkus-deployment,
+#     basquin-maven-injector) and commits it, so a Maven build can depend on them with no
+#     credentials.
 on:
   push:
     tags: ['v*']
@@ -167,7 +169,7 @@ jobs:
           helm package deploy/helm/basquin-operator --destination docs/charts \
             --version "${{ steps.v.outputs.tag }}" --app-version "${{ steps.v.outputs.tag }}"
           helm repo index docs/charts --url https://ianp94.github.io/basquin/charts --merge docs/charts/index.yaml
-      # DD-043: publish basquin-core into docs/maven, which Pages serves at
+      # DD-043: publish the extension chain into docs/maven, which Pages serves at
       # https://ianp94.github.io/basquin/maven/ — the Maven-repo counterpart of docs/charts.
       # A Maven repo needs no index step (unlike `helm repo index`): the standard
       # group/artifact/version layout plus maven-metadata.xml, which Gradle writes, is the whole
@@ -176,7 +178,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      # This PR made `version` in basquin-core/build.gradle load-bearing. It was decorative before —
+      # DD-043 made `version` load-bearing in every published module's build.gradle (basquin-core
+      # and both basquin-quarkus modules). It was decorative before —
       # nothing in the build read it, and the workflow stamps images/CLI/chart straight from the tag —
       # so a release-prep commit that bumps the tag but forgets this field is a very plausible miss.
       # The failure would be silent: Gradle would republish the OLD coordinate, `git diff --cached`
@@ -184,20 +187,41 @@ jobs:
       # on the new version. Assert instead of overriding with -Pversion: the repo's convention is that
       # the release commit bumps the file, and a guard enforces that convention where an override
       # would hide its violation.
-      - name: Assert basquin-core's version matches the release tag
+      - name: Assert every published module's version matches the release tag
         run: |
           set -euo pipefail
-          CORE="$(./gradlew -q :basquin-core:properties --no-daemon | awk -F': ' '/^version:/{print $2}')"
           TAG='${{ steps.v.outputs.tag }}'
-          echo "basquin-core version=$CORE  release tag=$TAG"
-          if [ "$CORE" != "$TAG" ]; then
-            echo "::error::basquin-core/build.gradle has version '$CORE' but this release is '$TAG'." \
-                 "Bump it in the release commit, or the Pages Maven repo will advertise the wrong" \
-                 "coordinate for this release."
-            exit 1
-          fi
-      - name: Publish basquin-core into the Pages Maven repo
-        run: ./gradlew :basquin-core:publishAllPublicationsToPagesRepository --no-daemon
+          fail=0
+          for p in :basquin-core :basquin-quarkus:runtime :basquin-quarkus:deployment :basquin-maven-injector; do
+            V="$(./gradlew -q "$p:properties" --no-daemon | awk -F': ' '/^version:/{print $2}')"
+            echo "$p version=$V  release tag=$TAG"
+            if [ "$V" != "$TAG" ]; then
+              echo "::error::$p has version '$V' but this release is '$TAG'. Bump it in the release" \
+                   "commit, or the Pages Maven repo will advertise the wrong coordinate."
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ]
+      # DD-043 PR-3: the injector resolves the whole extension chain from this repo, so all four
+      # artifacts ship together — including the injector jar itself, which an operator puts on
+      # maven.ext.class.path. Publishing only basquin-core would leave an injected build failing
+      # to resolve basquin-quarkus — loudly, but only at a user's build rather than here.
+      - name: Publish the extension chain into the Pages Maven repo
+        run: |
+          ./gradlew --no-daemon \
+            :basquin-core:publishAllPublicationsToPagesRepository \
+            :basquin-quarkus:runtime:publishAllPublicationsToPagesRepository \
+            :basquin-quarkus:deployment:publishAllPublicationsToPagesRepository \
+            :basquin-maven-injector:publishAllPublicationsToPagesRepository
+      - name: Assert the extension chain reached docs/maven
+        run: |
+          set -euo pipefail
+          TAG='${{ steps.v.outputs.tag }}'
+          for a in basquin-core basquin-quarkus basquin-quarkus-deployment basquin-maven-injector; do
+            f="docs/maven/com/basquin/$a/$TAG/$a-$TAG.jar"
+            [ -f "$f" ] || { echo "::error::$f missing after publish"; exit 1; }
+          done
+          echo "extension chain present in docs/maven"
       - name: Commit the updated Helm + Maven repos to main
         run: |
           git config user.name  "basquin-bot[bot]"
@@ -206,5 +230,5 @@ jobs:
           if git diff --cached --quiet; then
             echo "no chart or maven changes to publish"; exit 0
           fi
-          git commit -m "chore(release): publish chart + basquin-core ${{ steps.v.outputs.tag }} to the Pages repos [skip ci]"
+          git commit -m "chore(release): publish chart + the Basquin extension chain ${{ steps.v.outputs.tag }} to the Pages repos [skip ci]"
           git push origin main

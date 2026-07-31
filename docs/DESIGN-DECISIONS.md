@@ -391,8 +391,9 @@ irreversible and couples the *oracle* to a *presentation* concern. Clustering is
 of saved data: reversible, tunable later, and it can be recomputed differently without re-running
 a campaign.
 
-**Why deterministic, not the LLM.** agents.md's "enforcement > inference": anything the bug oracle
-or triage relies on should be a hard check. A model deciding what counts as a duplicate finding
+**Why deterministic, not the LLM.** This project's own principle of enforcement over inference —
+prefer hard checks that prove cleanliness over heuristics that guess it — means anything the bug
+oracle or triage relies on should be a hard check. A model deciding what counts as a duplicate finding
 would make results non-reproducible run-to-run. The Claude layer (DD-015) sits strictly *on top*
 of these clusters, explaining what a human is already looking at — it never decides what is or
 isn't a finding.
@@ -684,8 +685,9 @@ nothing exercised any of it. Four real bugs were found in that code during devel
 by hand: a regex that stack-overflowed on realistic input, an error-page parser reading the wrong
 `<pre>` block, a frame parser requiring an `at ` prefix Tomcat doesn't emit, and a kind extractor
 that only understood one of the two saved-finding formats. None of those were caught by anything
-repeatable, and `agents.md` already says a feature is done when it has a minimal test. A tool whose
-job is finding other people's bugs cannot credibly ship untested parsing logic.
+repeatable, and this project's own definition of done already requires a minimal test before a
+feature ships. A tool whose job is finding other people's bugs cannot credibly ship untested
+parsing logic.
 
 **Decision.** Unit-test the pure logic that decides what the tool can find and how it reports it:
 `JsonScan`, `FindingsClusterer`, `RequestGrammar`. Prefer regression tests tied to bugs that
@@ -1441,7 +1443,8 @@ heap drift from store mutation/reindex) that arm A's cached reads structurally c
 
 **Context.** DD-036 captures the value of a *statically*-named input, but Apache JSPWiki's
 `SpamFilter.checkHash` (called unconditionally from `Edit.jsp`, before every save — no config can
-bypass it, confirmed by bytecode + a live A/B in `.superpowers/sdd/jspwiki-save-rootcause.md`) requires
+bypass it, confirmed by bytecode (`javap -c`) and a live A/B against the deployed JSPWiki pod,
+not committed to the repo) requires
 a hidden field whose **name** is itself dynamic: 6 random lowercase letters, session-pinned and rotated
 daily (e.g. `ztbams`), holding a value of `lastModified ^ hash(clientIP)` that changes after every save.
 The name is un-nameable at grammar-authoring time — DD-036's `<<x=input:FIELD` needs a literal field
@@ -2024,8 +2027,9 @@ change that needed justifying. The response attributed to the input is the final
    knows a multi-hop number is an **explore-side** measurement.
 
 **The spike.** Three prior plan versions did not survive review, each assuming an obvious fix that the
-code does not support. A throwaway spike (`.superpowers/sdd/dd039-spike-report.md`) built only the
-minimal data path — accumulate, follow-and-stamp, one reconcile — reproduced DD-040's exact failure
+code does not support. A throwaway spike (not committed to the repo — no provenance is implied beyond
+this paragraph) built only the minimal data path — accumulate, follow-and-stamp, one reconcile —
+reproduced DD-040's exact failure
 (`POST → 302 → GET`, both hops violate) and asserted the driver's **finding count**, not a parsed
 integer: **1 counted → 2**. Front-loading that measurement surfaced the three corrections above that a
 paper design missed — A4b-1 (the un-implementable hop-identity dedup), A4b-2 (the header-save removal

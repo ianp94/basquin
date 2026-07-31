@@ -1,0 +1,32 @@
+== Re-derivation run 2026-07-30, from HEAD (dd043-pr3-maven-injector branch) ==
+
+--- 1. CoverageGuidedRun.java growth in a0595b9 (DD-039), the cause cited for the redirect-session-carry.md 52-wrong cluster ---
+$ git log --oneline -1 a0595b9
+a0595b9 feat: session carry across redirects — reach authenticated write paths, close DD-040's gap (DD-039) (#96)
+
+$ git show --stat a0595b9 -- runner/coverage/CoverageGuidedRun.java
+commit a0595b95d572dec1d6281977f3275cabae113ad3
+Author: basquin-bot[bot] <307641014+basquin-bot[bot]@users.noreply.github.com>
+Date:   Thu Jul 23 18:13:20 2026 -0400
+
+    feat: session carry across redirects — reach authenticated write paths, close DD-040's gap (DD-039) (#96)
+
+ runner/coverage/CoverageGuidedRun.java | 765 +++++++++++++++++++++++++--------
+ 1 file changed, 586 insertions(+), 179 deletions(-)
+
+$ git show a0595b9^:runner/coverage/CoverageGuidedRun.java | wc -l   # parent (pre-commit)
+1088
+
+$ git show a0595b9:runner/coverage/CoverageGuidedRun.java | wc -l    # at the commit
+1495
+
+$ wc -l runner/coverage/CoverageGuidedRun.java                      # current HEAD
+1495 runner/coverage/CoverageGuidedRun.java
+
+--- 2. Independent re-check of citations.txt (bench-results/dd043-pr3-r4-guard-measurement-2026-07-29/citations.txt) ---
+Script: for each 'file:line: expected-text' row, read that line of the referenced log file
+and check the expected text appears (substring match either direction).
+rows parsed: 66
+resolved OK: 66
+failed: 0
+--- end of captured run ---

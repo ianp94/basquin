@@ -1,0 +1,9 @@
+ M TODO.md
+ M bench-results/dd043-pr3-r4-guard-measurement-2026-07-29/README.md
+ M bench-results/dd043-pr3-restvillains-2026-07-26/pristine-proof.txt
+ M docs/ROADMAP.md
+ M docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md
+ M scripts/check-citations-allowlist.txt
+ M scripts/check-citations.py
+ M scripts/verify-dd043-pr3.sh
+?? bench-results/citations-20260730T214700Z/

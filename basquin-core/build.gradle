@@ -75,7 +75,8 @@ publishing {
             // needs no index step, only the standard group/artifact/version layout, which Gradle
             // writes here along with maven-metadata.xml.
             name = 'pages'
-            url = rootProject.layout.projectDirectory.dir('docs/maven')
+            url = rootProject.layout.projectDirectory.dir(
+                    providers.gradleProperty('basquinPagesDir').getOrElse('docs/maven'))
         }
         maven {
             // The Phase-0 fixture's Maven repository. The fixture builds in a container with

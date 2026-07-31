@@ -1,0 +1,58 @@
+# Eclipse Hono native declarations, master @ 8a4c437061c30d0269ce58a3406cbefb0d97c3c8, captured 2026-07-29T15:16:38Z
+
+## bom/pom.xml — grep -n 'quarkus.platform.version'
+52:    <quarkus.platform.version>3.27.4.1</quarkus.platform.version>
+213:        <version>${quarkus.platform.version}</version>
+221:        <version>${quarkus.platform.version}</version>
+230:        <version>${quarkus.platform.version}</version>
+242:        <version>${quarkus.platform.version}</version>
+253:        <version>${quarkus.platform.version}</version>
+264:        <version>${quarkus.platform.version}</version>
+275:        <version>${quarkus.platform.version}</version>
+286:        <version>${quarkus.platform.version}</version>
+680:          <version>${quarkus.platform.version}</version>
+
+## adapters/parent/pom.xml — verbatim around the build-native-image profile
+203:
+204:    <profile>
+205:      <id>build-native-image</id>
+206:      <properties>
+207:        <quarkus.native.enabled>true</quarkus.native.enabled>
+208:        <!-- build native image inside of a container, doesn't require GraalVM SDK to be installed locally -->
+209:        <quarkus.native.remote-container-build>true</quarkus.native.remote-container-build>
+210:        <quarkus.native.builder-image>${native.builder-image.name}</quarkus.native.builder-image>
+211:      </properties>
+212:
+213:      <build>
+
+## services/parent/pom.xml — verbatim around the build-native-image profile
+201:
+202:    <profile>
+203:      <id>build-native-image</id>
+204:      <properties>
+205:        <quarkus.native.enabled>true</quarkus.native.enabled>
+206:        <!-- build native image inside of a container, doesn't require GraalVM SDK to be installed locally -->
+207:        <quarkus.native.remote-container-build>true</quarkus.native.remote-container-build>
+208:        <quarkus.native.builder-image>${native.builder-image.name}</quarkus.native.builder-image>
+209:      </properties>
+210:
+211:      <build>
+
+## .github/workflows/native-images-tests.yml — schedule + job names
+17:name: Build native images and run integration tests
+19:on:
+20:  schedule:
+22:  - cron: '23 3,10,14 * * *'
+24:  workflow_dispatch:
+29:    runs-on: ubuntu-latest
+30:    name: "Run integration tests with native images"
+33:    - name: Set up Maven
+36:        maven-version: 3.9.11
+37:    - name: Set up JDK
+40:        distribution: "temurin"
+41:        java-version: "21"
+43:    - name: "Build native images"
+51:    - name: "Run integration tests with Mongo DB and Kafka"
+57:    - name: "Run integration tests with PostgreSQL DB and Kafka"
+63:    - name: "Run integration tests with Sandbox-like configuration"
+69:    - name: "Create CLI native executable"

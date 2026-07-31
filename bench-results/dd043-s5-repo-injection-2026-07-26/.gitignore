@@ -1,0 +1,5 @@
+# The stood-in Pages repository this spike served over HTTP. Regenerable in one command
+# (see README's Reproduce block) and it holds built jars — bench-results/ tracks no jars
+# anywhere else, matching s4-injection/probe-participant/.gitignore. The *evidence* that the
+# artifacts were served is http-access.log, not the bytes themselves.
+pages-repo/

@@ -1,0 +1,27 @@
+[INFO] Scanning for projects...
+[REPO-INJECT-CONTROL] added dependency com.basquin:basquin-quarkus:0.3.0 and repository basquin-injected=http://localhost:8000/ to the MODEL ONLY (2b omitted) for fixture
+[REPO-INJECT] -Dbasquin.inject.repo.url not set; injecting nothing
+[INFO] 
+[INFO] ---------------------< com.basquin.spike:fixture >----------------------
+[INFO] Building fixture 1.0.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] ------------------------------[ quarkus ]-------------------------------
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.pom
+[WARNING] The POM for com.basquin:basquin-quarkus:jar:0.3.0 is missing, no dependency information available
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.jar
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  36.648 s
+[INFO] Finished at: 2026-07-30T00:01:54Z
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal on project fixture: Could not resolve dependencies for project com.basquin.spike:fixture:quarkus:1.0.0-SNAPSHOT
+[ERROR] dependency: com.basquin:basquin-quarkus:jar:0.3.0 (compile)
+[ERROR] 	Could not find artifact com.basquin:basquin-quarkus:jar:0.3.0 in central (https://repo.maven.apache.org/maven2)
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/DependencyResolutionException

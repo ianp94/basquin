@@ -1,0 +1,24 @@
+# Post-hoc binary stat — fixture-1.0.0-SNAPSHOT-runner
+#
+# Captured 2026-07-29T14:46:45Z, after S3 (independent-approver review) found the
+# README's 'ELF 64-bit x86-64, stripped, 48,655,416 bytes' figure uncaptured in this directory.
+# The decisive build (build-native.log) ran on 2026-07-26 and its own working tree's gitignored
+# fixture/target/ was not cleaned afterward, so the same binary is still present here. Its mtime
+# below (2026-07-26 08:05:52 -0400 = 2026-07-26T12:05:52Z) matches build-native.log:135's
+# 'Finished at: 2026-07-26T12:05:52Z' to the second, and its size matches the README figure
+# exactly (48655416 bytes = 48,655,416) — both corroborate this is the same binary, not a
+# same-sized coincidence from a later rebuild.
+
+$ BIN=bench-results/dd043-spikes-2026-07-24/fixture/target/fixture-1.0.0-SNAPSHOT-runner
+$ file "$BIN"
+bench-results/dd043-spikes-2026-07-24/fixture/target/fixture-1.0.0-SNAPSHOT-runner: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=240485f6772c9624cea82a52f849ddcbc6b727ad, for GNU/Linux 3.2.0, stripped
+
+$ stat "$BIN"
+  File: bench-results/dd043-spikes-2026-07-24/fixture/target/fixture-1.0.0-SNAPSHOT-runner
+  Size: 48655416  	Blocks: 95032      IO Block: 4096   regular file
+Device: 46h/70d	Inode: 3659174698474841  Links: 1
+Access: (0777/-rwxrwxrwx)  Uid: ( 1000/     ian)   Gid: ( 1000/     ian)
+Access: 2026-07-26 08:05:52.022198400 -0400
+Modify: 2026-07-26 08:05:52.022198400 -0400
+Change: 2026-07-26 08:05:52.022198400 -0400
+ Birth: -

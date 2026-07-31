@@ -1,0 +1,65 @@
+# Debezium Server — full job list per run, last 12 runs of cross-maven.yml
+# query:    gh api "repos/debezium/debezium-server/actions/workflows/46636201/runs?per_page=12&status=completed"
+#           then gh api repos/debezium/debezium-server/actions/runs/<id>/jobs
+# captured: 2026-07-29T15:16:38Z
+# Purpose: attribute the 'skipped' native builds to their upstream cause.
+
+=== run 30319772988  workflow=failure  2026-07-28T01:16:12Z
+    Check signed commits => success
+    build => failure
+    Verify debezium-server distribution => skipped
+    Verify native build => skipped
+=== run 30313669053  workflow=action_required  2026-07-27T23:17:39Z
+=== run 30254682282  workflow=success  2026-07-27T09:36:32Z
+    Check signed commits => success
+    build => success
+    Verify debezium-server distribution (redis) => success
+    Verify native build => success
+=== run 30254417005  workflow=failure  2026-07-27T09:32:49Z
+    Check signed commits => success
+    build => failure
+    Verify debezium-server distribution => skipped
+    Verify native build => skipped
+=== run 30086164379  workflow=success  2026-07-24T10:26:21Z
+    Check signed commits => success
+    build => success
+    Verify native build => success
+    Verify debezium-server distribution (redis) => success
+=== run 30080771387  workflow=failure  2026-07-24T08:57:12Z
+    Check signed commits => success
+    build => failure
+    Verify debezium-server distribution => skipped
+    Verify native build => skipped
+=== run 29940371103  workflow=success  2026-07-22T16:58:48Z
+    Check signed commits => success
+    build => success
+    Verify native build => success
+    Verify debezium-server distribution (redis) => success
+=== run 29777270580  workflow=success  2026-07-20T20:42:58Z
+    Check signed commits => success
+    build => success
+    Verify native build => success
+    Verify debezium-server distribution (redis) => success
+=== run 29775033461  workflow=failure  2026-07-20T20:10:46Z
+    Check signed commits => success
+    build => failure
+    Verify native build => skipped
+    Verify debezium-server distribution => skipped
+=== run 29756389657  workflow=success  2026-07-20T15:42:32Z
+    Check signed commits => success
+    build => success
+    Verify debezium-server distribution (redis) => success
+    Verify native build => success
+=== run 29516539076  workflow=success  2026-07-16T16:40:09Z
+    Check signed commits => success
+    build => success
+    Verify native build => success
+    Verify debezium-server distribution (redis) => success
+=== run 29516453141  workflow=success  2026-07-16T16:38:55Z
+    Check signed commits => success
+    build => success
+    Verify native build => success
+    Verify debezium-server distribution (redis) => success
+
+# ---- DERIVED: conclusion of the 'build' job on runs where 'Verify native build' was skipped ----
+#   native=skipped & build=failure : 4 run(s)

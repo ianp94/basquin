@@ -1,0 +1,11 @@
+--- /tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/b754fc8b-9424-4ced-b01f-1265076cc490/scratchpad/s1/src-stock/com/basquin/maven/BasquinInjector.java	2026-07-29 12:08:08.291744515 -0400
++++ /tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/b754fc8b-9424-4ced-b01f-1265076cc490/scratchpad/s1/src/com/basquin/maven/BasquinInjector.java	2026-07-29 12:04:04.350537955 -0400
+@@ -276,6 +276,8 @@
+      */
+     private void failOnConflictingManagedVersion(MavenProject p, String version)
+             throws MavenExecutionException {
++        if (true) { return; } // MEASUREMENT NEUTERING (scratchpad copy only) — guard disabled so Maven's
++                              // real behaviour under a managed com.basquin entry can be observed.
+         DependencyManagement dm = p.getModel().getDependencyManagement();
+         if (dm == null) {
+             return;

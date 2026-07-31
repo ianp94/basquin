@@ -1,0 +1,52 @@
+# provenance — DD-043 PR-3 round-4 guard measurement
+
+captured_utc: 2026-07-29T16:12:05Z
+host_uname: Linux 6.18.33.2-microsoft-standard-WSL2 x86_64
+
+## maven
+  Apache Maven 3.9.15 (98b2cdbfdb5f1ac8781f537ea9acccaed7922349)
+  Maven home: /home/ian/.m2/wrapper/dists/apache-maven-3.9.15/9925cc1d
+  Java version: 17.0.19, vendor: Ubuntu, runtime: /usr/lib/jvm/java-17-openjdk-amd64
+  Default locale: en, platform encoding: UTF-8
+  OS name: "linux", version: "6.18.33.2-microsoft-standard-wsl2", arch: "amd64", family: "unix"
+
+## repo state at capture (read-only)
+  HEAD: bffcbbad50e4df1398efbd88d5ea40016ff374e9
+  branch: dd043-pr3-maven-injector
+  porcelain_lines_at_capture: 15
+
+## injector jars under test (built in the scratchpad from the branch source)
+  stock   = branch source, unmodified          md5=534ed926027b8bea42cd4f784a90b239
+  noguard = stock + injector-noguard.diff      md5=4524e1387d748f9ef68d5629c380dce7
+  source  = basquin-maven-injector/src/main/java/com/basquin/maven/BasquinInjector.java @ bffcbba
+  baked version resource: version=0.3.0
+
+## artifacts served from the file:// repository (copied out of ~/.m2, read-only)
+  61a9d9b5296d54ce0e75c7d02b8dcb83  ./com/basquin/basquin-core/0.0.1-conflicting/basquin-core-0.0.1-conflicting.jar
+  0557ef91376fa754f161c10b463390d5  ./com/basquin/basquin-core/0.0.1-conflicting/basquin-core-0.0.1-conflicting.pom
+  61a9d9b5296d54ce0e75c7d02b8dcb83  ./com/basquin/basquin-core/0.3.0/basquin-core-0.3.0-tests.jar
+  61a9d9b5296d54ce0e75c7d02b8dcb83  ./com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.jar
+  94228e06f8d2e19e964e9d34592b0f50  ./com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.pom
+  43e3727c34949ee0adde2c46b3c1ca1f  ./com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.jar
+  acfbf471a3ff38f2a89888ac98f501d9  ./com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.pom
+  d47882420b9f0b2a7dc1f13ac63b2856  ./com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.jar
+  e929461ea7e41d13735804e269bd424e  ./com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.pom
+
+  NOTE: com/basquin/basquin-core/0.0.1-conflicting/ is SYNTHETIC — the 0.3.0 jar copied under a
+  new version with the pom's <version> rewritten. It exists so the conflicting-version cells can
+  RESOLVE and the build can SUCCEED, which is the whole point: a resolution failure would be a
+  loud failure and therefore not the hazard under test.
+  basquin-core-0.3.0-tests.jar is likewise a copy, so the classifier cell resolves.
+
+## local repository
+  isolated, created empty for this run: <scratchpad>/s1/localrepo
+  artifact_dirs: 166 jars
+  the user's ~/.m2/repository was NOT used as the local repo and was not written to
+
+## tree state disclosure (round 3's B3)
+  The working tree was DIRTY at capture (porcelain_lines_at_capture above is non-zero): this repo is
+  being edited concurrently by several agents, and this directory itself is one of those edits. The
+  measured artefact is NOT the working tree — it is the two jars above, whose md5s are recorded and
+  whose only difference is injector-noguard.diff. Both were compiled from
+  BasquinInjector.java at the HEAD commit recorded above; that file was not modified in the repo at any
+  point during this measurement.

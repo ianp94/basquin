@@ -1,0 +1,31 @@
+# Eclipse Hono — conclusion of the 'Build native images' STEP, last 15 runs of native-images-tests.yml
+# job filter:  /native/i     step filter: /Build native images/i
+# query:       gh api "repos/eclipse-hono/hono/actions/workflows/19566723/runs?per_page=15&status=completed"
+#              then gh api repos/eclipse-hono/hono/actions/runs/<id>/jobs  (.steps[])
+# captured:    2026-07-29T15:16:38Z
+
+RUN_ID         RUN_SHA   CREATED_AT             JOB                                                        BUILD_STEP
+30446539639    8a4c4370  2026-07-29T11:10:33Z   Run integration tests with native images=success steps=12  Build native images => success
+30422454591    8a4c4370  2026-07-29T04:30:25Z   Run integration tests with native images=success steps=12  Build native images => success
+30372013196    8a4c4370  2026-07-28T15:10:03Z   Run integration tests with native images=failure steps=12  Build native images => success
+30353650433    8a4c4370  2026-07-28T11:09:27Z   Run integration tests with native images=success steps=12  Build native images => success
+30328896514    8a4c4370  2026-07-28T04:29:33Z   Run integration tests with native images=success steps=12  Build native images => success
+30279722872    8a4c4370  2026-07-27T15:23:05Z   Run integration tests with native images=failure steps=12  Build native images => success
+30262452532    8a4c4370  2026-07-27T11:34:31Z   Run integration tests with native images=success steps=12  Build native images => success
+30237612865    8a4c4370  2026-07-27T04:37:26Z   Run integration tests with native images=failure steps=12  Build native images => success
+30206879363    8a4c4370  2026-07-26T14:49:10Z   Run integration tests with native images=success steps=12  Build native images => success
+30199146720    8a4c4370  2026-07-26T10:55:20Z   Run integration tests with native images=success steps=12  Build native images => success
+30187997674    8a4c4370  2026-07-26T04:34:22Z   Run integration tests with native images=failure steps=12  Build native images => success
+30162332873    8a4c4370  2026-07-25T14:47:39Z   Run integration tests with native images=success steps=12  Build native images => success
+30155230749    8a4c4370  2026-07-25T10:52:08Z   Run integration tests with native images=success steps=12  Build native images => success
+30144105964    8a4c4370  2026-07-25T04:29:12Z   Run integration tests with native images=success steps=12  Build native images => success
+30103619135    8a4c4370  2026-07-24T15:03:03Z   Run integration tests with native images=success steps=12  Build native images => success
+
+# ---- DERIVED TALLY (window 2026-07-24 .. 2026-07-29) ----
+# runs listed:                                15
+# runs where the matching job is absent:      0
+# runs with step-level data for that job:     15
+# runs whose job exists but has steps=0
+#   (GitHub pruned the step list — old run):  0
+# build-step conclusions (over runs with step data):
+#          15 success

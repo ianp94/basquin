@@ -1,0 +1,113 @@
+[INFO] Scanning for projects...
+[basquin-injector] instrumented probe-moptcore (com.basquin:basquin-quarkus:0.3.0 from file:///tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/b754fc8b-9424-4ced-b01f-1265076cc490/scratchpad/r7-managed-scope/basquinrepo/)
+[INFO] 
+[INFO] ------------------< com.example.probe:probe-moptcore >------------------
+[INFO] Building probe-moptcore 1.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- dependency:3.6.1:list (default-cli) @ probe-moptcore ---
+[INFO] 
+[INFO] The following files have been resolved:
+[INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+[INFO]    com.basquin:basquin-core:jar:0.3.0:runtime (optional) -- module basquin.core (auto)
+[INFO]    io.quarkus:quarkus-vertx-http:jar:3.37.3:runtime -- module quarkus.vertx.http (auto)
+[INFO]    io.quarkus:quarkus-core:jar:3.37.3:runtime -- module io.quarkus.core [auto]
+[INFO]    jakarta.annotation:jakarta.annotation-api:jar:3.0.0:runtime -- module jakarta.annotation
+[INFO]    jakarta.enterprise:jakarta.enterprise.cdi-api:jar:4.1.0:runtime -- module jakarta.cdi
+[INFO]    jakarta.enterprise:jakarta.enterprise.lang-model:jar:4.1.0:runtime -- module jakarta.cdi.lang.model
+[INFO]    jakarta.el:jakarta.el-api:jar:6.0.0:runtime -- module jakarta.el
+[INFO]    jakarta.interceptor:jakarta.interceptor-api:jar:2.2.0:runtime -- module jakarta.interceptor
+[INFO]    jakarta.inject:jakarta.inject-api:jar:2.0.1:runtime -- module jakarta.inject
+[INFO]    io.smallrye.common:smallrye-common-os:jar:2.18.1:runtime -- module io.smallrye.common.os
+[INFO]    io.quarkus:quarkus-ide-launcher:jar:3.37.3:runtime -- module io.quarkus.launcher [auto]
+[INFO]    io.quarkus:quarkus-development-mode-spi:jar:3.37.3:runtime -- module io.quarkus.dev.spi
+[INFO]    io.smallrye.config:smallrye-config:jar:3.17.2:runtime -- module io.smallrye.config.inject
+[INFO]    io.smallrye.config:smallrye-config-core:jar:3.17.2:runtime -- module io.smallrye.config
+[INFO]    org.eclipse.microprofile.config:microprofile-config-api:jar:3.1.1-RC1:runtime -- module org.eclipse.microprofile.config [auto]
+[INFO]    io.smallrye.common:smallrye-common-classloader:jar:2.17.1:runtime -- module io.smallrye.common.classloader
+[INFO]    org.ow2.asm:asm:jar:9.9.1:runtime -- module org.objectweb.asm
+[INFO]    io.smallrye.config:smallrye-config-common:jar:3.17.2:runtime -- module io.smallrye.config.common
+[INFO]    org.jboss.logging:jboss-logging:jar:3.6.3.Final:runtime -- module org.jboss.logging
+[INFO]    org.jboss.logmanager:jboss-logmanager:jar:3.2.2.Final:runtime -- module org.jboss.logmanager
+[INFO]    io.smallrye.common:smallrye-common-cpu:jar:2.15.0:runtime -- module io.smallrye.common.cpu
+[INFO]    io.smallrye.common:smallrye-common-expression:jar:2.15.0:runtime -- module io.smallrye.common.expression
+[INFO]    io.smallrye.common:smallrye-common-net:jar:2.15.0:runtime -- module io.smallrye.common.net
+[INFO]    io.smallrye.common:smallrye-common-ref:jar:2.15.0:runtime -- module io.smallrye.common.ref
+[INFO]    jakarta.json:jakarta.json-api:jar:2.1.3:runtime -- module jakarta.json
+[INFO]    org.eclipse.parsson:parsson:jar:1.1.7:runtime -- module org.eclipse.parsson
+[INFO]    org.jboss.threads:jboss-threads:jar:3.9.2:runtime -- module org.jboss.threads
+[INFO]    io.smallrye.common:smallrye-common-function:jar:2.14.0:runtime -- module io.smallrye.common.function
+[INFO]    org.slf4j:slf4j-api:jar:2.0.18:runtime -- module org.slf4j
+[INFO]    org.jboss.slf4j:slf4j-jboss-logmanager:jar:2.0.2.Final:runtime -- module slf4j.jboss.logmanager (auto)
+[INFO]    org.wildfly.common:wildfly-common:jar:2.0.1:runtime -- module org.wildfly.common
+[INFO]    io.quarkus:quarkus-value-registry:jar:3.37.3:runtime -- module quarkus.value.registry (auto)
+[INFO]    io.quarkus:quarkus-bootstrap-runner:jar:3.37.3:runtime -- module io.quarkus.bootstrap.runner
+[INFO]    io.quarkus:quarkus-classloader-commons:jar:3.37.3:runtime -- module io.quarkus.commons.classloading
+[INFO]    io.smallrye.common:smallrye-common-io:jar:2.18.1:runtime -- module io.smallrye.common.io
+[INFO]    io.quarkus:quarkus-fs-util:jar:1.4.2:runtime -- module io.quarkus.fs.util
+[INFO]    io.quarkus:quarkus-security-runtime-spi:jar:3.37.3:runtime -- module quarkus.security.runtime.spi (auto)
+[INFO]    io.quarkus:quarkus-tls-registry:jar:3.37.3:runtime -- module quarkus.tls.registry (auto)
+[INFO]    io.quarkus:quarkus-tls-registry-spi:jar:3.37.3:runtime -- module quarkus.tls.registry.spi (auto)
+[INFO]    io.quarkus:quarkus-arc:jar:3.37.3:runtime -- module quarkus.arc (auto)
+[INFO]    org.eclipse.microprofile.context-propagation:microprofile-context-propagation-api:jar:1.3:runtime -- module microprofile.context.propagation.api (auto)
+[INFO]    io.smallrye.certs:smallrye-private-key-pem-parser:jar:0.9.3:runtime -- module io.smallrye.certs.pem.private_keys [auto]
+[INFO]    io.quarkus:quarkus-credentials:jar:3.37.3:runtime -- module quarkus.credentials (auto)
+[INFO]    io.quarkus.arc:arc:jar:3.37.3:runtime -- module io.quarkus.arc
+[INFO]    jakarta.transaction:jakarta.transaction-api:jar:2.0.1:runtime -- module jakarta.transaction
+[INFO]    io.quarkus:quarkus-mutiny:jar:3.37.3:runtime -- module quarkus.mutiny (auto)
+[INFO]    io.smallrye.reactive:mutiny:jar:3.2.1:runtime -- module io.smallrye.mutiny
+[INFO]    org.jctools:jctools-core:jar:4.0.6:runtime -- module org.jctools.core
+[INFO]    io.quarkus:quarkus-smallrye-context-propagation:jar:3.37.3:runtime -- module quarkus.smallrye.context.propagation (auto)
+[INFO]    io.smallrye:smallrye-context-propagation:jar:2.3.0:runtime -- module smallrye.context.propagation (auto)
+[INFO]    io.smallrye:smallrye-context-propagation-api:jar:2.3.0:runtime -- module smallrye.context.propagation.api (auto)
+[INFO]    io.smallrye:smallrye-context-propagation-storage:jar:2.3.0:runtime -- module smallrye.context.propagation.storage (auto)
+[INFO]    io.smallrye.reactive:mutiny-smallrye-context-propagation:jar:3.2.1:runtime -- module io.smallrye.mutiny.context [auto]
+[INFO]    io.smallrye.common:smallrye-common-vertx-context:jar:2.18.1:runtime -- module io.smallrye.common.vertx
+[INFO]    io.vertx:vertx-core:jar:4.5.27:runtime -- module io.vertx.core [auto]
+[INFO]    io.netty:netty-common:jar:4.1.133.Final:runtime -- module io.netty.common [auto]
+[INFO]    io.netty:netty-buffer:jar:4.1.133.Final:runtime -- module io.netty.buffer [auto]
+[INFO]    io.netty:netty-transport:jar:4.1.133.Final:runtime -- module io.netty.transport [auto]
+[INFO]    io.netty:netty-handler:jar:4.1.133.Final:runtime -- module io.netty.handler [auto]
+[INFO]    io.netty:netty-transport-native-unix-common:jar:4.1.133.Final:runtime -- module io.netty.transport.unix.common [auto]
+[INFO]    io.netty:netty-handler-proxy:jar:4.1.133.Final:runtime -- module io.netty.handler.proxy [auto]
+[INFO]    io.netty:netty-codec-socks:jar:4.1.133.Final:runtime -- module io.netty.codec.socks [auto]
+[INFO]    io.netty:netty-codec-http:jar:4.1.133.Final:runtime -- module io.netty.codec.http [auto]
+[INFO]    io.netty:netty-codec-http2:jar:4.1.133.Final:runtime -- module io.netty.codec.http2 [auto]
+[INFO]    io.netty:netty-resolver:jar:4.1.133.Final:runtime -- module io.netty.resolver [auto]
+[INFO]    io.netty:netty-resolver-dns:jar:4.1.133.Final:runtime -- module io.netty.resolver.dns [auto]
+[INFO]    io.netty:netty-codec-dns:jar:4.1.133.Final:runtime -- module io.netty.codec.dns [auto]
+[INFO]    com.fasterxml.jackson.core:jackson-core:jar:2.18.6:runtime -- module com.fasterxml.jackson.core
+[INFO]    io.smallrye.common:smallrye-common-constraint:jar:2.18.1:runtime -- module io.smallrye.common.constraint
+[INFO]    io.quarkus.security:quarkus-security:jar:2.3.2:runtime -- module io.quarkus.security.api [auto]
+[INFO]    io.quarkus:quarkus-vertx:jar:3.37.3:runtime -- module quarkus.vertx (auto)
+[INFO]    io.quarkus:quarkus-netty:jar:3.37.3:runtime -- module quarkus.netty (auto)
+[INFO]    io.netty:netty-codec:jar:4.1.135.Final:runtime -- module io.netty.codec [auto]
+[INFO]    io.netty:netty-codec-haproxy:jar:4.1.135.Final:runtime -- module io.netty.codec.haproxy [auto]
+[INFO]    io.smallrye.common:smallrye-common-annotation:jar:2.18.1:runtime -- module io.smallrye.common.annotation
+[INFO]    io.quarkus:quarkus-virtual-threads:jar:3.37.3:runtime -- module quarkus.virtual.threads (auto)
+[INFO]    io.quarkus:quarkus-vertx-latebound-mdc-provider:jar:3.37.3:runtime -- module quarkus.vertx.latebound.mdc.provider (auto)
+[INFO]    io.smallrye.reactive:smallrye-mutiny-vertx-core:jar:3.22.2:runtime -- module io.smallrye.mutiny.vertx.core [auto]
+[INFO]    io.smallrye.reactive:smallrye-mutiny-vertx-runtime:jar:3.22.2:runtime -- module io.smallrye.mutiny.vertx.runtime [auto]
+[INFO]    io.smallrye:smallrye-fault-tolerance-vertx:jar:6.11.1:runtime -- module io.smallrye.faulttolerance.vertx [auto]
+[INFO]    io.smallrye.reactive:smallrye-mutiny-vertx-web:jar:3.22.2:runtime -- module io.smallrye.mutiny.vertx.web [auto]
+[INFO]    io.smallrye.reactive:smallrye-mutiny-vertx-web-common:jar:3.22.2:runtime -- module io.smallrye.mutiny.vertx.web.common [auto]
+[INFO]    io.smallrye.reactive:smallrye-mutiny-vertx-auth-common:jar:3.22.2:runtime -- module io.smallrye.mutiny.vertx.auth.common [auto]
+[INFO]    io.smallrye.reactive:smallrye-mutiny-vertx-bridge-common:jar:3.22.2:runtime -- module io.smallrye.mutiny.vertx.bridge.common [auto]
+[INFO]    io.smallrye.reactive:smallrye-mutiny-vertx-uri-template:jar:3.22.2:runtime -- module io.smallrye.mutiny.vertx.uri.template [auto]
+[INFO]    io.vertx:vertx-uri-template:jar:4.5.26:runtime -- module io.vertx.uritemplate [auto]
+[INFO]    io.vertx:vertx-web:jar:4.5.28:runtime -- module io.vertx.web [auto]
+[INFO]    io.vertx:vertx-web-common:jar:4.5.28:runtime -- module io.vertx.web.common [auto]
+[INFO]    io.vertx:vertx-auth-common:jar:4.5.28:runtime -- module io.vertx.auth.common [auto]
+[INFO]    io.vertx:vertx-bridge-common:jar:4.5.28:runtime -- module io.vertx.eventbusbridge.common [auto]
+[INFO]    org.crac:crac:jar:1.5.0:runtime -- module org.crac
+[INFO]    com.aayushatharva.brotli4j:brotli4j:jar:1.23.0:runtime -- module com.aayushatharva.brotli4j
+[INFO]    com.aayushatharva.brotli4j:service:jar:1.23.0:runtime -- module com.aayushatharva.brotli4j.service
+[INFO]    com.aayushatharva.brotli4j:native-linux-x86_64:jar:1.23.0:runtime -- module com.aayushatharva.brotli4j.linux.x86_64
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  0.864 s
+[INFO] Finished at: 2026-07-30T00:59:17-04:00
+[INFO] ------------------------------------------------------------------------

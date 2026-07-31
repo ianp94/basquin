@@ -5,6 +5,12 @@ on:
     paths:
       - 'agent/**'
       - 'basquin-core/**'
+      # DD-043: without these two, a change confined to the Quarkus extension or the Maven injector
+      # triggers NO CI at all — their tests are part of `./gradlew check` but nothing would run it.
+      # That is the defect PR-1 shipped when the extracted core fell outside every filter; PR #102
+      # ran only because it incidentally also touched basquin-core/, settings.gradle and test/**.
+      - 'basquin-quarkus/**'
+      - 'basquin-maven-injector/**'
       - 'runner/**'
       - 'examples/**'
       - 'test/**'
@@ -16,11 +22,42 @@ on:
       - 'gradle/**'
       - 'gradlew'
       - 'gradlew.bat'
-      - 'deploy/bench/**'
+      # DD-043 PR-3, round 8: `basquin-init.gradle` is the root-level init script whose hard-coded
+      # default injected version verifyGradleInitScriptVersion (basquin-maven-injector/build.gradle)
+      # exists to guard, and it was missing from both lists — a commit touching only this file ran
+      # no CI at all, so that guard could drift undetected. Same gap class as basquin-quarkus/** above.
+      - 'basquin-init.gradle'
+      # Round 10: was 'deploy/bench/**' only, so the seven tracked citing *.sh files elsewhere under
+      # deploy/ (deploy/helm/{publish,sync-generated}.sh, deploy/e2e/e2e.sh, deploy/k8s/up.sh, and the
+      # three deploy/{agents,dashboard,runner}-image/build.sh — all scanned by check-citations.py's
+      # tracked-*.sh comment rule) sat outside every filter: a commit touching only one of them ran no
+      # CI at all, including the citation-integrity job that reads their '#'-comment citations.
+      # Broadened to the whole subtree so a future deploy/*.sh addition can't silently reopen this.
+      - 'deploy/**'
+      # Round 10: this PR modified .gitignore and it matched no filter — the one gap left in this
+      # list's own class (basquin-quarkus/**, basquin-init.gradle before it). Any tracked top-level
+      # path should trigger at least one CI job; this was the last one that didn't.
+      - '.gitignore'
+      # DD-045 item 1: the citation-integrity job checks every tracked *.md, */citations.txt and
+      # the '#'-comments of scripts/*.sh and workflow files, resolving citations against the
+      # files they cite (mostly under bench-results/). All of those classes must trigger CI, or
+      # the guard cannot see the very edits that stale citations — a doc-only push previously
+      # ran NO CI at all, which is how 135 wrong citations accumulated (see
+      # bench-results/dd043-pr3-citation-audit-2026-07-30/). Deliberate trade-off: the Gradle
+      # jobs now also run on doc-only pushes; correctness of the certification machinery was
+      # judged worth the CI minutes (DD-045's whole thesis).
+      - '**/*.md'
+      - '**/citations.txt'
+      - 'scripts/**'
+      - 'bench-results/**'
+      - '.github/workflows/**'
   pull_request:
     paths:
       - 'agent/**'
       - 'basquin-core/**'
+      # See the push block above — both lists must carry these or the gap persists on one trigger.
+      - 'basquin-quarkus/**'
+      - 'basquin-maven-injector/**'
       - 'runner/**'
       - 'examples/**'
       - 'test/**'
@@ -32,9 +69,33 @@ on:
       - 'gradle/**'
       - 'gradlew'
       - 'gradlew.bat'
-      - 'deploy/bench/**'
+      - 'basquin-init.gradle'
+      - 'deploy/**'
+      - '.gitignore'
+      # See the push block above — both lists must carry these or the citation gap persists on
+      # one trigger (same dual-list rule as basquin-quarkus/** etc.).
+      - '**/*.md'
+      - '**/citations.txt'
+      - 'scripts/**'
+      - 'bench-results/**'
+      - '.github/workflows/**'
 
 jobs:
+  # DD-045 item 1 — whole-tree citation integrity. A repo-wide audit found 135 of 547 citations
+  # wrong (1 in 4), and wrong citations were review findings in five consecutive PR #103 rounds.
+  # The check is whole-tree, not diff-scoped: a diff-scoped run missed four dead citations that
+  # sat in files the commit did not touch. Pure Python stdlib, no JDK, finishes in ~1s; its
+  # scope and conscious exclusions are documented in the script's docstring, and every exemption
+  # in scripts/check-citations-allowlist.txt carries a reason.
+  citation-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check citations resolve against cited file content
+        run: python3 scripts/check-citations.py
+
+
   build-and-test:
     runs-on: ubuntu-latest
     strategy:

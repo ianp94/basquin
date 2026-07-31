@@ -1,0 +1,47 @@
+// DD-043 PR-3 — the Gradle counterpart of basquin-maven-injector (spec §5).
+//
+// Usage:  ./gradlew -I /path/to/basquin-init.gradle build
+//
+// Same operator contract as the Maven injector, deliberately: the same three system properties mean
+// the same things, so an operator instrumenting a mixed estate learns one interface.
+//
+//   -Dbasquin.inject.skip=true      inject nothing (baseline/control build)
+//   -Dbasquin.inject.repo.url=URL   override the artifact repository
+//   -Dbasquin.inject.version=V      override the injected extension version
+//
+// SCOPE: this script is a stub in the sense that PR-3 does not exercise it against a Gradle-built
+// Quarkus application — both of PR-3's acceptance targets are Maven-built. The Maven path is the
+// measured one (spikes S4 and S5). Treat a Gradle target as unverified until someone runs the
+// §5.2 banner check against one.
+initscript {
+    // Intentionally empty: this script adds a dependency and a repository, needing nothing itself.
+}
+
+def skip = Boolean.parseBoolean(System.getProperty('basquin.inject.skip'))
+def repoUrl = System.getProperty('basquin.inject.repo.url') ?: 'https://ianp94.github.io/basquin/maven/'
+def version = System.getProperty('basquin.inject.version') ?: '0.3.0'
+
+if (skip) {
+    logger.lifecycle('[basquin-injector] basquin.inject.skip=true — injecting nothing (baseline build)')
+} else {
+    allprojects { proj ->
+        proj.repositories {
+            maven {
+                name = 'basquin-injected'
+                url = repoUrl
+            }
+        }
+        proj.plugins.withId('java') {
+            proj.dependencies.add('implementation', "com.basquin:basquin-quarkus:${version}")
+            // Log the REQUEST, never a result: nothing on this path reads back what Gradle actually
+            // resolved, and under Gradle's highest-wins conflict resolution a project already
+            // declaring a newer com.basquin:basquin-quarkus resolves THAT version while this line
+            // runs unchanged. The old message asserted "instrumented ... :${version}" as fact —
+            // a version this script never verified, on the path with no guards at all (PR #103
+            // round 9, should-fix 8).
+            logger.lifecycle("[basquin-injector] requested com.basquin:basquin-quarkus:${version} " +
+                    "from ${repoUrl} for ${proj.path} — the RESOLVED version is not verified on " +
+                    "this path (Gradle picks the highest version on conflict)")
+        }
+    }
+}

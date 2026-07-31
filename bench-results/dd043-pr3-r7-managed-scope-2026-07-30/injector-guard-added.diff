@@ -1,0 +1,191 @@
+--- /tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/b754fc8b-9424-4ced-b01f-1265076cc490/scratchpad/r7-managed-scope/src-stock/com/basquin/maven/BasquinInjector.java	2026-07-30 00:58:18.025454860 -0400
++++ /tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/b754fc8b-9424-4ced-b01f-1265076cc490/scratchpad/r7-managed-scope/src-guarded/com/basquin/maven/BasquinInjector.java	2026-07-30 01:12:21.605803768 -0400
+@@ -134,12 +134,15 @@
+      *   <li>{@code classifier} — a classified artifact is not the extension jar.</li>
+      *   <li>{@code exclusions} — can strip the extension's own transitive dependencies, notably
+      *       {@code basquin-core}, leaving the jar present but unusable. Found by PR #103's independent
+-     *       approver, and it is <b>one of the two</b> shapes §5.2's banner acceptance cannot detect: the
+-     *       feature still appears in {@code Installed features}, so no acceptance run would fail. The
+-     *       other is the same hazard one function away, on the <i>managed</i> path —
+-     *       {@code <exclusions>} on a {@code dependencyManagement} entry for {@code com.basquin}, closed
+-     *       by {@link #failOnConflictingManagedVersion} after review showed this fix had been half a fix.
+-     *       This guard covers the declared path only. An earlier self-review had judged exclusions
++     *       approver, and it belongs to the class of shapes §5.2's banner acceptance cannot detect: the
++     *       extension jar still loads, so the feature still appears in {@code Installed features}, while
++     *       basquin-core is missing or unusable at runtime, and no acceptance run would fail. The same
++     *       undetectable state is reachable through {@code <exclusions>} or an unusable {@code <scope>}
++     *       on a {@code dependencyManagement} entry for {@code com.basquin} (both closed by
++     *       {@link #failOnConflictingManagedVersion} after reviews showed this fix had been half a fix,
++     *       twice) and through an unusable scope on a declared {@code com.basquin} sibling (closed by
++     *       {@link #failOnUnusableSiblingDeclaration}). This guard covers the declared
++     *       {@code basquin-quarkus} path only. An earlier self-review had judged exclusions
+      *       harmless on the reasoning that "the extension jar still delivers" — true, and beside the
+      *       point.</li>
+      * </ul>
+@@ -206,10 +209,11 @@
+         } else if (d.getExclusions() != null && !d.getExclusions().isEmpty()) {
+             problem = "exclusions (" + d.getExclusions().size() + "), which can strip the extension's own"
+                     + " transitive dependencies — notably basquin-core — leaving the extension jar present"
+-                    + " but unusable. Exclusions are one of the TWO shapes §5.2's banner acceptance cannot"
+-                    + " detect — this one on the declared dependency, the other on a dependencyManagement"
+-                    + " entry for com.basquin — because the feature still appears in Installed features"
+-                    + " either way. No acceptance run would catch this declaration; only this guard does";
++                    + " but unusable. Exclusions are one of the shapes §5.2's banner acceptance cannot"
++                    + " detect — whether basquin-core is stripped here, by a dependencyManagement entry"
++                    + " for com.basquin, or by an unusable scope on a com.basquin entry, the feature"
++                    + " still appears in Installed features either way. No acceptance run would catch"
++                    + " this declaration; only this guard does";
+         }
+         if (problem == null) {
+             return;
+@@ -271,53 +275,78 @@
+ 
+     /**
+      * Spec §5.1: a strict dependencyManagement/BOM may pin something the extension needs, and a
+-     * managed version governs anything resolved transitively — notably basquin-core. Building
++     * managed entry governs anything resolved transitively — notably basquin-core. Building
+      * against a different core than the extension was compiled against is the "succeeds but is
+      * silently wrong" outcome this design exists to prevent, so it is a hard failure.
+      *
+-     * <p><b>Which managed attributes reach a dependency added at {@code afterProjectsRead} is measured,
+-     * not reasoned about.</b> This method runs after model building, so Maven's model-level
+-     * dependencyManagement injection has already passed over the model and cannot have touched the
+-     * {@link Dependency} {@link #addDependency} is about to add. PR #103's round-4 approver was right that
+-     * the two branches below rested on an unmeasured claim about what happens instead, and that the claim
+-     * being wrong in either direction left the code wrong: false positives if managed attributes never
+-     * reach us, an incomplete guard if they all do. The captured output is in the tree at
+-     * {@code bench-results/dd043-pr3-r4-guard-measurement-2026-07-29/} (every figure below is a
+-     * {@code file:line} into it, not prose). Against a minimal jar project under Maven 3.9.15
+-     * ({@code provenance.txt}) with this injector on {@code maven.ext.class.path} and its guard neutered
+-     * so the build could proceed ({@code injector-noguard.diff}):
++     * <p><b>Which managed attributes reach which artifact is measured, not reasoned about — and it is a
++     * PER-ARTIFACT question, because Maven 3.9's resolver draws a depth line through our own chain.</b>
++     * This method runs after model building, so Maven's model-level dependencyManagement injection has
++     * already passed over the model and cannot have touched the {@link Dependency} {@link #addDependency}
++     * is about to add. What reaches that dependency and its transitives instead is the RESOLVER's
++     * {@code ClassicDependencyManager}, which applies managed {@code version}/{@code scope}/{@code
++     * optional} only from depth 2 down while its exclusions handling has no such depth gate. The
++     * dependency this injector adds is a depth-1 node; the {@code basquin-core} it pulls in is a depth-2
++     * node. So a cell that varies a managed attribute on {@code com.basquin:basquin-quarkus} answers the
++     * depth-1 question ONLY, and an earlier revision of this comment generalized four such cells into
++     * "managed scope cannot reach us" — a claim about the whole group that the cells never tested at
++     * depth 2, where it is false. PR #103's earlier approver had reported the managed-scope gap and was
++     * overruled by that misread; they were right. Captured output for both depths (every figure below is
++     * a {@code file:line}, not prose): {@code bench-results/dd043-pr3-r4-guard-measurement-2026-07-29/}
++     * (depth-1 cells, injected-artifact attributes, guard neutered via {@code injector-noguard.diff}) and
++     * {@code bench-results/dd043-pr3-r7-managed-scope-2026-07-30/} (depth-2 cells on {@code basquin-core},
++     * shipped 865ba35 injector), each with its own {@code provenance.txt} and {@code rerun.sh}:
+      * <ul>
+-     *   <li><b>{@code <exclusions>} DO apply, at every depth.</b> A managed
++     *   <li><b>{@code <exclusions>} DO apply, even at depth 1.</b> A managed
+      *       {@code com.basquin:basquin-quarkus} at the <i>agreeing</i> version carrying an exclusion of
+      *       {@code basquin-core} resolved 94 artifacts with {@code basquin-quarkus:jar:0.3.0:compile}
+-     *       present and <b>no basquin-core at all</b> ({@code logs/mx-noguard-list.log:12}), against the
+-     *       control's 95 with {@code basquin-core:jar:0.3.0:runtime}
+-     *       ({@code logs/ctl-noguard-list.log:12-13}) — and the build SUCCEEDED
+-     *       ({@code logs/mx-noguard-list.log:108}). The exclusions branch below guards a real hazard and
+-     *       its message is true.</li>
+-     *   <li><b>{@code <version>} DOES apply, transitively.</b> A managed
++     *       present and <b>no basquin-core at all</b> (r4 {@code logs/mx-noguard-list.log:12}), against
++     *       the control's 95 with {@code basquin-core:jar:0.3.0:runtime}
++     *       (r4 {@code logs/ctl-noguard-list.log:12-13}) — and the build SUCCEEDED
++     *       (r4 {@code logs/mx-noguard-list.log:108}). The exclusions branch below guards a real hazard
++     *       and its message is true.</li>
++     *   <li><b>{@code <version>} DOES apply at depth 2.</b> A managed
+      *       {@code com.basquin:basquin-core:0.0.1-conflicting} resolved
+      *       {@code basquin-core:jar:0.0.1-conflicting:runtime} beside {@code basquin-quarkus:jar:0.3.0}
+-     *       and succeeded ({@code logs/mcv-noguard-list.log:12-13,109}). With the guard restored, the
+-     *       same cell aborts in {@code Scanning for projects} ({@code logs/mcv-stock-list.log:2}).</li>
+-     *   <li><b>{@code scope}, {@code type}, {@code classifier} and {@code optional} do NOT apply</b> to
+-     *       the dependency this injector adds. Each was varied alone on a managed
+-     *       {@code com.basquin:basquin-quarkus} entry at the agreeing version and each cell came out
+-     *       <i>identical to the control</i> — 95 artifacts, {@code basquin-quarkus} still at
+-     *       {@code :compile}, {@code basquin-core} still at {@code :runtime}
+-     *       ({@code logs/msc-noguard-list.log:12-13}, {@code logs/mty-noguard-list.log:12-13},
+-     *       {@code logs/mcl-noguard-list.log:12-13}, {@code logs/mopt-noguard-list.log:12-13}). So this
+-     *       method staying silent on a managed {@code <scope>provided</scope>} — which the approver
+-     *       reproduced and read as a gap — is <b>correct</b>. There is nothing there to guard, and a
+-     *       guard would hard-fail builds that demonstrably work, the same mistake guarding
+-     *       {@code optional=true} would have been.</li>
++     *       and succeeded (r4 {@code logs/mcv-noguard-list.log:12-13,109}). With the guard restored, the
++     *       same cell aborts in {@code Scanning for projects} (r4 {@code logs/mcv-stock-list.log:2}).</li>
++     *   <li><b>{@code <scope>} DOES apply at depth 2, and it is the EIGHTH silent bypass.</b> A managed
++     *       {@code com.basquin:basquin-core} at the agreeing version with {@code <scope>provided</scope>}
++     *       resolved {@code basquin-core:jar:0.3.0:provided} (r7 {@code logs/mscore-stock-list.log:13})
++     *       and with {@code <scope>test</scope>} resolved {@code :test}
++     *       (r7 {@code logs/mtcore-stock-list.log:13}) — in both, {@code basquin-quarkus:jar:0.3.0:compile}
++     *       is still present (line 12 of each), basquin-core is GONE from the runtime classpath (94
++     *       entries with no basquin-core, against the control's 95 with it —
++     *       r7 {@code logs/mscore-stock-runtime-cp-entries.txt}, {@code mtcore-…}, vs
++     *       {@code ctl-stock-runtime-cp-entries.txt:2}), the build SUCCEEDED and the 865ba35 injector
++     *       stayed silent. The extension jar still loads, so §5.2's banner acceptance cannot see it.
++     *       This is the resolved state {@link #failOnUnusableSiblingDeclaration} already hard-fails when
++     *       a <i>declared</i> sibling produces it, arrived at through {@code dependencyManagement}
++     *       instead — the same usability test must apply here or that fix was half a fix, which is why
++     *       the scope branch below uses the same compile/runtime whitelist. ({@code system} and
++     *       {@code import} ride it unmeasured, for {@link #failOnUnusableSiblingDeclaration}'s recorded
++     *       reasons; a consumed BOM import never survives into this effective model anyway.)</li>
++     *   <li><b>{@code <optional>true</optional>} on {@code basquin-core} is measured HARMLESS, so it is
++     *       deliberately not guarded.</b> The core resolves as {@code runtime (optional)}
++     *       (r7 {@code logs/moptcore-stock-list.log:13}) and stays ON the runtime classpath
++     *       (r7 {@code logs/moptcore-stock-runtime-cp-entries.txt:2}, 95 entries like the control).
++     *       A guard would hard-fail a build that demonstrably works — the same mistake guarding a
++     *       declared {@code optional=true} would have been.</li>
++     *   <li><b>Managed {@code scope}/{@code type}/{@code classifier}/{@code optional} on the injected
++     *       depth-1 {@code basquin-quarkus} itself do not reach it.</b> Each was varied alone at the
++     *       agreeing version and each cell came out identical to the control — 95 artifacts,
++     *       {@code basquin-quarkus} still {@code :compile}, {@code basquin-core} still {@code :runtime}
++     *       (r4 {@code logs/msc-noguard-list.log:12-13}, {@code mty-…:12-13}, {@code mcl-…:12-13},
++     *       {@code mopt-…:12-13}). That is a statement about the INJECTED artifact only; as the scope
++     *       bullet above shows, it must not be read across the depth boundary.</li>
+      * </ul>
+      *
+-     * <p>That is why this method enumerates rather than whitelisting, and the enumeration is not a
+-     * shortcut: the measurement says exclusions and version are the only two managed attributes that can
+-     * reach us, so the two branches below are the whole set. Anything added to {@link Dependency}, or any
+-     * change to the resolver's depth rules (Maven 4 replaces {@code ClassicDependencyManager}), re-opens
+-     * that and the cells in {@code rerun.sh} are how to settle it again.
++     * <p>The three branches below — exclusions, scope, version — are therefore the measured managed
++     * hazards, not a measured-complete enumeration of every attribute that could ever reach the group:
++     * completeness was only ever measured for the depth-1 injected artifact, and depth 2 is where
++     * basquin-core lives. Anything added to {@link Dependency}, any unmeasured attribute at depth 2, or
++     * any change to the resolver's depth rules (Maven 4 replaces {@code ClassicDependencyManager})
++     * re-opens this, and the cells in the two directories' {@code rerun.sh} are how to settle it again.
+      */
+     private void failOnConflictingManagedVersion(MavenProject p, String version)
+             throws MavenExecutionException {
+@@ -347,6 +376,34 @@
+                                 + " build uninstrumented deliberately.",
+                         p.getFile());
+             }
++            // The EIGHTH silent bypass, found by PR #103's round-6 approver and reproduced before this
++            // branch was written: a managed <scope> on a com.basquin sibling reaches basquin-core at
++            // depth 2 (see this method's javadoc — the earlier "managed scope cannot reach us" reading
++            // measured only the depth-1 injected artifact). provided/test leave the core resolved but
++            // off the runtime classpath while the extension still loads, so the banner still lists
++            // basquin and the build is green — r7 logs/mscore-stock-list.log:13 (:provided) and
++            // logs/mtcore-stock-list.log:13 (:test), runtime classpaths one jar short of the control.
++            // Same compile/runtime whitelist as failOnUnusableSiblingDeclaration: the identical
++            // resolved state one field away already hard-fails there. A null/blank managed scope
++            // manages nothing and is accepted; usability before version, as recorded at inject()'s
++            // declared-artifact call site.
++            String managedScope = managed.getScope();
++            if (managedScope != null && !managedScope.isBlank()
++                    && !"compile".equals(managedScope) && !"runtime".equals(managedScope)) {
++                throw new MavenExecutionException(
++                        "basquin-injector: " + p.getArtifactId() + "'s dependencyManagement pins "
++                                + GROUP_ID + ":" + managed.getArtifactId() + " to scope '" + managedScope
++                                + "'. A managed scope applies to the Basquin artifacts the extension"
++                                + " resolves transitively — basquin-core above all — so it would keep"
++                                + " them off the application's runtime classpath while the extension"
++                                + " jar itself still loads: the build would succeed, Installed features"
++                                + " would still list basquin, and the application would run"
++                                + " UNINSTRUMENTED, with /__basquin/result returning \"miss\". Only"
++                                + " 'compile' and 'runtime' reach the application. Remove the managed"
++                                + " scope, or pass -D" + PROP_SKIP + "=true to leave this build"
++                                + " uninstrumented deliberately.",
++                        p.getFile());
++            }
+             String managedVersion = managed.getVersion();
+             if (managedVersion != null && !managedVersion.equals(version)) {
+                 throw new MavenExecutionException(

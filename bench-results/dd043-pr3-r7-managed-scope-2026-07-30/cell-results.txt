@@ -1,0 +1,8 @@
+# cell-results — machine-generated from logs/ by regen-derived.py; do not hand-edit
+# stock = injector compiled from 865ba35 (pre-fix); guarded = injector with the round-7 scope branch
+
+cell       basquin-core resolved as (stock list)                   stock build  rt-cp entries core on rt-cp stock guard guarded build guarded guard
+ctl        com.basquin:basquin-core:jar:0.3.0:runtime -- module basquin.core (auto) SUCCESS      95            yes           silent      SUCCESS       silent       
+mscore     com.basquin:basquin-core:jar:0.3.0:provided -- module basquin.core (auto) SUCCESS      94            NO            silent      ABORT         fired        
+mtcore     com.basquin:basquin-core:jar:0.3.0:test -- module basquin.core (auto) SUCCESS      94            NO            silent      ABORT         fired        
+moptcore   com.basquin:basquin-core:jar:0.3.0:runtime (optional) -- module basquin.core (auto) SUCCESS      95            yes           silent      SUCCESS       silent       

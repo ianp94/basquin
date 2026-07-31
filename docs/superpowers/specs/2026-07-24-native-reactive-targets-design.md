@@ -20,7 +20,9 @@ occurred.** S1 was REFUTED *as specified* and CONFIRMED via S1b once the read pa
 §6.4 is amended rather than void and §2's full-parity goal does not reopen. S4 was CONFIRMED in JVM
 and native for the **dependency half** of §5's mechanism — the half it exercised — so §5.1's
 degradation stays a contingency. S4 never injected a **plugin execution**, which §5 requires in equal
-measure; that half is unmeasured and is now §8.2, a PR-4 entry gate.
+measure; that half is unmeasured and is now §8.2, a PR-4 entry gate. *(Written when §5 named two
+injections. §5 has since gained a third — the repository, measured by spike S5 during PR-3 — and the
+plugin execution remains the only unmeasured one.)*
 
 | Spike | Verdict | Sections it forced changes in |
 |---|---|---|
@@ -78,7 +80,9 @@ unchecked section:
   *(Round 2: §6.2's body said "verified" and has been corrected to match this bullet.)*
 - **§6.3** (event-loop watchdog) — not exercised by any Phase-0 spike. Unchanged and untested.
 - **§4.4** (result store and parking poll) — no spike touched the DD-040 channel transplant. Unchanged.
-- **§8.1** (does Apicurio build native) — still open; Phase 0 did not address it.
+- **§8.1** (does Apicurio build native) — still open; Phase 0 did not address it. *(Resolved since,
+  during PR-3: **NO** on the current line — see §8.1 for the finding, the substitute ranking, and the
+  cross-version gate it exposed.)*
 
 ### Round 2 — final-review fixes (2026-07-24)
 
@@ -197,7 +201,7 @@ denominator. §7.1 resolves that second case with a withheld application route, 
 | 2 | `rest-villains`, native | as above, `-Dnative` | Isolates whether build-time attachment survives AOT. |
 | 3 | `rest-heroes`, JVM mode | RESTEasy Reactive, **reactive**; Hibernate Reactive + Panache; PostgreSQL; port 8083 | Isolates reactive boundary semantics. |
 | 4 | `rest-heroes`, native | as above, `-Dnative` | **The actual target.** |
-| 5 | Apicurio Registry | Quarkus; PostgreSQL/KafkaSQL/in-memory | Real-product credibility row. **Gated on §8.1.** |
+| 5 | Substitute real product — §8.1's ranking: Debezium Server > Hono HTTP adapter > Apicurio 2.6.x | Quarkus 3.33.1.1 / 3.27.4.1 / 3.15.3 respectively | Real-product credibility row. **§8.1 resolved NO for current Apicurio** (its server has no native path on 3.x); the row now carries §8.1's cross-version augmentation gate instead. |
 
 Both services come from [`quarkusio/quarkus-super-heroes`](https://github.com/quarkusio/quarkus-super-heroes).
 Both are **contract-first**: the REST interface is generated at build time from
@@ -328,16 +332,27 @@ four**: the `Invariants` class, `evaluateAndMaybeFail`, `Result` (plus accessors
 `hardFailureMessage` — the fields can stay package-private if accessors are added instead), and
 `Violation`'s `name`/`detail` (as public fields or accessors).
 
-**Publishing — resolved, no longer an entry requirement.** `basquin-core` now applies `maven-publish`
-with two targets from one configuration. `publishToMavenLocal` puts it in `~/.m2/repository` for
-developing the extension against an unreleased core — the path spike S4's addendum proved, since an
-artifact present only in the local repo resolves through the injected dependency.
-`publishAllPublicationsToPagesRepository` writes it to `docs/maven/`, which GitHub Pages serves at
-`https://ianp94.github.io/basquin/maven/`; the release workflow's existing `pages` job publishes and
-commits it exactly as it already does for `docs/charts/`. **That URL serves nothing until the next `v*`
-tag** — v0.3.0 shipped before `basquin-core` existed and no artifacts are committed here — so until then
-the consumable path is `publishToMavenLocal`. Consumers add that one `<repository>` and
-need **no credentials**, unlike GitHub Packages, which requires a token even for public artifacts.
+**Publishing — resolved, no longer an entry requirement.** All four DD-043 artifacts — `basquin-core`,
+`basquin-quarkus` (runtime), `basquin-quarkus-deployment`, and `basquin-maven-injector` itself — now
+apply `maven-publish` with the same two targets from one configuration. (An earlier revision of this
+paragraph described only `basquin-core` publishing; spike S5 surfaced the gap — an injected build must
+resolve the *whole chain*, the deployment artifact included, or Quarkus augmentation fails — and PR-3
+wired the other three, plus the release workflow's publish-all-four and assert-all-four steps.)
+`publishToMavenLocal` puts them in `~/.m2/repository` for developing the extension against an
+unreleased core — and, after S5, that local-repo path is a documented **offline fallback**, no longer
+the consumable mechanism: the injector injects the repository itself, so no pre-populate step exists
+in the operator contract (§5). `publishAllPublicationsToPagesRepository` writes them to `docs/maven/`,
+which GitHub Pages serves at `https://ianp94.github.io/basquin/maven/`; the release workflow's
+existing `pages` job publishes and commits them exactly as it already does for `docs/charts/`. **That
+URL serves nothing until the next `v*` tag** — v0.3.0 shipped before `basquin-core` existed and no
+artifacts are committed here — and consequently **no acceptance run has exercised the real Pages
+HTTPS repository**: every PR-3 acceptance published the chain to a scratch directory and served it
+over localhost HTTP (`-Dbasquin.inject.repo.url=…`), which is also the interim path for anyone
+running the injector before that tag. Consumers add that one `<repository>` and
+need **no credentials**, unlike GitHub Packages, which requires a token even for public artifacts —
+**an ordinary, pom-editing consumer, that is.** On PR-3's zero-edit path nobody adds it by hand: the
+injector injects it, at both levels (§5), because editing the target's pom is exactly what that path
+forbids. Do not read this sentence as PR-3's mechanism.
 Maven has no native git-dependency form, so a static repo committed here and served over HTTPS is the
 closest equivalent to depending on the source directly.
 
@@ -547,19 +562,64 @@ than a bad refactor of a shipped control path.
 The runtime path never touches the app: the operator appends to `CATALINA_OPTS`/`JAVA_TOOL_OPTIONS`
 and patches only the pod template. The build-time path uses a Maven **core extension**: a
 `basquin-maven-injector` jar containing an `AbstractMavenLifecycleParticipant`, activated by
-`-Dmaven.ext.class.path`. Its `afterProjectsRead(MavenSession)` hook mutates each `MavenProject`'s
-`Model` — adding the `basquin-quarkus` dependency and the offline-JaCoCo plugin execution (§6.4) —
-before the per-project execution plan is computed.
+`-Dmaven.ext.class.path`. Its `afterProjectsRead(MavenSession)` hook mutates each `MavenProject` —
+adding **three** things: the `basquin-quarkus` dependency, the `<repository>` that makes it
+resolvable, and the offline-JaCoCo plugin execution (§6.4) — before the per-project execution plan
+is computed.
 
-**Only the first of those two injections is measured.** S4 injected a `Dependency` and nothing else
-(`s4-injection/probe-participant/…/InjectProbe.java:26-43`); no spike ever injected a plugin
-*execution*. The two are not the same operation — a dependency is consumed by resolution, while a
-plugin execution has to survive into the per-project **execution plan**, which Maven computes at a
-different point in the lifecycle. So "§5's mechanism holds" is true of the dependency half and
-**unmeasured** for the plugin half. §8.2 carries it as an open question and PR-4 cannot start on the
-assumption that it is settled.
+**The repository injection is a two-level mutation, and the one-level version fails silently.**
+Injecting a `Repository` into the `Model` **alone is a no-op** at `afterProjectsRead`: the project's
+effective repository lists are computed during project building, *before* any participant runs, so
+the model entry changes nothing downstream. The participant must **also** rebuild the project's
+effective list — construct an `ArtifactRepository`, append it, and call
+`MavenProject.setRemoteArtifactRepositories(...)`, whose implementation (verified in Maven 3.9.16
+bytecode) refreshes the Aether `remoteProjectRepositories` list that both Maven's dependency
+resolution and quarkus-maven-plugin's `${project.remoteProjectRepositories}` parameter actually
+consume. The two-level form is specified here, explicitly, because the model-only version is exactly
+what an implementer would write from the one-line description above: it passes no unit test that
+drives `inject()` directly, and against a populated local repository it builds **green while
+resolving from the wrong source** — this section's own silent failure mode. Measured by spike S5:
+with the local repository purged of `com.basquin` and Central not carrying the group, the injected
+repository was the sole source for the full closure — including `basquin-quarkus-deployment`, which
+the **Quarkus bootstrap resolver** fetched on its own during `generate-code`. Evidence:
+`bench-results/dd043-s5-repo-injection-2026-07-26/` (`findings.md`, `build-s5-injected.log`,
+`http-access.log`).
 
-**Gradle:** an init script (`-I basquin-init.gradle`) doing the same via `allprojects { … }`.
+**Two of those three injections are measured; the plugin execution is not.** S4 injected a
+`Dependency` and nothing else (`s4-injection/probe-participant/…/InjectProbe.java:26-43`); S5
+measured the repository injection, both levels. No spike ever injected a plugin *execution*. It is not the same
+operation — a dependency and a repository are consumed by resolution, while a plugin execution has
+to survive into the per-project **execution plan**, which Maven computes at a different point in the
+lifecycle. So "§5's mechanism holds" is true of the dependency and repository injections and
+**unmeasured** for the plugin execution. §8.2 carries it as an open question and PR-4 cannot start on the
+assumption that it is settled. **PR-3 shipped the first two injections only** — the offline-JaCoCo
+plugin execution is PR-4's, behind §8.2's entry gate (§9).
+
+**Gradle:** an init script (`-I basquin-init.gradle`, repository root) doing the same via
+`allprojects { … }`, deliberately sharing the Maven injector's three system properties
+(`basquin.inject.skip`, `basquin.inject.repo.url`, `basquin.inject.version`) so an operator
+instrumenting a mixed estate learns one contract. **It implements only the `skip` opt-out** — the
+other seven §5.1 requires on the Maven side have no Gradle counterpart. "Seven" counts independently-
+triggerable `throw MavenExecutionException` sites, not guard *methods*: `BasquinInjector.java` has
+only four methods that can throw (`failOnUnusableDeclaration`, `failOnConflictingDeclaredVersion`,
+`failOnConflictingManagedVersion`, `failOnUnusableSiblingDeclaration`), but two of the four guard more
+than one independent condition with a separate `throw` each — `failOnConflictingManagedVersion` throws
+three times, `failOnUnusableSiblingDeclaration` twice, the other two once apiece — giving 1+1+3+2 =
+seven: conflicting
+managed version, conflicting managed exclusions, an unusable managed scope, conflicting declared
+version, an unusable
+declaration shape (one `throw` bundling four sub-shapes — scope/type/classifier/exclusions — as a
+single condition), an unusable *sibling* scope, and a conflicting *sibling* version (the last two on
+a directly declared `com.basquin` artifact other than `basquin-quarkus`, `basquin-core` above all).
+This count moves whenever a guard is added, so verify it against
+`BasquinInjector.java`'s own `throw new MavenExecutionException` sites rather than trusting the number
+here; `docs/THIRD-PARTY-APPS.md`'s operator-facing section carries the same decomposition.
+None of the seven has a Gradle counterpart, and the script
+does not even detect a pre-existing declaration — of `basquin-quarkus` or of a sibling — before
+adding its own. Running §5.2's banner check against a Gradle target would not exercise any of that —
+it proves the extension loaded, not that a silent bypass was rejected — so §5.1's fail-loudly
+contract is **not implemented** on this path, full stop, independent of whether that check has run
+(§9's PR-3 row).
 
 **The injector must construct a fresh `Dependency` per `MavenProject`.** Maven's model objects are
 mutable, so hoisting one `Dependency` allocation out of the `for (MavenProject p : session.getProjects())`
@@ -568,9 +628,13 @@ then holds a pointer to the same object, and any later in-place mutation or iden
 handling on one module bleeds into all the others. **This passes every single-module test**, which is
 what makes it worth specifying rather than leaving to implementation taste: S4's spike fixture is
 single-module and its evidence was byte-for-byte unaffected by the bug, while the real targets are
-multi-module (Apicurio Registry certainly; super-heroes is a multi-project repo). Found and fixed in
+multi-module (super-heroes is a multi-project repo; each of §8.1's row-5 candidates is a multi-module
+reactor). Found and fixed in
 the spike participant — `bench-results/dd043-spikes-2026-07-24/s4-injection/probe-participant/src/main/java/com/basquin/spike/InjectProbe.java:37`
-carries the corrected shape and a comment saying why it must not be hoisted back out.
+carries the corrected shape and a comment saying why it must not be hoisted back out. **The same
+fresh-instance-per-project discipline applies to the repository injection's objects** — the model
+`Repository` and the effective-list `ArtifactRepository` are exactly as mutable and alias exactly the
+same way, so every model object is allocated fresh inside the per-project loop, none hoisted.
 
 **Native build arguments** ride the same channel. `quarkus.native.monitoring` is an enum list, and
 `nmt` **is an accepted value in Quarkus 3.37.3** — verified by S2, not assumed:
@@ -590,6 +654,13 @@ No file in the application tree is created or changed. The symmetry:
 This assumes the operator of Basquin controls the `mvn` invocation — has the app checked out and
 builds it — while never editing its source. That is the intended deployment model.
 
+**The operator contract needs no pre-populate step.** Because the injector supplies the repository as
+well as the dependency, the one-command form is complete on its own: nothing has to be installed into
+the target build's local repository first. S4's local-repo path (`publishToMavenLocal` /
+`install:install-file`) is thereby demoted from *the* consumable mechanism to a documented **offline
+fallback** — for build hosts that cannot reach the repository URL — and `docs/THIRD-PARTY-APPS.md`
+documents it as exactly that (S5; §3's publishing paragraph carries the same demotion).
+
 ### 5.1 The real risk is that Quarkus may not read the model we mutated — measured, and it did not materialise
 
 **Result first (S4, 2026-07-24): the hypothesis below is REFUTED.** Quarkus's bootstrap resolver
@@ -599,8 +670,12 @@ native** packaging, and the injected feature appeared in the `Installed features
 artifacts. Evidence: `bench-results/dd043-spikes-2026-07-24/s4-injection/` (`banner-baseline.txt` vs
 `banner-jvm-injected.txt` / `banner-native.txt`). §5's **dependency injection** therefore stands as
 designed and the degradation below is **not** the norm — it remains documented only as the contingency
-it always was. The **plugin-execution** injection §5 also requires was not part of this experiment and
-is not covered by this result (§8.2).
+it always was. S5 (2026-07-26) then extended the same result to the **repository** injection: the
+bootstrap consumed the participant-refreshed `${project.remoteProjectRepositories}` and fetched the
+deployment artifact from the injected repository on its own
+(`bench-results/dd043-s5-repo-injection-2026-07-26/findings.md`). The **plugin-execution** injection
+§5 also requires was part of neither experiment and
+is not covered by either result (§8.2).
 The reasoning is retained because it is why S4 existed, and because the same hazard would return for
 any resolver that behaves differently.
 
@@ -618,9 +693,11 @@ dependencies or plugin executions into the project model; it observes and wraps 
 event spies and its own APIs. "Exact analogue" was an overstatement and is withdrawn.
 
 Other risks: a strict `dependencyManagement`/BOM may pin something the extension needs (the injector
-must **fail loudly**, never silently); and builds that run inside their own Dockerfile never see our
-`MAVEN_OPTS`. Injecting a plugin *execution* is harder than injecting a dependency, and after S4 it is
-the **only half of §5 with no evidence at all** — promoted out of this list to §8.2, because a risk
+must **fail loudly**, never silently — implemented in PR-3: a conflicting managed *or* declared
+version both hard-fail the build, with the escape hatches named in the message); and builds that run
+inside their own Dockerfile never see our
+`MAVEN_OPTS`. Injecting a plugin *execution* is harder than injecting a dependency, and after S4 and
+S5 it is the **only part of §5 with no evidence at all** — promoted out of this list to §8.2, because a risk
 buried in a trailing sentence is how it stayed invisible to round 1's scope blocks.
 
 ### 5.2 Injection is proven by the banner, not assumed
@@ -1026,7 +1103,10 @@ invoking it means its probes must read zero. The discriminating evidence is that
 *against a live probe record* — S1b's `Probe.unused()` held at `2 missed, 0 covered` at t1 and t2 while
 sibling methods in the same class, backed by the same execution-data record, flipped to covered as
 their routes were hit. That is a live zero, and it is what refuted the pollution hypothesis. Evidence:
-`bench-results/dd043-spikes-2026-07-24/s1-coverage/s1b-t{0,1,2}-after-*.xml`, `s1b-app.log`.
+`bench-results/dd043-spikes-2026-07-24/s1-coverage/` — `s1b-t0-startup.xml` (baseline),
+`s1b-t1-after-ok.xml`, `s1b-t2-after-more.xml`, `s1b-app.log`. (The earlier citation here globbed
+`s1b-t{0,1,2}-after-*.xml`; t0's file is `-startup`, not `-after-`, so one third of that glob
+resolved to nothing.)
 
 #### Where that instrument lives on an unmodified target — the §1.1-compatible form
 
@@ -1039,9 +1119,13 @@ denominator the coverage percentage is computed over and cannot police it. Left 
 plants a route in `rest-heroes` and breaks the thesis, or stalls with no instrument. So the spec
 decides it here.
 
-**Decision: the instrument is a *withheld application route*, pre-registered before the run.** Every
-target in §3 is contract-first — the route set is enumerated at build time from
-`src/main/resources/openapi/openapi.yml`, which is also the driver's seed corpus. So the operator can
+**Decision: the instrument is a *withheld application route*, pre-registered before the run.** The
+2×2's targets (§3 rows 1–4) are contract-first — the route set is enumerated at build time from
+`src/main/resources/openapi/openapi.yml`, which is also the driver's seed corpus. (An earlier draft
+said "every target in §3"; row 5's substitutes (§8.1) carry no such guarantee, so row 5's withheld
+route must come from whatever enumerable route surface its target provides, named in the bench
+manifest the same way — and if the target has none, that row's coverage control needs its own design
+before the row publishes.) So the operator can
 name, **in the bench manifest and before the control run starts**, one route the driver is forbidden to
 send, chosen from a resource class whose *other* routes the driver will exercise. That method is then
 exactly S1b's instrument, with none of S1b's source edit: it is application code, already in the
@@ -1110,7 +1194,8 @@ specified — the reflective read path does not survive AOT — but CONFIRMED vi
 corrected to a direct typed call, so **§6.4 is amended, not void**, and §2's full-parity goal does not
 reopen. S4 was CONFIRMED in JVM and native, so **§5's dependency injection stands** and §5.1's
 degradation remains a contingency rather than the norm — but S4 injected only a `Dependency`, so §5's
-**plugin-execution** half passed no gate at all and is carried as §8.2. Full verdicts, evidence and the
+**plugin-execution** injection passed no gate at all and is carried as §8.2 (its repository injection,
+added to §5 after Phase 0, was later measured by spike S5). Full verdicts, evidence and the
 amendment list: `bench-results/dd043-spikes-2026-07-24/REPORT.md`.
 
 **Two Phase-0 scopes are carried forward as obligations rather than results**, because a spike that did
@@ -1258,23 +1343,95 @@ passing control is **not published**, matching the discipline that keeps `heapDr
 
 ## 8. Open questions
 
-### 8.1 Does the Apicurio Registry *server* build native?
+### 8.1 Does the Apicurio Registry *server* build native? — RESOLVED: NO (2026-07-26)
 
-Unresolved. A secondary source describes Apicurio's native support as an experimental `-Pnative` build,
-but the repository's own `-DcliSkipNative` flag appears to govern the **CLI** native image rather than
-the server. Target 5 is gated on verifying this directly. If the server does not build native, a
-substitute real-product Quarkus target is needed — the credibility requirement (a real application, not
-a reference demo) is what matters, not Apicurio specifically.
+**On the current (3.x) line there is no native build path for the server at all.** Investigation:
+`bench-results/dd043-apicurio-native-2026-07-26/README.md` (documentary, against a sparse clone of
+`Apicurio/apicurio-registry`; its §4 addendum spot-checked the load-bearing claims against primary
+sources). The verified facts:
+
+- `main` at the ref pinned by the investigation (`23159df`, 2026-07-25 — not HEAD; the capture
+  manifest's `main (head at capture)` row records `5d1dd525` as of 2026-07-29): `app/pom.xml`
+  contains **zero** occurrences of the string `native`
+  (`capture/12-apicurio-main-no-native.txt`). The repository's only CI-exercised native declarations
+  on `main` are the CLI's — `verify-cli.yaml`, `release.yaml` and `verify-build.yaml`
+  (`capture/13-apicurio-main-workflows-native-grep.txt`) — none of them the registry server. The
+  server's only container recipe on `main` is `Dockerfile.jvm`; `Dockerfile.native` is 404 there
+  (`capture/30-dockerfile-native-http-status.txt`). *(An earlier draft of this bullet also asserted
+  "the only native profiles anywhere in the repository are under `cli/`, `examples/` and
+  `support-chat/`". No file under `capture/` mentions `support-chat` or `examples` at all — `grep -rc
+  support-chat capture/` returns 0 in every file — and `capture.sh` fetches fixed paths rather than
+  walking the tree, so it cannot back an "anywhere in the repository" claim in the first place. That
+  sentence's original backing, a sparse-clone README, was deleted when the README was re-derived
+  through the GitHub API; the claim is removed here rather than re-asserted. This does not change the
+  ranking below: "Target 5 as specced cannot be built native" rests on the registry server's own
+  pom/CI/Dockerfile evidence just cited, not on what `examples/` or `support-chat/` contain.)*
+- `-DcliSkipNative` is defined in `cli/pom.xml` and governs the **CLI's** native image only — exactly
+  the suspicion this section previously recorded, now verified
+  (`capture/15-apicurio-main-cli-pom-and-appprops.txt:19-23`).
+- The secondary source was describing the **2.6.x** line, which *did* build the server native:
+  `app/pom.xml:590` on that branch carries the `native` profile, `Dockerfile.native` exists there
+  (HTTP 200 on `2.6.x`, 404 on `main`), and its CI native jobs ("Build and Test In Memory/SQL native
+  images") concluded success on the latest 2.6.x run.
+
+**Consequence: Target 5 as specced cannot be built native.** The credibility requirement (a real
+application, not a reference demo) is what matters, not Apicurio specifically — so row 5 takes a
+substitute. Ranked by **risk to what row 5 is for** (a real product we can actually instrument), not
+by setup cost:
+
+1. **Debezium Server** — Quarkus **3.33.1.1**, the closest to the harness's 3.37.3. **Not** "native
+   build verified in CI on every PR" — that overstates what the evidence shows, and the evidence
+   directory's own README rejects exactly this wording (`README.md:314-315`: *"'Green whenever it
+   runs' is the honest claim; 'green on every PR' is not"*). The accurate claim, at the level that
+   actually answers "does the native build pass" rather than the workflow's overall conclusion: over
+   a 12-run window (2026-07-16..28) the `native-build` job's `Verify native build` step was `success`
+   in all **7** runs it was exercised in, `skipped` in **4** (because its `needs: build` upstream job
+   failed first, so the native build never ran — it never *failed*), and **1** run had no matching
+   native job at all (a fork PR awaiting maintainer approval)
+   (`bench-results/dd043-apicurio-native-2026-07-26/capture/22-debezium-server-cross-maven-runs.txt:21-30`,
+   skip attribution in `capture/27-debezium-skip-attribution.txt`). The workflow *trigger* genuinely
+   does fire `on: pull_request` for every PR to `main` and release branches
+   (`capture/41-debezium-native-declarations.txt:8-21`) — that half of the claim is real; "verified in
+   CI on every PR" conflated the trigger firing with the native build actually running and passing.
+   Earlier drafts of this ranking tallied the *workflow's* overall conclusion (3 of the last 4 runs
+   succeeded) rather than the native-build step itself; re-derived at the step level the figure is
+   stronger, not weaker (0 exercised-and-failed, not 1-of-4-failed), which is why Debezium still ranks
+   first below — see `README.md`'s §0.2 discrepancy table (row D3) for how the two tallies diverge and
+   why the job/step level, not the workflow level, is the one that answers this question. Cost: a thin
+   HTTP surface (a management API, not a full REST product API) — acceptable, because the fuzz/load
+   axes are already carried by heroes/villains and row 5 buys credibility that a real product can be
+   instrumented natively.
+2. **Eclipse Hono, HTTP adapter** — Quarkus **3.27.4.1**, genuinely reactive, and the strongest
+   native-CI signal of the three (a dedicated native-image workflow on a 3×/day cron). Cost: the
+   heaviest infrastructure — Kafka (or an AMQP network) plus a device registry.
+3. **Apicurio Registry 2.6.x** — same product name, maintenance line, CI-green native. **Ranked last
+   despite looking cheapest, deliberately:** `basquin-quarkus` is compiled against Quarkus **3.37.3**
+   and consumes deployment-module APIs (`FilterBuildItem`, `RouteBuildItem`, `FeatureBuildItem`)
+   that are not stable across 22 minor versions, while 2.6.x pins Quarkus **3.15.3**. Whether one
+   `basquin-quarkus` build augments a 3.15.3 application is **unmeasured**, and the plausible failure
+   is §1.1's relocated one — a build that succeeds and is silently uninstrumented. Without a
+   cross-version compatibility spike first, this is not the low-cost option; it is the option whose
+   cost is hidden.
+
+**The new gate this exposes — row 5's entry gate, the same shape as §8.2 is for PR-4:** the Quarkus
+version range over which one `basquin-quarkus` build augments successfully is **untested**. Heroes
+and villains are both pinned at the toolchain's own 3.37.3 (§3.1), so nothing so far has exercised a
+version mismatch between the extension and its target; whichever substitute row 5 takes will be the
+first to. Settle it the way S4 and S5 settled theirs — a spike on the chosen target's Quarkus
+version, checked against §5.2's banner — before row 5 publishes anything.
 
 ### 8.2 Does `afterProjectsRead` model mutation reach the *execution plan*, not just resolution?
 
-Unresolved, and the only half of §5 with no evidence behind it. §5 requires the injector to add two
-things to each `MavenProject`'s `Model`: the `basquin-quarkus` **dependency** and the offline-JaCoCo
-**plugin execution** (§6.4). S4 measured the first and never attempted the second — `InjectProbe.java:26-43`
-adds a `Dependency` and nothing else — so "§5's mechanism holds" is a claim about half a mechanism.
+Unresolved, and the only part of §5 with no evidence behind it. §5 requires the injector to add three
+things to each `MavenProject`: the `basquin-quarkus` **dependency**, the **repository** that makes it
+resolvable, and the offline-JaCoCo **plugin execution** (§6.4). S4 measured the first
+(`InjectProbe.java:26-43` adds a `Dependency` and nothing else) and S5 measured the second, two-level
+form (`bench-results/dd043-s5-repo-injection-2026-07-26/`); nothing has ever attempted the third — so
+"§5's mechanism holds" is a claim about two thirds of a mechanism.
 
-The two are not obviously equivalent. A dependency is consumed by *resolution*, which S4 showed reads
-the in-memory model. A plugin execution has to survive into the per-project **execution plan**, which
+They are not obviously equivalent. A dependency and a repository are consumed by *resolution*, which
+S4 and S5 showed reads the in-memory session state the participant mutated. A plugin execution has to
+survive into the per-project **execution plan**, which
 Maven computes at a different point in the lifecycle; `afterProjectsRead` fires before that
 computation, so it *should* work, but "should" is what S4 existed to replace with a measurement.
 
@@ -1300,7 +1457,8 @@ history says this repo needs.
 | **PR-0** | Phase-0 spikes S1–S4 → `bench-results/dd043-spikes-2026-07-24/`, plus the spec amendments they forced. **No product code.** — **DONE, gate PASSED** | Gates everything below |
 | **PR-1** | `basquin-core` extraction (§4.1) — pure refactor, zero behaviour change, existing tests green, no Quarkus code — **DONE** (324 → 326 tests, 0 failures; branch `dd043-pr1-basquin-core`, not yet merged) | PR-0 — cleared |
 | **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + a `/__basquin/{result,violations}` control surface sharing `ResultStore`'s wire format (§4.4a), control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private and must be widened together before the boundary filter can call this artifact. The publishing half is resolved: `maven-publish` ships both a local and a Pages-served Maven repo |
-| **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits | PR-2 |
+| **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits — **DONE.** Shipped: the core extension injecting the dependency **and** the repository at both levels (§5), **8 operator guards** (grew from 7 in round 7, when review found a managed `<scope>` reaches `basquin-core` the same way a managed `<exclusions>` does — see `docs/ROADMAP.md` and `docs/THIRD-PARTY-APPS.md` for the current, checkable enumeration rather than trusting this snapshot), each mutation-checked by `scripts/verify-dd043-pr3.sh` — **all eight, no exception**: eight `_mutate` rows, one per item in the list below, each proven able to fail when its own branch is neutered, all PASS in `bench-results/verify-20260730T215842Z/RESULTS.md` as one `guards:<label>` row apiece, plus `guards:restored`. Cited by row key rather than line, because two mid-table insertions have already shifted that table's numbering twice: skip; conflicting managed version; conflicting managed exclusions; an unusable managed scope; conflicting declared version; an unusable declaration — wrong scope, `pom`/`test-jar` type, a classifier, or exclusions; and, on a *sibling* `com.basquin` artifact declared directly (`basquin-core` above all), an unusable sibling scope and a conflicting sibling version. **All but `skip` fail loudly per §5.1 — seven of the eight**; `skip` is the operator opt-out, not a guard. The scope, type/classifier, managed-exclusions, managed-scope and both sibling shapes were each found by review AFTER the preceding guard landed, so the declared-artifact check is written as a whitelist of what is usable rather than a list of known-bad values — while the sibling check enumerates the two fields measured to be hazards, `type`/`classifier`/`exclusions` having been measured harmless there. The eight live in **four** guard methods — `failOnUnusableDeclaration`, `failOnConflictingDeclaredVersion`, `failOnConflictingManagedVersion`, `failOnUnusableSiblingDeclaration` — read their javadoc in `BasquinInjector.java` for the shape-by-shape detail; this count and the line numbers below it move every time a guard is added, so a hand-typed number here is a snapshot, not a fact. And the Pages repo widened to all four artifacts (§3). **31 module tests** (23 in `BasquinInjectorGuardsTest.java` + 8 in `BasquinInjectorTest.java` — the two JUnit XMLs under
+`bench-results/verify-20260730T215842Z/guard-restore-junit/` report `tests="23"` and `tests="8"`; the `guards:restored` row of that run's `RESULTS.md` records the clean module suite as `31 tests, 0 failures`, derived from those XMLs); **390 repo-wide, 0 failures** (`bench-results/verify-20260730T215842Z/suite-counts.txt:1` reads `390 0`; `RESULTS.md:10`). §5.2's JVM half **PASSED on `rest-villains`** with zero edits to its tree (`bench-results/dd043-pr3-restvillains-2026-07-26/`, banner lists `basquin`); §5.2's native half **PASSED on the Phase-0 fixture, not rest-villains** (`bench-results/dd043-pr3-native-2026-07-26/`, banner `[basquin, cdi, rest, smallrye-context-propagation, vertx]`) — rest-villains' native buildability stays **unmeasured** and belongs to PR-4's native 2×2 cells (§7.2). **No multi-module Maven reactor was ever built end-to-end with the injector on `maven.ext.class.path`**: both acceptances are single-module — `rest-villains` is a standalone pom, so is the Phase-0 fixture — while `inject()` loops `session.getProjects()` and mutates a `MavenProject` instance per reactor member, which is exactly the shape this spec flags a hazard in ("The injector must construct a fresh `Dependency` per `MavenProject`", this file, the paragraph beginning with that sentence) and exactly the shape "the real targets are multi-module" a few lines below it refers to. The two unit tests that pin per-project freshness build a synthetic three-project list in memory, not a live Maven reactor; a real reactor build exercises paths — shared parent-pom inheritance into the effective model, Maven's own per-module lifecycle sequencing — that a synthetic list and a standalone pom cannot. The Gradle init script is a **stub**: it implements only the `skip` opt-out (`basquin-init.gradle:20,24`) — **none of the other seven operator guards have a Gradle counterpart**, so a conflicting version, an unusable declaration or an unusable sibling declaration on a Gradle target is resolved silently by Gradle's own defaults rather than failing loudly — and it was never exercised against a Gradle-built Quarkus target (§5). Both acceptances resolved over localhost HTTP; the real Pages HTTPS repository stays unexercised until the first `v*` tag (§3). The offline-JaCoCo plugin execution was **not** injected — §8.2 stands unmeasured, PR-4's entry gate | PR-2 — cleared |
 | **PR-4** | Coverage — offline-JaCoCo execution injection, `/__basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 · **entry gate: §8.2** (plugin-execution injection is unmeasured); the native cells additionally carry §7.2's S3 re-check |
 | **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs. **Entry condition:** §7.4's rule that the heap column, taint rate and `UNMEASURED` count render only when §7.3's firing controls passed is today **documented discipline, not enforced code** — nothing reads control-pass state, and it holds only because no renderer exists yet. PR-5 must make it a checkable gate in `render_page.py`, not a convention. **Also owns four gaps PR-2 measured:** the `UNMEASURED` disposition and §6.1's in-flight taint — both need a `ResultStore.Entry` field, and until they land §7.3's sub-quantum control **fails** and the heap invariant is **not publishable**; the watchdog, without which `block-loop`'s control cannot be claimed; **negative** heap deltas (measured `-16,456 KB` on `rest-villains`), which the in-flight counter structurally cannot detect because a GC is not a request; and **GC-contaminated positive** deltas, which the sign rule cannot see either — the general detector is a `GarbageCollectorMXBean.getCollectionCount()` delta across the window, whose SubstrateVM support is itself a PR-5 precondition | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |
 

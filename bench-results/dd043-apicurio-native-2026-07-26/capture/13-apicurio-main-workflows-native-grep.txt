@@ -1,0 +1,48 @@
+# Apicurio Registry main — every .github/workflows file grepped for 'native'
+# repo Apicurio/apicurio-registry @ 23159df62ef7a0935f55b8423c3b0d458773ecfc, captured 2026-07-29T15:16:38Z
+# method: gh api repos/Apicurio/apicurio-registry/contents/.github/workflows?ref=<sha> to enumerate,
+#         then GET each file raw and 'grep -n native'.
+
+# workflow files found: 29
+
+## .github/workflows/README.md  (2 hit(s))
+    134:| `verify-cli.yaml` | Called by verify | CLI native build (GraalVM) + tests on Linux and macOS. Conditional on `cli/` or `java-sdk/` changes | ~15-25 min |
+    152:| `release.yaml` | Main release orchestrator. Phase 1: version bump + commit. Phase 2: parallel builds (Java app, UI, CLI native on Linux + macOS via GraalVM). Phase 3: create GitHub release with artifacts, bump to next SNAPSHOT | 60-120 min | CLI native compilation is the bottleneck (~20-40 min per platform) |
+## .github/workflows/classify-issues.yml  (0 hits)
+## .github/workflows/generate-go-sdk.yaml  (0 hits)
+## .github/workflows/image-scan.yaml  (0 hits)
+## .github/workflows/operator.yaml  (0 hits)
+## .github/workflows/pr-lifecycle.yml  (0 hits)
+## .github/workflows/publish-docs.yaml  (0 hits)
+## .github/workflows/release-artifacts.yaml  (0 hits)
+## .github/workflows/release-images.yaml  (0 hits)
+## .github/workflows/release-milestones.yaml  (0 hits)
+## .github/workflows/release-operator.yaml  (0 hits)
+## .github/workflows/release-release-notes.yaml  (0 hits)
+## .github/workflows/release-sdks.yaml  (0 hits)
+## .github/workflows/release.yaml  (3 hit(s))
+    227:  # Phase 2c: Build CLI native binaries for each platform.
+    254:          native-image-job-reports: 'true'
+    264:            -Dquarkus.native.container-build=false \
+## .github/workflows/reusable-docker-build.yaml  (0 hits)
+## .github/workflows/reusable-notify-slack.yaml  (0 hits)
+## .github/workflows/update-openapi.yaml  (0 hits)
+## .github/workflows/update-website.yaml  (0 hits)
+## .github/workflows/validate-docs.yaml  (0 hits)
+## .github/workflows/validate-openapi.yaml  (0 hits)
+## .github/workflows/verify-build.yaml  (1 hit(s))
+    44:          # -DcliSkipNative: skip GraalVM native-image for CLI (separate verify-cli job handles this)
+## .github/workflows/verify-cli.yaml  (4 hit(s))
+    36:      # forward-compatibility issues with GraalVM/native-image early in PRs.
+    43:          native-image-job-reports: 'true'
+    78:          # -Dquarkus.native.container-build=false: use locally installed GraalVM (not Docker-based native build)
+    84:            -Dquarkus.native.container-build=false \
+## .github/workflows/verify-console-plugin.yaml  (0 hits)
+## .github/workflows/verify-extras.yaml  (0 hits)
+## .github/workflows/verify-integration-tests.yaml  (0 hits)
+## .github/workflows/verify-publish.yaml  (0 hits)
+## .github/workflows/verify-sdk.yaml  (0 hits)
+## .github/workflows/verify-unit-tests.yaml  (0 hits)
+## .github/workflows/verify.yaml  (0 hits)
+
+# total 'native' hits across all workflow files: 10

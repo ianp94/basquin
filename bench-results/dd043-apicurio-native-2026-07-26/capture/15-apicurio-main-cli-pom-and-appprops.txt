@@ -1,0 +1,77 @@
+# Apicurio main @ 23159df62ef7a0935f55b8423c3b0d458773ecfc — sources for README §1.2 and §1.5
+# captured 2026-07-29T15:16:38Z
+
+## cli/pom.xml — grep -n 'native|cliSkipNative'
+19:        <!-- Native build is enabled by default. Use -DcliSkipNative to skip. -->
+20:        <quarkus.native.enabled>true</quarkus.native.enabled>
+21:        <quarkus.native.builder-image>
+23:        </quarkus.native.builder-image>
+67:                     This prevents GraalVM native image from analyzing JDK HTTP client
+203:            <!-- Package the native binary with scripts into an architecture-specific ZIP -->
+293:        <!-- Skip native build when -DcliSkipNative is passed.
+294:             Useful for development and running tests without waiting for native compilation. -->
+296:            <id>cli-skip-native</id>
+299:                    <name>cliSkipNative</name>
+303:                <quarkus.native.enabled>false</quarkus.native.enabled>
+307:                    <!-- Disable assembly when not building native — the ZIP
+308:                         requires the native binary which won't exist -->
+
+## cli/pom.xml — verbatim lines 14-30 (default-native block)
+14:
+15:    <name>Registry :: CLI</name>
+16:
+17:    <properties>
+18:        <projectRoot>${project.basedir}/..</projectRoot>
+19:        <!-- Native build is enabled by default. Use -DcliSkipNative to skip. -->
+20:        <quarkus.native.enabled>true</quarkus.native.enabled>
+21:        <quarkus.native.builder-image>
+22:            quay.io/quarkus/ubi-quarkus-mandrel-builder-image:jdk-23
+23:        </quarkus.native.builder-image>
+24:        <!-- CLI branding and update defaults. Override in productized profiles. -->
+25:        <update.repo.url>https://repo1.maven.org/maven2/io/apicurio/apicurio-registry-cli</update.repo.url>
+26:        <branding.product-name>Apicurio Registry CLI</branding.product-name>
+27:    </properties>
+28:
+29:    <dependencies>
+30:
+
+## cli/pom.xml — verbatim around <id>cli-skip-native</id>
+294:             Useful for development and running tests without waiting for native compilation. -->
+295:        <profile>
+296:            <id>cli-skip-native</id>
+297:            <activation>
+298:                <property>
+299:                    <name>cliSkipNative</name>
+300:                </property>
+301:            </activation>
+302:            <properties>
+303:                <quarkus.native.enabled>false</quarkus.native.enabled>
+304:            </properties>
+305:            <build>
+306:                <plugins>
+307:                    <!-- Disable assembly when not building native — the ZIP
+308:                         requires the native binary which won't exist -->
+309:                    <plugin>
+310:                        <groupId>org.apache.maven.plugins</groupId>
+311:                        <artifactId>maven-assembly-plugin</artifactId>
+312:                        <executions>
+313:                            <execution>
+314:                                <id>dist</id>
+315:                                <phase>none</phase>
+316:                            </execution>
+317:                        </executions>
+318:                    </plugin>
+319:                </plugins>
+320:            </build>
+
+## README.md (repo root) — grep -n 'cliSkipNative'
+117:| `-DcliSkipNative`     | Skip CLI native image compilation (no executable is produced, but tests can still run)   |
+
+## app/src/main/resources/application.properties — grep -n storage/datasource keys
+226:apicurio.storage.kind=sql
+238:apicurio.storage.sql.kind=h2
+242:apicurio.datasource.url=jdbc:h2:mem:db_${quarkus.uuid}
+251:quarkus.datasource.h2.jdbc.url=${apicurio.datasource.url}
+260:quarkus.datasource.postgresql.jdbc.url=${apicurio.datasource.url}
+269:quarkus.datasource.mysql.jdbc.url=${apicurio.datasource.url}
+278:quarkus.datasource.mssql.jdbc.url=${apicurio.datasource.url}

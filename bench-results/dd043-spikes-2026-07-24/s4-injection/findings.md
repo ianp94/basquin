@@ -105,7 +105,7 @@ their transitive poms/jars — none of which are declared anywhere in
 have no reason to resolve any of this. This alone is strong evidence the
 resolver used the mutated in-memory model, and it appears *before* signal 2
 is checked, so it is independent corroboration, not the same observation
-counted twice. Build result: `BUILD SUCCESS` (`build-jvm-injected.log:141`).
+counted twice. Build result: `BUILD SUCCESS` (`build-jvm-injected.log:31`).
 
 **Signal 2 — did the banner list it?** Yes (`banner-jvm-injected.txt`,
 from actually running the resulting `quarkus-run.jar`):

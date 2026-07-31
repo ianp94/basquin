@@ -1,0 +1,250 @@
+// DD-043 PR-3 — the Maven core extension (AbstractMavenLifecycleParticipant) that adds Basquin's
+// instrumentation to a Quarkus application at build time, with zero edits to the application tree.
+//
+// Loaded into the TARGET application's Maven via -Dmaven.ext.class.path, which means:
+//   * maven-core and javax.inject are compileOnly — the target's Maven supplies them, and shipping
+//     our own copies would risk shadowing the host Maven's classes.
+//   * no runtime dependencies at all, so the jar can be put on that classpath by itself.
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+group = 'com.basquin'
+version = '0.3.0'
+sourceCompatibility = '17'
+targetCompatibility = '17'
+
+repositories { mavenCentral() }
+
+dependencies {
+    // 3.9.6 is what both spike participants COMPILED against (their poms); they then EXECUTED
+    // correctly under the wrapper's Maven 3.9.16, which is the actual evidence this pin rests on.
+    compileOnly 'org.apache.maven:maven-core:3.9.6'
+    // DefaultRepositoryLayout lives in maven-compat, not maven-core. S5's probe pom carries the
+    // verified note that the Maven 3.9.16 distribution ships maven-compat in lib/, so it is on the
+    // core classrealm that -Dmaven.ext.class.path extends — compileOnly is correct for the same
+    // reason it is correct for maven-core: the host Maven supplies it, and shipping our own copy
+    // would risk shadowing the host's classes.
+    compileOnly 'org.apache.maven:maven-compat:3.9.6'
+    compileOnly 'javax.inject:javax.inject:1'
+
+    testImplementation 'org.apache.maven:maven-core:3.9.6'
+    testImplementation 'org.apache.maven:maven-compat:3.9.6'
+    testImplementation 'javax.inject:javax.inject:1'
+    testImplementation 'junit:junit:4.13.2'
+}
+
+test {
+    useJUnit()
+}
+
+jar {
+    archiveBaseName = 'basquin-maven-injector'
+}
+
+// The injected dependency's version is the injector's OWN version, baked in at build time rather
+// than typed into Java source. A hand-typed constant drifts from `version` above the first time one
+// is bumped without the other, and the symptom would be a resolution failure in someone else's build.
+def versionResourceDir = layout.buildDirectory.dir('generated/basquin-version')
+def writeVersionResource = tasks.register('writeVersionResource', WriteProperties) {
+    destinationFile = versionResourceDir.map { it.file('basquin-injector.properties') }
+    property 'version', project.version.toString()
+}
+sourceSets.main.output.dir(versionResourceDir, builtBy: writeVersionResource)
+
+java {
+    withSourcesJar()
+}
+
+// Maven discovers this core extension through META-INF/sisu/javax.inject.Named, NOT by scanning for
+// @Named. Nothing in the unit suite can catch that resource going missing: all tests drive inject()
+// directly and bypass container wiring entirely, so a guard wired only into `jar` (and not `check`)
+// would let `./gradlew check` stay green while the shipped jar is undiscoverable — and a target
+// application then builds successfully and completely uninstrumented.
+//
+// PR #103's review found this guard existed only in scripts/verify-dd043-pr3.sh, which no workflow runs.
+// A guard outside CI is not a guard.
+//
+// Wired BOTH ways, following the same reasoning recorded for verifyShippedJarsContainCore in the root
+// build.gradle: `check` depends on it (below `tasks.named('jar')`, so `./gradlew check` cannot go green
+// without it), AND `jar` is finalizedBy it, because the release path builds/publishes without ever
+// running `check` — a check-only guard would let a regression ship through release without ever
+// executing. PR #103 round 10 (finding 4): `finalizedBy('jar')` alone is an alternative to wiring into
+// `check`, not a superset of it — a `--dry-run` of `check` showed neither guard in its task graph.
+def verifyInjectorIsDiscoverable = tasks.register('verifyInjectorIsDiscoverable') {
+    description = 'Fails if the built jar could not be discovered by Maven as a core extension.'
+    def jarFile = tasks.named('jar', Jar).flatMap { it.archiveFile }
+    inputs.file(jarFile)
+    doLast {
+        def index = 'META-INF/sisu/javax.inject.Named'
+        def zip = new java.util.zip.ZipFile(jarFile.get().asFile)
+        try {
+            def entry = zip.getEntry(index)
+            if (entry == null) {
+                throw new GradleException("${jarFile.get().asFile.name} has no ${index}. Maven would " +
+                        "never instantiate the participant, so an injected build would succeed and " +
+                        "produce an UNINSTRUMENTED application. Restore " +
+                        "src/main/resources/${index}.")
+            }
+            // Derived, never hardcoded: read the class the index names and require it in this same jar.
+            // A stale index after a rename is exactly as silent as a missing one.
+            def named = zip.getInputStream(entry).text.trim().readLines().findAll { it.trim() }
+            if (named.size() != 1) {
+                throw new GradleException("${index} must name exactly one class, found ${named.size()}: ${named}")
+            }
+            def classEntry = named[0].replace('.', '/') + '.class'
+            if (zip.getEntry(classEntry) == null) {
+                throw new GradleException("${index} names ${named[0]} but ${classEntry} is not in the " +
+                        "jar — a stale index is as silent as a missing one.")
+            }
+            // The index and the class EXISTING is necessary, not sufficient (PR #103 round 9): Sisu's
+            // index-based discovery still reads @Named off the class itself, and the participant
+            // contract is the AbstractMavenLifecycleParticipant supertype. Remove either — a
+            // plausible IDE "unused annotation" cleanup, since javax.inject is compileOnly and
+            // nothing else references it — and this jar still builds, the index still names the
+            // class, every unit test still passes (they drive inject() directly), and Maven silently
+            // never calls the participant: the exact uninstrumented-green failure this task exists
+            // to prevent. The superclass is resolved from the classfile's own constant pool
+            // (super_class -> Class -> Utf8), so an incidental mention of the type elsewhere in the
+            // class cannot satisfy it. @Named is required as its annotation DESCRIPTOR among the
+            // constant-pool UTF-8 entries — the compiler emits `Ljavax/inject/Named;` iff the
+            // annotation (or an explicit reference to the type) survives compilation.
+            def classBytes = zip.getInputStream(zip.getEntry(classEntry)).bytes
+            def dis = new DataInputStream(new ByteArrayInputStream(classBytes))
+            // Groovy promotes 0xCAFEBABE to a Long (no silent int overflow), so compare unsigned.
+            if ((dis.readInt() & 0xFFFFFFFFL) != 0xCAFEBABEL) {
+                throw new GradleException("${classEntry} is not a classfile (bad magic).")
+            }
+            dis.readUnsignedShort(); dis.readUnsignedShort()          // minor, major
+            int cpCount = dis.readUnsignedShort()
+            Map<Integer, String> utf8 = [:]
+            Map<Integer, Integer> classRefs = [:]
+            int ci = 1
+            while (ci < cpCount) {
+                int tag = dis.readUnsignedByte()
+                if (tag == 1) { utf8[ci] = dis.readUTF() }            // Utf8: same u2-length format as readUTF
+                else if (tag == 7) { classRefs[ci] = dis.readUnsignedShort() }
+                else if (tag in [8, 16, 19, 20]) { dis.skipBytes(2) } // String, MethodType, Module, Package
+                else if (tag == 15) { dis.skipBytes(3) }              // MethodHandle
+                else if (tag in [3, 4, 9, 10, 11, 12, 17, 18]) { dis.skipBytes(4) }
+                else if (tag in [5, 6]) { dis.skipBytes(8); ci++ }    // long/double occupy TWO pool slots
+                else {
+                    throw new GradleException("unparseable constant-pool tag ${tag} in ${classEntry} — " +
+                            "update this task's classfile walker before trusting its verdict.")
+                }
+                ci++
+            }
+            dis.readUnsignedShort()                                   // access_flags
+            dis.readUnsignedShort()                                   // this_class
+            int superIdx = dis.readUnsignedShort()
+            String superName = utf8[classRefs[superIdx]]
+            String wantSuper = 'org/apache/maven/AbstractMavenLifecycleParticipant'
+            if (superName != wantSuper) {
+                throw new GradleException("${named[0]} extends '${superName}', not ${wantSuper}. Maven " +
+                        "looks the discovered component up BY that supertype; without it the " +
+                        "participant is never called and an injected build succeeds UNINSTRUMENTED.")
+            }
+            if (!utf8.values().contains('Ljavax/inject/Named;')) {
+                throw new GradleException("${named[0]} no longer carries @javax.inject.Named — the Sisu " +
+                        "index names it, but index-based discovery still reads the annotation off the " +
+                        "class, so Maven would never instantiate the participant and an injected build " +
+                        "would succeed UNINSTRUMENTED. Restore @Named(\"basquin-injector\") on the class.")
+            }
+            def props = zip.getEntry('basquin-injector.properties')
+            if (props == null) {
+                throw new GradleException("basquin-injector.properties missing from the jar; " +
+                        "InjectorVersion.value() would throw at runtime in the target's build.")
+            }
+            def p = new Properties()
+            zip.getInputStream(props).withStream { p.load(it) }
+            if (p.getProperty('version') != project.version.toString()) {
+                throw new GradleException("baked version '${p.getProperty('version')}' != project " +
+                        "version '${project.version}'.")
+            }
+            logger.lifecycle("verifyInjectorIsDiscoverable: ${index} -> ${named[0]} (@Named present, " +
+                    "extends ${wantSuper}), version ${p.getProperty('version')}")
+        } finally {
+            zip.close()
+        }
+    }
+}
+tasks.named('jar') { finalizedBy verifyInjectorIsDiscoverable }
+tasks.named('check') { dependsOn verifyInjectorIsDiscoverable }
+
+// PR #103's approver (finding 2): basquin-init.gradle:22 hand-types the injected version's default
+// ('0.3.0') where the Maven path deliberately does not — InjectorVersion reads a resource baked from
+// THIS module's `project.version` (above), so the Maven default can never drift from it. An init
+// script cannot do the same: it runs before any project classpath exists, which is before this jar's
+// baked resource could even be on a classpath to read (TODO.md, the PR-3 follow-up
+// "basquin-init.gradle hand-types '0.3.0'" — cited by title, not line number: the line drifted once
+// already, and that section is actively edited), so the literal itself cannot be
+// eliminated the way the Maven one was. What can be added is an assertion that the literal has not
+// drifted from the one thing it is supposed to mirror — this module's own `version`, which
+// release.yml (`Assert every published module's version matches the release tag`) already keeps
+// equal to every other published module's, including basquin-quarkus, the artifact this default
+// names. Read the literal back out of the checked-in script text and compare, rather than trusting a
+// comment asking a human to keep the two in sync.
+def basquinInitGradleFile = rootProject.layout.projectDirectory.file('basquin-init.gradle')
+def verifyGradleInitScriptVersion = tasks.register('verifyGradleInitScriptVersion') {
+    group = 'verification'
+    description = "Fails if basquin-init.gradle's hard-coded default injected version has drifted " +
+            "from this module's version."
+    inputs.file(basquinInitGradleFile)
+    doLast {
+        File initFile = basquinInitGradleFile.asFile
+        if (!initFile.isFile()) {
+            throw new GradleException("verifyGradleInitScriptVersion: ${initFile} does not exist; " +
+                    "cannot check its default injected version against project.version " +
+                    "'${project.version}'. Update this task if the file moved.")
+        }
+        // Matches:  System.getProperty('basquin.inject.version') ?: '0.3.0'
+        def matcher = initFile.text =~ /basquin\.inject\.version'\)\s*\?:\s*'([^']*)'/
+        if (!matcher.find()) {
+            throw new GradleException("verifyGradleInitScriptVersion: could not find the " +
+                    "'basquin.inject.version ?: <literal>' default in ${initFile.name}. Either the " +
+                    "script was rewritten in a way this regex no longer parses, or the fallback " +
+                    "literal was removed entirely — update this task to match its new shape.")
+        }
+        String literalVersion = matcher.group(1)
+        String moduleVersion = project.version.toString()
+        if (literalVersion != moduleVersion) {
+            throw new GradleException("verifyGradleInitScriptVersion: ${initFile.name}'s hard-coded " +
+                    "default version '${literalVersion}' != ${project.name}'s version " +
+                    "'${moduleVersion}'. A Gradle target built without -Dbasquin.inject.version would " +
+                    "resolve the STALE coordinate com.basquin:basquin-quarkus:${literalVersion} — the " +
+                    "build succeeds and /__basquin/result returns \"miss\". Update the literal at " +
+                    "${initFile.name} to '${moduleVersion}' as part of this release's version bump.")
+        }
+        logger.lifecycle("verifyGradleInitScriptVersion: ${initFile.name} default version " +
+                "'${literalVersion}' matches ${project.name} '${moduleVersion}'.")
+    }
+}
+// Same reasoning as verifyInjectorIsDiscoverable just above: wired BOTH into `check` (dependsOn) and
+// `jar` (finalizedBy), because the release path builds/publishes without ever running `check`, so a
+// check-only guard would let a regression ship through release without ever executing. PR #103 round
+// 10 (finding 4): finalizedBy alone left this guard, despite its own `group = 'verification'`,
+// invisible to `./gradlew check` — the verification entry point it is grouped under.
+tasks.named('jar') { finalizedBy verifyGradleInitScriptVersion }
+tasks.named('check') { dependsOn verifyGradleInitScriptVersion }
+
+publishing {
+    publications {
+        injector(MavenPublication) {
+            from components.java
+            pom {
+                name = 'basquin-maven-injector'
+                description = 'Maven core extension that injects the Basquin Quarkus extension into ' +
+                        'a target application build without modifying its source.'
+                url = 'https://github.com/ianp94/basquin'
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = 'pages'
+            url = rootProject.layout.projectDirectory.dir(
+                    providers.gradleProperty('basquinPagesDir').getOrElse('docs/maven'))
+        }
+    }
+}

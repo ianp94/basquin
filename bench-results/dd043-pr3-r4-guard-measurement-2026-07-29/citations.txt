@@ -1,0 +1,66 @@
+logs/ctl-noguard-coldcache-list.log:2: [basquin-injector] instrumented probe-ctl (com.basquin:basquin-quarkus:0.3.0
+logs/ctl-noguard-coldcache-list.log:1632: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/ctl-noguard-coldcache-list.log:1633: [INFO]    com.basquin:basquin-core:jar:0.3.0:runtime -- module basquin.core (auto)
+logs/ctl-noguard-coldcache-list.log:1729: BUILD SUCCESS
+logs/ctl-noguard-list.log:2: [basquin-injector] instrumented probe-ctl (com.basquin:basquin-quarkus:0.3.0
+logs/ctl-noguard-list.log:12: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/ctl-noguard-list.log:13: [INFO]    com.basquin:basquin-core:jar:0.3.0:runtime -- module basquin.core (auto)
+logs/ctl-noguard-list.log:109: BUILD SUCCESS
+logs/ctl-stock-list.log:2: [basquin-injector] instrumented probe-ctl (com.basquin:basquin-quarkus:0.3.0
+logs/ctl-stock-list.log:12: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/ctl-stock-list.log:13: [INFO]    com.basquin:basquin-core:jar:0.3.0:runtime -- module basquin.core (auto)
+logs/ctl-stock-list.log:109: BUILD SUCCESS
+logs/dag-stock-list.log:2: [basquin-injector] instrumented probe-dag (com.basquin:basquin-quarkus:0.3.0
+logs/dag-stock-list.log:12: [INFO]    com.basquin:basquin-core:jar:0.3.0:compile -- module basquin.core (auto)
+logs/dag-stock-list.log:13: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/dag-stock-list.log:109: BUILD SUCCESS
+logs/dcl-stock-list.log:2: [basquin-injector] instrumented probe-dcl (com.basquin:basquin-quarkus:0.3.0
+logs/dcl-stock-list.log:56: [INFO]    com.basquin:basquin-core:jar:tests:0.3.0:compile -- module basquin.core (auto)
+logs/dcl-stock-list.log:57: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/dcl-stock-list.log:58: [INFO]    com.basquin:basquin-core:jar:0.3.0:runtime -- module basquin.core (auto)
+logs/dcl-stock-list.log:154: BUILD SUCCESS
+logs/dcv-stock-list.log:2: [basquin-injector] instrumented probe-dcv (com.basquin:basquin-quarkus:0.3.0
+logs/dcv-stock-list.log:111: [INFO]    com.basquin:basquin-core:jar:0.0.1-conflicting:compile -- module basquin.core (auto)
+logs/dcv-stock-list.log:112: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/dcv-stock-list.log:208: BUILD SUCCESS
+logs/dex-stock-list.log:2: [basquin-injector] instrumented probe-dex (com.basquin:basquin-quarkus:0.3.0
+logs/dex-stock-list.log:12: [INFO]    com.basquin:basquin-core:jar:0.3.0:compile -- module basquin.core (auto)
+logs/dex-stock-list.log:13: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/dex-stock-list.log:109: BUILD SUCCESS
+logs/dprov-stock-list.log:2: [basquin-injector] instrumented probe-dprov (com.basquin:basquin-quarkus:0.3.0
+logs/dprov-stock-list.log:12: [INFO]    com.basquin:basquin-core:jar:0.3.0:provided -- module basquin.core (auto)
+logs/dprov-stock-list.log:13: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/dprov-stock-list.log:109: BUILD SUCCESS
+logs/dsc-stock-list.log:2: [basquin-injector] instrumented probe-dsc (com.basquin:basquin-quarkus:0.3.0
+logs/dsc-stock-list.log:12: [INFO]    com.basquin:basquin-core:jar:0.3.0:test -- module basquin.core (auto)
+logs/dsc-stock-list.log:13: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/dsc-stock-list.log:109: BUILD SUCCESS
+logs/dty-stock-list.log:2: [basquin-injector] instrumented probe-dty (com.basquin:basquin-quarkus:0.3.0
+logs/dty-stock-list.log:13: [INFO]    com.basquin:basquin-core:pom:0.3.0:compile
+logs/dty-stock-list.log:14: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/dty-stock-list.log:15: [INFO]    com.basquin:basquin-core:jar:0.3.0:runtime -- module basquin.core (auto)
+logs/dty-stock-list.log:111: BUILD SUCCESS
+logs/mcl-noguard-list.log:2: [basquin-injector] instrumented probe-mcl (com.basquin:basquin-quarkus:0.3.0
+logs/mcl-noguard-list.log:12: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/mcl-noguard-list.log:13: [INFO]    com.basquin:basquin-core:jar:0.3.0:runtime -- module basquin.core (auto)
+logs/mcl-noguard-list.log:109: BUILD SUCCESS
+logs/mcv-noguard-list.log:2: [basquin-injector] instrumented probe-mcv (com.basquin:basquin-quarkus:0.3.0
+logs/mcv-noguard-list.log:12: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/mcv-noguard-list.log:13: [INFO]    com.basquin:basquin-core:jar:0.0.1-conflicting:runtime -- module basquin.core (auto)
+logs/mcv-noguard-list.log:109: BUILD SUCCESS
+logs/mcv-stock-list.log:2: [ERROR] basquin-injector: probe-mcv's dependencyManagement pins com.basquin:basquin-core to 0.0.1-conflicting, but this 
+logs/mopt-noguard-list.log:2: [basquin-injector] instrumented probe-mopt (com.basquin:basquin-quarkus:0.3.0
+logs/mopt-noguard-list.log:12: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/mopt-noguard-list.log:13: [INFO]    com.basquin:basquin-core:jar:0.3.0:runtime -- module basquin.core (auto)
+logs/mopt-noguard-list.log:109: BUILD SUCCESS
+logs/msc-noguard-list.log:2: [basquin-injector] instrumented probe-msc (com.basquin:basquin-quarkus:0.3.0
+logs/msc-noguard-list.log:12: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/msc-noguard-list.log:13: [INFO]    com.basquin:basquin-core:jar:0.3.0:runtime -- module basquin.core (auto)
+logs/msc-noguard-list.log:109: BUILD SUCCESS
+logs/mty-noguard-list.log:2: [basquin-injector] instrumented probe-mty (com.basquin:basquin-quarkus:0.3.0
+logs/mty-noguard-list.log:12: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/mty-noguard-list.log:13: [INFO]    com.basquin:basquin-core:jar:0.3.0:runtime -- module basquin.core (auto)
+logs/mty-noguard-list.log:109: BUILD SUCCESS
+logs/mx-noguard-list.log:2: [basquin-injector] instrumented probe-mx (com.basquin:basquin-quarkus:0.3.0
+logs/mx-noguard-list.log:12: [INFO]    com.basquin:basquin-quarkus:jar:0.3.0:compile -- module basquin.quarkus (auto)
+logs/mx-noguard-list.log:108: BUILD SUCCESS

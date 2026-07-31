@@ -23,7 +23,7 @@ only — no native build was run.**
 
 - Repo: `https://github.com/quarkusio/quarkus-super-heroes`, commit `c9b46d745620708e1519859bb4775469114381e5`
   (`main`, fetched 2026-07-26).
-- Cloned **outside** this repository, per `docs/THIRD-PARTY-APPS.md:58`'s precedent (JPetStore): a
+- Cloned **outside** this repository, per `docs/THIRD-PARTY-APPS.md:64`'s precedent (JPetStore's `git clone --depth 1 …/jpetstore-6.git`): a
   shallow (`--depth 1`), sparse (`rest-villains` only) clone to a sibling directory,
   `../quarkus-super-heroes` (sibling of `closureJVM`, i.e.
   `/mnt/c/Users/ianpa/OneDrive/Documents/GitHub/quarkus-super-heroes/rest-villains`). Not committed
@@ -115,7 +115,7 @@ cd closureJVM
 Clone and patch the target (outside this repo):
 
 ```bash
-DEST=../quarkus-super-heroes   # sibling of closureJVM, per docs/THIRD-PARTY-APPS.md:58
+DEST=../quarkus-super-heroes   # sibling of closureJVM, per docs/THIRD-PARTY-APPS.md:64
 git clone --filter=blob:none --no-checkout --depth 1 \
   https://github.com/quarkusio/quarkus-super-heroes.git "$DEST"
 cd "$DEST"

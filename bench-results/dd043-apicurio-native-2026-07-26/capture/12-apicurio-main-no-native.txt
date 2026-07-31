@@ -1,0 +1,17 @@
+# Apicurio main @ 23159df62ef7a0935f55b8423c3b0d458773ecfc (the ref README:11 pins), captured 2026-07-29T15:16:38Z
+
+## app/pom.xml — count of the string 'native'
+grep -c native app/pom.xml = 0
+## app/pom.xml — grep -n 'quarkus.version'
+(none)
+
+## pom.xml — count of the string 'native'
+grep -c native pom.xml = 0
+## pom.xml — grep -n 'quarkus.version'
+140:    <quarkus.version>3.33.2.1</quarkus.version>
+593:        <version>${quarkus.version}</version>
+978:        <version>${quarkus.version}</version>
+1081:          <version>${quarkus.version}</version>
+
+## same counts at main HEAD @ 5d1dd525e08e76eb9b970d9b6d74e5f8488210cf (drift check)
+grep -c native app/pom.xml = 0

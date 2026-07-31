@@ -1,0 +1,23 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Task :basquin-maven-injector:compileJava
+Note: /mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/basquin-maven-injector/src/main/java/com/basquin/maven/BasquinInjector.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :basquin-maven-injector:processResources UP-TO-DATE
+> Task :basquin-maven-injector:writeVersionResource UP-TO-DATE
+> Task :basquin-maven-injector:classes
+> Task :basquin-maven-injector:compileTestJava UP-TO-DATE
+> Task :basquin-maven-injector:processTestResources NO-SOURCE
+> Task :basquin-maven-injector:testClasses UP-TO-DATE
+> Task :basquin-maven-injector:test
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.9/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 7s
+5 actionable tasks: 2 executed, 3 up-to-date

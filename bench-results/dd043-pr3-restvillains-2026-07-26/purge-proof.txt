@@ -1,0 +1,9 @@
+$ ls -d ~/.m2/repository/com/basquin/* # before
+/home/ian/.m2/repository/com/basquin/basquin-core
+/home/ian/.m2/repository/com/basquin/basquin-quarkus
+/home/ian/.m2/repository/com/basquin/basquin-quarkus-deployment
+
+$ rm -rf ~/.m2/repository/com/basquin
+
+$ find ~/.m2/repository/com/basquin -type f | head -3 # after
+bfs: error: /home/ian/.m2/repository/com/basquin: No such file or directory.

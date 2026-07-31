@@ -2,7 +2,10 @@
 
 **Status:** design approved (Component 1 as a `<nonce>` generator + Component 2 Option A), 2026-07-22.
 **Builds on:** DD-036/037 response correlation (`LoadRun.substitute`, `${{name}}` refs, encoding model A).
-**Motivation source:** `.superpowers/sdd/jspwiki-runner-save-rootcause.md`.
+**Motivation source:** live in-cluster investigation of the DD-037 load runner, using the real
+runner code path against a running JSPWiki pod, which established that replayed saves were being
+silently no-oped by identical text rather than rejected — not committed to the repo; see the
+Problem section below for the reproduced findings.
 
 ## Problem
 

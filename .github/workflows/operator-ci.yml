@@ -20,6 +20,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Round 10 (PR #103 approver): the whole-tree citation-integrity job lives in ci.yml, whose path
+  # filters don't carry 'operator/**' — by design, so a Go-only change doesn't pull in the entire
+  # Gradle build. But that left operator/** triggering NO citation check at all: line-pinned
+  # citations target it (TODO.md:781 -> injection.go:115; bench-results/dd044-native-jto-2026-07-26/
+  # README.md:4 -> injection.go:108-115), and operator/ has its own citing *.md (CHANGELOG.md,
+  # README.md), yet a commit touching only operator/** ran no check that could catch either going
+  # stale. Duplicating just this one cheap (~1s), stdlib-only step here closes that gap without
+  # dragging Go-only changes through the Gradle suite.
+  citation-integrity:
+    name: citation integrity (operator/** trigger)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check citations resolve against cited file content
+        run: python3 scripts/check-citations.py
+
   test:
     name: build + vet + envtest
     runs-on: ubuntu-latest

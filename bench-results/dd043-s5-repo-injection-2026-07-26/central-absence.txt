@@ -1,0 +1,5 @@
+# DD-043 S5 — Maven Central absence check for the injected coordinates
+# 2026-07-26 07:24:33 UTC
+GET https://repo1.maven.org/maven2/com/basquin/basquin-quarkus/ -> HTTP 404
+GET https://repo1.maven.org/maven2/com/basquin/basquin-quarkus-deployment/ -> HTTP 404
+GET https://repo1.maven.org/maven2/com/basquin/basquin-core/ -> HTTP 404

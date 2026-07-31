@@ -1,0 +1,36 @@
+> Task :basquin-core:compileJava UP-TO-DATE
+> Task :basquin-core:processResources NO-SOURCE
+> Task :basquin-core:classes UP-TO-DATE
+> Task :basquin-core:jar UP-TO-DATE
+> Task :basquin-core:sourcesJar UP-TO-DATE
+> Task :basquin-core:generateMetadataFileForCorePublication
+> Task :basquin-core:generatePomFileForCorePublication
+> Task :basquin-core:publishCorePublicationToS5PagesRepository
+> Task :basquin-core:publishAllPublicationsToS5PagesRepository
+> Task :basquin-quarkus:runtime:processResources NO-SOURCE
+> Task :basquin-quarkus:runtime:validateExtension
+> Task :basquin-quarkus:runtime:extensionDescriptor
+> Task :basquin-quarkus:runtime:compileJava UP-TO-DATE
+> Task :basquin-quarkus:runtime:classes UP-TO-DATE
+> Task :basquin-quarkus:runtime:jar
+> Task :basquin-quarkus:runtime:generateMetadataFileForRuntimePublication
+> Task :basquin-quarkus:runtime:generatePomFileForRuntimePublication
+> Task :basquin-quarkus:runtime:publishRuntimePublicationToS5PagesRepository
+> Task :basquin-quarkus:runtime:publishAllPublicationsToS5PagesRepository
+> Task :basquin-quarkus:deployment:compileJava UP-TO-DATE
+> Task :basquin-quarkus:deployment:processResources NO-SOURCE
+> Task :basquin-quarkus:deployment:classes UP-TO-DATE
+> Task :basquin-quarkus:deployment:jar
+> Task :basquin-quarkus:deployment:generateMetadataFileForDeploymentPublication
+> Task :basquin-quarkus:deployment:generatePomFileForDeploymentPublication
+> Task :basquin-quarkus:deployment:publishDeploymentPublicationToS5PagesRepository
+> Task :basquin-quarkus:deployment:publishAllPublicationsToS5PagesRepository
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.9/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 4s
+18 actionable tasks: 13 executed, 5 up-to-date

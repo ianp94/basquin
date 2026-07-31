@@ -1,0 +1,14 @@
+# bench-results/RUN-OF-RECORD — the certified run of record for DD-043 PR-3.
+#
+# scripts/check-citations.py resolves any cited path beginning
+# `bench-results/RUN-OF-RECORD/` against the directory named on the single non-comment line
+# below, so citations do not go stale every time evidence is regenerated (DD-045 item 2).
+# Format: exactly one non-comment, non-blank line, naming a bench-results/ subdirectory by
+# name only — no `bench-results/` prefix, no trailing slash. Zero or more than one such line
+# is a malformed pointer and the checker fails loudly rather than guessing.
+#
+# Promoting a run to run-of-record is a DELIBERATE, MANUAL step: scripts/verify-dd043-pr3.sh
+# never writes this file, so an ad hoc local run cannot silently become the cited evidence.
+# Whoever certifies a new run edits the line below to name it, in the SAME COMMIT that adds
+# the new bench-results/verify-<UTC>/ directory — never as a follow-up commit.
+verify-20260730T215842Z

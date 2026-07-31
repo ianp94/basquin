@@ -45,7 +45,7 @@ work, not cleanup of this thread.
 | **DD-043** | Native + reactive targets — build-time instrumentation of a GraalVM-native Quarkus app | **Phase 0 done, gate PASSED** — **merged** as [#98](https://github.com/ianp94/basquin/pull/98) (2026-07-24). All four spikes resolved; S1 REFUTED as specified then CONFIRMED via S1b; 8 spec amendments forced, none voiding a section, plus a round-2 fix pass from the whole-branch review (spec ledger, "Round 2"). **PR-1 (#100), PR-2 (#102) merged; PR-3 open as
 [#103](https://github.com/ianp94/basquin/pull/103)** — build-time injection with zero edits to the
 target's tree, both halves of §5.2 passed (JVM on `rest-villains`, native on the fixture), 390 tests
-(`bench-results/verify-20260730T215842Z/suite-counts.txt:1`).
+(`bench-results/RUN-OF-RECORD/suite-counts.txt:1`).
 §8.1 **resolved**: Apicurio's server has no native build on the 3.x line, so row 5 needs a substitute —
 ranked Debezium Server (Quarkus 3.33.1.1) > Eclipse Hono HTTP adapter (3.27.4.1, reactive, heavier
 infra) > Apicurio 2.6.x, the last only behind a compatibility spike since `basquin-quarkus` is pinned to
@@ -99,7 +99,7 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
    Spec §5.2's two-artifact bar passed both halves — JVM on the real `rest-villains` app
    (`bench-results/dd043-pr3-restvillains-2026-07-26/`) and native on the Phase-0 fixture
    (`bench-results/dd043-pr3-native-2026-07-26/`). 390 tests, 0 failures — that count comes from the
-   run of record, not from either acceptance directory: `bench-results/verify-20260730T215842Z/`
+   run of record, not from either acceptance directory: `bench-results/RUN-OF-RECORD/`
    (`suite-counts.txt:1` reads `390 0`; `RESULTS.md:10`).
 
    **Both acceptances are single-module, and no multi-module Maven reactor was ever built end-to-end
@@ -111,7 +111,7 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
    targets are multi-module" (`docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md`,
    the paragraph beginning "The injector must construct a fresh `Dependency` per `MavenProject`"). The
    run of record's own "What a pass here does and does not establish" section
-   (`bench-results/verify-20260730T215842Z/RESULTS.md`) omits this gap; that file is fixed evidence and
+   (`bench-results/RUN-OF-RECORD/RESULTS.md`) omits this gap; that file is fixed evidence and
    cannot be amended, so it is recorded here and in the spec instead.
 
    **What a fresh agent most needs to know about this branch.** Two mechanisms fail *silently* if
@@ -166,7 +166,7 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
    `declaration-usability`, `sibling-scope`, `sibling-version` — seven, matching the seven
    `throw new MavenExecutionException` sites in `BasquinInjector.java`), plus `skip` for the operator
    opt-out, each proven able to fail when its own branch is neutered. All eight PASS in
-   `bench-results/verify-20260730T215842Z/RESULTS.md` as one `guards:<label>` row apiece, alongside
+   `bench-results/RUN-OF-RECORD/RESULTS.md` as one `guards:<label>` row apiece, alongside
    `guards:restored` recording the source restored and the module suite green. Cited by **row key, not
    line**: mid-table insertions in rounds 6 and 7 invalidated that line range twice, and any further
    guard renumbers it again. Mind the arithmetic when restating this — eight *shapes* are closed by
@@ -277,10 +277,18 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
       not: a citation to agents.md in `docs/DESIGN-DECISIONS.md`'s DD-021 entry, a file that exists on
       the authoring machine but is gitignored, so it resolved for its author and was dead on a fresh
       clone (fixed in the same pass).
-   2. **A stable pointer to the run of record.** Timestamped directory names are why citations rot in
-      bulk. Add `bench-results/RUN-OF-RECORD` (a pointer file or symlink) and cite *that*, so
-      regenerating evidence does not invalidate every reference to it. This is the cheapest structural
-      fix on the list and it removes the cause rather than detecting the symptom.
+   2. **A stable pointer to the run of record. Delivered.** Timestamped directory names were why
+      citations rotted in bulk. Added `bench-results/RUN-OF-RECORD` — a tracked pointer **file**, not a
+      symlink (this checkout has `core.symlinks=false`, on which a tracked symlink materialises as a
+      plain-text file naming its target rather than resolving), holding one non-comment line naming the
+      run directory. `scripts/check-citations.py`'s `resolve()` substitutes a cited
+      `bench-results/RUN-OF-RECORD/...` prefix with the directory the pointer names before matching the
+      tracked tree, so a supersession now edits one file instead of repointing every citation; a
+      dangling, missing, or malformed (0 or 2+ non-comment-line) pointer fails the checker loudly
+      (`exit=1`, a `DEAD PATH` finding naming the reason) rather than passing silently — proved
+      empirically for all three modes. `scripts/verify-dd043-pr3.sh` never writes this file; promoting a
+      run is a deliberate, manual edit in the same commit that adds the new run directory. Full account
+      in `TODO.md`'s DD-045 item 2.
    3. **Mutation-test the harness, not only the guards.** The script mutation-tests the injector's guards
       (8 rows, each proven to fail when its own branch is neutered) but nothing mutation-tests the
       *script's own rows*. Neuter each assertion; require its row to go red. Every entry in row 1 of the
@@ -307,8 +315,8 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
       it contains the pasted output of its own verification, and partial evidence is never committed.
 
    **Entry condition:** none — this is tooling over the existing tree, and it is independently useful
-   before PR-4 begins. 0 and 1 are now built; 2-3 are the remaining structural pieces. 4-6 are cheap
-   once those exist.
+   before PR-4 begins. 0, 1 and 2 are now built; 3 is the remaining structural piece. 4-6 are cheap once
+   that exists.
 
    **Also worth noting for whoever picks this up:** `scripts/verify-dd043-pr3.sh` is *inside*
    `ci.yml`'s path filters — `'scripts/**'` is in both lists
@@ -350,13 +358,13 @@ time, nothing CPU-heavy during a run.
 
 **[#103](https://github.com/ianp94/basquin/pull/103) — DD-043 PR-3, `basquin-maven-injector`.**
 Build-time injection with zero edits to the target's source; both halves of spec §5.2 passed; 390 tests,
-0 failures (`bench-results/verify-20260730T215842Z/suite-counts.txt:1`). Labelled `ready-for-approver`.
+0 failures (`bench-results/RUN-OF-RECORD/suite-counts.txt:1`). Labelled `ready-for-approver`.
 Six follow-ups are recorded in `TODO.md` under "DD-043 PR-3 follow-ups", of which **two** are now
 resolved and **four** remain open — count the `- [ ]`/`- [x]` boxes in that section rather than
 trusting this sentence, which has gone stale twice (round 7 added the sixth; round 9 closed the
 second). The two resolved: the verify script's `jvm` and `native` stages had never been executed —
 both now ran end-to-end in the run of record, stamped `20260730T215842Z`
-(`bench-results/verify-20260730T215842Z/RESULTS.md`, its `Stages run:` and
+(`bench-results/RUN-OF-RECORD/RESULTS.md`, its `Stages run:` and
 `27 passed, 0 failed, 0 skipped` header lines — cited by label, not line number, because the header
 gains lines) — and `jvm:boundary` no longer accepts an error page, since it now runs `curl -sf` and
 requires `ResultStore.format`'s CSV shape.

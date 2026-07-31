@@ -66,6 +66,17 @@ pairs, URL-shaped tokens, generated build output) are COUNTED and named in the s
 final OK line claims "verified clean" only for the verified count and names everything it did
 not verify: a zero in this tool's output means checked-and-clean, never unexamined.
 
+RUN-OF-RECORD POINTER (DD-045 item 2). `bench-results/RUN-OF-RECORD` is a tracked pointer FILE
+naming the current run-of-record directory (one non-comment line; not a symlink — this
+checkout has core.symlinks=false, so a tracked symlink would materialise as a plain-text file
+containing its target path). `resolve()` substitutes a cited `bench-results/RUN-OF-RECORD/...`
+prefix with that directory before matching against the tracked tree, so a supersession edits
+one file instead of repointing every citation. A missing pointer, a pointer with zero or more
+than one non-comment line, or a pointer naming a directory that is not tracked (dangling) is
+never a silent pass or a guess: `resolve_run_of_record()` reports it, and it is emitted as a
+FAILED DEAD PATH exactly like any other broken citation, so it fails the run (exit 1) whenever
+a RUN-OF-RECORD/ citation exists to need it.
+
 MECHANICS. Prose is grouped into logical units — markdown paragraphs (blank-line delimited;
 each table row its own unit) and contiguous comment blocks — because a wrapped sentence puts
 the quoted value and its citation on adjacent physical lines. A quoted value passes if it
@@ -165,6 +176,15 @@ ALLOWLIST_FILE = ROOT / "scripts" / "check-citations-allowlist.txt"
 # never evidence FOR those figures. Round 11: two carried values under indictment briefly
 # "verified" against the allowlist entry written to report them. Excluded from value backing.
 SELF_FILES = {"scripts/check-citations.py", "scripts/check-citations-allowlist.txt"}
+# DD-045 item 2: bench-results/RUN-OF-RECORD is a tracked pointer FILE (not a symlink — this
+# checkout has core.symlinks=false, so a tracked symlink materialises as a plain-text file
+# containing its target path rather than resolving, on a clone with that setting) naming the
+# current run-of-record directory. A cited path beginning `bench-results/RUN-OF-RECORD/` is
+# resolved (see resolve()) against the directory it names, so a supersession edits one file
+# instead of repointing every citation. See resolve_run_of_record() for the three failure
+# modes this substitution must fail loudly on rather than silently pass or guess.
+RUN_OF_RECORD_FILE = "bench-results/RUN-OF-RECORD"
+RUN_OF_RECORD_PREFIX = RUN_OF_RECORD_FILE + "/"
 
 CITED_EXTS = (
     "md|txt|log|java|sh|py|go|gradle|xml|yml|yaml|json|csv|tsv|properties|html|svg|bat|kts|exec"
@@ -341,6 +361,27 @@ def main() -> int:
     def cite_emit(citing: str, msg: str) -> None:
         stats[K_REP if emit(citing, msg) == "reported" else K_FAIL] += 1
 
+    def resolve_run_of_record():
+        """Resolve the bench-results/RUN-OF-RECORD pointer to the run directory it names.
+        -> (target_dir, None) on success, (None, reason) on any of the three failure modes
+        this pointer must not silently swallow: the pointer file is missing; it has zero or
+        more than one non-comment, non-blank line; or the directory it names is not in the
+        tracked tree (a dangling pointer). Called lazily, only when a citation actually needs
+        it, via resolve()'s RUN_OF_RECORD_PREFIX branch below — so a broken pointer with no
+        RUN-OF-RECORD/ citations in the tree does not, by itself, fail the run."""
+        lines = read_lines(RUN_OF_RECORD_FILE)
+        if lines is None:
+            return None, f"{RUN_OF_RECORD_FILE} is missing"
+        content = [ln.strip() for ln in lines
+                   if ln.strip() and not ln.strip().startswith("#")]
+        if len(content) != 1:
+            return None, (f"{RUN_OF_RECORD_FILE} has {len(content)} non-comment, non-blank "
+                          f"line(s) (expected exactly 1): {content!r}")
+        target_dir = f"bench-results/{content[0]}"
+        if target_dir not in tracked_dirs:
+            return None, f"{RUN_OF_RECORD_FILE} names {target_dir!r}, not a tracked directory"
+        return target_dir, None
+
     def resolve(citing: str, path: str):
         """-> (candidates, kind).
              exact — root-relative or citing-dir-relative (incl. ../ normalised): verified;
@@ -351,9 +392,21 @@ def main() -> int:
                      multi-segment token (`env/build.sh`, `cmd/basquin/status.go`): the
                      written path names nothing, so this is reported UNCHECKED, not verified;
              ambiguous — several matches, target not mechanically decidable;
+             pointer-error — path is bench-results/RUN-OF-RECORD/<rest> but the pointer is
+                     missing, malformed, or dangling: reported as a FAILED DEAD PATH, never a
+                     guess (see resolve_run_of_record());
              none  — nothing matches anywhere."""
         if path in tracked_set or path in tracked_dirs:
             return [path], "exact"
+        if path.startswith(RUN_OF_RECORD_PREFIX):
+            target_dir, err = resolve_run_of_record()
+            if err is not None:
+                return [err], "pointer-error"
+            sub = target_dir + path[len(RUN_OF_RECORD_FILE):]
+            if sub in tracked_set or sub in tracked_dirs:
+                return [sub], "exact"
+            return ([f"{RUN_OF_RECORD_FILE} resolves to {target_dir!r}, but {sub!r} is not "
+                     f"tracked"], "pointer-error")
         cite_dir = citing.rsplit("/", 1)[0] if "/" in citing else ""
         if cite_dir:
             rel = posixpath.normpath(f"{cite_dir}/{path}")
@@ -568,6 +621,11 @@ def main() -> int:
             if kind == "guess":
                 stats[K_GUESS] += 1
                 guess_rows.append((raw, cands[0], citing, lineno))
+                continue
+            if kind == "pointer-error":
+                # A dangling/missing/malformed RUN-OF-RECORD pointer is a FAILED DEAD PATH,
+                # never a guess or a silent pass — see resolve_run_of_record().
+                cite_emit(citing, f"{citing}:{lineno}: DEAD PATH `{raw}` — {cands[0]}")
                 continue
             if kind == "none":
                 window = [unit_text.get(lineno - 1, ""), unit_text[lineno],

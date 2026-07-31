@@ -1184,12 +1184,28 @@ the feature held in every one, and almost every finding was in the machinery tha
       but is gitignored — the citation resolved for its author and was dead on every fresh clone
       (fixed in the same pass that added this entry). Evidence for the scale that motivated building
       it: `bench-results/dd043-pr3-citation-audit-2026-07-30/`.
-- [ ] **2 — a stable pointer to the run of record.** Timestamped `verify-<UTC>/` names mean each new
-      run stales every citation to the previous one at once: **10, 10, 13 and 18** occurrences had to be
-      repointed by the four supersession commits, each figure read out of that commit's own message
-      (`16da079`, `865ba35`, `1c3ce88`, `572282a`) and counted as occurrences rather than matching lines
-      — `16da079` records `grep -c` reporting eight where there were ten. Add
-      `bench-results/RUN-OF-RECORD` and cite that.
+- [x] **2 — a stable pointer to the run of record. Delivered.** Timestamped `verify-<UTC>/` names meant
+      each new run staled every citation to the previous one at once: **10, 10, 13 and 18** occurrences
+      had to be repointed by the four supersession commits, each figure read out of that commit's own
+      message (`16da079`, `865ba35`, `1c3ce88`, `572282a`) and counted as occurrences rather than
+      matching lines — `16da079` records `grep -c` reporting eight where there were ten. Added
+      `bench-results/RUN-OF-RECORD`, a tracked pointer **file** — not a symlink: this checkout has
+      `core.symlinks=false`, on which a tracked symlink materialises as a plain-text file containing its
+      target path rather than resolving. Format: `#`-comment and blank lines ignored, then exactly one
+      line naming a `bench-results/` subdirectory by name only. `scripts/check-citations.py`'s
+      `resolve()` substitutes a cited `bench-results/RUN-OF-RECORD/...` prefix with the directory the
+      pointer names before matching the tracked tree (`resolve_run_of_record()`), reusing the existing
+      FAILED/DEAD-PATH reporting path rather than adding a parallel one. Repointed all **14** occurrences
+      across the **5** files that named `verify-20260730T215842Z` (counted with `grep -o … | wc -l`, not
+      `grep -c`, per the lesson above) to `bench-results/RUN-OF-RECORD/`; `python3
+      scripts/check-citations.py`'s disposition counts are byte-identical before and after the repoint,
+      both runs exit 0. The three failure modes a resolver like this must never silently pass were each
+      proven empirically, not asserted: a pointer naming an untracked directory, a missing pointer file,
+      and a pointer with 0 or 2 non-comment lines each produced a `DEAD PATH` finding and `exit=1`;
+      restoring the pointer returned `exit=0` again every time. `scripts/verify-dd043-pr3.sh` was not
+      touched and does not write this file — promoting a run to run-of-record stays a deliberate, manual
+      edit made in the same commit that adds the new run directory, stated in the pointer file's own
+      comment header.
 - [ ] **3 — mutation-test the harness, not only the guards.** The script proves each of the injector's
       8 guards fails when neutered; nothing proves the script's own rows do. Also: the guards stage
       mutates tracked source in place, so a commit during a run is unsafe — one was observed
@@ -1259,7 +1275,7 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       committed unexercised (the native mutex was held, and the `guards` stage mutates source a running
       build was compiling). **Resolved 2026-07-30**: both stages ran end-to-end in the run of record,
       stamped `20260730T215842Z` and made against `b980e1f` on a clean tree. All four figures come from
-      `bench-results/verify-20260730T215842Z/RESULTS.md`, read by label rather than by line number because
+      `bench-results/RUN-OF-RECORD/RESULTS.md`, read by label rather than by line number because
       that header gains lines: its title line carries the stamp, its `Commit:` line the SHA and
       `tree clean at run start`, its `Stages run:` line `unit jar guards jvm native`, and the line after
       that **27 passed, 0 failed, 0 skipped** — including the `jvm:build`, `jvm:banner`, `native:build` and
@@ -1274,7 +1290,7 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       `## What a pass here does and does not establish` heading, which states what a pass does and does not
       establish. (Cited by heading with no line range at all: the range given here was off by one at both
       ends, and a limitations list that gains a bullet invalidates any range.) Do not re-run the
-      native stage on the strength of this entry; check `bench-results/verify-20260730T215842Z/` first.
+      native stage on the strength of this entry; check `bench-results/RUN-OF-RECORD/` first.
       (An earlier run, `verify-20260729T153141Z`, was **deleted** in `8cadf8a` — its B1 and B2 checks could
       not fail, so it certified nothing. Do not cite it; it is not in the tree.)
 - [ ] **A repo-wide line-citation audit (PR #103 round 7) found 135 wrong citations out of 547

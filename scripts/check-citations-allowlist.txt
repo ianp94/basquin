@@ -7,7 +7,6 @@
 #                                          other agents, reported 2026-07-30, pending their fix.
 
 # --- deliberately absent (proposed, not yet built) ---
-bench-results/RUN-OF-RECORD proposed in DD-045 item 2 (docs/ROADMAP.md); deliberately not built yet — forward-looking reference, not a broken one
 snap/snapcraft.yaml planned file — TODO.md's snap-packaging checklist item says "Write" it; deliberately not in the tree yet
 
 # --- upstream repos: files that live in the target application's tree, not ours ---

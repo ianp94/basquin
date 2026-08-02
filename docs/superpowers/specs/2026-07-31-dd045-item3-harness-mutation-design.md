@@ -19,7 +19,7 @@ an accepted workaround, for the reasons laid out next.
 
 ---
 
-## Considered and rejected: redirecting `sourceSets.main.java` to a mutated copy
+## Considered and rejected: redirecting the module's main Java source directory to a mutated copy
 
 **The hazard.** `run_guards` mutates
 `basquin-maven-injector/src/main/java/com/basquin/maven/BasquinInjector.java` in place
@@ -30,7 +30,7 @@ consequence happening once: "the guards stage mutates tracked source in place, s
 a run is unsafe — one was observed mid-mutation" (`TODO.md:1225-1228`).
 
 **Mechanism considered.** A harness-only Gradle property, `-PbasquinInjectorMainSrc=<dir>`, added
-to `basquin-maven-injector/build.gradle` to redirect `sourceSets.main.java` to a mutated *copy*
+to `basquin-maven-injector/build.gradle` to redirect `sourceSets.main`'s Java source directory to a mutated *copy*
 under `build/tmp/`, so the guards stage would touch no tracked file. (Other mechanisms were weighed
 and set aside for independent reasons before this one was picked as the candidate: a git worktree
 for the guards stage breaks the documented dirty-tree fast loop — it would silently grade HEAD

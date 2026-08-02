@@ -66,6 +66,66 @@ pairs, URL-shaped tokens, generated build output) are COUNTED and named in the s
 final OK line claims "verified clean" only for the verified count and names everything it did
 not verify: a zero in this tool's output means checked-and-clean, never unexamined.
 
+RUN-OF-RECORD POINTER (DD-045 item 2). `bench-results/RUN-OF-RECORD` is a tracked pointer FILE
+naming the current run-of-record directory (one non-comment line; not a symlink — this
+checkout has core.symlinks=false, so a tracked symlink would materialise as a plain-text file
+containing its target path). `resolve()` substitutes a cited `bench-results/RUN-OF-RECORD/...`
+prefix — INCLUDING the bare form `bench-results/RUN-OF-RECORD/`, nothing after the slash,
+which names the directory itself rather than a sub-path within it — with that directory before
+matching against the tracked tree, so a supersession edits one file instead of repointing
+every citation. `resolve()` checks the substitution FIRST, through a single helper —
+`tracked_or_pointer()` — shared by EVERY citation shape it is willing to call an exact match:
+the literal, root-relative path, AND its citing-dir-relative normalisation (`../RUN-OF-RECORD/`
+cited from a file one level under bench-results/, or bare `RUN-OF-RECORD/` cited from a file
+directly under it). Both go through that one helper, in that order, ahead of the generic
+exact-path short-circuit (`cand in tracked_set or cand in tracked_dirs`) inside it — for
+EITHER shape, not just the literal one — because the caller strips a citation's trailing slash
+before calling resolve(), so a bare citation's literal path, or its citing-dir-relative
+normalisation, is then IDENTICAL to `bench-results/RUN-OF-RECORD` — the pointer FILE's own
+tracked path. An earlier version of this tool checked the generic branch first for the literal
+path; it matched the pointer's own tracked-ness and returned "exact" without
+`resolve_run_of_record()` ever running, so a dangling, missing, or malformed pointer verified
+clean for that one citation shape (fixed in 793c18e). One round later, the citing-dir-relative
+branch a few lines further down still ran its own, separately-ordered copy of "check
+tracked_set first" — the identical bug, one branch later, because the two shapes were two
+independent copies of the ordering instead of one shared, correctly-ordered check; folding both
+through `tracked_or_pointer()` is the fix, so a third citation shape reaching the tracked tree
+by some future route gets the correct ordering for free rather than needing its own patch. That
+was a real, review-found gap for the literal shape: several citations in TODO.md and
+docs/ROADMAP.md name only the bare form, and not one of them was flagged when the pointer was
+deliberately pointed at a nonexistent directory, while sub-path citations of the same broken
+pointer were. (Those sites were originally listed here by `file:line`; the list is deliberately
+gone. Two of the three line numbers were stale within one commit, because the same commit
+inserted lines earlier in TODO.md — a citation rotting inside the commit that fixed citation
+rot. Nothing scans this file: the corpus is *.md, */citations.txt and the '#'-comments of *.sh
+and workflow files, so a Python docstring's own citations are unguarded and must not carry line
+numbers. Find them with: git grep -nE '`bench-results/RUN-OF-RECORD/`' -- '*.md') For the citing-dir-relative shape no citation was
+ever written that way — but `bench-results/dd043-pr3-restvillains-2026-07-26/README.md` already
+cites the run of record from one level under bench-results/, so it was one edit away. A bare
+citation (literal or citing-dir-relative) now resolves to the target directory itself — a
+tracked DIRECTORY, never the pointer FILE — so the `file_cands` computed from it (candidates
+that are tracked FILES) is empty exactly as it is for any other directory citation: a quoted
+value beside a bare RUN-OF-RECORD/ citation has nothing to check against, rather than being
+silently checked against the pointer file's own one-line text. A missing pointer, a pointer
+with zero or more than one non-comment line, or a pointer naming a directory that is not
+tracked (dangling) is never a silent pass or a guess for any RUN-OF-RECORD/ citation
+`resolve()` treats as an exact match — literal or citing-dir-relative, bare or with a sub-path:
+`resolve_run_of_record()` reports it, and it is emitted as a FAILED DEAD PATH exactly like any
+other broken citation, so it fails the run (exit 1) whenever such a citation exists to need it.
+This does NOT cover every conceivable way a citation could name the pointer — a basename/tail
+GUESS match could in principle land on `bench-results/RUN-OF-RECORD` too, but never does in
+practice: those branches only fire for a path with no "/", and `RUN-OF-RECORD` alone, without
+`bench-results/` and without a recognised extension, never matches TOKEN_RE or DIR_TOKEN_RE, so
+it is never extracted as a citation token at all (see `check_unit()`/`parse_token()`).
+  Scope boundary, stated so it is not mistaken for coverage: only `resolve()` substitutes the
+pointer. The separate pinned-row resolver that reads `*/citations.txt` does NOT, so a
+`bench-results/RUN-OF-RECORD/...` path written into a citations.txt would be treated as a
+literal path and reported DEAD rather than resolved. That is moot as written — no tracked
+citations.txt names the run of record (both under bench-results/dd043-pr3-r4-guard-measurement-
+2026-07-29/ and bench-results/dd043-pr3-r7-managed-scope-2026-07-30/ contain zero such
+references) — and it fails closed rather than open, which is the safe direction. Teach the
+pinned resolver the same substitution before writing the first such citation.
+
 MECHANICS. Prose is grouped into logical units — markdown paragraphs (blank-line delimited;
 each table row its own unit) and contiguous comment blocks — because a wrapped sentence puts
 the quoted value and its citation on adjacent physical lines. A quoted value passes if it
@@ -165,6 +225,15 @@ ALLOWLIST_FILE = ROOT / "scripts" / "check-citations-allowlist.txt"
 # never evidence FOR those figures. Round 11: two carried values under indictment briefly
 # "verified" against the allowlist entry written to report them. Excluded from value backing.
 SELF_FILES = {"scripts/check-citations.py", "scripts/check-citations-allowlist.txt"}
+# DD-045 item 2: bench-results/RUN-OF-RECORD is a tracked pointer FILE (not a symlink — this
+# checkout has core.symlinks=false, so a tracked symlink materialises as a plain-text file
+# containing its target path rather than resolving, on a clone with that setting) naming the
+# current run-of-record directory. A cited path beginning `bench-results/RUN-OF-RECORD/` is
+# resolved (see resolve()) against the directory it names, so a supersession edits one file
+# instead of repointing every citation. See resolve_run_of_record() for the three failure
+# modes this substitution must fail loudly on rather than silently pass or guess.
+RUN_OF_RECORD_FILE = "bench-results/RUN-OF-RECORD"
+RUN_OF_RECORD_PREFIX = RUN_OF_RECORD_FILE + "/"
 
 CITED_EXTS = (
     "md|txt|log|java|sh|py|go|gradle|xml|yml|yaml|json|csv|tsv|properties|html|svg|bat|kts|exec"
@@ -341,9 +410,32 @@ def main() -> int:
     def cite_emit(citing: str, msg: str) -> None:
         stats[K_REP if emit(citing, msg) == "reported" else K_FAIL] += 1
 
+    def resolve_run_of_record():
+        """Resolve the bench-results/RUN-OF-RECORD pointer to the run directory it names.
+        -> (target_dir, None) on success, (None, reason) on any of the three failure modes
+        this pointer must not silently swallow: the pointer file is missing; it has zero or
+        more than one non-comment, non-blank line; or the directory it names is not in the
+        tracked tree (a dangling pointer). Called lazily, only when a citation actually needs
+        it, via resolve()'s RUN_OF_RECORD_PREFIX branch below — so a broken pointer with no
+        RUN-OF-RECORD/ citations in the tree does not, by itself, fail the run."""
+        lines = read_lines(RUN_OF_RECORD_FILE)
+        if lines is None:
+            return None, f"{RUN_OF_RECORD_FILE} is missing"
+        content = [ln.strip() for ln in lines
+                   if ln.strip() and not ln.strip().startswith("#")]
+        if len(content) != 1:
+            return None, (f"{RUN_OF_RECORD_FILE} has {len(content)} non-comment, non-blank "
+                          f"line(s) (expected exactly 1): {content!r}")
+        target_dir = f"bench-results/{content[0]}"
+        if target_dir not in tracked_dirs:
+            return None, f"{RUN_OF_RECORD_FILE} names {target_dir!r}, not a tracked directory"
+        return target_dir, None
+
     def resolve(citing: str, path: str):
         """-> (candidates, kind).
-             exact — root-relative or citing-dir-relative (incl. ../ normalised): verified;
+             exact — the literal path, OR its citing-dir-relative normalisation (incl. ../
+                     normalised), is a tracked file/dir, OR the RUN-OF-RECORD pointer
+                     resolves either of them (see tracked_or_pointer()): verified;
              near  — unique basename/suffix match inside the citing file's own directory
                      subtree (an evidence README citing `driver-summary.txt` means the copy
                      in its run directory): verified;
@@ -351,14 +443,81 @@ def main() -> int:
                      multi-segment token (`env/build.sh`, `cmd/basquin/status.go`): the
                      written path names nothing, so this is reported UNCHECKED, not verified;
              ambiguous — several matches, target not mechanically decidable;
+             pointer-error — the literal path, or its citing-dir-relative normalisation, is
+                     bench-results/RUN-OF-RECORD (bare) or bench-results/RUN-OF-RECORD/<rest>
+                     but the pointer is missing, malformed, or dangling: reported as a FAILED
+                     DEAD PATH, never a guess (see resolve_run_of_record());
              none  — nothing matches anywhere."""
-        if path in tracked_set or path in tracked_dirs:
-            return [path], "exact"
         cite_dir = citing.rsplit("/", 1)[0] if "/" in citing else ""
-        if cite_dir:
-            rel = posixpath.normpath(f"{cite_dir}/{path}")
-            if rel in tracked_set or rel in tracked_dirs:
-                return [rel], "exact"
+        rel = posixpath.normpath(f"{cite_dir}/{path}") if cite_dir else None
+
+        def tracked_or_pointer(cand: str):
+            """Validate ONE candidate path — called once below for the literal `path` and
+            once for its citing-dir-relative normalisation `rel` — against the RUN-OF-RECORD
+            pointer substitution, checked FIRST, ahead of the generic "cand in tracked_set"
+            short-circuit. Not after it, for EITHER candidate: this is the one place that
+            ordering is expressed, so a citation shape added later gets it automatically
+            instead of needing its own copy that can fall out of sync. That already happened
+            once: 793c18e fixed this ordering for the literal path alone; the citing-dir-
+            relative branch a few lines below it, in the pre-refactor code, still ran
+            `rel in tracked_set` with no pointer check at all — the identical bug, one branch
+            further down, because the two shapes were two copies of "check tracked_set" that
+            drifted independently instead of one shared, correctly-ordered check.
+              RUN_OF_RECORD_FILE is itself a tracked FILE (the pointer), and the caller has
+            already stripped a bare citation's trailing slash before calling resolve(), so a
+            bare `bench-results/RUN-OF-RECORD/` citation — or, one level further, a citing-
+            dir-relative citation that NORMALISES to the same path (`../RUN-OF-RECORD/` cited
+            from a file one level under bench-results/, or bare `RUN-OF-RECORD/` cited from a
+            file directly under it) — arrives here with `cand == RUN_OF_RECORD_FILE`,
+            identical to that tracked file's own path. Checking tracked_set first would match
+            the pointer's own tracked-ness and return "exact" without
+            resolve_run_of_record() ever running, so a dangling/missing/malformed pointer
+            would verify clean for that citation shape specifically. That was not
+            hypothetical for the literal shape: three citations (TODO.md:1200, TODO.md:1293,
+            docs/ROADMAP.md:102) name only the bare `bench-results/RUN-OF-RECORD/` form, and
+            none of the three was flagged when the pointer was deliberately pointed at a
+            nonexistent directory, while sub-path citations of the same broken pointer were.
+            (The basename/tail-guess branches further down resolve() can never hit this same
+            trap by accident: they only fire for a `path` with no "/", and `RUN-OF-RECORD`
+            alone — without `bench-results/` and without a recognised extension — never
+            matches TOKEN_RE or DIR_TOKEN_RE, so it is never extracted as a citation token in
+            the first place; see check_unit().)
+            -> (candidates, kind) if `cand` resolves — pointer substitution or a plain
+               tracked-tree hit — else None, meaning `cand` isn't in the tracked tree at all
+               so the caller falls through to basename/tail matching."""
+            if cand == RUN_OF_RECORD_FILE or cand.startswith(RUN_OF_RECORD_PREFIX):
+                target_dir, err = resolve_run_of_record()
+                if err is not None:
+                    return [err], "pointer-error"
+                if cand == RUN_OF_RECORD_FILE:
+                    # A bare `RUN-OF-RECORD/` citation names the DIRECTORY the pointer points
+                    # to, not the pointer file's own one-line text — the same reading a
+                    # sub-path citation gets, just with an empty remainder. Resolve to
+                    # target_dir itself: a tracked DIRECTORY, never the pointer FILE, so the
+                    # caller's `file_cands = [c for c in cands if c in tracked_set]` comes back
+                    # empty, exactly as it does for every other directory citation (directories
+                    # are never in tracked_set). Deliberate, not incidental: the alternative —
+                    # resolving to RUN_OF_RECORD_FILE itself so `cands` is non-empty — would put
+                    # the pointer file back into file_cands, and a quoted value in the same
+                    # prose unit would then be silently checked against the pointer's own
+                    # one-line content instead of correctly having nothing to check against.
+                    return [target_dir], "exact"
+                sub = target_dir + cand[len(RUN_OF_RECORD_FILE):]
+                if sub in tracked_set or sub in tracked_dirs:
+                    return [sub], "exact"
+                return ([f"{RUN_OF_RECORD_FILE} resolves to {target_dir!r}, but {sub!r} is not "
+                         f"tracked"], "pointer-error")
+            if cand in tracked_set or cand in tracked_dirs:
+                return [cand], "exact"
+            return None
+
+        hit = tracked_or_pointer(path)
+        if hit is not None:
+            return hit
+        if rel is not None:
+            hit = tracked_or_pointer(rel)
+            if hit is not None:
+                return hit
         if "/" not in path:
             low = path.lower()
             cands = list(by_basename.get(low, []))
@@ -568,6 +727,11 @@ def main() -> int:
             if kind == "guess":
                 stats[K_GUESS] += 1
                 guess_rows.append((raw, cands[0], citing, lineno))
+                continue
+            if kind == "pointer-error":
+                # A dangling/missing/malformed RUN-OF-RECORD pointer is a FAILED DEAD PATH,
+                # never a guess or a silent pass — see resolve_run_of_record().
+                cite_emit(citing, f"{citing}:{lineno}: DEAD PATH `{raw}` — {cands[0]}")
                 continue
             if kind == "none":
                 window = [unit_text.get(lineno - 1, ""), unit_text[lineno],

@@ -131,7 +131,13 @@ SELECT = set(sys.argv[4:])
 # "DIRTY" only: a `git status` failure exits 3 from bash before this python ever runs.
 GIT_COMMIT = os.environ.get("GIT_COMMIT", "<unknown>")
 GIT_BRANCH = os.environ.get("GIT_BRANCH", "<unknown>")
-TREE_STATE = os.environ.get("TREE_STATE", "clean")
+# Default UNKNOWN, not "clean": the header stamps NON-CITABLE for any value that is not exactly
+# "clean", so a missing variable degrades to a marked artifact rather than an unmarked one that
+# claims a clean tree it never observed. The bash preamble exports this unconditionally, so this
+# default is unreachable today — which is precisely why it must fail closed. The same "masked,
+# so unreachable in practice" reasoning covered DD-045 item 2's bare-pointer bypass right up
+# until a citation shape existed that reached it.
+TREE_STATE = os.environ.get("TREE_STATE", "UNKNOWN")
 
 def _load_overlay_files():
     """Paths (relative to REPO_ROOT/WT) of main-tree tracked files to overlay onto the worktree

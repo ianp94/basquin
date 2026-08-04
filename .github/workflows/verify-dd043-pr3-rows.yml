@@ -1,0 +1,64 @@
+name: verify-dd043-pr3-rows
+
+# DD-045 item 3 — proves scripts/verify-dd043-pr3.sh's OWN rows can go red, not only the
+# injector's guards. This is a separate workflow file, not a job appended to ci.yml, because it
+# needs its OWN narrow path filter: ci.yml's own `paths:` list is deliberately broad (it runs the
+# Gradle jobs on doc-only pushes too, per DD-045 item 1) and GitHub Actions applies `on: paths:`
+# per WORKFLOW FILE, not per job — a job living inside ci.yml would inherit that broad trigger,
+# including **/*.md, which cannot change whether a harness row can fail
+# (docs/superpowers/specs/2026-07-31-dd045-item3-harness-mutation-design.md §4).
+#
+# "Each row can fail" changes only when the harness or the subject it grades changes; every file
+# the meta-check's scenarios touch is on the list below, so the guard is reachable for exactly the
+# edits that could break it. No cron: the subjects are all in-repo, so push-triggering covers
+# every change that matters, and the existing every-push verify-dd043-pr3 job (ci.yml) would
+# surface environment-only rot (a runner image change) first.
+
+on:
+  push:
+    paths:
+      - 'scripts/verify-dd043-pr3.sh'
+      - 'scripts/verify-dd043-pr3-rows.sh'
+      - 'basquin-maven-injector/**'
+      - 'basquin-init.gradle'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/workflows/verify-dd043-pr3-rows.yml'
+  pull_request:
+    paths:
+      - 'scripts/verify-dd043-pr3.sh'
+      - 'scripts/verify-dd043-pr3-rows.sh'
+      - 'basquin-maven-injector/**'
+      - 'basquin-init.gradle'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/workflows/verify-dd043-pr3-rows.yml'
+
+jobs:
+  verify-dd043-pr3-rows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Meta-check — prove the DD-043 PR-3 harness's own rows can fail
+        run: bash scripts/verify-dd043-pr3-rows.sh
+      - name: Upload meta run directory
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-dd043-pr3-rows-results
+          path: bench-results/verify-rows-*/
+          if-no-files-found: warn

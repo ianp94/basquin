@@ -258,10 +258,16 @@ therefore graded from artifacts that prove the run happened, never from the exit
    `scripts/verify-dd043-pr3.sh:1013-1019`. This cross-check is also the only kill available for
    the exit-status line itself, which is a claim like any row but not a row.
 5. **Branch pinning, sparingly:** where the branch is the point (C2's `guard is dead`, C7's
-   `0 tests`), the meta additionally requires a short stable substring of the expected detail
-   text. Elsewhere it pins only the label + FAIL, because over-pinning detail prose would make
-   every harmless wording edit a meta failure. C2's eight rows are asserted FAIL-with-
-   `guard is dead`; note that if the neuter set were ever narrowed to only the eight expected
+   `^0 tests, 0 failures \(gradle rc=0\)`), the meta additionally requires the expected detail text
+   to match a short, stable pattern — a regex (`re.search`), not a plain substring. Elsewhere it
+   pins only the label + FAIL, because over-pinning detail prose would make every harmless wording
+   edit a meta failure. C2's eight rows are asserted FAIL-with-`guard is dead`, a literal phrase
+   safe to match as a plain substring since it sits next to no digits. C7's pin is `^`-anchored on
+   purpose: an unanchored `"0 tests"` is `in` `"360 tests, 1 failures"` too — 360 itself ends in
+   the digit `0` — which would let the pin silently accept the exact "tests actually ran and
+   failed" branch it exists to exclude, a real defect this design shipped with and later fixed (the
+   anchor pins `tot==0` at the string's start, which a trailing digit can never produce). Note
+   also that if the neuter set were ever narrowed to only the eight expected
    tests, gate-sharing non-neutered tests (e.g. `failsLoudlyWhenOurArtifactIsDeclaredWithAnUnusableTypeOrClassifier`
    behind the `problem == null` gate) would still fail and flip some rows to the
    `expected-to-fail` branch — legal row-kills, wrong branch pin. Neutering *all* `@Test` methods

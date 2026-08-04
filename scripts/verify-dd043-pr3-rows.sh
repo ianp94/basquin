@@ -262,11 +262,18 @@ def grade(scn, copy_dir, proc, dt, new_dirs):
         if label not in pass_labels:
             problems.append(f"expected PASS row `{label}` not present (PASS rows: {sorted(pass_labels)})")
     for label, needle in scn.get("branch_pins", {}).items():
+        # `needle` is a regex, matched with re.search — not a plain substring `in`. Most pins are
+        # safe as plain text either way (C2's `guard is dead` is a literal phrase with no adjacent
+        # digits to be swallowed by), but a pin built around a count is a substring-containment
+        # hazard: the OLD shape's "0 tests" is `in` "360 tests, 1 failures" too, because 360 itself
+        # ends in the digit "0" — the exact branch the pin exists to EXCLUDE would silently satisfy
+        # it. `^`-anchoring (C7's pin, below) closes that: a detail string only STARTS WITH "0"
+        # when the count really is zero, never as the trailing digit of a larger number.
         match = next((det for (res, lbl, det) in rows if lbl == label and res == "FAIL"), None)
         if match is None:
             problems.append(f"branch pin: no FAIL row `{label}` to pin against")
-        elif needle not in match:
-            problems.append(f"branch pin: FAIL row `{label}` detail lacks {needle!r}: {match!r}")
+        elif not re.search(needle, match):
+            problems.append(f"branch pin: FAIL row `{label}` detail doesn't match /{needle}/: {match!r}")
     expect_exit = scn.get("expect_exit")
     if expect_exit is not None and proc.returncode != expect_exit:
         problems.append(f"exit={proc.returncode}, expected {expect_exit}")
@@ -396,7 +403,12 @@ SCENARIOS = [
         name="C7", desc="unit anti-vacuity branch (tot > 0): all Test tasks disabled repo-wide",
         stage_args=["unit"], expect_exit=1,
         expect_fail=["unit"], expect_total_rows=1,
-        branch_pins={"unit": "0 tests"},
+        # Anchored to the START of the detail string (scripts/verify-dd043-pr3.sh:398-400 emits
+        # "$tot tests, $f failures (gradle rc=$rc) — see gradle-check.log"): pins tot==0 AND
+        # f==0 AND rc==0 together, the exact "no tests ran" branch. An unanchored "0 tests" would
+        # also match e.g. "360 tests, 1 failures" (360 ends in "0"), which is the branch this pin
+        # exists to exclude — see grade()'s branch_pins comment.
+        branch_pins={"unit": r"^0 tests, 0 failures \(gradle rc=0\)"},
         seeds=[lambda: apply_seed(
             "build.gradle",
             "tasks.named('check') {\n    dependsOn 'runExampleProper', 'runRunnerProper'\n}",

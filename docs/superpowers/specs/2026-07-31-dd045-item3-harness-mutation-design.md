@@ -272,6 +272,11 @@ therefore graded from artifacts that prove the run happened, never from the exit
    behind the `problem == null` gate) would still fail and flip some rows to the
    `expected-to-fail` branch — legal row-kills, wrong branch pin. Neutering *all* `@Test` methods
    is what makes the branch uniform, which is why C2 is specified that way.
+6. **The results table's Exit column shows the exit the run actually produced, not merely the
+   scenario's `expect_exit`.** Format `observed; expect`. An UNPROVEN scenario (seed anchor not
+   found) never invokes the harness at all, so a table cell holding only `expect_exit` would
+   display an exit code that never happened — misleading in an artifact whose whole purpose is
+   evidence. The expected exit stays visible alongside, clearly labelled, for reference.
 
 **What checks the meta-checker?** The regress is declared to stop here, deliberately: the meta's
 assertions are presence-based (absence of an expected row is red), its scenario runner is one

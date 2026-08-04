@@ -426,7 +426,7 @@ def run_scenario(scn):
         ok = seed()
         if ok is False:
             print(f"   UNPROVEN: a seed's anchor was not found in the subject — the subject's shape drifted")
-            return "UNPROVEN", ["seed anchor not found"], 0.0
+            return "UNPROVEN", ["seed anchor not found"], 0.0, None
     proc, dt, new_dirs = invoke_harness(scn["stage_args"])
     scenario_out = os.path.join(META_OUT, name)
     os.makedirs(scenario_out, exist_ok=True)
@@ -450,7 +450,7 @@ def run_scenario(scn):
     status = "PROVEN" if not problems else "FAILED"
     print(f"   {status} (exit={proc.returncode}, {dt:.1f}s)" + (f" -- {'; '.join(problems)}" if problems else ""),
           flush=True)
-    return status, problems, dt
+    return status, problems, dt, proc.returncode
 
 def main():
     scenarios = [s for s in SCENARIOS if not SELECT or s["name"] in SELECT]
@@ -461,14 +461,14 @@ def main():
     t0 = time.time()
     outcomes = {}
     for scn in scenarios:
-        status, problems, dt = run_scenario(scn)
-        outcomes[scn["name"]] = (status, problems, dt, scn)
+        status, problems, dt, exit_code = run_scenario(scn)
+        outcomes[scn["name"]] = (status, problems, dt, scn, exit_code)
     total_dt = time.time() - t0
 
     coverage_problems = []
     if not SELECT:
         killed_by = {}
-        for name, (status, problems, dt, scn) in outcomes.items():
+        for name, (status, problems, dt, scn, exit_code) in outcomes.items():
             if status == "PROVEN":
                 for label in scn.get("expect_fail", ()):
                     if label in GREEN_RUN_LABELS:
@@ -482,13 +482,18 @@ def main():
     lines.append(f"Scenarios run: {', '.join(outcomes)}  \n")
     lines.append(f"Wall-clock: {total_dt:.1f}s\n")
     lines.append("")
-    lines.append("| Scenario | Status | Exit | Wall-clock (s) | Problems |")
+    # Exit column shows the OBSERVED exit code the run actually produced, not merely the
+    # scenario's expected one — an UNPROVEN scenario (seed anchor not found) never invokes the
+    # harness at all, so printing only `expect_exit` there would display an exit that never
+    # happened. The expected exit is still shown alongside, clearly labelled, for reference.
+    lines.append("| Scenario | Status | Exit (observed; expect) | Wall-clock (s) | Problems |")
     lines.append("|---|---|---|---|---|")
     all_ok = True
-    for name, (status, problems, dt, scn) in outcomes.items():
+    for name, (status, problems, dt, scn, exit_code) in outcomes.items():
         if status != "PROVEN":
             all_ok = False
-        lines.append(f"| {name} | {status} | {scn.get('expect_exit', '?')} | {dt:.1f} | {'; '.join(problems) or '-'} |")
+        observed = str(exit_code) if exit_code is not None else "n/a (harness never invoked)"
+        lines.append(f"| {name} | {status} | {observed}; {scn.get('expect_exit', '?')} | {dt:.1f} | {'; '.join(problems) or '-'} |")
     if not SELECT:
         lines.append("")
         lines.append("## Green-run row coverage (13 labels)")
@@ -510,8 +515,8 @@ def main():
 
     print()
     print(f"  {META_OUT}/RESULTS.md")
-    print(f"  {sum(1 for s,_,_,_ in outcomes.values() if s == 'PROVEN')} proven, "
-          f"{sum(1 for s,_,_,_ in outcomes.values() if s != 'PROVEN')} failed/unproven, "
+    print(f"  {sum(1 for s,_,_,_,_ in outcomes.values() if s == 'PROVEN')} proven, "
+          f"{sum(1 for s,_,_,_,_ in outcomes.values() if s != 'PROVEN')} failed/unproven, "
           f"wall-clock {total_dt:.1f}s")
     return 0 if (all_ok and not coverage_problems) else 1
 

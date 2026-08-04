@@ -1222,10 +1222,43 @@ the feature held in every one, and almost every finding was in the machinery tha
       Re-verified against all four break modes (dangling, missing, 0-line, 2-line pointer) with all
       three bare citations now each producing a `DEAD PATH` finding and `exit=1`; restoring the
       pointer returns `exit=0` again.
-- [ ] **3 — mutation-test the harness, not only the guards.** The script proves each of the injector's
-      8 guards fails when neutered; nothing proves the script's own rows do. Also: the guards stage
-      mutates tracked source in place, so a commit during a run is unsafe — one was observed
-      mid-mutation. Mutate a copy or hold a lock.
+- [x] **3 — mutation-test the harness, not only the guards. Delivered.** Design in
+      `docs/superpowers/specs/2026-07-31-dd045-item3-harness-mutation-design.md`; built as
+      `scripts/verify-dd043-pr3-rows.sh` plus its own CI job
+      (`.github/workflows/verify-dd043-pr3-rows.yml`, narrow path filter — not `**/*.md`, since a doc
+      edit cannot change whether a harness row can fail). Mechanism: seed one mechanical defect per
+      targeted row into a throwaway `git worktree add --detach build/tmp/verify-rows-wt HEAD` (never
+      the working tree), run `scripts/verify-dd043-pr3.sh`'s own stage subset there, and assert the
+      targeted row(s) came back `FAIL` by exact label in that run's own `RESULTS.md` — graded from a
+      COPY of the run directory, never from the exit code alone, the same discriminator discipline
+      `_mutate` already applies one level down. Core tier: 8 scenarios (C0-C7) kill all 13 green-run
+      row labels plus the `jar` stage-refusal row and the full-run dirty gate, each with embedded
+      PASS-row controls where the row shape allows one (C1's eight `guards:*` PASS rows control its
+      `guards:restored` kill; C2's `guards:restored` PASS controls its eight guard-is-dead kills; C4/
+      C5/C6 each leave the other two `jar:*` rows PASS).
+      **Proved empirically, not asserted, with captured exit codes:** a full run on this branch
+      (commit `3b1cb3c`) proved all 8 scenarios and all 13 labels, `exit=0`, in 327.9s of scenario
+      wall-clock (5m42s including worktree setup/teardown, on WSL2/NTFS — expected to run faster on
+      CI's ephemeral checkout, consistent with the design's own note that the CI figure decides, not
+      the local one). Then, for three scenarios spanning different stages, the meta-check's own
+      assertions were broken one at a time in scratch copies (never the committed script) and each
+      correctly reported failure instead of a false pass: C4 (`jar` stage) with its seed disabled —
+      `jar:baked-version` stayed PASS, `exit=1`, "expected FAIL row `jar:baked-version` not present";
+      C2 (`guards` stage) with a wrong branch-pin substring ("guard is immortal" for the real "guard is
+      dead") — `exit=1`, all eight pins reported as lacking the wrong text; C0 (the gate) with its
+      expected exit changed from 3 to 0 — `exit=1`, "exit=3, expected 0". All three normal (un-broken)
+      runs of the same three scenarios passed, `exit=0`, in the same session.
+      The tracked-source mutation hazard (guards stage mutating in place) is resolved as an **accepted
+      workaround**, not new code: the design's "Considered and rejected" section found the harness-only
+      Gradle-property mechanism considered for it would have silently redirected an ORDINARY build's
+      compiled source if the same property or an inherited environment variable were ever present in
+      the release job's environment — a real hazard to `release.yml`'s publish step, traded for fixing
+      a local-only commit-timing hazard. Not built; the workaround (do not commit mid-guards-run;
+      `guards:restored` is the harness's own signal the tree came back clean) stays as documented in
+      `scripts/verify-dd043-pr3.sh` itself.
+      Optional tier (O1-O5, each cheap, each killing one branch not otherwise exercised) and the
+      `selftest` entry point for the `jvm`/`native` shared graders are deliberately deferred — the
+      design doc's own §6 recommendation, not a scope cut.
 - [ ] **4 — a "what depended on this?" pre-commit pass.** For every path, row key or claim a commit
       removes, search the whole tree for what still depends on it. Diff-internal consistency is the
       narrower question and asking it is what let round 8's findings through.

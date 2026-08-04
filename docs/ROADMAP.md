@@ -295,12 +295,24 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
       is itself a tracked file, so all three bare citations verified clean against a deliberately
       broken pointer. Fixed by checking the substitution first. Full account in `TODO.md`'s DD-045
       item 2.
-   3. **Mutation-test the harness, not only the guards.** The script mutation-tests the injector's guards
-      (8 rows, each proven to fail when its own branch is neutered) but nothing mutation-tests the
-      *script's own rows*. Neuter each assertion; require its row to go red. Every entry in row 1 of the
-      table above would have been caught pre-review. Related: the guards stage currently mutates **tracked
-      source in place**, which makes any commit during a run unsafe — one was observed mid-mutation. It
-      should mutate a copy, or hold a lock that blocks commits.
+   3. **Mutation-test the harness, not only the guards. Delivered.** Built as
+      `scripts/verify-dd043-pr3-rows.sh` plus its own CI job
+      (`.github/workflows/verify-dd043-pr3-rows.yml`, narrow path filter — not `**/*.md`), per
+      `docs/superpowers/specs/2026-07-31-dd045-item3-harness-mutation-design.md`. Seeds one mechanical
+      defect per targeted row into a throwaway `git worktree` at HEAD (never the working tree), runs
+      `scripts/verify-dd043-pr3.sh`'s own stage subset there, and asserts the targeted row(s) came back
+      `FAIL` by exact label in a COPY of that run's own `RESULTS.md` — never from the exit code alone,
+      the same discriminator discipline `_mutate` already applies one level down. Core tier: 8 scenarios
+      kill all 13 green-run row labels plus the `jar` stage-refusal row and the full-run dirty gate, each
+      with embedded PASS-row controls where the row shape allows one. Proved empirically, with captured
+      exit codes: a full run passed all 8 scenarios and all 13 labels, `exit=0`; then three of the
+      meta-check's own assertions were broken one at a time, in scratch copies, never the committed
+      script, and each correctly reported failure instead of a false pass. Related hazard — the guards
+      stage mutating **tracked source in place** — is resolved as an accepted workaround, not new code:
+      the harness-only Gradle-property mechanism considered for redirecting it to a copy would have
+      silently redirected an ORDINARY build's compiled source if the property or an inherited
+      environment variable ever leaked into `release.yml`'s publish job, a worse hazard than the
+      local-only commit-timing one it would have fixed. Full account in `TODO.md`'s DD-045 item 3.
    4. **A "what depended on this?" pre-commit pass, and its mirror image.** Not "is the diff internally
       consistent" — that is the narrower question, and asking it is what let items above through. For
       every path, row key, or claim a commit **removes**, search the whole tree for anything that still

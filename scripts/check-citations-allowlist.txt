@@ -7,7 +7,6 @@
 #                                          other agents, reported 2026-07-30, pending their fix.
 
 # --- deliberately absent (proposed, not yet built) ---
-scripts/verify-dd043-pr3-rows.sh proposed by DD-045 item 3's design doc; deliberately not built yet — REMOVE this entry in the commit that creates the script, or it silently exempts a real dead path (the bench-results/RUN-OF-RECORD entry above it had to be removed for exactly this reason when item 2 shipped)
 snap/snapcraft.yaml planned file — TODO.md's snap-packaging checklist item says "Write" it; deliberately not in the tree yet
 
 # --- upstream repos: files that live in the target application's tree, not ours ---

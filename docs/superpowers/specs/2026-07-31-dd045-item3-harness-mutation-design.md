@@ -155,13 +155,21 @@ itself:
   The meta refuses a dirty main tree by default (mirroring the harness's own full-run gate
   doctrine at `scripts/verify-dd043-pr3.sh:119-153`), with `--allow-dirty` overlaying
   `git status --porcelain`-listed modified tracked files into the worktree for exploratory runs.
+  The overlay is not a one-time setup step: because reset-between-scenarios (below) restores the
+  worktree to HEAD before every scenario, including the first, the overlay list is re-applied on
+  top of every such reset too — otherwise the first `git checkout -- .` would silently discard it
+  and every scenario would grade bare HEAD while claiming to grade in-progress edits.
 - Scenario invocations are **named stage subsets** (`jar`, `guards`, `unit guards`) — deliberately
   riding the fast-loop exemption the harness documents (`scripts/verify-dd043-pr3.sh:74-79`): a
   seeded (dirty) worktree is never refused for a subset run, only annotated. C0 alone invokes
   `all` *because* it wants the refusal.
-- Reset between scenarios: `git -C <wt> checkout -- .` plus deleting the file-deletion seeds'
-  paths as needed. Untracked `build/` and `.gradle/` in the worktree survive the reset — that is
-  the warm-build cache that makes the cost figures in §4 achievable. Scenario-created
+- Reset between scenarios: `git -C <wt> checkout -- .` (restoring HEAD, and with it any
+  file-deletion seed's path) followed by re-copying the `--allow-dirty` overlay list on top when
+  one is in effect, so a scenario's baseline is HEAD-plus-overlay rather than bare HEAD. Drift
+  detection after reset (tracked changes left behind → hard failure) excludes exactly the
+  overlaid paths, since those are expected to differ from HEAD by design; anything else surviving
+  the reset is still a bug. Untracked `build/` and `.gradle/` in the worktree survive the reset —
+  that is the warm-build cache that makes the cost figures in §4 achievable. Scenario-created
   `bench-results/verify-*` dirs inside the worktree are copied out (below) then removed, so
   "exactly one new run dir" stays assertable per scenario.
 - The scenario set is **data**: one table of `(name, seeds[], pre-scrub[], stages, expected FAIL

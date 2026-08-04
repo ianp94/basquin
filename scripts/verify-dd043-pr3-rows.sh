@@ -18,10 +18,12 @@
 #   bash scripts/verify-dd043-pr3-rows.sh                 # all 8 core scenarios (C0-C7), ~7 CI min
 #   bash scripts/verify-dd043-pr3-rows.sh C4 C6            # only the named scenarios (no coverage
 #                                                           # check — that only applies to a full run)
-#   bash scripts/verify-dd043-pr3-rows.sh --allow-dirty    # overlay the main tree's modified
-#                                                           # tracked files into the worktree first,
-#                                                           # for an exploratory run against
-#                                                           # in-progress edits
+#   bash scripts/verify-dd043-pr3-rows.sh --allow-dirty    # every scenario's worktree baseline
+#                                                           # becomes HEAD plus the main tree's
+#                                                           # modified tracked files overlaid on
+#                                                           # top (not bare HEAD), for an
+#                                                           # exploratory run against in-progress
+#                                                           # edits
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -85,26 +87,44 @@ trap cleanup EXIT
 
 chmod +x "$WT/gradlew" 2>/dev/null || true
 
+# ---- overlay list: paths of tracked files modified relative to HEAD, to be reapplied onto the
+# worktree every time reset_worktree() (python, below) restores it — so a scenario's baseline is
+# HEAD-plus-overlay, not bare HEAD, for the whole run (not just once at setup, which a mid-run
+# `git checkout -- .` would otherwise silently discard). Written even when --allow-dirty is off
+# or the tree is clean (empty file), so the python side never special-cases "no overlay" apart
+# from "empty overlay". Deletions/pure adds are not overlaid — only paths git reports as modified
+# relative to HEAD (tracked, present in both trees).
+OVERLAY_LIST="$META_OUT/overlay-files.txt"
+: > "$OVERLAY_LIST"
 if [ "$ALLOW_DIRTY" -eq 1 ] && [ -n "$DIRTY_TRACKED" ]; then
-  # Overlay the main tree's modified TRACKED files into the worktree, so an exploratory run
-  # grades in-progress edits rather than bare HEAD. Deletions/pure adds are not overlaid — only
-  # paths git reports as modified relative to HEAD (tracked, present in both trees).
   while IFS= read -r path; do
     [ -n "$path" ] || continue
     [ -f "$REPO_ROOT/$path" ] || continue
-    mkdir -p "$(dirname "$WT/$path")"
-    cp "$REPO_ROOT/$path" "$WT/$path"
+    echo "$path" >> "$OVERLAY_LIST"
   done < <(git diff --name-only HEAD -- .)
 fi
 
 # ---- the scenario engine: one data table, one seed-apply helper, one grading helper. Python for
 # real data structures and regex (the harness's own _mutate is embedded python3 for the same
 # reason); this outer script only does CLI/gate/worktree lifecycle. ----
-python3 - "$WT" "$META_OUT" "${SELECT[@]}" <<'PY'
+python3 - "$WT" "$META_OUT" "$REPO_ROOT" "${SELECT[@]}" <<'PY'
 import glob, os, re, shutil, subprocess, sys, time
 
-WT, META_OUT = sys.argv[1], sys.argv[2]
-SELECT = set(sys.argv[3:])
+WT, META_OUT, REPO_ROOT = sys.argv[1], sys.argv[2], sys.argv[3]
+SELECT = set(sys.argv[4:])
+
+def _load_overlay_files():
+    """Paths (relative to REPO_ROOT/WT) of main-tree tracked files to overlay onto the worktree
+    baseline on every reset_worktree() call — see OVERLAY_LIST above. Empty unless --allow-dirty
+    was passed and the main tree had tracked modifications."""
+    path = os.path.join(META_OUT, "overlay-files.txt")
+    if not os.path.isfile(path):
+        return []
+    with open(path, encoding="utf-8") as fh:
+        return [line.strip() for line in fh if line.strip()]
+
+OVERLAY_FILES = _load_overlay_files()
+OVERLAY_SET = set(OVERLAY_FILES)
 
 def _p(rel):
     return os.path.join(WT, rel)
@@ -159,11 +179,25 @@ def neuter_all_tests(rel, expected_count):
     return True, n
 
 def reset_worktree():
+    """Restore the worktree to this run's baseline: HEAD, plus OVERLAY_FILES reapplied on top
+    when --allow-dirty is in effect. `git checkout -- .` alone would restore bare HEAD and
+    silently discard the overlay (the bug this two-step sequence fixes: overlaying once at setup
+    is not enough, because every scenario calls this at its start). Drift detection then excludes
+    OVERLAY_FILES themselves — they are *expected* to differ from HEAD by design — so it still
+    catches any tracked drift left behind by a scenario's seeds or the harness run."""
     subprocess.run(["git", "-C", WT, "checkout", "--", "."], check=True,
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for rel in OVERLAY_FILES:
+        src = os.path.join(REPO_ROOT, rel)
+        if not os.path.isfile(src):
+            continue
+        dst = os.path.join(WT, rel)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copy(src, dst)
     rc = subprocess.run(["git", "-C", WT, "status", "--porcelain", "--", "."],
                          capture_output=True, text=True, check=True)
-    dirty = [l for l in rc.stdout.splitlines() if not l.startswith("??")]
+    dirty = [l for l in rc.stdout.splitlines()
+             if not l.startswith("??") and l[3:] not in OVERLAY_SET]
     if dirty:
         raise RuntimeError(f"worktree reset left tracked drift behind: {dirty}")
 

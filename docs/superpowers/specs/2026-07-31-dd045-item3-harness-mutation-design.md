@@ -277,6 +277,15 @@ therefore graded from artifacts that prove the run happened, never from the exit
    found) never invokes the harness at all, so a table cell holding only `expect_exit` would
    display an exit code that never happened — misleading in an artifact whose whole purpose is
    evidence. The expected exit stays visible alongside, clearly labelled, for reference.
+7. **The meta's own `RESULTS.md` carries provenance.** Its header stamps the commit the isolation
+   worktree was created AT plus the main tree's state at run start, the same shape as
+   `scripts/verify-dd043-pr3.sh`'s own header (`:107-116`, `:926-958`): `Commit: `<sha>` on
+   `<branch>` — main tree <clean|DIRTY> at run start`, and — reached only via `--allow-dirty`,
+   since the gate above (§3) otherwise refuses — an unmistakable `NON-CITABLE` tag on the H1 and a
+   fenced listing of what differed from that commit. Without this a full `--allow-dirty` run
+   grading in-progress edits would mint an "N scenarios PROVEN" summary byte-indistinguishable
+   from a clean-HEAD run's — the meta-check's own version of the defect its C0 scenario exists to
+   catch one level down.
 
 **What checks the meta-checker?** The regress is declared to stop here, deliberately: the meta's
 assertions are presence-based (absence of an expected row is red), its scenario runner is one

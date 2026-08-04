@@ -56,6 +56,19 @@ if [ "$GSRC" -ne 0 ]; then
   exit 3
 fi
 DIRTY_TRACKED="$(grep -v '^??' "$META_OUT/main-git-status.txt" || true)"
+
+# ---- provenance for the meta's OWN RESULTS.md header, same shape as scripts/verify-dd043-pr3.sh's
+# header (:107-116, :926-958): the commit the isolation worktree below is created AT, plus an
+# unmistakable DIRTY marker when --allow-dirty let a dirty main tree through the gate above.
+# Without this, a full --allow-dirty run grading in-progress edits mints a RESULTS.md that is
+# byte-indistinguishable from a clean-HEAD run's. Captured here (same point as the gate above, and
+# before the worktree is even created) so it reflects the tree that was actually measured; exported
+# so the python scenario engine below — the one place RESULTS.md is written — can read it.
+GIT_COMMIT="$(git rev-parse --short HEAD)"
+GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [ -n "$DIRTY_TRACKED" ]; then TREE_STATE="DIRTY"; else TREE_STATE="clean"; fi
+export GIT_COMMIT GIT_BRANCH TREE_STATE
+
 if [ -n "$DIRTY_TRACKED" ] && [ "$ALLOW_DIRTY" -ne 1 ]; then
   {
     echo "REFUSED: the main tree has tracked-file modifications — the isolation worktree below is"
@@ -112,6 +125,13 @@ import glob, os, re, shutil, subprocess, sys, time
 
 WT, META_OUT, REPO_ROOT = sys.argv[1], sys.argv[2], sys.argv[3]
 SELECT = set(sys.argv[4:])
+
+# Provenance for the meta's own RESULTS.md header (§ near main()'s `lines` build, below) —
+# exported by the bash preamble above, captured at the same point as the dirty gate. "clean" or
+# "DIRTY" only: a `git status` failure exits 3 from bash before this python ever runs.
+GIT_COMMIT = os.environ.get("GIT_COMMIT", "<unknown>")
+GIT_BRANCH = os.environ.get("GIT_BRANCH", "<unknown>")
+TREE_STATE = os.environ.get("TREE_STATE", "clean")
 
 def _load_overlay_files():
     """Paths (relative to REPO_ROOT/WT) of main-tree tracked files to overlay onto the worktree
@@ -477,8 +497,43 @@ def main():
             if label not in killed_by:
                 coverage_problems.append(f"green-run row `{label}` has no killing scenario")
 
+    # ---- provenance header, same shape as scripts/verify-dd043-pr3.sh's own RESULTS.md header
+    # (:107-116, :926-958): stamp the commit the isolation worktree was created AT, and mark the
+    # page unmistakably when the main tree was dirty. Without this, a full --allow-dirty run
+    # grading in-progress edits produces a RESULTS.md byte-indistinguishable from a clean-HEAD
+    # run's — this meta-check's own version of the defect its C0 scenario exists to catch one
+    # level down. GIT_COMMIT/GIT_BRANCH/TREE_STATE are exported by the bash preamble above,
+    # captured at the same point as the dirty gate — from the untracked, run-only capture file
+    # this run's own META_OUT writes it to (same status as every verify-* run directory: never
+    # committed). TREE_STATE is only ever "clean" or "DIRTY" here — a `git status` failure
+    # (UNMEASURED one level down) already exits 3 from the bash preamble before this python ever
+    # runs, so there is no third state to stamp.
     lines = []
-    lines.append(f"# DD-045 item 3 meta-check run\n")
+    title_tag = " — NON-CITABLE" if TREE_STATE != "clean" else ""
+    lines.append(f"# DD-045 item 3 meta-check run{title_tag}")
+    lines.append("")
+    lines.append(f"Commit: `{GIT_COMMIT}` on `{GIT_BRANCH}` — main tree {TREE_STATE} at run start "
+                 f"(`main-git-status.txt`).")
+    if TREE_STATE != "clean":
+        lines.append("")
+        lines.append(f"**NON-CITABLE — DIRTY: tracked files in the main tree differed from "
+                     f"`{GIT_COMMIT}` when this run started (reached here only because "
+                     f"`--allow-dirty` was passed — the dirty gate above refuses otherwise; the "
+                     f"isolation worktree is HEAD with those files overlaid on top, see "
+                     f"`overlay-files.txt`):**")
+        lines.append("")
+        lines.append("```")
+        status_path = os.path.join(META_OUT, "main-git-status.txt")
+        if os.path.isfile(status_path):
+            with open(status_path, encoding="utf-8") as fh:
+                for raw in fh:
+                    if not raw.startswith("??"):
+                        lines.append(raw.rstrip("\n"))
+        lines.append("```")
+        lines.append("")
+        lines.append(f"**This meta-run's verdicts are NOT reproducible from `{GIT_COMMIT}` alone — "
+                     f"do not cite this run as proving anything about that commit.**")
+    lines.append("")
     lines.append(f"Scenarios run: {', '.join(outcomes)}  \n")
     lines.append(f"Wall-clock: {total_dt:.1f}s\n")
     lines.append("")

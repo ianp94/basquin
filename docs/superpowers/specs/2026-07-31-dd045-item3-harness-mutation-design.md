@@ -204,7 +204,12 @@ directional until a second sample exists.
 even though the job runs on `ubuntu-latest` only), and the workflow file itself. Rationale: "each
 row can fail" changes only when the harness or its subject changes; every file the scenarios touch
 is on that list, so the guard is reachable for exactly the edits that could break it (the guard
-tracks its target). Explicitly **not** on `**/*.md` — the existing `ci.yml` filter
+tracks its target). This includes C0: its seed only needs *some* tracked file dirty to trip the
+full-run gate (`scripts/verify-dd043-pr3.sh:133-154` fires before any stage reads a file's
+content), so it deliberately targets the workflow file itself — already on this list — rather than
+an arbitrary file outside it (README.md, tried first, was rejected for exactly that reason: it
+would have needed its own entry on both `paths:` lists just to keep the seed's anchor covered,
+adding a dependency to track instead of removing one). Explicitly **not** on `**/*.md` — the existing `ci.yml` filter
 (`.github/workflows/ci.yml:49`) deliberately runs the Gradle jobs on doc-only pushes; extending
 that to a ~7-min meta job would buy nothing, because a doc edit cannot change whether a harness row
 can fail. No cron: the subjects are all in-repo, so push-triggering covers every change that

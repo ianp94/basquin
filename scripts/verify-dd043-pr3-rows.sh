@@ -269,12 +269,20 @@ INJ_BUILD_GRADLE = "basquin-maven-injector/build.gradle"
 
 SCENARIOS = [
     dict(
+        # The gate this scenario targets (scripts/verify-dd043-pr3.sh:133-154) fires on ANY
+        # tracked-file diff, before any stage reads the file's content, so the seed's target only
+        # needs to be *some* tracked file. It is deliberately pointed at this very workflow file —
+        # already on both `paths:` lists below — rather than a file outside them (e.g. README.md,
+        # the original choice): that removes a filter dependency instead of adding one to track.
+        # This file is also never read by the invoked harness process (`bash
+        # scripts/verify-dd043-pr3.sh`), so the edit cannot influence anything but git's dirty
+        # check either way — belt and suspenders on top of the gate already firing pre-stage.
         name="C0", desc="full-run dirty gate, exit 3",
         stage_args=["all"], is_gate=True, expect_exit=3,
         seeds=[lambda: apply_seed(
-            "README.md",
-            "- [TODO](TODO.md) — roadmap and milestones",
-            "- [TODO](TODO.md) — roadmap and milestones\n<!-- DD-045 item 3 C0 seed -->",
+            ".github/workflows/verify-dd043-pr3-rows.yml",
+            "          if-no-files-found: warn",
+            "          if-no-files-found: warn\n# DD-045 item 3 C0 seed",
         )],
     ),
     dict(

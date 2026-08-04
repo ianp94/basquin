@@ -61,4 +61,4 @@ jobs:
         with:
           name: verify-dd043-pr3-rows-results
           path: bench-results/verify-rows-*/
-          if-no-files-found: warn
+          if-no-files-found: ignore

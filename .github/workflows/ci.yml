@@ -92,8 +92,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # DD-045 item 4A/4B need full history: 4A diffs against the PR base ref or the
+          # push's `before` SHA (neither is guaranteed present in a shallow checkout), and 4B
+          # resolves commit-SHA reachability against `origin/main`, which a shallow checkout
+          # does not fetch as a remote-tracking ref unless main is the ref being built.
+          fetch-depth: 0
       - name: Check citations resolve against cited file content
         run: python3 scripts/check-citations.py
+      # DD-045 item 4A — for every path this push/PR removes, search the whole tracked tree
+      # (code included, the corpus item 1 deliberately excludes) for anything still depending on
+      # it. See scripts/check-removed-deps.py's docstring for the mechanism and the disclosed
+      # zero-SHA skip on a brand-new branch/ref.
+      - name: Check removed paths have no surviving dependents
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python3 scripts/check-removed-deps.py "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}"
+          else
+            python3 scripts/check-removed-deps.py "${{ github.event.before }}" "${{ github.event.after }}"
+          fi
 
 
   # DD-045 item 0 — the DD-043 PR-3 verification harness had never run anywhere but a developer's

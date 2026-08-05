@@ -1265,24 +1265,78 @@ the feature held in every one, and almost every finding was in the machinery tha
       Optional tier (O1-O5, each cheap, each killing one branch not otherwise exercised) and the
       `selftest` entry point for the `jvm`/`native` shared graders are deliberately deferred — the
       design doc's own §6 recommendation, not a scope cut.
-- [ ] **4 — a "what depended on this?" pre-commit pass.** For every path, row key or claim a commit
-      removes, search the whole tree for what still depends on it. Diff-internal consistency is the
-      narrower question and asking it is what let round 8's findings through.
-      **Add its mirror image: resolve open debt against the code.** Round 9 swept all **91** `- [ ]`
+- [x] **4 — "what depended on this?" Delivered (the CI-enforceable third; the mirror image stays a
+      convention by design — see below).** Design:
+      `docs/superpowers/specs/2026-08-04-dd045-items-4-6-design.md`. Three checks, added in the PR
+      that also did 4B's own migration:
+      - **4A** `scripts/check-removed-deps.py` — for every path a diff removes (`git diff
+        --name-status --find-renames`; `--staged` locally, base...head in CI on `pull_request`/
+        `push`), `git grep -nF` the WHOLE tracked tree — code included, precisely the corpus item 1
+        excludes — for a surviving dependent (disclosed-absence and a new `removed-ok` allowlist
+        kind aside). Proven in a scratch worktree against a live target:
+        `scripts/verify-dd043-pr3.sh`'s `jvm` stage reads
+        `bench-results/dd043-pr3-restvillains-2026-07-26/build.sh` on a code line item 1's
+        comment-only scan cannot see — deleting that directory there went red naming that exact
+        line, `exit=1`; restoring went green, `exit=0`; a true-negative control (delete a file
+        nothing references) stayed green throughout.
+      - **4B** a new commit-SHA-reachability token class inside `scripts/check-citations.py`
+        (backticked/bold hex tokens, prefix-matched against `git rev-list origin/main`, its own
+        balance-asserted disposition ledger, a new `sha` allowlist kind for upstream SHAs, and a
+        `bench-results/`-citing-file `historical` bucket that is counted, never failed). Landed red
+        against this file and `docs/ROADMAP.md`: 22 `FAILED UNREACHABLE COMMIT` findings (plus 3
+        more disclosed via the existing dead-path `NEG_RE` window), `exit=1` — every one a
+        branch-only SHA already unreachable from `origin/main` before its branch is even pruned.
+        Fixed in the same PR by repointing survivors to their squash-merge commits (`b32b394`,
+        `e7137a4`) and rewording the rest — above all this section's own supersession-count
+        sentences and the guard-history paragraph in `docs/ROADMAP.md` — to disclose that the
+        per-commit derivation predates the squash and is not re-runnable from main, per this item's
+        own design doc's migration guidance; `exit=0` after. Degrades honestly to a counted
+        `UNCHECKED — no baseline ref` bucket, proven in an isolated clone with no `origin/main`
+        ref, rather than a silent pass.
+      - **4C** `scripts/check-row-label-coverage.py`, appended to the `verify-dd043-pr3` CI job
+        guarded on `success()`: diffs the fresh run's own `RESULTS.md` PASS-row labels against
+        `scripts/verify-dd043-pr3-rows.sh`'s `GREEN_RUN_LABELS` (read as literal data, never
+        executed) — closes item 3's own declared residual, the *added*-label direction its comment
+        above `GREEN_RUN_LABELS` names. Proven both directions: an undeclared extra PASS label
+        reds; a declared-but-unobserved label reds (disclosed as redundant with the rows job's own
+        unmatched-label failure — different path filters, this one the broader); the unmodified
+        pairing is clean.
+      **The mirror image — resolve open debt against the code — stays a convention, not a
+      mechanism**, per the design's own reasoning: an entry about something to *build* legitimately
+      names things that do not exist, and an entry about something *broken* names things that do; no
+      grep distinguishes the two directions, and a predicate-per-entry DSL would be a second
+      hand-maintained mirror that itself drifts (same shape as item 5's reasoning, below). Round 9's
+      sweep is the model instead — a recurring dispatched task, not a standing check: it swept all **91** `- [ ]`
       entries in this file against the tree and found **ten** the code already satisfied — the box count
-      went 91 open / 152 closed to **81 open / 163 closed** in `119d400` (counted with
-      `git show <rev>:TODO.md | grep -cE '^\s*- \[[ x]\]'` on both sides of that commit, so the numbers
-      are derived rather than tallied by hand; closed rose by eleven, not ten, because the same commit
-      also landed the already-done "1 — citation-resolution CI check" entry) — plus one (`status.load` in the CLI) whose named gap had
+      went 91 open / 152 closed to **81 open / 163 closed** during PR #103's round-9 commit (counted
+      with `git show <rev>:TODO.md | grep -cE '^\s*- \[[ x]\]'` on both sides of that commit at the
+      time; that commit is now folded into the `b32b394` squash-merge, so the exact command is no
+      longer re-runnable from main — the before/after figures stand as recorded narrative, not
+      re-derivable today; closed rose by eleven, not ten, because the same commit also landed the
+      already-done "1 — citation-resolution CI check" entry) — plus one (`status.load` in the CLI) whose named gap had
       half closed and needed narrowing rather than checking off. Two had been false since `a0595b9`,
       the whole span of DD-043. The sharpest was "Roller's `login_publish` sequence has never published
       a single row", sitting 91 lines below an already-`[x]` DD-039 entry recording 84 such rows: the
       file refuted itself and no one re-read it. **A `- [ ]` is a claim about the current tree exactly
       like a citation is**, and the tooling in item 1 should resolve both. The check is cheap when each
       entry names a symbol, a file or a workflow step — so write them that way.
-- [ ] **5 — stop restating derived numbers in prose**, and where a count stays, say what unit it
-      counts. Round 8's miscount came from documents counting shapes, throw sites and methods
-      interchangeably.
+- [x] **5 — stop restating derived numbers in prose. Closed as covered-plus-convention; built
+      nothing.** Design:
+      `docs/superpowers/specs/2026-08-04-dd045-items-4-6-design.md`. Its enforceable core already
+      shipped inside item 1's carried-value machinery: a strong-shaped figure (cost CSV, 4+-digit
+      number, thousands-separated, UTC stamp) restated beside a citation is checked against the
+      cited files (`CARRIED VALUE`/`STALE LINE`), and a figure "verified" only by another hand-typed
+      prose figure is caught as circular corroboration. What remains is the *unit* problem — round
+      8's miscount came from documents counting shapes, throw sites and methods interchangeably, and
+      that is a question about what a number COUNTS, not what it IS, so no token-level check can
+      adjudicate it: a unit-annotation format is a second hand-typed mirror that itself drifts; the
+      value checker's own docstring already rules out extending strong-shape matching to short
+      numbers ("substring-matching a 1-3-digit number against a file is meaningless"); an LLM-judge
+      reviewer is a nondeterministic gate this thread's house style does not admit. So item 5 ships
+      as: nothing mechanical, plus the standing rule already adopted in round 7 and written in
+      `docs/ROADMAP.md`'s item-5 paragraph — derive in place with the command shown, or point at one
+      authoritative enumeration, and name the unit when a count stays. The check on the habit is
+      review plus item 1's counters, said honestly rather than dressed up as a mechanism.
 - [ ] **6 — an agent completion contract**: a report is accepted only with the pasted output of its own
       verification; partial evidence is never committed.
 

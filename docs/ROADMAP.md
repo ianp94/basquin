@@ -125,22 +125,26 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
      path publishes without running `check`.
 
    **Eight silent-bypass shapes are closed** across **four** guard methods, and the shape of that
-   history is the lesson: **only one shipped with the original guard commit** (`68714ed`) — checked
-   directly against that commit's own tree (`git show 68714ed:basquin-maven-injector/src/main/java/com/basquin/maven/BasquinInjector.java`),
-   which contains exactly one guard method (`failOnConflictingManagedVersion`) and one `throw` site,
-   not three. **The other seven arrived after implementation — each added by review, or by measurement
-   review prompted — none by the design or a self-review**, derived from
-   `git log --reverse -S'<method>' -- basquin-maven-injector/.../BasquinInjector.java` (checkable the
-   same way): the declared-version conflict (`e457125` — "Task 4's review found this as a Minor");
-   the declared-scope shape (`c4b565b` — its own javadoc: "Found by review of PR #103, which was asked
+   history is the lesson: **only one shipped with the original guard commit** — verified at the time
+   directly against that commit's own tree with `git show <sha>:basquin-maven-injector/src/main/java/com/basquin/maven/BasquinInjector.java`,
+   which contained exactly one guard method (`failOnConflictingManagedVersion`) and one `throw` site,
+   not three; that commit predates PR #103's squash-merge and the command is no longer re-runnable
+   from main, so the fact is recorded here rather than re-cited by SHA. **The other seven arrived
+   after implementation — each added by review, or by measurement
+   review prompted — none by the design or a self-review**, derived at the time from
+   `git log --reverse -S'<method>' -- basquin-maven-injector/.../BasquinInjector.java` (a command that
+   is itself no longer re-runnable against those pre-squash commits, for the same reason): the
+   declared-version conflict ("Task 4's review found this as a Minor");
+   the declared-scope shape (its own javadoc: "Found by review of PR #103, which was asked
    to look for exactly this shape after two similar asymmetries had already been fixed"); the type and
-   classifier shapes, folded into a whitelist (`cff7f24` — "scope (Claude review), type (approver),
-   classifier (same)"); the exclusions shape added to that same whitelist (`95a6d57` — an unsteered
-   approver round); managed exclusions (`a61a90c` — the same approver's next round, "SIXTH bypass
-   shape"); the sibling-declaration guard (`8cadf8a` — "found by measuring", spike S2, "SEVENTH silent
-   bypass"); managed scope (`9f1e990` — round 7, "EIGHTH bypass"). The code keeps its own running
+   classifier shapes, folded into a whitelist ("scope (Claude review), type (approver),
+   classifier (same)"); the exclusions shape added to that same whitelist (an unsteered
+   approver round); managed exclusions (the same approver's next round, "SIXTH bypass
+   shape"); the sibling-declaration guard ("found by measuring", spike S2, "SEVENTH silent
+   bypass"); managed scope (round 7, "EIGHTH bypass"). The code keeps its own running
    count, so read it there rather than here — it is drift-proof against line-number churn a further
-   guard addition causes; a line number pinned in this doc is not.
+   guard addition causes; a line number pinned in this doc is not, and neither is a commit SHA once
+   the branch that carried it is pruned.
    - `failOnUnusableDeclaration` closes four shapes on the *declared* `basquin-quarkus` as a
      **whitelist** of usable declarations — scope, type, classifier, exclusions — rather
      than a list of known-bad values, because narrowing the guard to specific bad values kept shipping
@@ -223,7 +227,7 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
    | A citation that no longer resolves | **135 wrong of 547** checked repo-wide — roughly 1 in 4 — and wrong citations were findings in rounds 5, 6, 7 **and** 8 |
    | A derived number restated in prose | guard counts stale in **seven** documents across **three** consecutive rounds; then a shapes-vs-throw-sites conflation (8 shapes closed by 7 throws) produced a fresh wrong count in round 8 |
    | Parallel agents each correct alone, contradictory together | round 5's B3 (one change deleted a run directory while another, same commit, cited it); two agents disagreeing whether the `managed-scope` mutation row existed; and a false debt removed from `TODO.md` while the identical false claim was left in `ROADMAP.md` |
-   | Evidence whose *name* changes every time it is regenerated | each run of record is `verify-<UTC timestamp>/`, so producing a new one stales **every** citation to the old one at once — **10, 10, 13 and 18** occurrences repointed by the four supersession commits, each count taken from that commit's own message (`16da079`, `865ba35`, `1c3ce88`, `572282a`); counted as occurrences, not matching lines, because `grep -c` undercounted the first one |
+   | Evidence whose *name* changes every time it is regenerated | each run of record is `verify-<UTC timestamp>/`, so producing a new one stales **every** citation to the old one at once — **10, 10, 13 and 18** occurrences repointed by four supersession commits during PR #103, each count taken from that commit's own message at the time (those commits are now folded into the `b32b394` squash-merge and their individual messages are no longer separately reachable); counted as occurrences, not matching lines, because `grep -c` undercounted the first one |
 
    All five are one defect — **a claim and its check drifting apart** — attacked at five layers.
 

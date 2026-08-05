@@ -47,7 +47,13 @@ Every citation it parses lands in EXACTLY ONE disposition —
                         or a passing pinned row;
     FAILED              a finding: dead path, gitignored path, stale line, carried value;
     reported            a FAILED finding suppressed (but printed) via a `reported` allowlist
-                        entry: a real defect in a file owned by another agent, pending their fix;
+                        entry: a real defect in a file owned by another agent, pending their fix.
+                        A `reported` entry that never fires across a whole run is itself a
+                        FINDING (unused-suppression, DD-045 defect-class audit finding 13: two
+                        such entries sat live on merged main, matching nothing, while this tool
+                        printed `0 reported to owners` and exited 0) — its self-expiry text says
+                        to remove it, so an unused entry is exactly the drift this tool exists to
+                        catch, now in its own input;
     allowlisted         cited path exempted by the allowlist, one written reason each;
     UNCHECKED-ambiguous several tracked files match; the target is not mechanically decidable;
     UNCHECKED-guessed   exactly one tracked file matches by basename/suffix/path-tail but NOT at
@@ -125,6 +131,59 @@ citations.txt names the run of record (both under bench-results/dd043-pr3-r4-gua
 2026-07-29/ and bench-results/dd043-pr3-r7-managed-scope-2026-07-30/ contain zero such
 references) — and it fails closed rather than open, which is the safe direction. Teach the
 pinned resolver the same substitution before writing the first such citation.
+
+COMMIT-SHA REACHABILITY (DD-045 item 4B). This repo squash-merges every PR, which makes every
+branch-side commit SHA unreachable the moment its branch is pruned — pruning after merge is the
+documented routine, so a citation to a branch-only SHA is dead on any fresh clone the day the
+prune happens, sometimes sooner. A hash citation is a DIFFERENT claim from a file/line citation —
+it names repo HISTORY, not a cited file's CONTENT — so it gets its own token class, its own
+resolution, and its own disposition ledger, balanced and asserted exactly like the citation ledger
+above: a SHA token cannot be silently dropped either.
+
+  Parse: a backticked or **bold** hex token, 7-40 characters, containing at least one [a-f] letter
+  AND at least one digit — drops English hex-words ("defaced") and all-digit run IDs/timestamps,
+  the same false-positive concern VALUE_RE already handles for numbers. A bare (unbackticked,
+  non-bold) hex-shaped token is NOT parsed as a SHA — counted per class as not-examined instead,
+  the same disclosed-blind-spot treatment short numbers get (see V_UNEX_SHA_BARE).
+
+  Resolve: prefix-match against `git rev-list origin/main`, computed once per run. Dispositions:
+    verified (reachable from origin/main)   the token prefixes a commit on origin/main's history;
+    FAILED UNREACHABLE COMMIT                matches nothing there — a branch-only SHA whose
+                                              branch was pruned, or a foreign (upstream-repo) SHA
+                                              never in this repo's object DB at all;
+    allowlisted (upstream/foreign SHA)       a `sha <prefix> <reason>` allowlist entry (new kind,
+                                              below) — for upstream-repo commits, which will never
+                                              resolve here and are not this repo's history to fix;
+    disclosed absence                        the +/-1-line window says the commit is gone (reuses
+                                              NEG_RE, the same disclosed-absence rule dead paths
+                                              already get);
+    historical (bench-results evidence)      counted, never failed, for any citing file under
+                                              bench-results/: an evidence README naming the commit
+                                              it ran against is a record of a past run, not a live
+                                              claim — the same rationale this docstring already
+                                              applies to captured *.txt. A run-of-record's own
+                                              `Commit:` line names its own (eventually branch-only)
+                                              SHA by design and lands here, not in FAILED.
+  A citing file under bench-results/ gets the historical disposition from its PATH alone, before
+  reachability is even computed — correct even for a SHA this repo's object DB no longer has at
+  all, once the branch is actually pruned rather than merely unreachable from origin/main.
+
+  Degrade honestly: when `origin/main` cannot be resolved locally (an offline clone with no
+  network-fetched remote-tracking ref), EVERY parsed SHA token in the run becomes a counted
+  `UNCHECKED — no baseline ref` — never silently verified, never silently failed. In CI the job
+  checks out with `fetch-depth: 0`, so the baseline always exists there.
+
+  Allowlist kind: `sha <prefix> <reason>` — exempts a SHA token whose text starts with <prefix>.
+  One entry per upstream-repo SHA, the same one-reason-each discipline as every other kind here.
+
+  What this class deliberately does NOT do: keep a pruned SHA resolvable via a tag or git-notes
+  pointer. That would make the citation "resolve" again to history no surviving branch or ref
+  contains — laundering a dead reference into a live-looking one, the same move the 2026-07-30
+  citation audit refused when it left STALE-BY-REFACTOR citations unrepointed rather than faking
+  them current. The fix for a citation this class fails is always one of: repoint to the
+  squash-merge commit that carries the change on `main`, reword to disclose that the derivation
+  predates the squash and is not re-runnable, or cite content (a file, a running count in code, a
+  tree hash) instead of a commit.
 
 MECHANICS. Prose is grouped into logical units — markdown paragraphs (blank-line delimited;
 each table row its own unit) and contiguous comment blocks — because a wrapped sentence puts
@@ -289,6 +348,18 @@ PINNED_RE = re.compile(r"^([A-Za-z0-9_./-]+):(\d+): (.*)$")
 # an absolute machine-local path, or a shell/env expansion — not a citation.
 FRAGMENT_PRECEDERS = ":/.$~\\"
 
+# Commit-SHA reachability (DD-045 item 4B) — see the docstring's COMMIT-SHA REACHABILITY section.
+# SHA-shaped requires >=1 [a-f] letter AND >=1 digit (word-bounded so it never matches a substring
+# of a longer identifier): drops English hex-words ("defaced", "cafebabe") and all-digit run
+# IDs/dates, the same VALUE_RE concern for numbers.
+SHA_SHAPE_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
+
+
+def is_sha_shaped(s: str) -> bool:
+    return bool(SHA_SHAPE_RE.fullmatch(s)) and any(c in "abcdef" for c in s) and any(
+        c.isdigit() for c in s)
+
+
 # Value forms the tool does NOT examine, counted per class wherever they sit in a unit that
 # also carries a citation (see the docstring's VALUE FORMS NOT EXAMINED). A disclosed gap is
 # a known limit; a silent one is the defect this tool exists to prevent.
@@ -300,6 +371,8 @@ V_UNEX_BOLD = ("values NOT examined: digit-bearing bold phrase with no strong-sh
 V_UNEX_BARE = ("values NOT examined: bare unseparated 4+-digit number (year/date-shaped)")
 V_UNEX_PAREN = ("values NOT examined: parenthesised group straight after a backticked "
                 "citation (line-list idiom `file` (82,105))")
+V_UNEX_SHA_BARE = ("values NOT examined: bare hex token outside backticks/bold (not parsed as "
+                   "a commit SHA)")
 
 _file_cache: dict[str, list[str] | None] = {}
 
@@ -315,15 +388,23 @@ def read_lines(rel: str) -> list[str] | None:
 
 
 def load_allowlist():
-    """Three entry kinds, one reason each (a reason is mandatory — an unexplained exemption is
+    """Five entry kinds, one reason each (a reason is mandatory — an unexplained exemption is
     exactly the drift this tool exists to stop):
       <cited-path-or-prefix/> <reason>      exempt a cited path (exact, or prefix if it ends /)
       frozen <citing-prefix> <reason>       do not scan this citing file/dir at all
       reported <citing-prefix> <needle> <reason>
                                             suppress (but print) findings in <citing-prefix>
                                             whose message contains <needle> — for real defects
-                                            in files owned by other agents, pending their fix."""
-    cited, frozen, reported = [], [], []
+                                            in files owned by other agents, pending their fix.
+      sha <prefix> <reason>                 DD-045 item 4B: exempt a commit-SHA token (prefix
+                                            match) unreachable from origin/main — upstream-repo
+                                            commits, which will never resolve here.
+      removed-ok <path> <reason>            DD-045 item 4A (scripts/check-removed-deps.py): a
+                                            removed path that is fine to still be cited. Not this
+                                            tool's concern — parsed here only so it does not fall
+                                            through to the generic cited-path branch below and get
+                                            misread as one."""
+    cited, frozen, reported, sha = [], [], [], []
     if ALLOWLIST_FILE.exists():
         for n, raw in enumerate(
                 (ALLOWLIST_FILE.read_text(encoding="utf-8")).splitlines(), 1):
@@ -341,12 +422,21 @@ def load_allowlist():
                 sub = parts[1].split(None, 2) if len(parts) > 1 else []
                 if len(sub) < 3:
                     sys.exit(f"allowlist:{n}: reported entry needs <citing> <needle> <reason>")
-                reported.append((sub[0], sub[1], sub[2]))
+                reported.append((sub[0], sub[1], sub[2], n))
+            elif kind == "sha":
+                sub = parts[1].split(None, 1) if len(parts) > 1 else []
+                if len(sub) < 2:
+                    sys.exit(f"allowlist:{n}: sha entry needs <prefix> <reason>")
+                sha.append((sub[0], sub[1]))
+            elif kind == "removed-ok":
+                sub = parts[1].split(None, 1) if len(parts) > 1 else []
+                if len(sub) < 2:
+                    sys.exit(f"allowlist:{n}: removed-ok entry needs <path> <reason>")
             else:
                 if len(parts) < 2:
                     sys.exit(f"allowlist:{n}: entry has no reason: {line!r}")
                 cited.append((parts[0], parts[1]))
-    return cited, frozen, reported
+    return cited, frozen, reported, sha
 
 
 def main() -> int:
@@ -364,7 +454,13 @@ def main() -> int:
     for t in tracked_set:
         by_basename.setdefault(t.rsplit("/", 1)[-1].lower(), []).append(t)
 
-    allow_cited, frozen, reported = load_allowlist()
+    allow_cited, frozen, reported, sha_allow = load_allowlist()
+    # DD-045 defect-class audit finding 13: a `reported` entry whose needle matches nothing is a
+    # claim about another file's content ("a defect is pending there") that nobody checks — live
+    # on merged main, self-expiry instructions unfollowed, while this tool printed the tell
+    # (`0 reported to owners`) and exited 0. Track per-entry usage across the whole run; an entry
+    # that fires zero times is itself a finding below, not a silent pass.
+    reported_used = [False] * len(reported)
     findings: list[str] = []
     allowed_out: list[str] = []
     reported_out: list[str] = []
@@ -374,6 +470,8 @@ def main() -> int:
     untracked_out: list[str] = []
     sibling_out: list[str] = []
     circular_out: list[str] = []
+    sha_allowed_out: list[str] = []
+    sha_disclosed_out: list[str] = []
     stats: collections.Counter = collections.Counter()
 
     # Citation dispositions — every parsed citation lands in exactly one; the sum is asserted
@@ -391,6 +489,36 @@ def main() -> int:
     DISPOSITIONS = (K_EXACT, K_NEAR, K_PIN, K_FAIL, K_REP, K_ALLOW,
                     K_AMBIG, K_GUESS, K_DISC, K_DISK)
 
+    # Commit-SHA reachability dispositions (DD-045 item 4B) — a SEPARATE ledger from the
+    # citation dispositions above: a SHA token is a different claim (repo history, not cited-file
+    # content), so it gets its own balance-asserted ledger rather than overloading the citation
+    # one. See the docstring's COMMIT-SHA REACHABILITY section.
+    S_OK = "verified (reachable from origin/main)"
+    S_FAIL = "FAILED UNREACHABLE COMMIT"
+    S_ALLOW = "allowlisted (upstream/foreign SHA)"
+    S_DISC = "disclosed absence (commit pruned, prose says so)"
+    S_HIST = "historical (bench-results evidence)"
+    S_NOBASE = "UNCHECKED — no baseline ref"
+    SHA_DISPOSITIONS = (S_OK, S_FAIL, S_ALLOW, S_DISC, S_HIST, S_NOBASE)
+
+    main_shas: set[str] = set()
+    no_baseline = False
+    rl = subprocess.run(["git", "-C", str(ROOT), "rev-list", "origin/main"],
+                        capture_output=True, text=True)
+    if rl.returncode != 0 or not rl.stdout.strip():
+        no_baseline = True
+    else:
+        main_shas = set(rl.stdout.split())
+
+    def sha_reachable(token: str) -> bool:
+        return any(full.startswith(token) for full in main_shas)
+
+    def sha_allowed(token: str) -> str | None:
+        for pat, reason in sha_allow:
+            if token.startswith(pat) or pat.startswith(token):
+                return reason
+        return None
+
     def cited_allowed(path: str) -> str | None:
         for pat, reason in allow_cited:
             if path == pat or path.rstrip("/") == pat.rstrip("/") or (
@@ -400,8 +528,9 @@ def main() -> int:
 
     def emit(citing: str, msg: str) -> str:
         """-> 'reported' if suppressed by a reported allowlist entry, else 'failed'."""
-        for cite_pre, needle, reason in reported:
+        for i, (cite_pre, needle, reason, _n) in enumerate(reported):
             if citing.startswith(cite_pre) and needle in msg:
+                reported_used[i] = True
                 reported_out.append(f"{msg}\n        [reported, pending owner fix: {reason}]")
                 return "reported"
         findings.append(msg)
@@ -611,6 +740,7 @@ def main() -> int:
         """unit: [(physical line number, text)] — one paragraph / table row / comment block."""
         citations = []  # (lineno, raw, path, [lines])
         values = []     # (lineno, normalised value)
+        shas: list[tuple[int, str]] = []  # (lineno, hex token) — DD-045 item 4B
         unex: collections.Counter = collections.Counter()  # unexamined value forms, per class
         bold_line: list[tuple[int, list[str]]] = []
         plain_line: list[tuple[int, str]] = []
@@ -629,6 +759,8 @@ def main() -> int:
                 norm = span.replace("\\|", "|")
                 if VALUE_RE.fullmatch(norm) or ATTR_VALUE_RE.fullmatch(norm):
                     values.append((lineno, norm))
+                elif is_sha_shaped(norm):
+                    shas.append((lineno, norm))
                 elif SHORT_NUM_RE.fullmatch(norm):
                     unex[V_UNEX_SHORT] += 1
                 elif any(ch.isdigit() for ch in norm):
@@ -671,6 +803,9 @@ def main() -> int:
                 if VALUE_RE.fullmatch(norm) or ATTR_VALUE_RE.fullmatch(norm):
                     values.append((lineno, norm))
                     continue
+                if is_sha_shaped(norm):
+                    shas.append((lineno, norm))
+                    continue
                 strong = []
                 for mm in THOUSANDS_RE.finditer(norm):
                     if mm.group(0) in idiom_vals:
@@ -695,6 +830,8 @@ def main() -> int:
             for mm in STAMP_RE.finditer(plain):
                 values.append((lineno, mm.group(0)))
             unex[V_UNEX_BARE] += len(BARE4_RE.findall(STAMP_RE.sub(" ", plain)))
+            unex[V_UNEX_SHA_BARE] += sum(
+                1 for mm in SHA_SHAPE_RE.finditer(plain) if is_sha_shaped(mm.group(0)))
         # The unexamined counts are meaningful only where a value COULD have been paired
         # with a citation — count them for citation-bearing units, so the printed number is
         # the size of the actual blind spot, not tree-wide digit noise.
@@ -873,6 +1010,40 @@ def main() -> int:
             else:
                 stats["values: verified in cited file(s)"] += 1
 
+        # Commit-SHA reachability (DD-045 item 4B) — independent of the citation/value
+        # resolution above: a SHA names repo history, not this unit's cited files, so it is
+        # judged purely against origin/main, the sha allowlist, the same NEG_RE disclosure
+        # window, and the citing path (bench-results/ is historical evidence, never FAILED).
+        for sline, sha_tok in shas:
+            stats["sha_tokens"] += 1
+            if no_baseline:
+                stats[S_NOBASE] += 1
+                continue
+            if citing.startswith("bench-results/"):
+                stats[S_HIST] += 1
+                continue
+            if sha_reachable(sha_tok):
+                stats[S_OK] += 1
+                continue
+            reason = sha_allowed(sha_tok)
+            if reason is not None:
+                stats[S_ALLOW] += 1
+                sha_allowed_out.append(f"{citing}:{sline}: `{sha_tok}` — {reason}")
+                continue
+            window = [unit_text.get(sline - 1, ""), unit_text.get(sline, ""),
+                      unit_text.get(sline + 1, "")]
+            if any(NEG_RE.search(w) for w in window):
+                stats[S_DISC] += 1
+                sha_disclosed_out.append(
+                    f"{citing}:{sline}: `{sha_tok}` — surrounding prose discloses the absence")
+                continue
+            findings.append(
+                f"{citing}:{sline}: FAILED UNREACHABLE COMMIT `{sha_tok}` — not reachable from "
+                f"origin/main (branch pruned, or a foreign repo's SHA); repoint to the "
+                f"squash-merge commit that carries this on main, reword to disclose the "
+                f"derivation predates the squash, or cite content instead of a commit")
+            stats[S_FAIL] += 1
+
     def frozen_reason(citing: str) -> str | None:
         for pre, reason in frozen:
             if citing.startswith(pre):
@@ -969,6 +1140,18 @@ def main() -> int:
         if unit:
             check_unit(citing, unit)
 
+    # Unused `reported` allowlist entries (DD-045 defect-class audit finding 13) — a needle that
+    # matched nothing anywhere in this run is a stale suppression: the defect it named is fixed
+    # and the entry's own text says to remove it, so leaving it in is itself the claim/check
+    # drift this tool exists to catch, in its own input.
+    for i, (cite_pre, needle, reason, n) in enumerate(reported):
+        if not reported_used[i]:
+            findings.append(
+                f"scripts/check-citations-allowlist.txt:{n}: unused `reported` entry — needle "
+                f"{needle!r} matches nothing in citing files starting {cite_pre!r}; its own "
+                f"self-expiry instruction says remove it now that the defect it named is fixed "
+                f"(reason on file: {reason})")
+
     # The ledger must balance: every parsed citation has exactly one disposition. If this
     # trips, the tool has a silent-drop bug — the round-10 blocking defect class — and no
     # verdict it prints can be trusted, so abort loudly.
@@ -979,6 +1162,15 @@ def main() -> int:
               f"{disposed} dispositioned; a citation was silently dropped. No verdict.")
         return 2
 
+    # Same discipline for the SHA ledger (DD-045 item 4B) — a separate token class, a separate
+    # balance check, so it cannot be silently dropped either.
+    n_sha = stats["sha_tokens"]
+    sha_disposed = sum(stats[k] for k in SHA_DISPOSITIONS)
+    if sha_disposed != n_sha:
+        print(f"check-citations: INTERNAL ERROR — {n_sha} commit-SHA tokens parsed but only "
+              f"{sha_disposed} dispositioned; a SHA token was silently dropped. No verdict.")
+        return 2
+
     n_verified = stats[K_EXACT] + stats[K_NEAR] + stats[K_PIN]
     n_unchecked = stats[K_AMBIG] + stats[K_GUESS]
     print(f"check-citations: {n_cit} citations parsed across {len(citing_md)} md + "
@@ -987,13 +1179,17 @@ def main() -> int:
     print("  citation dispositions (each citation lands in exactly one; sum equals total):")
     for k in DISPOSITIONS:
         print(f"    {stats[k]:5d}  {k}")
+    print(f"  commit-SHA reachability (DD-045 item 4B; {n_sha} backticked/bold hex token(s) "
+          f"with >=1 letter & >=1 digit, each lands in exactly one; sum equals total):")
+    for k in SHA_DISPOSITIONS:
+        print(f"    {stats[k]:5d}  {k}")
     print("  value quotes beside citations (backticked, **bold**, attribute-quoted, and "
           "bare separated numbers/stamps on citation lines):")
     for k in sorted(k for k in stats if k.startswith("values:")):
         print(f"    {stats[k]:5d}  {k}")
     print("  value forms NOT examined, sitting beside citations (counted, per class; "
           "see docstring):")
-    for k in (V_UNEX_SHORT, V_UNEX_CODE, V_UNEX_BOLD, V_UNEX_BARE, V_UNEX_PAREN):
+    for k in (V_UNEX_SHORT, V_UNEX_CODE, V_UNEX_BOLD, V_UNEX_BARE, V_UNEX_PAREN, V_UNEX_SHA_BARE):
         print(f"    {stats[k]:5d}  {k}")
     print("        (not countable, also unexamined: bare short prose numbers, spelled-out "
           "figures, percentages, arithmetic)")
@@ -1027,7 +1223,11 @@ def main() -> int:
                         ("values backed ONLY by cited prose .md (circular corroboration — "
                          "a claim, not an artifact; not verified, not failed)", circular_out),
                         ("REPORTED to owning agent, pending their fix (not failed)",
-                         reported_out)):
+                         reported_out),
+                        ("allowlisted commit SHAs (upstream/foreign; reasons in "
+                         "scripts/check-citations-allowlist.txt)", sha_allowed_out),
+                        ("disclosed absent commit SHAs (prose says the commit is "
+                         "gone/pruned)", sha_disclosed_out)):
         if rows:
             print(f"\n{len(rows)} {title}:")
             for r in rows:
@@ -1038,7 +1238,7 @@ def main() -> int:
             print(f"  FAIL {f}")
         return 1
     n_unex = sum(stats[k] for k in (V_UNEX_SHORT, V_UNEX_CODE, V_UNEX_BOLD, V_UNEX_BARE,
-                                    V_UNEX_PAREN))
+                                    V_UNEX_PAREN, V_UNEX_SHA_BARE))
     n_rep = stats[K_REP] + stats["values: reported (suppressed FAIL)"]
     print(f"\nOK — {n_verified} of {n_cit} citations verified clean (dead paths, stale "
           f"lines, carried values); {n_unchecked} UNCHECKED, {stats[K_ALLOW]} allowlisted, "
@@ -1047,8 +1247,12 @@ def main() -> int:
           f"backticks, **bold**, attribute quotes, and bare separated-number/stamp forms on "
           f"citation lines; {n_unex} digit-bearing tokens beside citations were in forms NOT "
           f"examined (short numbers, non-strong code spans/bold phrases, year-shaped bare "
-          f"numbers — counted above), and bare short prose numbers, spelled-out figures, "
-          f"percentages and arithmetic are never examined. No claim is made about anything "
+          f"numbers, bare hex tokens — counted above), and bare short prose numbers, "
+          f"spelled-out figures, percentages and arithmetic are never examined. Commit-SHA "
+          f"reachability (item 4B): {stats[S_OK]} of {n_sha} backticked/bold hex token(s) "
+          f"verified reachable from origin/main; {stats[S_ALLOW]} allowlisted, "
+          f"{stats[S_DISC]} disclosed, {stats[S_HIST]} historical (bench-results evidence), "
+          f"{stats[S_NOBASE]} unchecked (no baseline ref). No claim is made about anything "
           f"not counted as verified.")
     return 0
 

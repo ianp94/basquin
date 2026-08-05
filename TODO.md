@@ -612,8 +612,10 @@ ledger tells a fresh clone it's dead. Fixed as of 2026-07-30: four of the five a
 disclose their own deadness inline (not additional debt, listed below so they aren't miscounted as
 such if re-encountered); the fifth — `bench-results/dd043-s5-repo-injection-2026-07-26/README.md:84`
 — was a genuinely new undisclosed dangling citation (fresh instance of this exact defect, introduced
-in `f872199`) and is fixed in the same pass as this paragraph, by dropping the dead path and keeping
-only the prose attribution it decorated.
+during PR #103's round-5 fixes — now folded into the `b32b394` squash-merge; the specific
+introducing commit predates that squash and is not separately reachable) and is fixed in the same
+pass as this paragraph, by dropping the dead path and keeping only the prose attribution it
+decorated.
 
 **Update 2026-07-30 (checker round 10, reported items fixed):** the checker's round-10 fix (which can
 no longer report a clean verdict over citations it never examined) surfaced four of the six as
@@ -1186,9 +1188,12 @@ the feature held in every one, and almost every finding was in the machinery tha
       it: `bench-results/dd043-pr3-citation-audit-2026-07-30/`.
 - [x] **2 — a stable pointer to the run of record. Delivered.** Timestamped `verify-<UTC>/` names meant
       each new run staled every citation to the previous one at once: **10, 10, 13 and 18** occurrences
-      had to be repointed by the four supersession commits, each figure read out of that commit's own
-      message (`16da079`, `865ba35`, `1c3ce88`, `572282a`) and counted as occurrences rather than
-      matching lines — `16da079` records `grep -c` reporting eight where there were ten. Added
+      had to be repointed by four supersession commits during PR #103's development, each figure read
+      out of that commit's own message at the time — those commits are now folded into the `b32b394`
+      squash-merge, and their individual messages are no longer separately reachable, so the
+      derivation predates the squash and is not re-runnable from main — and counted as occurrences
+      rather than matching lines; the first of the four recorded `grep -c` reporting eight where there
+      were ten. Added
       `bench-results/RUN-OF-RECORD`, a tracked pointer **file** — not a symlink: this checkout has
       `core.symlinks=false`, on which a tracked symlink materialises as a plain-text file containing its
       target path rather than resolving. Format: `#`-comment and blank lines ignored, then exactly one
@@ -1237,7 +1242,8 @@ the feature held in every one, and almost every finding was in the machinery tha
       `guards:restored` kill; C2's `guards:restored` PASS controls its eight guard-is-dead kills; C4/
       C5/C6 each leave the other two `jar:*` rows PASS).
       **Proved empirically, not asserted, with captured exit codes:** a full run on this branch
-      (commit `3b1cb3c`) proved all 8 scenarios and all 13 labels, `exit=0`, in 327.9s of scenario
+      (folded into the squash-merge `e7137a4` on main) proved all 8 scenarios and all 13 labels,
+      `exit=0`, in 327.9s of scenario
       wall-clock (5m42s including worktree setup/teardown, on WSL2/NTFS — expected to run faster on
       CI's ephemeral checkout, consistent with the design's own note that the CI figure decides, not
       the local one). Then, for three scenarios spanning different stages, the meta-check's own
@@ -1290,7 +1296,8 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       non-empty, non-`miss` body, so an HTML error response would read as a pass. It had to assert the
       **shape** — `ResultStore.format`'s `costCsv|invariantCount|detail|leak`, i.e. three comma-separated
       numbers before the first `|`. A check that passes on the wrong thing is worse than no check in the one
-      stage whose job is proving the boundary sat on the request path. **Resolved in `6e67ca7`**, which
+      stage whose job is proving the boundary sat on the request path. **Resolved during PR #103**
+      (folded into the squash-merge `b32b394`), which
       overrode this deferral: the poll now runs `curl -sf`, so a non-2xx fails the row outright instead of
       letting its error body ride through, and the verdict additionally requires the wire shape via the
       `boundary_poll_shape_ok` helper, which passes only when the body holds at least one line and
@@ -1323,14 +1330,18 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
 - [x] **`scripts/verify-dd043-pr3.sh`'s `jvm` and `native` stages have never been executed.** Written and
       committed unexercised (the native mutex was held, and the `guards` stage mutates source a running
       build was compiling). **Resolved 2026-07-30**: both stages ran end-to-end in the run of record,
-      stamped `20260730T215842Z` and made against `b980e1f` on a clean tree. All four figures come from
+      stamped `20260730T215842Z`, made on a clean tree against the commit recorded in that run's own
+      `bench-results/RUN-OF-RECORD/RESULTS.md` `Commit:` line — frozen evidence there (now a
+      branch-only SHA, unreachable after PR #103's squash-merge and branch prune, kept as historical
+      record in that file rather than repeated here as a live citation). All four figures come from
       `bench-results/RUN-OF-RECORD/RESULTS.md`, read by label rather than by line number because
       that header gains lines: its title line carries the stamp, its `Commit:` line the SHA and
       `tree clean at run start`, its `Stages run:` line `unit jar guards jvm native`, and the line after
       that **27 passed, 0 failed, 0 skipped** — including the `jvm:build`, `jvm:banner`, `native:build` and
       `native:banner` rows, cited by row key because inserting a guard row renumbers that whole table and
       these four citations went stale twice that way already. This entry previously stamped the run
-      `20260730T054112Z` at `9f1e990` — a run `572282a` **deleted**, and a SHA contradicted by the very
+      `20260730T054112Z` at an earlier PR #103 round's commit — a run from a later round **deleted**,
+      and a SHA contradicted by the very
       `RESULTS.md` line it cited. Cause: an earlier supersession repointed the `verify-`-prefixed *path*
       and left the bare stamp and commit label attached to it. **A repoint must re-read every value it
       carries — stamp, SHA, figure — out of the new target's text, not merely confirm the path resolves.**
@@ -1340,7 +1351,8 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       establish. (Cited by heading with no line range at all: the range given here was off by one at both
       ends, and a limitations list that gains a bullet invalidates any range.) Do not re-run the
       native stage on the strength of this entry; check `bench-results/RUN-OF-RECORD/` first.
-      (An earlier run, `verify-20260729T153141Z`, was **deleted** in `8cadf8a` — its B1 and B2 checks could
+      (An earlier run, `verify-20260729T153141Z`, was **deleted** during PR #103 (folded into the
+      `b32b394` squash-merge) — its B1 and B2 checks could
       not fail, so it certified nothing. Do not cite it; it is not in the tree.)
 - [ ] **A repo-wide line-citation audit (PR #103 round 7) found 135 wrong citations out of 547
       checked — roughly 1 in 4.** Method: every `file:line`/`file:line-line`/bare `:N` citation

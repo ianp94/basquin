@@ -24,7 +24,11 @@ comparing a partial/crashed run's rows, and on a missing/unparseable GREEN_RUN_L
 
 Exit 0: the two label sets are identical.
 Exit 1: at least one observed-but-undeclared or declared-but-unobserved label.
-Exit 3: REFUSED — non-green input, unparseable tally, zero rows, or GREEN_RUN_LABELS not found.
+Exit 2: usage error (no arguments).
+Exit 3: REFUSED — the check could not be performed: non-green input, unparseable tally, zero
+        rows, a missing RESULTS.md, or GREEN_RUN_LABELS unreadable. Distinct from exit 1 on
+        purpose: "I could not check" must never read as "I checked and it is fine", nor as
+        "I checked and found a mismatch".
 
 Run: python3 scripts/check-row-label-coverage.py <RESULTS.md> [scripts/verify-dd043-pr3-rows.sh]
 """
@@ -50,6 +54,16 @@ def extract_results_labels(results_md: pathlib.Path):
     return pass_labels, tally
 
 
+class Refused(Exception):
+    """A refusal: the check could not be performed at all, as distinct from performing it and
+    finding a mismatch. Raised rather than exited, because `sys.exit("message")` prints the string
+    and exits 1 — the SAME code this script uses for a real coverage mismatch. Four refusal paths
+    were written that way and every one silently reported itself as a finding: 'the extraction
+    regex drifted so I could not read the labels' was indistinguishable from 'I read them and one
+    is missing'. That is a claim wider than its check, inside a checker built to close item 3's
+    residual — the exact defect DD-045 exists to remove, found by review on PR #107."""
+
+
 def extract_green_run_labels(rows_script: pathlib.Path) -> set[str]:
     """Read GREEN_RUN_LABELS as DATA — the literal list of quoted strings between the `[` that
     follows `GREEN_RUN_LABELS = ` and its matching `]` — never by importing or executing the
@@ -58,25 +72,25 @@ def extract_green_run_labels(rows_script: pathlib.Path) -> set[str]:
     text = rows_script.read_text(encoding="utf-8")
     m = re.search(r"GREEN_RUN_LABELS\s*=\s*\[(.*?)\]", text, re.DOTALL)
     if not m:
-        sys.exit(f"check-row-label-coverage: GREEN_RUN_LABELS list not found (as data) in "
-                  f"{rows_script}")
+        raise Refused(f"GREEN_RUN_LABELS list not found (as data) in {rows_script}")
     labels = set(re.findall(r'"([^"]+)"', m.group(1)))
     if not labels:
-        sys.exit(f"check-row-label-coverage: GREEN_RUN_LABELS parsed to zero labels in "
-                  f"{rows_script} — the extraction regex has drifted from the file's format")
+        raise Refused(f"GREEN_RUN_LABELS parsed to zero labels in {rows_script} — the "
+                      f"extraction regex has drifted from the file's format")
     return labels
 
 
 def main() -> int:
     args = sys.argv[1:]
     if not args:
-        sys.exit("usage: check-row-label-coverage.py <RESULTS.md> [rows-script]")
+        print("usage: check-row-label-coverage.py <RESULTS.md> [rows-script]", file=sys.stderr)
+        return 2
     results_md = pathlib.Path(args[0])
     rows_script = (pathlib.Path(args[1]) if len(args) > 1
                    else ROOT / "scripts" / "verify-dd043-pr3-rows.sh")
 
     if not results_md.exists():
-        sys.exit(f"check-row-label-coverage: {results_md} does not exist")
+        raise Refused(f"{results_md} does not exist")
     observed, tally = extract_results_labels(results_md)
     if tally is None:
         print(f"check-row-label-coverage: REFUSED — {results_md} has no parseable "
@@ -118,4 +132,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Refused as e:
+        print(f"check-row-label-coverage: REFUSED — {e}", file=sys.stderr)
+        sys.exit(3)

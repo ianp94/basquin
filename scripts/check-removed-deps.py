@@ -24,6 +24,12 @@ MECHANISM.
      precisely the corpus item 1 excludes. Full-path fixed-string matching only, no basename
      matching (a deleted README.md would otherwise light up the whole tree). CONSEQUENCE,
      disclosed: a dependent that references the removed file by basename alone is not caught.
+     Ancestor directories that VANISH are searched too (see vanished_dirs) — a bare directory
+     citation on a code line was previously invisible to this check AND to item 1 at once. ALSO
+     DISCLOSED: the removal set is name-status based, so a path removed and re-added at the same
+     name with gutted content is an `M`, never enters the set, and is never checked — a dependent
+     whose content assumption broke is invisible here. Detecting that needs content comparison,
+     deliberately not built.
   3. A hit is a surviving dependent -> FAILED, unless:
        (a) the hit line +/-1 discloses the absence — reusing NEG_RE by IMPORTING it from
            scripts/check-citations.py, one regex, not a second copy (that script's own
@@ -82,7 +88,7 @@ def load_removed_ok() -> list[tuple[str, str]]:
             continue
         sub = parts[1].split(None, 1) if len(parts) > 1 else []
         if len(sub) < 2:
-            sys.exit(f"allowlist:{n}: removed-ok entry needs <path> <reason>")
+            raise Aborted(f"allowlist:{n}: removed-ok entry needs <path> <reason>")
         out.append((sub[0], sub[1]))
     return out
 
@@ -104,7 +110,7 @@ def removed_paths(args: list[str]):
         diff = git("diff", "--name-status", "--find-renames", f"{base}...{head}")
         tree_ref = head
     if diff.returncode != 0:
-        sys.exit(f"check-removed-deps: git diff failed: {diff.stderr.strip()}")
+        raise Aborted(f"git diff failed: {diff.stderr.strip()}")
     removed = []
     for line in diff.stdout.splitlines():
         if not line.strip():
@@ -115,7 +121,56 @@ def removed_paths(args: list[str]):
             removed.append(parts[1])
         elif status.startswith("R"):
             removed.append(parts[1])  # old name — the identity that stopped existing
-    return removed, tree_ref
+    return removed + vanished_dirs(removed, tree_ref), tree_ref
+
+
+def vanished_dirs(removed: list[str], tree_ref: str | None) -> list[str]:
+    """Ancestor directories of removed files that NO LONGER EXIST — returned with a trailing
+    slash, so grep_hits() searches for the bare directory citation too.
+
+    Why: the removal set is file-granular (`git diff --name-status` gives files), and grep_hits()
+    searches for the literal file path. A dependent citing only the parent directory —
+    `local dir="bench-results/some-run-2026-07-26/"`, no filename — can never match, because that
+    string does not contain the removed file's full path as a substring. That is worse than the
+    basename gap disclosed above: there the search runs and misses, here the search term is never
+    constructed. And such a line is invisible to item 1 as well, which skips code lines entirely,
+    so a code line citing a bare removed directory was unreachable by BOTH checks at once — the
+    exact question this tool exists to answer. Found by review on PR #107.
+
+    Only VANISHED directories are searched. A directory that still holds tracked files after the
+    removal has not stopped existing, so a citation to it is not a broken dependency, and flagging
+    it would be noise — the false-positive shape that makes a check get disabled."""
+    if not removed:
+        return []
+    if tree_ref is None:
+        proc = git("ls-files", "--cached")
+    else:
+        proc = git("ls-tree", "-r", "--name-only", tree_ref)
+    if proc.returncode != 0:
+        raise Aborted(f"could not list tracked files to test directory survival: "
+                      f"{proc.stderr.strip()}")
+    survivors = proc.stdout.splitlines()
+    out, seen = [], set()
+    for path in removed:
+        parts = path.split("/")[:-1]
+        for i in range(len(parts), 0, -1):
+            d = "/".join(parts[:i])
+            if d in seen:
+                continue
+            seen.add(d)
+            prefix = d + "/"
+            if not any(s.startswith(prefix) for s in survivors):
+                out.append(prefix)
+    return out
+
+
+class Aborted(Exception):
+    """The check could not run — a git command failed, or the allowlist is malformed. Raised, not
+    `sys.exit("msg")`: that prints and exits 1, which this script's own contract reserves for "a
+    surviving dependent was found". Every abort path here was written that way, so "git diff failed
+    and I computed no removal set at all" reported itself as a clean-but-for-findings run. Same
+    defect PR #107's review found in check-row-label-coverage.py; both are fixed together, because
+    a second copy of one rule drifting is exactly what this repo keeps paying for."""
 
 
 def grep_hits(path: str, tree_ref: str | None) -> list[tuple[str, int, str]]:
@@ -127,7 +182,7 @@ def grep_hits(path: str, tree_ref: str | None) -> list[tuple[str, int, str]]:
     else:
         proc = git("grep", "-nF", "-e", path, tree_ref)
     if proc.returncode not in (0, 1):  # 0 = matches, 1 = no matches, else a real error
-        sys.exit(f"check-removed-deps: git grep failed on {path!r}: {proc.stderr.strip()}")
+        raise Aborted(f"git grep failed on {path!r}: {proc.stderr.strip()}")
     hits = []
     for line in proc.stdout.splitlines():
         if not line.strip():
@@ -158,7 +213,8 @@ def read_context(f: str, lineno: int, tree_ref: str | None) -> list[str]:
 def main() -> int:
     args = sys.argv[1:]
     if not args or (len(args) == 1 and args[0] != "--staged") or len(args) > 2:
-        sys.exit("usage: check-removed-deps.py --staged | <base> <head>")
+        print("usage: check-removed-deps.py --staged | <base> <head>", file=sys.stderr)
+        return 2
 
     removed, tree_ref = removed_paths(args)
     if removed is None:
@@ -209,4 +265,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Aborted as e:
+        print(f"check-removed-deps: ABORTED — {e}", file=sys.stderr)
+        sys.exit(2)

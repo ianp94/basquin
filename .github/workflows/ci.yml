@@ -135,8 +135,29 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      # DD-045 item 4C — before/after snapshot of tracked+scratch verify-* run directories, so
+      # the next step can identify the one this job's own harness run just produced without
+      # parsing the harness's stdout or guessing by mtime.
+      - name: Snapshot existing verify-* run directories
+        run: ls -d bench-results/verify-*/ 2>/dev/null > /tmp/verify-dirs-before.txt || true
       - name: Verify DD-043 PR-3 harness (unit jar guards)
         run: bash scripts/verify-dd043-pr3.sh unit jar guards
+      # DD-045 item 4C — closes item 3's declared residual: a harness row ADDED without a
+      # matching kill scenario is invisible to scripts/verify-dd043-pr3-rows.sh's own meta-check.
+      # Guarded on success() because only a GREEN run's row set equals the green-run label
+      # inventory GREEN_RUN_LABELS describes. Reads this run's own RESULTS.md and the rows
+      # script's GREEN_RUN_LABELS list as DATA — never the harness's bash, never executing the
+      # rows script — see scripts/check-row-label-coverage.py's docstring.
+      - name: Harness row-label coverage (DD-045 item 4C)
+        if: success()
+        run: |
+          ls -d bench-results/verify-*/ 2>/dev/null > /tmp/verify-dirs-after.txt || true
+          NEW_DIR="$(comm -13 <(sort /tmp/verify-dirs-before.txt) <(sort /tmp/verify-dirs-after.txt) | head -1)"
+          if [ -z "$NEW_DIR" ]; then
+            echo "check-row-label-coverage: could not identify the freshly created verify-* run directory" >&2
+            exit 1
+          fi
+          python3 scripts/check-row-label-coverage.py "${NEW_DIR}RESULTS.md"
       - name: Upload verification run directory
         if: failure()
         uses: actions/upload-artifact@v4

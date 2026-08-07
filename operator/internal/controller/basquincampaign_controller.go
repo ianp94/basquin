@@ -105,16 +105,32 @@ func (r *BasquinCampaignReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 		return ctrl.Result{}, err
 	}
-	if target.Status.Phase != basquinv1alpha1.PhaseInjected {
-		// A target that drops out of Injected mid-run is the same class of event as it being deleted
-		// (§7c): a Running campaign fails terminally rather than silently regressing to Pending and
-		// never inspecting the driver Job again.
+	// Explore mode is structurally JVM-and-JaCoCo-shaped: it gates on a coverage endpoint and extracts
+	// classes from the target's image for verification (§3). A pre-instrumented target has neither — no
+	// coverage Service, no build-time coverage support — until PR-4 does that work. This combination is
+	// invalid regardless of the target's phase, so reject explicitly and terminally right here, BEFORE the
+	// readiness gate below: otherwise an explore campaign against a still-Observing pre-instrumented target
+	// would sit Pending until the target became ready and only then reject — leaving it "Pending forever"
+	// in the interim, the exact failure shape §3 says this rejection exists to avoid.
+	if target.Spec.PreInstrumented && campaign.Spec.Mode == "explore" {
+		return r.fail(ctx, &campaign, "ExploreUnsupportedForPreInstrumented",
+			fmt.Sprintf("target %q is preInstrumented; mode: explore needs build-time coverage support, which is PR-4's work — use mode: load instead", target.Name))
+	}
+	// Injected (runtime-instrumented) and Observed (build-time-instrumented, §2.2b) are both "ready to
+	// drive" — a campaign treats them identically. Observing/Reverting are in-flight and must NOT satisfy
+	// this: a campaign against one of those stays Pending rather than launching a driver against a target
+	// that isn't settled yet.
+	targetReady := target.Status.Phase == basquinv1alpha1.PhaseInjected || target.Status.Phase == basquinv1alpha1.PhaseObserved
+	if !targetReady {
+		// A target that drops out of the {Injected, Observed} set mid-run is the same class of event as
+		// it being deleted (§7c): a Running campaign fails terminally rather than silently regressing to
+		// Pending and never inspecting the driver Job again.
 		if campaign.Status.Phase == basquinv1alpha1.CampaignRunning {
 			return r.fail(ctx, &campaign, "TargetGone",
-				fmt.Sprintf("target %q dropped out of Injected (now %q) mid-run", target.Name, target.Status.Phase))
+				fmt.Sprintf("target %q dropped out of {Injected, Observed} (now %q) mid-run", target.Name, target.Status.Phase))
 		}
 		return r.pending(ctx, &campaign, "TargetNotInjected",
-			fmt.Sprintf("target %q is %q, waiting for Injected", target.Name, target.Status.Phase))
+			fmt.Sprintf("target %q is %q, waiting for Injected or Observed", target.Name, target.Status.Phase))
 	}
 	// Coverage is explore-only; a load run replays a corpus and doesn't sample coverage.
 	if campaign.Spec.Mode != "load" && target.Status.CoverageEndpoint == "" {

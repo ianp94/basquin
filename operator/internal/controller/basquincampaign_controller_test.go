@@ -102,6 +102,23 @@ var _ = Describe("BasquinCampaign Controller (P5a)", func() {
 		t.Status.CoverageEndpoint = covEndpoint
 		Expect(k8sClient.Status().Update(ctx, t)).To(Succeed())
 	}
+	// A pre-instrumented target (DD-044) parked at the given phase — Observing (in-flight) or Observed
+	// (settled). No coverage endpoint: build-time-instrumented targets publish none (§3).
+	makePreInstrumentedTarget := func(phase basquinv1alpha1.TargetPhase) {
+		t := &basquinv1alpha1.BasquinTarget{
+			ObjectMeta: metav1.ObjectMeta{Name: targetName, Namespace: namespace},
+			Spec: basquinv1alpha1.BasquinTargetSpec{
+				DeploymentRef:   basquinv1alpha1.DeploymentReference{Name: deployName},
+				Container:       "app",
+				PreInstrumented: true,
+				Invariants:      basquinv1alpha1.InvariantsSpec{Mode: "soft", LatencyMaxMs: 250},
+			},
+		}
+		Expect(k8sClient.Create(ctx, t)).To(Succeed())
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: targetName, Namespace: namespace}, t)).To(Succeed())
+		t.Status.Phase = phase
+		Expect(k8sClient.Status().Update(ctx, t)).To(Succeed())
+	}
 	newCampaign := func() *basquinv1alpha1.BasquinCampaign {
 		return &basquinv1alpha1.BasquinCampaign{
 			ObjectMeta: metav1.ObjectMeta{Name: campaignName, Namespace: namespace},
@@ -562,6 +579,109 @@ var _ = Describe("BasquinCampaign Controller (P5a)", func() {
 		t := &basquinv1alpha1.BasquinTarget{}
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: targetName, Namespace: namespace}, t)).To(Succeed())
 		t.Status.Phase = basquinv1alpha1.PhasePending
+		Expect(k8sClient.Status().Update(ctx, t)).To(Succeed())
+		_, err = reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		got := &basquinv1alpha1.BasquinCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.CampaignFailed))
+		Expect(meta.FindStatusCondition(got.Status.Conditions, "Ready").Reason).To(Equal("TargetGone"))
+	})
+
+	// --- DD-044: campaign gate accepts Observed, rejects explore for pre-instrumented (task 3) --------
+	// explore+preInstrumented is an invalid combination regardless of the target's phase (§3): it must
+	// reject terminally even before the target settles into Observed — never sit Pending waiting for a
+	// readiness the mode can't use anyway.
+	It("terminally rejects mode: explore against a preInstrumented target even while Observing (acceptance 5)", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makePreInstrumentedTarget(basquinv1alpha1.PhaseObserving)
+		Expect(k8sClient.Create(ctx, newCampaign())).To(Succeed()) // Mode defaults to explore
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		got := &basquinv1alpha1.BasquinCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.CampaignFailed))
+		cond := meta.FindStatusCondition(got.Status.Conditions, "Ready")
+		Expect(cond.Reason).To(Equal("ExploreUnsupportedForPreInstrumented"))
+		Expect(cond.Message).To(ContainSubstring("PR-4")) // message must name PR-4 (§3)
+		Expect(k8sClient.Get(ctx, jobKey, &batchv1.Job{})).NotTo(Succeed())
+	})
+
+	It("terminally rejects mode: explore against a preInstrumented target once Observed, same reason", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makePreInstrumentedTarget(basquinv1alpha1.PhaseObserved)
+		Expect(k8sClient.Create(ctx, newCampaign())).To(Succeed()) // Mode defaults to explore
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		got := &basquinv1alpha1.BasquinCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.CampaignFailed))
+		cond := meta.FindStatusCondition(got.Status.Conditions, "Ready")
+		Expect(cond.Reason).To(Equal("ExploreUnsupportedForPreInstrumented"))
+		Expect(cond.Message).To(ContainSubstring("PR-4"))
+		Expect(k8sClient.Get(ctx, jobKey, &batchv1.Job{})).NotTo(Succeed())
+	})
+
+	It("stays Pending (launches no driver) for mode: load while the target is Observing (acceptance 3)", func() {
+		// Only explore is rejected early; load has no coverage/extraction dependency and simply waits
+		// for the target to settle into Injected or Observed.
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makePreInstrumentedTarget(basquinv1alpha1.PhaseObserving)
+		corpusCM := "corp-observing-" + fmt.Sprint(runID)
+		Expect(k8sClient.Create(ctx, &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: corpusCM, Namespace: namespace},
+			Data:       map[string]string{"corpus.txt": "/actions/Catalog.action\n"}})).To(Succeed())
+		Expect(k8sClient.Create(ctx, newLoadCampaign(corpusCM))).To(Succeed())
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		got := &basquinv1alpha1.BasquinCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.CampaignPending))
+		Expect(meta.FindStatusCondition(got.Status.Conditions, "Ready").Reason).To(Equal("TargetNotInjected"))
+		Expect(k8sClient.Get(ctx, jobKey, &batchv1.Job{})).NotTo(Succeed()) // no Job yet
+	})
+
+	It("runs mode: load against an Observed target the same as an Injected one", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makePreInstrumentedTarget(basquinv1alpha1.PhaseObserved)
+		corpusCM := "corp-obs-" + fmt.Sprint(runID)
+		Expect(k8sClient.Create(ctx, &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: corpusCM, Namespace: namespace},
+			Data:       map[string]string{"corpus.txt": "/actions/Catalog.action\n"}})).To(Succeed())
+		Expect(k8sClient.Create(ctx, newLoadCampaign(corpusCM))).To(Succeed())
+		_, err := reconcileOnce()
+		Expect(err).NotTo(HaveOccurred())
+
+		got := &basquinv1alpha1.BasquinCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.CampaignRunning))
+		Expect(got.Status.DriverJob).To(Equal(campaignName + "-driver"))
+		Expect(k8sClient.Get(ctx, jobKey, &batchv1.Job{})).To(Succeed())
+	})
+
+	It("fails with TargetGone when a Running campaign's target drops out of {Injected, Observed}", func() {
+		Expect(k8sClient.Create(ctx, newTargetDeploy())).To(Succeed())
+		makePreInstrumentedTarget(basquinv1alpha1.PhaseObserved)
+		corpusCM := "corp-drop-" + fmt.Sprint(runID)
+		Expect(k8sClient.Create(ctx, &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: corpusCM, Namespace: namespace},
+			Data:       map[string]string{"corpus.txt": "/actions/Catalog.action\n"}})).To(Succeed())
+		Expect(k8sClient.Create(ctx, newLoadCampaign(corpusCM))).To(Succeed())
+		_, err := reconcileOnce() // Running
+		Expect(err).NotTo(HaveOccurred())
+		running := &basquinv1alpha1.BasquinCampaign{}
+		Expect(k8sClient.Get(ctx, campaignKey, running)).To(Succeed())
+		Expect(running.Status.Phase).To(Equal(basquinv1alpha1.CampaignRunning))
+
+		// The target drops out of the accepted set mid-run: Observed → Observing (e.g. a spec edit
+		// kicked off re-observation).
+		t := &basquinv1alpha1.BasquinTarget{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: targetName, Namespace: namespace}, t)).To(Succeed())
+		t.Status.Phase = basquinv1alpha1.PhaseObserving
 		Expect(k8sClient.Status().Update(ctx, t)).To(Succeed())
 		_, err = reconcileOnce()
 		Expect(err).NotTo(HaveOccurred())

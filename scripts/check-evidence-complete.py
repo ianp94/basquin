@@ -65,8 +65,10 @@ directory — see VERIFY-ROWS SHAPE below; both go through `check_run_results()`
 
 VERIFY-ROWS SHAPE — deliberately NOT a literal copy of the rule above, and that deviation is
 disclosed rather than silent. `scripts/verify-dd043-pr3-rows.sh`'s OWN top-level
-`bench-results/verify-rows-<UTC>/RESULTS.md` (`META_OUT/RESULTS.md`, written at that script's
-lines ~517-575) is a DIFFERENT shape from a `verify-dd043-pr3.sh` run: it has no
+`bench-results/verify-rows-<UTC>/RESULTS.md` (`META_OUT/RESULTS.md`, written by that script's
+`main()`, the block that assembles and writes the report's `lines` list — cited by symbol, not
+`file:line`; see scripts/README.md for why) is a DIFFERENT shape from a `verify-dd043-pr3.sh` run:
+it has no
 `**P passed, F failed, S skipped.**` tally at all — its rows are `| Scenario | Status | Exit
 (observed; expect) | Wall-clock (s) | Problems |`, `Status` is `PROVEN`/not, never `PASS`/`FAIL`.
 Requiring the tally there, as an over-literal reading of the design text would, would make this
@@ -76,8 +78,9 @@ header, `NON-CITABLE` absence (same two rules as above), and the "observed-exit 
 names — a table header row containing both "Exit" and "observed" (case-insensitive), matching that
 script's own `| ... | Exit (observed; expect) | ...` column literally. Meanwhile every SCENARIO's
 copied run directory nested underneath (`<scenario>/run/RESULTS.md`, written by that same script's
-`shutil.copytree(new_dirs[0], copy_dir)` at line ~468) IS a literal copy of a `verify-dd043-pr3.sh`
-run and DOES carry the tally — those nested files are checked with the exact same
+`run_scenario()`, via its `shutil.copytree(new_dirs[0], copy_dir)` call — cited by symbol, not
+`file:line`) IS a literal copy of a `verify-dd043-pr3.sh` run and DOES carry the tally — those
+nested files are checked with the exact same
 `check_run_results()` the plain `verify-<UTC>/` shape uses above. A gate-refusal scenario
 legitimately has NO nested RESULTS.md (`git-status.txt` only) by that harness's own design; this
 checker does not require one to exist per scenario subdirectory — it checks whichever nested
@@ -98,14 +101,17 @@ proven only against a scratch fixture, never real committed data — disclosed h
     the ledger of, and is incomplete evidence for the same reason a truncated RESULTS.md is;
   * `V + U + A + D + K` (verified + UNCHECKED + allowlisted + disclosed absences + untracked-on-disk)
     must equal the header's own parsed total N. The `R` (reported-to-owners) figure printed on that
-    same line is DELIBERATELY EXCLUDED from this sum: `scripts/check-citations.py:1242`'s own
-    `n_rep = stats[K_REP] + stats["values: reported (suppressed FAIL)"]` sums a CITATION-level
-    counter with a VALUE-level one — two different ledgers — into that one printed figure, so it is
-    not a term of the citation-count ledger the rest of the line balances. This is verified
-    against the one real captured run today (`bench-results/citations-20260730T214700Z/`:
-    1241+299+136+13+0 = 1689, the header's own total, exactly; adding the printed `2 reported to
-    owners` would overshoot by 2) — re-run `python3 scripts/check-citations.py` if this ever stops
-    holding and re-derive rather than trusting this comment.
+    same line is DELIBERATELY EXCLUDED from this sum: `scripts/check-citations.py`'s own `n_rep`
+    local (inside its `main()`, assigned as `stats[K_REP] + stats["values: reported (suppressed
+    FAIL)"]`) sums a CITATION-level counter with a VALUE-level one — two different ledgers — into
+    that one printed figure, so it is not a term of the citation-count ledger the rest of the line
+    balances. Cited by SYMBOL, not `file:line`, on purpose: see this script's README entry
+    (`scripts/README.md`) for why a line-number citation inside a `.py` docstring is not guarded
+    by the citation gate the way a citation inside a `.md`/`.sh` file is. This is verified against
+    the one real captured run today (`bench-results/citations-20260730T214700Z/`: 1241+299+136+13+0
+    = 1689, the header's own total, exactly; adding the printed `2 reported to owners` would
+    overshoot by 2) — re-run `python3 scripts/check-citations.py` if this ever stops holding and
+    re-derive rather than trusting this comment.
 
 `bench-results/RUN-OF-RECORD`:
   * the pointer file must exist, contain exactly one non-comment non-blank line (the same
@@ -136,14 +142,26 @@ BENCH = "bench-results"
 
 COMMIT_RE = re.compile(r"^Commit:\s*`([0-9a-f]{4,40})`", re.MULTILINE)
 TREE_RE = re.compile(r"^Tree:\s*`([0-9a-f]{4,64})`", re.MULTILINE)
+# LOOSE presence check, deliberately separate from TREE_RE above: TREE_RE's own hex-token group
+# can never be empty when TREE_RE matches at all (a match requires 4-64 hex chars in group 1), so
+# testing `tm.group(1)` for emptiness after a TREE_RE match can never be true — a malformed line
+# (e.g. `` Tree: `zzzz` `` — non-hex) makes TREE_RE simply NOT MATCH, which used to fall through to
+# the "absent, predates the stamp" branch below and be silently counted rather than flagged, even
+# though this script's own docstring already promises "malformed is a finding". TREE_LINE_RE
+# matches the bare label regardless of what follows it, so malformed-but-present is distinguished
+# from genuinely absent.
+TREE_LINE_RE = re.compile(r"^Tree:", re.MULTILINE)
 TALLY_RE = re.compile(r"\*\*(\d+) passed, (\d+) failed, (\d+) skipped\.")
 ROW_RE = re.compile(r"^\|\s*(?:PASS|FAIL|SKIP)\s*\|", re.MULTILINE)
 OBSERVED_EXIT_HEADER_RE = re.compile(r"^\|.*\bexit\b.*\bobserved\b.*\|", re.MULTILINE | re.IGNORECASE)
 
 CITATIONS_HEADER_RE = re.compile(r"^check-citations:\s*(\d+)\s+citations parsed", re.MULTILINE)
-# Mirrors scripts/check-citations.py:1243-1256's own f-string, field for field — see this script's
-# docstring's "citations-<UTC>/ directories" section for why `reported to owners` is parsed but
-# deliberately not one of the summed terms.
+# Mirrors scripts/check-citations.py's own final "OK — ..." f-string (in its main(), the printed
+# success line built right after n_rep is computed), field for field — cited by SYMBOL rather
+# than file:line because a line-number citation inside a .py docstring is not covered by the
+# citation gate (see scripts/README.md) and drifts silently as that file is edited. See this
+# script's docstring's "citations-<UTC>/ directories" section for why `reported to owners` is
+# parsed but deliberately not one of the summed terms.
 CITATIONS_OK_RE = re.compile(
     r"OK — (\d+) of (\d+) citations verified clean[^\n;]*; "
     r"(\d+) UNCHECKED, (\d+) allowlisted, (\d+) reported to owners, "
@@ -238,9 +256,11 @@ def check_run_results(results_path: str, allow: list[tuple[str, str]], findings:
         findings.append(f"{results_path}: no `Commit:` header line found — incomplete evidence")
     tm = TREE_RE.search(text)
     if tm is None:
-        stats["no-tree-stamp"] += 1
-    elif not tm.group(1):
-        findings.append(f"{results_path}: `Tree:` header line present but unparseable")
+        if TREE_LINE_RE.search(text) is not None:
+            findings.append(f"{results_path}: `Tree:` header line present but unparseable "
+                             f"(no 4-64 hex token in backticks)")
+        else:
+            stats["no-tree-stamp"] += 1
     tally = TALLY_RE.search(text)
     if not tally:
         findings.append(f"{results_path}: no parseable '**P passed, F failed, S skipped.**' "

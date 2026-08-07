@@ -21,8 +21,11 @@ enforces it (this thread's whole thesis — a claim and its check must not drift
   A report is accepted only when it contains the PASTED, VERBATIM output of its OWN verification
   run — not a description of having run it, not a summary of the result. Concretely: a
   `## Verification` section with at least one fenced block that shows the command AND its captured
-  `exit=$?` line (this repo's idiom — see e.g. `TODO.md:1155`); a header stamp naming the commit
-  the verification ran against; every artifact path the section names existing on disk; and any
+  `exit=$?` line (this repo's idiom — see e.g. `TODO.md`'s DD-045 item 0, "run the harness in CI",
+  cited by item rather than `file:line` since a line-number citation inside a `.py` docstring is
+  not covered by `check-citations.py`'s citation gate, see `scripts/README.md`); a header stamp
+  naming the commit the verification ran against; every artifact path the section names existing
+  on disk; and any
   tally or exit code repeated in prose also appearing, verbatim, inside a pasted block. Partial
   evidence is never committed — `scripts/check-evidence-complete.py` is this contract's CI-side
   half, grading the bytes once they reach `bench-results/`; this script grades the REPORT that

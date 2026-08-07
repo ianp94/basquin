@@ -37,3 +37,14 @@ matching the design doc's explicit "Contract clause / convention" distinction (s
   leaves artifacts without claims — recoverable — rather than claims without artifacts.
 - **CONVENTION:** waits watch a terminal artifact (an `exit=` line, a file that appears), never a
   process-name poll.
+
+**DISCLOSED GAP:** a `file:line` citation inside one of these scripts' own docstrings is NOT
+covered by `check-citations.py`'s citation gate — that checker's citing-file selection scans only
+tracked `.md` files, `citations.txt` files, `.sh` files, and `.github/workflows/*` files, never
+`.py` (see `check-citations.py`'s own `citing_md`/`citing_pinned`/`citing_comments` selection).
+A line-number citation into ANY file, written inside a `.py` docstring, can go dead the moment
+that docstring's own file grows or shrinks a line, with nothing here to catch it (PR #108 round-1
+review found exactly this: an edit to this file moved a cited line by 8 without anything failing).
+Docstring citations into code therefore cite by SYMBOL (a function or variable name, e.g.
+`` `main()` `` or `` `n_rep` ``) rather than by line number — a symbol survives a line shift; a
+line number does not.

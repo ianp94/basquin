@@ -41,9 +41,11 @@ level (a path to the conversation JSON, noted to LAG in-memory state) without pu
 line-level JSONL schema. This hook does not read `transcript_path` at all, specifically BECAUSE of
 that gap — `last_assistant_message` is the one field the docs confirm is fresh for the current
 turn, and mutating-tool detection here is DELIBERATELY LIMITED to what can be inferred from that
-text (a crude, clause-scoped verb+file+first-person scan — see `has_self_mutation_hint()` below),
-not a transcript walk. This is a strictly weaker signal than parsing actual tool_use blocks would
-be: disclosed, not silently claimed as full coverage. A future revision that reads
+text (a crude, clause-scoped verb+file+first-person scan that also excludes third-party narration
+mediated by a reporting verb — "I found that X wrote the files" does not trip this, "I wrote the
+files" does; see `has_self_mutation_hint()` below), not a transcript walk. This is a strictly
+weaker signal than parsing actual tool_use blocks would be: disclosed, not silently claimed as
+full coverage. A future revision that reads
 `transcript_path` for exact tool_use records would need its own JSONL-schema confirmation pass
 first, same bar as this file cleared for the event/blocking mechanism.
 
@@ -57,9 +59,12 @@ to ITS OWN bug is a worse failure mode than a missed catch: this is a mechanical
 security boundary, and the design's own text says so plainly ("it cannot help a killed session;
 nothing can"). Never raises past `main()` — nor past the module-level import above it.
 
-Wired in `.claude/settings.json` (tracked, this-checkout-only, requires the user to have approved
-project hooks — an honest boundary, not a durable gate: see check-agent-report.py's own docstring
-for what IS durable, item 6a's CI-side evidence-completeness gate).
+Wired in `.claude/settings.json` (tracked, this-checkout-only). It runs the moment a session in
+this checkout has accepted Claude Code's one-time workspace-trust dialog for this folder — not a
+separate, per-hook approval prompt; merging this file into the tree, in a folder the user has
+already trusted, IS the conscious opt-in — an honest boundary, not a durable gate: see
+check-agent-report.py's own docstring for what IS durable, item 6a's CI-side evidence-completeness
+gate.
 """
 import json
 import pathlib
@@ -99,19 +104,43 @@ except Exception as _e:
 # ELSE's mutation ("the previous commit had already modified 3 files before I started") does not
 # trip this hook merely because a mutation verb and a first-person pronoun both occur somewhere in
 # its final message — clause-scoped and ordered, not a whole-message keyword search.
+#
+# A pronoun-then-verb ORDER alone is still not enough, though: "I found that the deploy script
+# wrote the files to /tmp" has "I" before "wrote ... files" in the same clause, but "I" is the
+# subject of "found", not of "wrote" — a REPORTING verb (found/noticed/observed/confirmed/saw/
+# discovered/noted/detected/realized/learned) sitting between the pronoun and the mutation verb
+# means the pronoun governs the reporting verb, and the mutation verb's subject is whatever THAT
+# reporting verb's object names (here, "the deploy script") — third-party narration, not a
+# self-mutation claim. Only the LAST first-person marker before the mutation verb is checked
+# against this (a compound clause like "I confirmed that I wrote the files" still blocks: the
+# second "I" has no reporting verb between it and "wrote").
 CLAUSE_SPLIT_RE = re.compile(r"[.!?;]+")
 MUTATION_VERB_FILE_RE = re.compile(
     r"\b(edited|wrote|created|modified|updated|deleted|renamed)\b.{0,40}\b(file|files)\b",
     re.IGNORECASE,
 )
 FIRST_PERSON_RE = re.compile(r"\b(I|my|me|myself)\b", re.IGNORECASE)
+REPORTING_VERB_RE = re.compile(
+    r"\b(found|noticed|observed|confirmed|saw|discovered|noted|detected|realized|learned)\b",
+    re.IGNORECASE,
+)
 
 
 def has_self_mutation_hint(text: str) -> bool:
     for clause in CLAUSE_SPLIT_RE.split(text):
         m = MUTATION_VERB_FILE_RE.search(clause)
-        if m and FIRST_PERSON_RE.search(clause[:m.start()]):
-            return True
+        if not m:
+            continue
+        before = clause[:m.start()]
+        fp_matches = list(FIRST_PERSON_RE.finditer(before))
+        if not fp_matches:
+            continue
+        # only the text between the CLOSEST first-person marker and the mutation verb matters —
+        # see the comment above for why (a reporting verb there means third-party narration).
+        between = before[fp_matches[-1].end():]
+        if REPORTING_VERB_RE.search(between):
+            continue
+        return True
     return False
 
 
@@ -134,6 +163,10 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except Exception:
         return 0  # fail open — malformed input is not this hook's problem to solve
+    if not isinstance(payload, dict):
+        return 0  # fail open — valid JSON (e.g. `[1,2]`) but not an object; `.get` below would
+                  # otherwise raise AttributeError, which would make "Never raises past main()"
+                  # false rather than merely relying on the __main__ guard one level further out
     text = payload.get("last_assistant_message")
     if not isinstance(text, str) or not text.strip():
         return 0  # nothing to scan — fail open, never block on absence of the field itself

@@ -87,9 +87,12 @@ PR-4 starts; **§6.2** (native JFR streaming) still gates PR-5. A follow-on **DD
 
 ## Start here next
 
-No PR is currently open — checked 2026-08-07 via `gh pr list --state open`, zero results; #100/#102/
-#103/#107 are the four most recently merged (scope and dates under "Open PRs" below). Four threads
-are ready to pick up, in rough priority:
+Run `gh pr list --state open` for what is open right now — this file does not hand-maintain that
+count, the same rot this line itself once had (it previously asserted "One PR is open (#100)"
+after #100 had already merged). #100/#102/#103/#107 are the four most recently merged (scope and
+dates under "Open PRs" below, which DOES need a manual update per newly-opened/merged PR — see
+that section's own citations for how to check it). Four threads are ready to pick up once nothing
+is open, in rough priority:
 
 0. **DD-043 PR-3 — `basquin-maven-injector` — merged as
    [#103](https://github.com/ianp94/basquin/pull/103) (`b32b394`, 2026-07-31).**

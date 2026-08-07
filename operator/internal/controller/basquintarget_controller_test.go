@@ -495,6 +495,213 @@ var _ = Describe("BasquinTarget Controller (P2: injection)", func() {
 		Expect(got.Status.CoverageEndpoint).To(BeEmpty())
 		Expect(meta.FindStatusCondition(got.Status.Conditions, "Ready").Reason).To(Equal("DeploymentNotFound"))
 	})
+
+	// --- DD-044 / PR-3.5: pre-instrumented targets (observe path + revert-before-observe) ---------
+	//
+	// spec.PreInstrumented declares the target's image already carries Basquin's instrumentation at
+	// build time (basquin-maven-injector, DD-043 §5); the operator OBSERVES the Deployment instead
+	// of injecting. See docs/superpowers/specs/2026-07-26-preinstrumented-targets-design.md §2.
+
+	It("never mutates the Deployment when preInstrumented is true and nothing was previously injected", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{
+			Name: container, Image: "busybox",
+			Env: []corev1.EnvVar{{Name: "CATALINA_OPTS", Value: origOpts}},
+		}))).To(Succeed())
+		before := getDeploy()
+		beforeSpec := before.Spec.Template.Spec.DeepCopy()
+		beforeGen := before.Generation
+
+		t := newTarget()
+		t.Spec.PreInstrumented = true
+		Expect(k8sClient.Create(ctx, t)).To(Succeed())
+		reconcileN(3) // finalizer-add + a couple of observe passes; must still change nothing
+
+		after := getDeploy()
+		Expect(after.Spec.Template.Spec).To(Equal(*beforeSpec), "pod template must stay byte-identical")
+		Expect(after.Generation).To(Equal(beforeGen), "no write to the Deployment spec must occur")
+		for k := range after.Annotations {
+			Expect(k).NotTo(HavePrefix("basquin.dev/"), "no basquin.dev/* annotation must appear on Deployment metadata")
+		}
+		for k := range after.Labels {
+			Expect(k).NotTo(HavePrefix("basquin.dev/"), "no basquin.dev/* label must appear on Deployment metadata")
+		}
+	})
+
+	It("sits in Observing (Ready:False, WaitingForReplicas) while ReadyReplicas < desired (§2.2a pre-ready window)", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{Name: container, Image: "busybox"}))).To(Succeed())
+		t := newTarget()
+		t.Spec.PreInstrumented = true
+		Expect(k8sClient.Create(ctx, t)).To(Succeed())
+		reconcileN(3) // envtest never moves ReadyReplicas off 0 on its own
+
+		got := &basquinv1alpha1.BasquinTarget{}
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.PhaseObserving),
+			"Observed must never be minted on first sight of the Deployment")
+		cond := meta.FindStatusCondition(got.Status.Conditions, "Ready")
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal("WaitingForReplicas"))
+	})
+
+	It("reverts an existing injection (incl. its coverage Service) before observing, when preInstrumented flips true (§2.2b)", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{
+			Name: container, Image: "busybox",
+			Env: []corev1.EnvVar{{Name: "CATALINA_OPTS", Value: origOpts}},
+		}))).To(Succeed())
+		t := newTarget()
+		t.Spec.CoverageService = true
+		Expect(k8sClient.Create(ctx, t)).To(Succeed())
+		reconcileN(2)
+		Expect(getDeploy().Annotations).To(HaveKey(annInjectedHash)) // injected
+		svcKey := types.NamespacedName{Name: deployName + coverageServiceSuffix, Namespace: namespace}
+		Expect(k8sClient.Get(ctx, svcKey, &corev1.Service{})).To(Succeed()) // coverage Service exists
+
+		// Reach steady-state Injected before flipping (mirrors "reports Injected" above).
+		d := getDeploy()
+		d.Status.Replicas, d.Status.UpdatedReplicas, d.Status.ReadyReplicas = 2, 2, 2
+		Expect(k8sClient.Status().Update(ctx, d)).To(Succeed())
+		reconcileN(1)
+		got := &basquinv1alpha1.BasquinTarget{}
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.PhaseInjected))
+
+		// Flip preInstrumented: true on the already-injected target.
+		got.Spec.PreInstrumented = true
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+		reconcileN(1) // pass 1: detect our injection is present, revert it, Phase=Reverting
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.PhaseReverting))
+		d = getDeploy()
+		Expect(d.Spec.Template.Spec.InitContainers).To(BeEmpty(), "template must be clean before Observed can be claimed")
+		Expect(d.Spec.Template.Spec.Volumes).To(BeEmpty())
+		Expect(envValue(appContainer(d).Env, "CATALINA_OPTS")).To(Equal(origOpts))
+		Expect(d.Annotations).NotTo(HaveKey(annInjectedHash))
+		// The coverage-Service teardown fix (fable issue 4): a reverted target must not keep a live
+		// Service / stale endpoint while claiming "did not modify".
+		Expect(k8sClient.Get(ctx, svcKey, &corev1.Service{})).NotTo(Succeed(), "coverage Service must be removed on revert")
+		Expect(got.Status.CoverageEndpoint).To(BeEmpty(), "stale coverage endpoint must be cleared")
+		// No state may exist where the Observed "did not modify" claim coexists with the old template.
+		Expect(got.Status.Phase).NotTo(Equal(basquinv1alpha1.PhaseObserved))
+
+		// The revert just changed the pod template; on a real cluster that triggers a new
+		// ReplicaSet and pods cycle, so ReadyReplicas transiently dips. envtest runs no rollout
+		// controller (ReadyReplicas otherwise just sits at its pre-revert value), so simulate that
+		// dip explicitly — otherwise the pre-ready window (§2.2a) would go unexercised on this path.
+		d = getDeploy()
+		d.Status.ReadyReplicas = 0
+		Expect(k8sClient.Status().Update(ctx, d)).To(Succeed())
+
+		reconcileN(1) // pass 2: template clean, but not yet ready
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.PhaseObserving))
+		cond := meta.FindStatusCondition(got.Status.Conditions, "Ready")
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal("WaitingForReplicas"))
+
+		// Pods come back up on the (now clean) template.
+		d = getDeploy()
+		d.Status.ReadyReplicas = 2
+		Expect(k8sClient.Status().Update(ctx, d)).To(Succeed())
+
+		reconcileN(1) // pass 3: ready -> Observed, and only now is the claim true
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.PhaseObserved))
+		cond = meta.FindStatusCondition(got.Status.Conditions, "Ready")
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(cond.Reason).To(Equal("PreInstrumented"))
+		Expect(cond.Message).To(Equal(
+			"2/2 replica(s) ready; instrumentation is build-time (operator did not modify the pod template)"))
+	})
+
+	It("stays Observed through a later ReadyReplicas dip (sticky, per Locked decisions)", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{Name: container, Image: "busybox"}))).To(Succeed())
+		t := newTarget()
+		t.Spec.PreInstrumented = true
+		Expect(k8sClient.Create(ctx, t)).To(Succeed())
+		reconcileN(2)
+
+		d := getDeploy()
+		d.Status.Replicas, d.Status.ReadyReplicas = 2, 2
+		Expect(k8sClient.Status().Update(ctx, d)).To(Succeed())
+		reconcileN(1)
+
+		got := &basquinv1alpha1.BasquinTarget{}
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.PhaseObserved))
+
+		// A pod-readiness blip must NOT flip Observed back to Observing (Locked decisions: matches
+		// the injected path's stability and prevents a load-under-test blip from terminally failing
+		// a Running campaign via the §2.3 set-membership gate).
+		d = getDeploy()
+		d.Status.ReadyReplicas = 0
+		Expect(k8sClient.Status().Update(ctx, d)).To(Succeed())
+		reconcileN(1)
+
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.PhaseObserved), "Observed must be sticky against a transient ReadyReplicas dip")
+		cond := meta.FindStatusCondition(got.Status.Conditions, "Ready")
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(cond.Reason).To(Equal("PreInstrumented"))
+	})
+
+	It("writes ReplicaConfigSupported=False for multi-replica (warning only), and True again once scaled back to 1", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{Name: container, Image: "busybox"}))).To(Succeed()) // 2 replicas
+		t := newTarget()
+		t.Spec.PreInstrumented = true
+		Expect(k8sClient.Create(ctx, t)).To(Succeed())
+		reconcileN(2)
+
+		got := &basquinv1alpha1.BasquinTarget{}
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		cond := meta.FindStatusCondition(got.Status.Conditions, conditionReplicaConfigSupported)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal("MultiReplicaUnsupported"))
+		Expect(cond.Message).To(ContainSubstring("single replica"))
+		Expect(cond.Message).To(ContainSubstring("PR-3.5"))
+		// It's a warning: it must not gate the observe path into Error, nor block Observing/Observed.
+		Expect(got.Status.Phase).To(BeElementOf(basquinv1alpha1.PhaseObserving, basquinv1alpha1.PhaseObserved))
+
+		// Scale back to a single replica.
+		d := getDeploy()
+		d.Spec.Replicas = int32Ptr(1)
+		Expect(k8sClient.Update(ctx, d)).To(Succeed())
+		reconcileN(1)
+
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		cond = meta.FindStatusCondition(got.Status.Conditions, conditionReplicaConfigSupported)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue), "the multi-replica warning must not survive a scale-back to 1")
+		Expect(cond.Reason).To(Equal("SingleReplica"))
+	})
+
+	It("still injects when every agent toggle is off but preInstrumented is NOT set (accept 7 — pins the distinction)", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{
+			Name: container, Image: "busybox",
+			Env: []corev1.EnvVar{{Name: "CATALINA_OPTS", Value: origOpts}},
+		}))).To(Succeed())
+		t := newTarget()
+		t.Spec.Agents = basquinv1alpha1.AgentsSpec{
+			ThreadTracker: boolPtr(false),
+			Valve:         false,
+			Coverage:      basquinv1alpha1.CoverageSpec{Enabled: false},
+		}
+		t.Spec.Invariants = basquinv1alpha1.InvariantsSpec{}
+		Expect(k8sClient.Create(ctx, t)).To(Succeed())
+		reconcileN(2)
+
+		Expect(t.Spec.PreInstrumented).To(BeFalse(), "this pins the all-agents-disabled case, distinct from preInstrumented")
+		d := getDeploy()
+		Expect(d.Spec.Template.Spec.InitContainers).To(HaveLen(1),
+			"disabling every agent toggle still injects today (DD-044 §1) — preInstrumented is the only way to opt out")
+		opts := envValue(appContainer(d).Env, "CATALINA_OPTS")
+		Expect(opts).To(ContainSubstring("-javaagent:" + agentsMountPath + "/basquin-agent.jar"))
+		Expect(opts).To(ContainSubstring("-Dbasquin.boundary=agent"))
+		Expect(opts).NotTo(ContainSubstring("-agentpath:"), "threadTracker: false must still suppress the native agent")
+		Expect(opts).NotTo(ContainSubstring("jacocoagent"), "coverage disabled must still suppress the JaCoCo flag")
+	})
 })
 
 func int32Ptr(i int32) *int32 { return &i }

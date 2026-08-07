@@ -1,0 +1,16 @@
+{
+  "//": "DD-045 item 6b hook (CONDITIONAL, opt-in, this-harness-only). Runs scripts/agent-report-hook.py on every SubagentStop and lets it decide whether to block. See that script's docstring for exactly what it checks, its disclosed limits (Bash-only mutations are invisible to it; it fails open on any error), and the specific docs page its hook-event-name and blocking-mechanism claims were confirmed against on 2026-08-07. This hook binds only Claude-Code sessions in this checkout whose user has approved project hooks, and cannot help a killed session — the CI-side gates (scripts/check-evidence-complete.py, scripts/check-agent-report.py wired in .github/workflows/ci.yml) are the durable enforcement; this is a convenience assist on top.",
+  "hooks": {
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/agent-report-hook.py\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

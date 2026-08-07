@@ -1,0 +1,65 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.32kB 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/golang:1.21
+#2 ...
+
+#3 [internal] load metadata for gcr.io/distroless/static:nonroot
+#3 DONE 0.4s
+
+#2 [internal] load metadata for docker.io/library/golang:1.21
+#2 DONE 0.5s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 32B
+#4 transferring context: 163B 0.0s done
+#4 DONE 0.1s
+
+#5 [builder 1/9] FROM docker.io/library/golang:1.21@sha256:4746d26432a9117a5f58e95cb9f954ddf0de128e9d5816886514199316e4a2fb
+#5 DONE 0.0s
+
+#6 [stage-1 1/3] FROM gcr.io/distroless/static:nonroot@sha256:f7f8f729987ad0fdf6b05eeeae94b26e6a0f613bdf46feea7fc40f7bd72953e6
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 257.11kB 0.1s done
+#7 DONE 0.1s
+
+#8 [builder 2/9] WORKDIR /workspace
+#8 CACHED
+
+#9 [builder 3/9] COPY go.mod go.mod
+#9 CACHED
+
+#10 [builder 4/9] COPY go.sum go.sum
+#10 CACHED
+
+#11 [builder 5/9] RUN go mod download
+#11 CACHED
+
+#12 [builder 6/9] COPY cmd/main.go cmd/main.go
+#12 CACHED
+
+#13 [builder 7/9] COPY api/ api/
+#13 DONE 0.0s
+
+#14 [builder 8/9] COPY internal/controller/ internal/controller/
+#14 DONE 0.1s
+
+#15 [builder 9/9] RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager cmd/main.go
+#15 DONE 14.4s
+
+#6 [stage-1 1/3] FROM gcr.io/distroless/static:nonroot@sha256:f7f8f729987ad0fdf6b05eeeae94b26e6a0f613bdf46feea7fc40f7bd72953e6
+#6 CACHED
+
+#16 [stage-1 2/3] COPY --from=builder /workspace/manager .
+#16 DONE 0.1s
+
+#17 exporting to image
+#17 exporting layers 0.1s done
+#17 writing image sha256:db8017bf895351289fb56f218198b294622b2145c9ab77e654dbfce323f17222 done
+#17 naming to docker.io/basquin/operator:0.3.0 done
+#17 DONE 0.1s

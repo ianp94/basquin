@@ -124,10 +124,21 @@ type BasquinTargetSpec struct {
 	// coverage port so one driver can reach every replica by DNS (DD-023). Opt-in.
 	// +optional
 	CoverageService bool `json:"coverageService,omitempty"`
+
+	// PreInstrumented declares that the target's image already carries Basquin's instrumentation —
+	// as produced by basquin-maven-injector at build time (DD-043 §5). The operator then OBSERVES the
+	// Deployment and never mutates its pod template: no initContainer, no volume, no JVM-opts append.
+	//
+	// This is not "disable the agents". Disabling every agent still injects (injection.go:108-115 appends
+	// -javaagent, -Xbootclasspath/a and -Dbasquin.boundary=agent unconditionally), and
+	// -Dbasquin.boundary=agent would name a different boundary than the one the app already has.
+	//
+	// +optional
+	PreInstrumented bool `json:"preInstrumented,omitempty"`
 }
 
 // TargetPhase is a coarse lifecycle summary for humans and kubectl printing.
-// +kubebuilder:validation:Enum=Pending;Injecting;Injected;Reverting;Error
+// +kubebuilder:validation:Enum=Pending;Injecting;Injected;Reverting;Observing;Observed;Error
 type TargetPhase string
 
 const (
@@ -135,6 +146,8 @@ const (
 	PhaseInjecting TargetPhase = "Injecting"
 	PhaseInjected  TargetPhase = "Injected"
 	PhaseReverting TargetPhase = "Reverting"
+	PhaseObserving TargetPhase = "Observing"
+	PhaseObserved  TargetPhase = "Observed"
 	PhaseError     TargetPhase = "Error"
 )
 

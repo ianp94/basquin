@@ -105,6 +105,13 @@ declare -a ROWS
 # for the verdict, so the graded state and the committed evidence could diverge; now one call
 # feeds both, and tracked drift is derived by filtering the untracked `??` lines from the capture.
 GIT_COMMIT="$(git rev-parse --short HEAD)"
+# DD-045 item 4B: this repo squash-merges, so the commit above stops resolving the moment the
+# branch is pruned — 17 cited SHAs across TODO.md and docs/ROADMAP.md had already died that way
+# before item 4B migrated them. The TREE hash survives: a squash commit's tree is byte-identical
+# to the branch head's, so this still identifies HEAD's tree on a fresh clone where GIT_COMMIT
+# resolves to nothing. It is the MEASURED tree only on a clean run: a dirty run reads the
+# working tree, which has no hash here — hence the header says so rather than implying it.
+GIT_TREE="$(git rev-parse HEAD^{tree})"
 GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 git status --porcelain > "$OUT/git-status.txt" 2>"$OUT/git-status-stderr.txt"
 GIT_STATUS_RC=$?
@@ -936,6 +943,9 @@ fi
   echo "# DD-043 PR-3 verification — $TS$TITLE_TAG"
   echo
   echo "Commit: \`$GIT_COMMIT\` on \`$GIT_BRANCH\` — tree $TREE_STATE at run start (\`git-status.txt\`)"
+  echo "Tree: \`$GIT_TREE\` — HEAD's tree, which survives a squash+prune where the commit above"
+  echo "does not. On a CITABLE (clean) run this is the tree that was measured; on a NON-CITABLE"
+  echo "one it is not, because the run read a dirty working tree. Check with: git rev-parse <ref>^{tree}"
   echo "Stages run: ${STAGES[*]}"
   if [ "$TREE_STATE" = "DIRTY" ]; then
     echo

@@ -1,10 +1,17 @@
-# Allowlist for scripts/check-citations.py. Every entry MUST carry a reason — an unexplained
-# exemption is exactly the claim/check drift the tool exists to stop. Three entry kinds:
+# Allowlist for scripts/check-citations.py (and, for the `removed-ok` kind only,
+# scripts/check-removed-deps.py). Every entry MUST carry a reason — an unexplained
+# exemption is exactly the claim/check drift the tool exists to stop. Five entry kinds:
 #   <cited-path-or-prefix/> <reason>       exempt a cited path (prefix if it ends with /)
 #   frozen <citing-prefix> <reason>        do not scan this citing file/dir at all
 #   reported <citing-prefix> <needle> <reason>  suppress-but-print findings in <citing-prefix>
 #                                          containing <needle>: real defects in files owned by
 #                                          other agents, reported 2026-07-30, pending their fix.
+#   sha <prefix> <reason>                  DD-045 item 4B: exempt a commit-SHA token (prefix
+#                                          match) unreachable from origin/main — upstream-repo
+#                                          commits, which will never resolve in this repo.
+#   removed-ok <path> <reason>             DD-045 item 4A: a removed path that is fine to still
+#                                          be cited (scripts/check-removed-deps.py's own kind;
+#                                          scripts/check-citations.py just parses past it).
 
 # --- deliberately absent (proposed, not yet built) ---
 snap/snapcraft.yaml planned file — TODO.md's snap-packaging checklist item says "Write" it; deliberately not in the tree yet
@@ -83,12 +90,15 @@ frozen docs/superpowers/plans/ historical point-in-time execution plans; audit l
 frozen docs/superpowers/specs/2026-07-21-operator-server-side-boundary-design.md historical design doc for shipped work; same audit rationale
 frozen docs/superpowers/specs/2026-07-23-trustworthy-measurement-design.md historical design doc for shipped work; same audit rationale
 frozen docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md historical design doc for shipped work; same audit rationale
+frozen docs/superpowers/specs/2026-08-04-dd045-defect-class-audit.md point-in-time audit; citations describe main@e7137a4, pins its own tree hash
 
 # --- reported entries: real defects in other agents' files, suppressed-but-printed until the
 #     owner fixes them, then the entry MUST be removed (a reported entry whose defect is fixed
 #     matches nothing, suppresses nothing, and falsely implies a pending defect — round 11
 #     removed seven such stale entries from rounds 9/10, all of whose defects the owners had
 #     fixed: the run printed `0 reported to owners` with all seven present, which is the
-#     mechanical proof of staleness). ---
-reported TODO.md 1,577 TODO.md:1155's hand-typed run total predates the round-11 checker, which parses and verifies more; a quoted live-run total cited only to the script that computes it can never verify — owner should re-derive from the round-11 disposition line AND commit+cite a run artifact (see .superpowers/sdd/pr103-r11-checker-report.md); the needle is the stale figure itself, so this entry expires the moment the owner edits it — REMOVE it then
-reported TODO.md 1,175 second figure of the same stale disposition quote (TODO.md:1156); same fix, same report, same self-expiry — REMOVE when the owner re-derives
+#     mechanical proof of staleness; scripts/check-citations.py now asserts this mechanically —
+#     the 2026-08-04 defect-class audit's finding 13 — an unused `reported` entry is itself a
+#     FAILED finding, not merely a printed tell. The two entries this comment used to sit above
+#     were removed by that same discovery: both matched nothing as of 2026-08-05, their defects
+#     long since fixed by the owner). ---

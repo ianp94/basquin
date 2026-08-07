@@ -612,8 +612,10 @@ ledger tells a fresh clone it's dead. Fixed as of 2026-07-30: four of the five a
 disclose their own deadness inline (not additional debt, listed below so they aren't miscounted as
 such if re-encountered); the fifth — `bench-results/dd043-s5-repo-injection-2026-07-26/README.md:84`
 — was a genuinely new undisclosed dangling citation (fresh instance of this exact defect, introduced
-in `f872199`) and is fixed in the same pass as this paragraph, by dropping the dead path and keeping
-only the prose attribution it decorated.
+during PR #103's round-5 fixes — now folded into the `b32b394` squash-merge; the specific
+introducing commit predates that squash and is not separately reachable) and is fixed in the same
+pass as this paragraph, by dropping the dead path and keeping only the prose attribution it
+decorated.
 
 **Update 2026-07-30 (checker round 10, reported items fixed):** the checker's round-10 fix (which can
 no longer report a clean verdict over citations it never examined) surfaced four of the six as
@@ -1186,9 +1188,12 @@ the feature held in every one, and almost every finding was in the machinery tha
       it: `bench-results/dd043-pr3-citation-audit-2026-07-30/`.
 - [x] **2 — a stable pointer to the run of record. Delivered.** Timestamped `verify-<UTC>/` names meant
       each new run staled every citation to the previous one at once: **10, 10, 13 and 18** occurrences
-      had to be repointed by the four supersession commits, each figure read out of that commit's own
-      message (`16da079`, `865ba35`, `1c3ce88`, `572282a`) and counted as occurrences rather than
-      matching lines — `16da079` records `grep -c` reporting eight where there were ten. Added
+      had to be repointed by four supersession commits during PR #103's development, each figure read
+      out of that commit's own message at the time — those commits are now folded into the `b32b394`
+      squash-merge, and their individual messages are no longer separately reachable, so the
+      derivation predates the squash and is not re-runnable from main — and counted as occurrences
+      rather than matching lines; the first of the four recorded `grep -c` reporting eight where there
+      were ten. Added
       `bench-results/RUN-OF-RECORD`, a tracked pointer **file** — not a symlink: this checkout has
       `core.symlinks=false`, on which a tracked symlink materialises as a plain-text file containing its
       target path rather than resolving. Format: `#`-comment and blank lines ignored, then exactly one
@@ -1237,7 +1242,8 @@ the feature held in every one, and almost every finding was in the machinery tha
       `guards:restored` kill; C2's `guards:restored` PASS controls its eight guard-is-dead kills; C4/
       C5/C6 each leave the other two `jar:*` rows PASS).
       **Proved empirically, not asserted, with captured exit codes:** a full run on this branch
-      (commit `3b1cb3c`) proved all 8 scenarios and all 13 labels, `exit=0`, in 327.9s of scenario
+      (folded into the squash-merge `e7137a4` on main) proved all 8 scenarios and all 13 labels,
+      `exit=0`, in 327.9s of scenario
       wall-clock (5m42s including worktree setup/teardown, on WSL2/NTFS — expected to run faster on
       CI's ephemeral checkout, consistent with the design's own note that the CI figure decides, not
       the local one). Then, for three scenarios spanning different stages, the meta-check's own
@@ -1259,24 +1265,88 @@ the feature held in every one, and almost every finding was in the machinery tha
       Optional tier (O1-O5, each cheap, each killing one branch not otherwise exercised) and the
       `selftest` entry point for the `jvm`/`native` shared graders are deliberately deferred — the
       design doc's own §6 recommendation, not a scope cut.
-- [ ] **4 — a "what depended on this?" pre-commit pass.** For every path, row key or claim a commit
-      removes, search the whole tree for what still depends on it. Diff-internal consistency is the
-      narrower question and asking it is what let round 8's findings through.
-      **Add its mirror image: resolve open debt against the code.** Round 9 swept all **91** `- [ ]`
+- [x] **4 — "what depended on this?" Delivered (the CI-enforceable third; the mirror image stays a
+      convention by design — see below).** Design:
+      `docs/superpowers/specs/2026-08-04-dd045-items-4-6-design.md`. Three checks, added in the PR
+      that also did 4B's own migration:
+      - **4A** `scripts/check-removed-deps.py` — for every path a diff removes (`git diff
+        --name-status --find-renames`; `--staged` locally, base...head in CI on `pull_request`/
+        `push`), `git grep -nF` the WHOLE tracked tree — code included, precisely the corpus item 1
+        excludes — for a surviving dependent (disclosed-absence and a new `removed-ok` allowlist
+        kind aside). Proven in a scratch worktree against a live target:
+        `scripts/verify-dd043-pr3.sh`'s `jvm` stage reads
+        `bench-results/dd043-pr3-restvillains-2026-07-26/build.sh` on a code line item 1's
+        comment-only scan cannot see — deleting that directory there went red naming that exact
+        line, `exit=1`; restoring went green, `exit=0`; a true-negative control (delete a file
+        nothing references) stayed green throughout.
+      - **4B** a new commit-SHA-reachability token class inside `scripts/check-citations.py`
+        (backticked/bold hex tokens, prefix-matched against `git rev-list origin/main`, its own
+        balance-asserted disposition ledger, a new `sha` allowlist kind for upstream SHAs, and a
+        `bench-results/`-citing-file `historical` bucket that is counted, never failed). Landed red
+        against this file and `docs/ROADMAP.md`: 22 `FAILED UNREACHABLE COMMIT` findings (plus 3
+        more disclosed via the existing dead-path `NEG_RE` window), `exit=1` — every one a
+        branch-only SHA already unreachable from `origin/main` before its branch is even pruned.
+        Fixed in the same PR by repointing survivors to their squash-merge commits (`b32b394`,
+        `e7137a4`) and rewording the rest — above all this section's own supersession-count
+        sentences and the guard-history paragraph in `docs/ROADMAP.md` — to disclose that the
+        per-commit derivation predates the squash and is not re-runnable from main, per this item's
+        own design doc's migration guidance; `exit=0` after. Degrades honestly to a counted
+        `UNCHECKED — no baseline ref` bucket, proven in an isolated clone with no `origin/main`
+        ref, rather than a silent pass.
+      - **4C** `scripts/check-row-label-coverage.py`, appended to the `verify-dd043-pr3` CI job
+        guarded on `success()`: diffs the fresh run's own `RESULTS.md` PASS-row labels against
+        `scripts/verify-dd043-pr3-rows.sh`'s `GREEN_RUN_LABELS` (read as literal data, never
+        executed) — closes item 3's own declared residual, the *added*-label direction its comment
+        above `GREEN_RUN_LABELS` names, **for the `unit`/`jar`/`guards` stages this CI job actually
+        runs, not the whole harness.** DISCLOSED RESIDUAL, not closed: a row added to the `jvm` or
+        `native` stage stays invisible to this check — those two need docker and 15+ minutes and
+        stay manual-only, so this checker never sees their RESULTS.md in CI, and
+        `GREEN_RUN_LABELS` was never extended to them either. Stage-aware by construction: it
+        reads the RESULTS.md's own `Stages run:` line, compares only the in-scope stages, and
+        excludes-and-counts any `jvm`/`native` rows present rather than comparing them — proven
+        against the actual full run of record
+        (`bench-results/verify-20260730T215842Z/RESULTS.md`, all five stages): resolves clean,
+        its 14 `jvm:*`/`native:*` PASS rows excluded and counted, not reported as findings.
+        Proven both directions on the in-scope stages: an undeclared extra PASS label reds; a
+        declared-but-unobserved label reds (disclosed as redundant with the rows job's own
+        unmatched-label failure — different path filters, this one the broader); the unmodified
+        pairing is clean.
+      **The mirror image — resolve open debt against the code — stays a convention, not a
+      mechanism**, per the design's own reasoning: an entry about something to *build* legitimately
+      names things that do not exist, and an entry about something *broken* names things that do; no
+      grep distinguishes the two directions, and a predicate-per-entry DSL would be a second
+      hand-maintained mirror that itself drifts (same shape as item 5's reasoning, below). Round 9's
+      sweep is the model instead — a recurring dispatched task, not a standing check: it swept all **91** `- [ ]`
       entries in this file against the tree and found **ten** the code already satisfied — the box count
-      went 91 open / 152 closed to **81 open / 163 closed** in `119d400` (counted with
-      `git show <rev>:TODO.md | grep -cE '^\s*- \[[ x]\]'` on both sides of that commit, so the numbers
-      are derived rather than tallied by hand; closed rose by eleven, not ten, because the same commit
-      also landed the already-done "1 — citation-resolution CI check" entry) — plus one (`status.load` in the CLI) whose named gap had
+      went 91 open / 152 closed to **81 open / 163 closed** during PR #103's round-9 commit (counted
+      with `git show <rev>:TODO.md | grep -cE '^\s*- \[[ x]\]'` on both sides of that commit at the
+      time; that commit is now folded into the `b32b394` squash-merge, so the exact command is no
+      longer re-runnable from main — the before/after figures stand as recorded narrative, not
+      re-derivable today; closed rose by eleven, not ten, because the same commit also landed the
+      already-done "1 — citation-resolution CI check" entry) — plus one (`status.load` in the CLI) whose named gap had
       half closed and needed narrowing rather than checking off. Two had been false since `a0595b9`,
       the whole span of DD-043. The sharpest was "Roller's `login_publish` sequence has never published
       a single row", sitting 91 lines below an already-`[x]` DD-039 entry recording 84 such rows: the
       file refuted itself and no one re-read it. **A `- [ ]` is a claim about the current tree exactly
       like a citation is**, and the tooling in item 1 should resolve both. The check is cheap when each
       entry names a symbol, a file or a workflow step — so write them that way.
-- [ ] **5 — stop restating derived numbers in prose**, and where a count stays, say what unit it
-      counts. Round 8's miscount came from documents counting shapes, throw sites and methods
-      interchangeably.
+- [x] **5 — stop restating derived numbers in prose. Closed as covered-plus-convention; built
+      nothing.** Design:
+      `docs/superpowers/specs/2026-08-04-dd045-items-4-6-design.md`. Its enforceable core already
+      shipped inside item 1's carried-value machinery: a strong-shaped figure (cost CSV, 4+-digit
+      number, thousands-separated, UTC stamp) restated beside a citation is checked against the
+      cited files (`CARRIED VALUE`/`STALE LINE`), and a figure "verified" only by another hand-typed
+      prose figure is caught as circular corroboration. What remains is the *unit* problem — round
+      8's miscount came from documents counting shapes, throw sites and methods interchangeably, and
+      that is a question about what a number COUNTS, not what it IS, so no token-level check can
+      adjudicate it: a unit-annotation format is a second hand-typed mirror that itself drifts; the
+      value checker's own docstring already rules out extending strong-shape matching to short
+      numbers ("substring-matching a 1-3-digit number against a file is meaningless"); an LLM-judge
+      reviewer is a nondeterministic gate this thread's house style does not admit. So item 5 ships
+      as: nothing mechanical, plus the standing rule already adopted in round 7 and written in
+      `docs/ROADMAP.md`'s item-5 paragraph — derive in place with the command shown, or point at one
+      authoritative enumeration, and name the unit when a count stays. The check on the habit is
+      review plus item 1's counters, said honestly rather than dressed up as a mechanism.
 - [ ] **6 — an agent completion contract**: a report is accepted only with the pasted output of its own
       verification; partial evidence is never committed.
 
@@ -1290,7 +1360,8 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       non-empty, non-`miss` body, so an HTML error response would read as a pass. It had to assert the
       **shape** — `ResultStore.format`'s `costCsv|invariantCount|detail|leak`, i.e. three comma-separated
       numbers before the first `|`. A check that passes on the wrong thing is worse than no check in the one
-      stage whose job is proving the boundary sat on the request path. **Resolved in `6e67ca7`**, which
+      stage whose job is proving the boundary sat on the request path. **Resolved during PR #103**
+      (folded into the squash-merge `b32b394`), which
       overrode this deferral: the poll now runs `curl -sf`, so a non-2xx fails the row outright instead of
       letting its error body ride through, and the verdict additionally requires the wire shape via the
       `boundary_poll_shape_ok` helper, which passes only when the body holds at least one line and
@@ -1323,14 +1394,18 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
 - [x] **`scripts/verify-dd043-pr3.sh`'s `jvm` and `native` stages have never been executed.** Written and
       committed unexercised (the native mutex was held, and the `guards` stage mutates source a running
       build was compiling). **Resolved 2026-07-30**: both stages ran end-to-end in the run of record,
-      stamped `20260730T215842Z` and made against `b980e1f` on a clean tree. All four figures come from
+      stamped `20260730T215842Z`, made on a clean tree against the commit recorded in that run's own
+      `bench-results/RUN-OF-RECORD/RESULTS.md` `Commit:` line — frozen evidence there (now a
+      branch-only SHA, unreachable after PR #103's squash-merge and branch prune, kept as historical
+      record in that file rather than repeated here as a live citation). All four figures come from
       `bench-results/RUN-OF-RECORD/RESULTS.md`, read by label rather than by line number because
       that header gains lines: its title line carries the stamp, its `Commit:` line the SHA and
       `tree clean at run start`, its `Stages run:` line `unit jar guards jvm native`, and the line after
       that **27 passed, 0 failed, 0 skipped** — including the `jvm:build`, `jvm:banner`, `native:build` and
       `native:banner` rows, cited by row key because inserting a guard row renumbers that whole table and
       these four citations went stale twice that way already. This entry previously stamped the run
-      `20260730T054112Z` at `9f1e990` — a run `572282a` **deleted**, and a SHA contradicted by the very
+      `20260730T054112Z` at an earlier PR #103 round's commit — a run from a later round **deleted**,
+      and a SHA contradicted by the very
       `RESULTS.md` line it cited. Cause: an earlier supersession repointed the `verify-`-prefixed *path*
       and left the bare stamp and commit label attached to it. **A repoint must re-read every value it
       carries — stamp, SHA, figure — out of the new target's text, not merely confirm the path resolves.**
@@ -1340,7 +1415,8 @@ were recorded nowhere — the same evaporation that #95 had to go back and fix.
       establish. (Cited by heading with no line range at all: the range given here was off by one at both
       ends, and a limitations list that gains a bullet invalidates any range.) Do not re-run the
       native stage on the strength of this entry; check `bench-results/RUN-OF-RECORD/` first.
-      (An earlier run, `verify-20260729T153141Z`, was **deleted** in `8cadf8a` — its B1 and B2 checks could
+      (An earlier run, `verify-20260729T153141Z`, was **deleted** during PR #103 (folded into the
+      `b32b394` squash-merge) — its B1 and B2 checks could
       not fail, so it certified nothing. Do not cite it; it is not in the tree.)
 - [ ] **A repo-wide line-citation audit (PR #103 round 7) found 135 wrong citations out of 547
       checked — roughly 1 in 4.** Method: every `file:line`/`file:line-line`/bare `:N` citation

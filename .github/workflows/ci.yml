@@ -38,6 +38,24 @@ on:
       # list's own class (basquin-quarkus/**, basquin-init.gradle before it). Any tracked top-level
       # path should trigger at least one CI job; this was the last one that didn't.
       - '.gitignore'
+      # DD-045 item 4 (finding 7), DISCLOSED GAP, deliberately NOT closed here: `operator/**` is
+      # NOT in this list, unlike every other top-level tracked path above. `.github/workflows/
+      # operator-ci.yml` already duplicates a citation-integrity step (`check-citations.py` only)
+      # on `operator/**` pushes precisely so a Go-only change skips this workflow's Gradle-heavy
+      # jobs below (`build-and-test`'s JDK 17/21 matrix, `native-agent`, `leak-demo`) — see that
+      # file's own header comment. GitHub Actions path filters gate the whole workflow, not one
+      # job, so adding `operator/**` here would re-drag every operator-only commit through those
+      # unrelated jobs, the exact cost that duplicate step exists to avoid. Consequence: this job's
+      # `check-removed-deps.py` step (item 4A, the whole-tree removed-path cross-reference) never
+      # sees an operator/**-only diff either — operator-ci.yml's duplicate only re-runs
+      # check-citations.py (item 1), not check-removed-deps.py. Real surviving dependents exist
+      # today on operator/** paths from outside operator/** (deploy/e2e/e2e.sh's
+      # `operator/config/crd/bases/...` references, deploy/helm/sync-generated.sh's same, TODO.md's
+      # `operator/cmd/basquin/*.go` citations): an operator-only removal of one of those paths
+      # would merge green, seen by neither this job nor operator-ci.yml's. The real fix is
+      # duplicating check-removed-deps.py into operator-ci.yml's own job, the same move already
+      # made there for check-citations.py — out of this change's file scope; recorded here so the
+      # blind spot is named, not silently reopened.
       # DD-045 item 1: the citation-integrity job checks every tracked *.md, */citations.txt and
       # the '#'-comments of scripts/*.sh and workflow files, resolving citations against the
       # files they cite (mostly under bench-results/). All of those classes must trigger CI, or
@@ -72,6 +90,10 @@ on:
       - 'basquin-init.gradle'
       - 'deploy/**'
       - '.gitignore'
+      # `operator/**` is deliberately absent from both lists — disclosed-gap comment on the push
+      # block above (DD-045 item 4, finding 7): it would re-drag operator-only changes through
+      # this workflow's Gradle-heavy jobs, the cost `.github/workflows/operator-ci.yml`'s own
+      # duplicate citation-integrity step exists to avoid.
       # See the push block above — both lists must carry these or the citation gap persists on
       # one trigger (same dual-list rule as basquin-quarkus/** etc.).
       - '**/*.md'
@@ -92,8 +114,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # DD-045 item 4A/4B need full history: 4A diffs against the PR base ref or the
+          # push's `before` SHA (neither is guaranteed present in a shallow checkout), and 4B
+          # resolves commit-SHA reachability against `origin/main`, which a shallow checkout
+          # does not fetch as a remote-tracking ref unless main is the ref being built.
+          fetch-depth: 0
       - name: Check citations resolve against cited file content
         run: python3 scripts/check-citations.py
+      # DD-045 item 4A — for every path this push/PR removes, search the whole tracked tree
+      # (code included, the corpus item 1 deliberately excludes) for anything still depending on
+      # it. See scripts/check-removed-deps.py's docstring for the mechanism and the disclosed
+      # zero-SHA skip on a brand-new branch/ref.
+      - name: Check removed paths have no surviving dependents
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python3 scripts/check-removed-deps.py "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}"
+          else
+            python3 scripts/check-removed-deps.py "${{ github.event.before }}" "${{ github.event.after }}"
+          fi
 
 
   # DD-045 item 0 — the DD-043 PR-3 verification harness had never run anywhere but a developer's
@@ -118,8 +157,32 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      # DD-045 item 4C — before/after snapshot of tracked+scratch verify-* run directories, so
+      # the next step can identify the one this job's own harness run just produced without
+      # parsing the harness's stdout or guessing by mtime.
+      - name: Snapshot existing verify-* run directories
+        run: ls -d bench-results/verify-*/ 2>/dev/null > /tmp/verify-dirs-before.txt || true
       - name: Verify DD-043 PR-3 harness (unit jar guards)
         run: bash scripts/verify-dd043-pr3.sh unit jar guards
+      # DD-045 item 4C — closes item 3's declared residual FOR THE `unit`/`jar`/`guards` stages
+      # this job runs (above): a harness row ADDED to one of those three stages without a matching
+      # kill scenario is invisible to scripts/verify-dd043-pr3-rows.sh's own meta-check. DISCLOSED
+      # RESIDUAL, not closed by this step: a row added to the `jvm` or `native` stage — those never
+      # run here (docker, 15+ min; manual-only, see the job comment above), so this checker never
+      # sees their output in CI. Guarded on success() because only a GREEN run's row set equals the
+      # green-run label inventory GREEN_RUN_LABELS describes. Reads this run's own RESULTS.md and
+      # the rows script's GREEN_RUN_LABELS list as DATA — never the harness's bash, never executing
+      # the rows script — see scripts/check-row-label-coverage.py's docstring.
+      - name: Harness row-label coverage (DD-045 item 4C)
+        if: success()
+        run: |
+          ls -d bench-results/verify-*/ 2>/dev/null > /tmp/verify-dirs-after.txt || true
+          NEW_DIR="$(comm -13 <(sort /tmp/verify-dirs-before.txt) <(sort /tmp/verify-dirs-after.txt) | head -1)"
+          if [ -z "$NEW_DIR" ]; then
+            echo "check-row-label-coverage: could not identify the freshly created verify-* run directory" >&2
+            exit 1
+          fi
+          python3 scripts/check-row-label-coverage.py "${NEW_DIR}RESULTS.md"
       - name: Upload verification run directory
         if: failure()
         uses: actions/upload-artifact@v4

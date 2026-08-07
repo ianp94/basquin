@@ -1297,8 +1297,18 @@ the feature held in every one, and almost every finding was in the machinery tha
         guarded on `success()`: diffs the fresh run's own `RESULTS.md` PASS-row labels against
         `scripts/verify-dd043-pr3-rows.sh`'s `GREEN_RUN_LABELS` (read as literal data, never
         executed) — closes item 3's own declared residual, the *added*-label direction its comment
-        above `GREEN_RUN_LABELS` names. Proven both directions: an undeclared extra PASS label
-        reds; a declared-but-unobserved label reds (disclosed as redundant with the rows job's own
+        above `GREEN_RUN_LABELS` names, **for the `unit`/`jar`/`guards` stages this CI job actually
+        runs, not the whole harness.** DISCLOSED RESIDUAL, not closed: a row added to the `jvm` or
+        `native` stage stays invisible to this check — those two need docker and 15+ minutes and
+        stay manual-only, so this checker never sees their RESULTS.md in CI, and
+        `GREEN_RUN_LABELS` was never extended to them either. Stage-aware by construction: it
+        reads the RESULTS.md's own `Stages run:` line, compares only the in-scope stages, and
+        excludes-and-counts any `jvm`/`native` rows present rather than comparing them — proven
+        against the actual full run of record
+        (`bench-results/verify-20260730T215842Z/RESULTS.md`, all five stages): resolves clean,
+        its 14 `jvm:*`/`native:*` PASS rows excluded and counted, not reported as findings.
+        Proven both directions on the in-scope stages: an undeclared extra PASS label reds; a
+        declared-but-unobserved label reds (disclosed as redundant with the rows job's own
         unmatched-label failure — different path filters, this one the broader); the unmodified
         pairing is clean.
       **The mirror image — resolve open debt against the code — stays a convention, not a

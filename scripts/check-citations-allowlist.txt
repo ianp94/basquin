@@ -1,6 +1,7 @@
 # Allowlist for scripts/check-citations.py (and, for the `removed-ok` kind only,
-# scripts/check-removed-deps.py). Every entry MUST carry a reason — an unexplained
-# exemption is exactly the claim/check drift the tool exists to stop. Five entry kinds:
+# scripts/check-removed-deps.py; and, for the `non-citable` kind only,
+# scripts/check-evidence-complete.py). Every entry MUST carry a reason — an unexplained
+# exemption is exactly the claim/check drift the tool exists to stop. Six entry kinds:
 #   <cited-path-or-prefix/> <reason>       exempt a cited path (prefix if it ends with /)
 #   frozen <citing-prefix> <reason>        do not scan this citing file/dir at all
 #   reported <citing-prefix> <needle> <reason>  suppress-but-print findings in <citing-prefix>
@@ -12,6 +13,10 @@
 #   removed-ok <path> <reason>             DD-045 item 4A: a removed path that is fine to still
 #                                          be cited (scripts/check-removed-deps.py's own kind;
 #                                          scripts/check-citations.py just parses past it).
+#   non-citable <path> <reason>            DD-045 item 6a: a tracked RESULTS.md that is stamped
+#                                          NON-CITABLE anyway (scripts/check-evidence-complete.py's
+#                                          own kind; scripts/check-citations.py just parses past
+#                                          it). <path> is exact, or a prefix if it ends with /.
 
 # --- deliberately absent (proposed, not yet built) ---
 snap/snapcraft.yaml planned file — TODO.md's snap-packaging checklist item says "Write" it; deliberately not in the tree yet

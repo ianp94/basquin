@@ -97,3 +97,10 @@ address → fable approver → approval via ianp94 → human merge.
   (fable issue 4 — spec omitted it).
 - §4: the `ReplicaConfigSupported` condition's lifecycle (always-write + remove-on-leave; non-gating).
 - §2.2: `Observed` is sticky against transient `ReadyReplicas` dips.
+- §2.2 (approver review, post-merge-request): `ReadyReplicas` alone is NOT sufficient to mint `Observed`.
+  It counts Ready pods of ANY ReplicaSet revision, so right after revert-before-observe updates the pod
+  template, the default `maxUnavailable=25%` (rounds down to 0 at low replica counts) lets the OLD,
+  possibly-still-injected pod stay Ready — and be counted — until its clean replacement is Ready too.
+  `Observed` now additionally requires the rollout to have SETTLED: `ObservedGeneration >= Generation`
+  and `Replicas == UpdatedReplicas >= desired`, on top of `ReadyReplicas >= desired`. Mid-rollout targets
+  wait honestly in `Observing`/`RolloutNotSettled` instead.

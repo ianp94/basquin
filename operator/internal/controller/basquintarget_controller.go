@@ -290,10 +290,12 @@ func (r *BasquinTargetReconciler) reconcileObserve(ctx context.Context,
 	}
 
 	// Observed is STICKY (Locked decisions): once minted, a transient ReadyReplicas dip must not
-	// revert it to Observing, and nothing else about the target's observe status is recomputed
-	// either — freeze it exactly as it is. The target leaves Observed only via a spec change (a
-	// different branch of Reconcile entirely) or the Deployment disappearing (the
-	// DeploymentNotFound branch above, which resets Phase to Pending before this would run again).
+	// revert it to Observing — the phase, condition, and InstrumentedReplicas below are all left as
+	// they were minted; only removeCoverageService (above) and setReplicaConfigCondition (above,
+	// which is warning-only and never gates Observed) still run on every pass while Observed. The
+	// target leaves Observed only via a spec change (a different branch of Reconcile entirely) or the
+	// Deployment disappearing (the DeploymentNotFound branch above, which resets Phase to Pending
+	// before this would run again).
 	//
 	// KNOWN, ACCEPTED LIMITATION (the zero-pod edge): because this returns before re-reading
 	// ReadyReplicas, a target whose pods ALL die *after* reaching Observed stays Observed /
@@ -308,11 +310,25 @@ func (r *BasquinTargetReconciler) reconcileObserve(ctx context.Context,
 
 	// The template is clean (never injected, or a prior revert already landed): observe readiness.
 	// ReadyReplicas, not UpdatedReplicas (design §2.2) — there is no rollout to track for an
-	// observe-only target, so readiness is the only honest signal.
+	// observe-only target, so readiness is the only honest signal for HOW MANY pods are up.
+	//
+	// But readiness alone is not enough to mint Observed. ReadyReplicas counts Ready pods of ANY
+	// ReplicaSet revision — during a rollout (e.g. right after the revert-before-observe branch above
+	// updates the pod template), the default RollingUpdate maxUnavailable=25% rounds down to 0 at low
+	// replica counts, so the OLD pod stays Ready and keeps ReadyReplicas at desired until its
+	// replacement is Ready too. Minting Observed on that signal would attach "operator did not modify
+	// the pod template" to a pod that may still be running the pre-revert (possibly still-injected)
+	// template — the exact honesty failure this feature exists to prevent. So Observed additionally
+	// requires the rollout to have settled: the Deployment controller has observed the latest
+	// generation, and every replica is on the latest ReplicaSet (Replicas == UpdatedReplicas ==
+	// desired) as well as Ready.
 	ready := deploy.Status.ReadyReplicas
 	target.Status.InstrumentedReplicas = ready
+	settled := deploy.Status.ObservedGeneration >= deploy.Generation &&
+		deploy.Status.UpdatedReplicas >= desired &&
+		deploy.Status.Replicas == deploy.Status.UpdatedReplicas
 
-	if ready >= desired && desired > 0 {
+	if settled && ready >= desired && desired > 0 {
 		target.Status.Phase = basquinv1alpha1.PhaseObserved
 		meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
 			Type: "Ready", Status: metav1.ConditionTrue, Reason: "PreInstrumented",
@@ -324,12 +340,20 @@ func (r *BasquinTargetReconciler) reconcileObserve(ctx context.Context,
 	}
 
 	// design §2.2a — the pre-ready window: Observed must never be minted on first sight of the
-	// Deployment. The campaign gate (a separate controller) accepts Observed only, never Observing,
-	// so a campaign referencing this target stays Pending rather than launching against zero pods.
+	// Deployment, nor mid-rollout (see settled above). The campaign gate (a separate controller)
+	// accepts Observed only, never Observing, so a campaign referencing this target stays Pending
+	// rather than launching against zero — or not-yet-clean — pods.
 	target.Status.Phase = basquinv1alpha1.PhaseObserving
+	reason, msg := "WaitingForReplicas", fmt.Sprintf("%d/%d replica(s) ready", ready, desired)
+	if ready >= desired && desired > 0 && !settled {
+		reason = "RolloutNotSettled"
+		msg = fmt.Sprintf(
+			"%d/%d replica(s) ready, but the rollout has not settled yet (updated %d/%d, observedGeneration %d/%d); waiting before observing",
+			ready, desired, deploy.Status.UpdatedReplicas, desired, deploy.Status.ObservedGeneration, deploy.Generation)
+	}
 	meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
-		Type: "Ready", Status: metav1.ConditionFalse, Reason: "WaitingForReplicas",
-		Message: fmt.Sprintf("%d/%d replica(s) ready", ready, desired),
+		Type: "Ready", Status: metav1.ConditionFalse, Reason: reason,
+		Message: msg,
 	})
 	return nil
 }

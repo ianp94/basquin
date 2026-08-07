@@ -585,27 +585,40 @@ var _ = Describe("BasquinTarget Controller (P2: injection)", func() {
 		// No state may exist where the Observed "did not modify" claim coexists with the old template.
 		Expect(got.Status.Phase).NotTo(Equal(basquinv1alpha1.PhaseObserved))
 
-		// The revert just changed the pod template; on a real cluster that triggers a new
-		// ReplicaSet and pods cycle, so ReadyReplicas transiently dips. envtest runs no rollout
-		// controller (ReadyReplicas otherwise just sits at its pre-revert value), so simulate that
-		// dip explicitly — otherwise the pre-ready window (§2.2a) would go unexercised on this path.
-		d = getDeploy()
-		d.Status.ReadyReplicas = 0
-		Expect(k8sClient.Status().Update(ctx, d)).To(Succeed())
-
-		reconcileN(1) // pass 2: template clean, but not yet ready
-		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
-		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.PhaseObserving))
-		cond := meta.FindStatusCondition(got.Status.Conditions, "Ready")
-		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal("WaitingForReplicas"))
-
-		// Pods come back up on the (now clean) template.
-		d = getDeploy()
+		// The revert just changed the pod template, bumping deploy.Generation. On a REAL cluster the
+		// Deployment controller drives a rolling update, and with the default maxUnavailable=25%
+		// (which rounds down to 0 at these replica counts) the OLD, still-injected pod stays Ready
+		// until its clean replacement is Ready too — so ReadyReplicas alone can sit at `desired`
+		// throughout the whole rollout, never dipping. envtest runs no rollout controller, so simulate
+		// that realistic mid-rollout state explicitly: ReadyReplicas already at desired (the stale pod
+		// still counted Ready), but UpdatedReplicas and ObservedGeneration both lagging. This is the
+		// regression case for the "revert-before-observe can mint Observed off the stale pod" finding:
+		// minting Observed here would attach "operator did not modify the pod template" to a pod that
+		// may still be running the pre-revert (possibly still-injected) template.
+		revertGen := d.Generation
+		d.Status.ObservedGeneration = revertGen - 1
+		d.Status.Replicas = 2
+		d.Status.UpdatedReplicas = 0
 		d.Status.ReadyReplicas = 2
 		Expect(k8sClient.Status().Update(ctx, d)).To(Succeed())
 
-		reconcileN(1) // pass 3: ready -> Observed, and only now is the claim true
+		reconcileN(1) // pass 2: pods "ready" but on the stale revision — rollout has not settled
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.PhaseObserving),
+			"ReadyReplicas alone must not mint Observed while UpdatedReplicas/ObservedGeneration lag — "+
+				"those Ready pods may still be running the injected template")
+		cond := meta.FindStatusCondition(got.Status.Conditions, "Ready")
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal("RolloutNotSettled"))
+
+		// The rollout catches up: pods now on the reverted template, and the Deployment controller
+		// has observed the latest generation.
+		d = getDeploy()
+		d.Status.ObservedGeneration = d.Generation
+		d.Status.Replicas, d.Status.UpdatedReplicas, d.Status.ReadyReplicas = 2, 2, 2
+		Expect(k8sClient.Status().Update(ctx, d)).To(Succeed())
+
+		reconcileN(1) // pass 3: settled AND ready -> Observed, and only now is the claim true
 		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
 		Expect(got.Status.Phase).To(Equal(basquinv1alpha1.PhaseObserved))
 		cond = meta.FindStatusCondition(got.Status.Conditions, "Ready")
@@ -623,7 +636,10 @@ var _ = Describe("BasquinTarget Controller (P2: injection)", func() {
 		reconcileN(2)
 
 		d := getDeploy()
-		d.Status.Replicas, d.Status.ReadyReplicas = 2, 2
+		// A settled rollout: never injected, so Generation never moved off its post-create value, and
+		// UpdatedReplicas/ObservedGeneration must be driven too now that Observed requires settlement.
+		d.Status.ObservedGeneration = d.Generation
+		d.Status.Replicas, d.Status.UpdatedReplicas, d.Status.ReadyReplicas = 2, 2, 2
 		Expect(k8sClient.Status().Update(ctx, d)).To(Succeed())
 		reconcileN(1)
 
@@ -675,6 +691,55 @@ var _ = Describe("BasquinTarget Controller (P2: injection)", func() {
 		Expect(cond).NotTo(BeNil())
 		Expect(cond.Status).To(Equal(metav1.ConditionTrue), "the multi-replica warning must not survive a scale-back to 1")
 		Expect(cond.Reason).To(Equal("SingleReplica"))
+	})
+
+	It("removes a stale ReplicaConfigSupported=False when the Deployment disappears (observe-path exit 1)", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{Name: container, Image: "busybox"}))).To(Succeed()) // 2 replicas
+		t := newTarget()
+		t.Spec.PreInstrumented = true
+		Expect(k8sClient.Create(ctx, t)).To(Succeed())
+		reconcileN(2)
+
+		got := &basquinv1alpha1.BasquinTarget{}
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		cond := meta.FindStatusCondition(got.Status.Conditions, conditionReplicaConfigSupported)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse), "sanity: multi-replica warning is present before the Deployment disappears")
+
+		Expect(k8sClient.Delete(ctx, &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: deployName, Namespace: namespace}})).To(Succeed())
+		reconcileN(1)
+
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(meta.FindStatusCondition(got.Status.Conditions, conditionReplicaConfigSupported)).To(BeNil(),
+			"a stale ReplicaConfigSupported=False must not survive the Deployment vanishing — it's the status-lie class this PR targets")
+	})
+
+	It("removes a stale ReplicaConfigSupported=False when preInstrumented flips back to false (observe-path exit 2)", func() {
+		Expect(k8sClient.Create(ctx, newDeploy(corev1.Container{
+			Name: container, Image: "busybox",
+			Env: []corev1.EnvVar{{Name: "CATALINA_OPTS", Value: origOpts}},
+		}))).To(Succeed()) // 2 replicas
+		t := newTarget()
+		t.Spec.PreInstrumented = true
+		Expect(k8sClient.Create(ctx, t)).To(Succeed())
+		reconcileN(2)
+
+		got := &basquinv1alpha1.BasquinTarget{}
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		cond := meta.FindStatusCondition(got.Status.Conditions, conditionReplicaConfigSupported)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse), "sanity: multi-replica warning is present before the flip back")
+
+		got.Spec.PreInstrumented = false
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+		reconcileN(1)
+
+		Expect(k8sClient.Get(ctx, targetKey, got)).To(Succeed())
+		Expect(meta.FindStatusCondition(got.Status.Conditions, conditionReplicaConfigSupported)).To(BeNil(),
+			"a stale ReplicaConfigSupported=False must not survive leaving the observe path — it's meaningless back on the injection path")
+		// The target really is back on the injection path (not just that the condition vanished).
+		Expect(getDeploy().Annotations).To(HaveKey(annInjectedHash))
 	})
 
 	It("still injects when every agent toggle is off but preInstrumented is NOT set (accept 7 — pins the distinction)", func() {

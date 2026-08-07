@@ -90,6 +90,7 @@ frozen docs/superpowers/plans/ historical point-in-time execution plans; audit l
 frozen docs/superpowers/specs/2026-07-21-operator-server-side-boundary-design.md historical design doc for shipped work; same audit rationale
 frozen docs/superpowers/specs/2026-07-23-trustworthy-measurement-design.md historical design doc for shipped work; same audit rationale
 frozen docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md historical design doc for shipped work; same audit rationale
+frozen docs/superpowers/specs/2026-08-04-dd045-defect-class-audit.md point-in-time audit; citations describe main@e7137a4, pins its own tree hash
 
 # --- reported entries: real defects in other agents' files, suppressed-but-printed until the
 #     owner fixes them, then the entry MUST be removed (a reported entry whose defect is fixed

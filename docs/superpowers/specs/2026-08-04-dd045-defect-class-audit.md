@@ -126,7 +126,7 @@ code on `main` instead.
 | 11 | Operator wait-loops, five failures in one session: `pgrep -f` matching the waiting shell's own command line; a grep for "Review in progress" missing "Re-review in progress"; `grep -qF '- [ ]'` parsed by ugrep as a flag | operator process (untracked) | silent |
 | 12 | A verification run read as a pass when it had *refused* (exit 3, dirty tree, no artifact produced) — and a commit was made on it | operator process (untracked) | misread refusal as pass |
 | 13 | Allowlist `reported` entries whose needles match nothing in TODO.md — live on merged `main` today (`scripts/check-citations-allowlist.txt:93-94`), the exact staleness class the same file's header documents removing seven of (`:87-92`); the checker prints `0 reported to owners` and exits 0 — **found by this audit** (§5.2) | allowlist | stale suppression, silent |
-| 14 | Twelve of fourteen commit SHAs cited across the DD-045 ledger and the checker's own docstring are unreachable from `origin/main` — dead on every fresh clone — **found by this audit** (§5.1) | docs prose + checker docstring | stale claim, silent |
+| 14 | Twelve of thirteen commit SHAs cited across the DD-045 ledger and the checker's own docstring are unreachable from `origin/main` — dead on every fresh clone — **found by this audit** (§5.1) | docs prose + checker docstring | stale claim, silent |
 
 Tally worth stating plainly: of the fourteen rows, **eleven live in the verification and
 bookkeeping machinery or the process around it; at most one is in feature code**. Ten of
@@ -197,8 +197,9 @@ and 14 show the machinery is still producing them after items 0-3 merged.
 - **Structurally prevents:** the rename-churn generator — supersession staling every
   citation to the previous run at once. This is the thread's cleanest closure: it removes
   a *mechanism*, rather than detecting its symptom. The resolver's failure modes were
-  negative-controlled (empirically re-proven by this audit: a dangling pointer produced 17
-  DEAD PATH findings across bare and sub-path shapes, exit 1).
+  negative-controlled (empirically re-proven by this audit on a clean clone of `main`: a
+  dangling pointer produced 14 DEAD PATH findings — 4 in `TODO.md`, 2 in the restvillains
+  README, 8 in `docs/ROADMAP.md` — across bare and sub-path shapes, exit 1).
 - **Blind by construction:** only this one evidence family has a pointer. Every other
   timestamped `bench-results/` directory (the citation runs, the per-round audit dirs) is
   still cited by literal dated name; superseding any of them re-creates the exact churn
@@ -266,8 +267,12 @@ run, failing nothing.
 **Controls — the same run-shape with in-scope defects, to confirm the gate is live:** a
 dead path in a tracked `.sh` comment → FAILED DEAD PATH; one character changed in a line
 pinned by a `citations.txt` row → FAILED STALE LINE with expected-vs-actual text; the
-RUN-OF-RECORD pointer aimed at a nonexistent directory → 17 FAILED findings covering both
-bare and sub-path citation shapes, exit 1. The gate does what it says over what it scans.
+RUN-OF-RECORD pointer aimed at a nonexistent directory → 14 FAILED DEAD PATH findings
+covering both bare and sub-path citation shapes, exit 1, re-derived on a clean clone of
+`main` (an earlier pass of this audit reported "17," which counted a probe-worktree run
+where the six planted P1-P6 claims were still present alongside this control, rather than
+the clean tree the control is meant to describe). The gate does what it says over what it
+scans.
 
 **Meta-run:** a full `scripts/verify-dd043-pr3-rows.sh` run on the merged tree completed 8 proven /
 0 failed, exit 0, wall-clock ~335s, RESULTS.md stamped `main tree clean at run start` with
@@ -287,10 +292,11 @@ bare figures, unscanned file classes, and everything outside tracked content pas
 
 The DD-045 ledger derives its numbers scrupulously — and then cites the derivation to
 commit SHAs. Under this repo's squash-merge workflow those SHAs mostly never reach `main`.
-Checked on 2026-08-04, of fourteen SHAs cited across `TODO.md`'s DD-045/PR-3 entries and
-`scripts/check-citations.py`'s docstring, **twelve are not ancestors of `origin/main`**,
-and at least the four below sit on *no remote branch at all* — unresolvable on every fresh
-clone today, before any prune:
+Checked on 2026-08-04 (re-derived 2026-08-07 with `git merge-base --is-ancestor <sha>
+origin/main` against a non-shallow checkout, one SHA at a time), of thirteen SHAs cited
+across `TODO.md`'s DD-045/PR-3 entries and `scripts/check-citations.py`'s docstring,
+**twelve are not ancestors of `origin/main`**, and at least the four below sit on *no
+remote branch at all* — unresolvable on every fresh clone today, before any prune:
 
 ```
 16da079 865ba35 1c3ce88 572282a   TODO.md item 2: the ONLY stated provenance for the
@@ -300,7 +306,7 @@ clone today, before any prune:
                                   git show 119d400:TODO.md, errors on a fresh clone
 6e67ca7                           TODO.md follow-ups: "Resolved in 6e67ca7"
 793c18e                           check-citations.py's own docstring: "fixed in 793c18e"
-9f1e990 8cadf8a 3b1cb3c b980e1f 04fc4a5 f872199   further ledger/entry provenance
+9f1e990 8cadf8a 3b1cb3c b980e1f f872199   further ledger/entry provenance
 ```
 
 This is the *same defect* item 1 was built to kill for file paths — the DD-021 case of a

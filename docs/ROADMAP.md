@@ -6,10 +6,10 @@ order is what it is*. If you find a detail stated here and nowhere else, it is i
 (The benchmark page had exactly this drift and it is what `deploy/bench/render_page.py` now exists to
 prevent.)
 
-Last reviewed: 2026-07-26. DD-043 PR-1 (#100) and PR-2 (#102) are **merged**; **PR-3 is open as
-[#103](https://github.com/ianp94/basquin/pull/103)**, awaiting approval and the human's merge. A new
-follow-on — **DD-044 / PR-3.5** — is specced and reviewed but not started. The DD-040→DD-039 arc was
-completed and merged 2026-07-23. See "Start here next".
+Last reviewed: 2026-08-07. DD-043 PR-1 (#100), PR-2 (#102), and **PR-3
+([#103](https://github.com/ianp94/basquin/pull/103), squash-merged as `b32b394` on 2026-07-31)** are all
+**merged**. A new follow-on — **DD-044 / PR-3.5** — is specced and reviewed but not started. The
+DD-040→DD-039 arc was completed and merged 2026-07-23. See "Start here next".
 
 ---
 
@@ -42,10 +42,10 @@ work, not cleanup of this thread.
 | **Benchmark re-run** | All three apps re-measured on the trustworthy channel | **merged** as [#97](https://github.com/ianp94/basquin/pull/97) (2026-07-23). This is the payoff — first benchmarks whose finding counts are real | — | `docs/benchmarks.html` (generated), `bench-results/*/‌*-bench3-explore/` |
 | **DD-041** | Clustered exploration across replicas — the one you asked for (service-backed apps) | **next up**, not specced. DD-039 leaves it a clean seam (the same-method-hop merge) | nothing (DD-040/039 merged) | `TODO.md` "Next after DD-040" |
 | **DD-042** | A load-mode concurrency oracle — load counts but never *asserts* | designed, not specced; independent, can precede or follow DD-041 | nothing | `TODO.md` "Future: DD-042" |
-| **DD-043** | Native + reactive targets — build-time instrumentation of a GraalVM-native Quarkus app | **Phase 0 done, gate PASSED** — **merged** as [#98](https://github.com/ianp94/basquin/pull/98) (2026-07-24). All four spikes resolved; S1 REFUTED as specified then CONFIRMED via S1b; 8 spec amendments forced, none voiding a section, plus a round-2 fix pass from the whole-branch review (spec ledger, "Round 2"). **PR-1 (#100), PR-2 (#102) merged; PR-3 open as
-[#103](https://github.com/ianp94/basquin/pull/103)** — build-time injection with zero edits to the
-target's tree, both halves of §5.2 passed (JVM on `rest-villains`, native on the fixture), 390 tests
-(`bench-results/RUN-OF-RECORD/suite-counts.txt:1`).
+| **DD-043** | Native + reactive targets — build-time instrumentation of a GraalVM-native Quarkus app | **Phase 0 done, gate PASSED** — **merged** as [#98](https://github.com/ianp94/basquin/pull/98) (2026-07-24). All four spikes resolved; S1 REFUTED as specified then CONFIRMED via S1b; 8 spec amendments forced, none voiding a section, plus a round-2 fix pass from the whole-branch review (spec ledger, "Round 2"). **PR-1 (#100), PR-2 (#102), and PR-3
+([#103](https://github.com/ianp94/basquin/pull/103), `b32b394`) are all merged** — PR-3 delivers
+build-time injection with zero edits to the target's tree, both halves of §5.2 passed (JVM on
+`rest-villains`, native on the fixture), 390 tests (`bench-results/RUN-OF-RECORD/suite-counts.txt:1`).
 §8.1 **resolved**: Apicurio's server has no native build on the 3.x line, so row 5 needs a substitute —
 ranked Debezium Server (Quarkus 3.33.1.1) > Eclipse Hono HTTP adapter (3.27.4.1, reactive, heavier
 infra) > Apicurio 2.6.x, the last only behind a compatibility spike since `basquin-quarkus` is pinned to
@@ -90,9 +90,9 @@ PR-4 starts; **§6.2** (native JFR streaming) still gates PR-5. A follow-on **DD
 One PR is open ([#100](https://github.com/ianp94/basquin/pull/100) — DD-043 PR-1, the `basquin-core`
 extraction; scope under "Open PRs" below). Four threads are ready to pick up, in rough priority:
 
-0. **DD-043 PR-3 — `basquin-maven-injector` — done, open as
-   [#103](https://github.com/ianp94/basquin/pull/103), awaiting approval and the human's merge.**
-   PR-1 (`basquin-core` extraction, #100) and PR-2 (`basquin-quarkus` extension, #102) are **merged**.
+0. **DD-043 PR-3 — `basquin-maven-injector` — merged as
+   [#103](https://github.com/ianp94/basquin/pull/103) (`b32b394`, 2026-07-31).**
+   PR-1 (`basquin-core` extraction, #100) and PR-2 (`basquin-quarkus` extension, #102) are also **merged**.
 
    PR-3 delivers build-time injection: a Maven core extension on `-Dmaven.ext.class.path` that adds the
    Quarkus extension to a target application's build with **zero edits to that application's tree**.
@@ -317,28 +317,37 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
       silently redirected an ORDINARY build's compiled source if the property or an inherited
       environment variable ever leaked into `release.yml`'s publish job, a worse hazard than the
       local-only commit-timing one it would have fixed. Full account in `TODO.md`'s DD-045 item 3.
-   4. **A "what depended on this?" pre-commit pass, and its mirror image.** Not "is the diff internally
-      consistent" — that is the narrower question, and asking it is what let items above through. For
-      every path, row key, or claim a commit **removes**, search the whole tree for anything that still
-      depends on it. Round 8 found two instances the diff-scoped version could not see. The mirror image
-      is **resolving open debt against the code**: round 9 swept all 91 `- [ ]` entries in `TODO.md`
-      against the tree and ten were already satisfied, two of them false for the whole span of DD-043,
-      one of them refuted by an already-`[x]` entry in the same file. An unchecked box is a claim about
-      the current tree exactly like a citation is, so item 1's checker should resolve both. Full account
-      in `TODO.md`'s DD-045 item 4.
-   5. **Stop restating derived numbers in prose.** Generate the fragment from the code, or state the class
-      and point at one authoritative enumeration. Standing rule adopted in round 7: a count that must be
-      updated in N places when the code changes is a defect generator, not documentation. Where a count is
-      genuinely useful, name the items so drift is visible, and say what unit is being counted — the
-      round-8 miscount came from three documents counting shapes, throw sites, and methods without saying
-      which.
+   4. **A "what depended on this?" check, and its mirror image. Delivered — as CI-enforced checks, not
+      the pre-commit pass originally scoped here** (an operator discipline, the layer with this
+      history's worst record). Not "is the diff internally consistent" — that is the narrower question,
+      and asking it is what let items above through. For every path, row key, or claim a commit
+      **removes**, search the whole tree for anything that still depends on it. Round 8 found two
+      instances the diff-scoped version could not see. The mirror image is **resolving open debt against
+      the code**: round 9 swept all 91 `- [ ]` entries in `TODO.md` against the tree and ten were already
+      satisfied, two of them false for the whole span of DD-043, one of them refuted by an already-`[x]`
+      entry in the same file. An unchecked box is a claim about the current tree exactly like a citation
+      is, so item 1's checker should resolve both — **now does**, for the removal side: `4A`
+      (`scripts/check-removed-deps.py`, a removed path's surviving dependents) and `4B` (commit-SHA
+      reachability folded into `scripts/check-citations.py`); the box-count sweep (the mirror image)
+      stays a convention, not a mechanism, by the design's own reasoning. Full account in `TODO.md`'s
+      DD-045 item 4.
+   5. **Stop restating derived numbers in prose. Closed as covered-plus-convention — built nothing new.**
+      Its enforceable core already shipped inside item 1's carried-value machinery: a strong-shaped
+      figure beside a citation is checked against the cited files. What remains is the *unit* discipline
+      below, which stays a convention for the same reason item 4's mirror image does: generate the
+      fragment from the code, or state the class and point at one authoritative enumeration. Standing
+      rule adopted in round 7: a count that must be updated in N places when the code changes is a defect
+      generator, not documentation. Where a count is genuinely useful, name the items so drift is
+      visible, and say what unit is being counted — the round-8 miscount came from three documents
+      counting shapes, throw sites, and methods without saying which. Full account in `TODO.md`'s DD-045
+      item 5.
    6. **An agent completion contract.** Three subagents were killed mid-work by a session limit; one had
       already reported success on work whose verification step never ran. A report is accepted only when
       it contains the pasted output of its own verification, and partial evidence is never committed.
 
    **Entry condition:** none — this is tooling over the existing tree, and it is independently useful
-   before PR-4 begins. 0, 1 and 2 are now built; 3 is the remaining structural piece. 4-6 are cheap once
-   that exists.
+   before PR-4 begins. 0-5 are now built, delivered, or closed; 6 (the agent completion contract) is the
+   remaining piece.
 
    **Also worth noting for whoever picks this up:** `scripts/verify-dd043-pr3.sh` is *inside*
    `ci.yml`'s path filters — `'scripts/**'` is in both lists
@@ -380,7 +389,7 @@ time, nothing CPU-heavy during a run.
 
 **[#103](https://github.com/ianp94/basquin/pull/103) — DD-043 PR-3, `basquin-maven-injector`.**
 Build-time injection with zero edits to the target's source; both halves of spec §5.2 passed; 390 tests,
-0 failures (`bench-results/RUN-OF-RECORD/suite-counts.txt:1`). Labelled `ready-for-approver`.
+0 failures (`bench-results/RUN-OF-RECORD/suite-counts.txt:1`). **Merged as `b32b394` on 2026-07-31.**
 Six follow-ups are recorded in `TODO.md` under "DD-043 PR-3 follow-ups", of which **two** are now
 resolved and **four** remain open — count the `- [ ]`/`- [x]` boxes in that section rather than
 trusting this sentence, which has gone stale twice (round 7 added the sixth; round 9 closed the

@@ -1,0 +1,50 @@
+# scripts/ — verification-integrity tooling (DD-045)
+
+An index, not a second copy of any tool's contract — each script's own module docstring is the
+normative text for what it checks and why; this file only points at them so a reader can find the
+right one.
+
+| Script | Checks | Wired in CI |
+|---|---|---|
+| `check-citations.py` | Whole-tree citation resolution, carried-value drift, commit-SHA reachability (item 4B). | `citation-integrity` job, `.github/workflows/ci.yml`. |
+| `check-removed-deps.py` | A removed path has no surviving dependent, code included (item 4A). | Same job. |
+| `check-row-label-coverage.py` | A harness row without a matching kill scenario is visible (item 4C). | `verify-dd043-pr3` job. |
+| `check-evidence-complete.py` | Every tracked `bench-results/` evidence directory is a complete record, not a truncated or `NON-CITABLE` one (item 6a). | `citation-integrity` job. |
+| `check-agent-report.py` | One report file: a pasted verification block, a matching HEAD-SHA stamp, artifacts that exist, prose claims backed by a paste (item 6b). | `citation-integrity` job, run against `scripts/fixtures/agent-report/` on every push/PR. |
+| `agent-report-hook.py` | Optional `SubagentStop` hook wiring for the same contract check-agent-report.py enforces, this-checkout-only (item 6b, conditional piece). | Not CI — `.claude/settings.json`, local harness only. |
+
+`scripts/check-citations-allowlist.txt` is the one shared allowlist file; its header comment lists
+every entry kind and which script owns each.
+
+## THE CONTRACT (DD-045 item 6c)
+
+Normative text lives in `check-evidence-complete.py`'s and `check-agent-report.py`'s own
+docstrings — the one place it can change in the same commit as the check that enforces it, which
+is this whole thread's thesis. Restated here only as a pointer, not a copy:
+
+**A report is accepted only with the pasted output of its own verification. Partial evidence is
+never committed.**
+
+`check-agent-report.py` grades the REPORT that makes a claim (form only — see its own printed
+limit); `check-evidence-complete.py` grades the EVIDENCE once it reaches `bench-results/` (bytes,
+CI-enforced).
+
+Two clauses below are CONVENTION, not mechanically checked by either script — labeled as such,
+matching the design doc's explicit "Contract clause / convention" distinction (see
+`docs/superpowers/specs/2026-08-04-dd045-items-4-6-design.md`, item 6c):
+
+- **CONVENTION:** verification artifacts to disk first, the report last, so a killed session
+  leaves artifacts without claims — recoverable — rather than claims without artifacts.
+- **CONVENTION:** waits watch a terminal artifact (an `exit=` line, a file that appears), never a
+  process-name poll.
+
+**DISCLOSED GAP:** a `file:line` citation inside one of these scripts' own docstrings is NOT
+covered by `check-citations.py`'s citation gate — that checker's citing-file selection scans only
+tracked `.md` files, `citations.txt` files, `.sh` files, and `.github/workflows/*` files, never
+`.py` (see `check-citations.py`'s own `citing_md`/`citing_pinned`/`citing_comments` selection).
+A line-number citation into ANY file, written inside a `.py` docstring, can go dead the moment
+that docstring's own file grows or shrinks a line, with nothing here to catch it (PR #108 round-1
+review found exactly this: an edit to this file moved a cited line by 8 without anything failing).
+Docstring citations into code therefore cite by SYMBOL (a function or variable name, e.g.
+`` `main()` `` or `` `n_rep` ``) rather than by line number — a symbol survives a line shift; a
+line number does not.

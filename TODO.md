@@ -1347,8 +1347,46 @@ the feature held in every one, and almost every finding was in the machinery tha
       `docs/ROADMAP.md`'s item-5 paragraph — derive in place with the command shown, or point at one
       authoritative enumeration, and name the unit when a count stays. The check on the habit is
       review plus item 1's counters, said honestly rather than dressed up as a mechanism.
-- [ ] **6 — an agent completion contract**: a report is accepted only with the pasted output of its own
-      verification; partial evidence is never committed.
+- [x] **6 — an agent completion contract. Delivered: the evidence-completeness gate, the
+      report-form validator with its own CI-proven fixtures, and (event/blocking semantics
+      confirmed against current harness docs, not merely designed) the optional `SubagentStop`
+      hook.** Design: `docs/superpowers/specs/2026-08-04-dd045-items-4-6-design.md`, item 6.
+      Two mechanisms, one CI-enforced on bytes, one a local/CI form check on the claim that
+      precedes them: `scripts/check-evidence-complete.py`, a new step in the `citation-integrity`
+      job, asserts every tracked `bench-results/verify-*/`, `verify-rows-*/` and `citations-*/`
+      directory is a COMPLETE record — a `Commit:` header, a `**P passed, F failed, S skipped**`
+      tally that parses and equals its own table's row count, no committed `NON-CITABLE` run
+      (override: a new `non-citable` allowlist kind, reason mandatory), and a `citations-*/`
+      disposition ledger that still balances on the committed copy — and that
+      `bench-results/RUN-OF-RECORD` names one of the verify directories that passed. Today's one
+      verify directory and one citations directory both pass with ZERO grandfathering; every
+      other `bench-results/` directory is counted out-of-scope (free-form hand-authored evidence
+      has no mechanical definition of "complete"), never silently skipped. `verify-rows-*/`
+      handling deviates from a literal reading of the design text — its docstring explains why,
+      grounded in `scripts/verify-dd043-pr3-rows.sh`'s actual generated output, which carries no
+      P/F/S tally at its own top level (only its nested per-scenario copies do) — proven only
+      against a scratch fixture, since no such directory is tracked yet.
+      `scripts/check-agent-report.py` validates ONE report file's FORM: a `## Verification`
+      section with a fenced block containing a captured `exit=<N>` line, a header stamp matching
+      the ref being checked against (`--ref` exists so a TRACKED fixture can stay green forever —
+      seeded numbers here would go one commit stale, since a commit can't embed its own SHA),
+      every artifact path the section names existing on disk, and every prose tally/exit claim
+      also appearing verbatim inside a pasted block. Proven against
+      `scripts/fixtures/agent-report/` — one compliant fixture plus one per failure mode — itself
+      re-run in the same CI job on every push/PR, so a regression in the validator's own logic is
+      caught the same way every other checker here is. It validates form, never truth — printed
+      in its own output on every run, not merely stated here. The design left the `SubagentStop`
+      hook conditional on confirming event name and blocking semantics against authoritative
+      docs at implementation time; both were confirmed live (`https://code.claude.com/docs/en/hooks`,
+      2026-08-07: the event fires when a subagent finishes, and a hook blocks it — genuinely
+      preventing it from stopping, not merely adding context — via `{"decision": "block", ...}`
+      on stdout or exit 2) before `scripts/agent-report-hook.py` and `.claude/settings.json` were
+      written. That hook's own docstring discloses what is NOT confirmed the same way (the
+      transcript JSONL schema, so it reads only `last_assistant_message` and a crude keyword
+      heuristic for "this looks like a file edit") and fails open, unconditionally, on any error —
+      a mechanical assist, never a security boundary. The contract text itself lives in those two
+      scripts' own docstrings, the one place it changes in the same commit as the check that
+      enforces it; `scripts/README.md` is a one-page index and pointer, not a third copy.
 
 ## DD-043 PR-3 follow-ups (deferred during PR #103 review, recorded so they cannot evaporate)
 

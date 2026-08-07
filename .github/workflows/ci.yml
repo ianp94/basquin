@@ -133,6 +133,44 @@ jobs:
           else
             python3 scripts/check-removed-deps.py "${{ github.event.before }}" "${{ github.event.after }}"
           fi
+      # DD-045 item 6a — every tracked machine-produced evidence directory under bench-results/
+      # (verify-*/, verify-rows-*/, citations-*/) must be a COMPLETE record — a truncated
+      # RESULTS.md, a run stamped NON-CITABLE committed anyway, or a citations-*/ directory whose
+      # own disposition ledger no longer balances all fail here, even though items 0-3 above
+      # would pass them (those check that citations/rows RESOLVE, not that the run they resolve
+      # against is a whole, uncorrupted record). See scripts/check-evidence-complete.py's
+      # docstring for the exact rules per shape and the free-form-evidence out-of-scope carve-out.
+      - name: Check bench-results evidence directories are complete (DD-045 item 6a)
+        run: python3 scripts/check-evidence-complete.py
+      # DD-045 item 6b — the report-form validator (scripts/check-agent-report.py) is itself
+      # proven here: one compliant fixture must exit 0, and one fixture per failure mode it
+      # exists to catch must exit 1 — the same every-gate-must-fail-first rule this whole thread
+      # applies to its OWN checkers, not only to the trees they check. FIXTURE_REF is a
+      # placeholder commit embedded in every fixture but wrong-commit.md (which embeds a
+      # different one on purpose); it is passed via --ref rather than resolved against actual
+      # HEAD, which would falsify a tracked "compliant" fixture the moment this very commit
+      # lands — see check-agent-report.py's "WHY --ref EXISTS".
+      - name: Prove the agent-report validator against its own fixtures (DD-045 item 6b)
+        run: |
+          FIXTURE_REF=deadbeef
+          FAIL=0
+          check() {
+            local file="$1" want="$2" got=0
+            python3 scripts/check-agent-report.py --ref "$FIXTURE_REF" "scripts/fixtures/agent-report/$file" || got=$?
+            if [ "$got" -ne "$want" ]; then
+              echo "FIXTURE MISMATCH: $file expected exit=$want, got exit=$got" >&2
+              FAIL=1
+            else
+              echo "OK: $file exited $got as expected"
+            fi
+          }
+          check valid.md 0
+          check no-exit-code.md 1
+          check wrong-commit.md 1
+          check missing-artifact.md 1
+          check prose-only-claim.md 1
+          check decoy-paste.md 1
+          exit $FAIL
 
 
   # DD-045 item 0 — the DD-043 PR-3 verification harness had never run anywhere but a developer's

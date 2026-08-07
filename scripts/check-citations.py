@@ -388,7 +388,7 @@ def read_lines(rel: str) -> list[str] | None:
 
 
 def load_allowlist():
-    """Five entry kinds, one reason each (a reason is mandatory — an unexplained exemption is
+    """Six entry kinds, one reason each (a reason is mandatory — an unexplained exemption is
     exactly the drift this tool exists to stop):
       <cited-path-or-prefix/> <reason>      exempt a cited path (exact, or prefix if it ends /)
       frozen <citing-prefix> <reason>       do not scan this citing file/dir at all
@@ -403,7 +403,11 @@ def load_allowlist():
                                             removed path that is fine to still be cited. Not this
                                             tool's concern — parsed here only so it does not fall
                                             through to the generic cited-path branch below and get
-                                            misread as one."""
+                                            misread as one.
+      non-citable <path> <reason>           DD-045 item 6a (scripts/check-evidence-complete.py):
+                                            a tracked RESULTS.md that is stamped NON-CITABLE
+                                            anyway. Not this tool's concern either — parsed here
+                                            for the same reason removed-ok is."""
     cited, frozen, reported, sha = [], [], [], []
     if ALLOWLIST_FILE.exists():
         for n, raw in enumerate(
@@ -432,6 +436,10 @@ def load_allowlist():
                 sub = parts[1].split(None, 1) if len(parts) > 1 else []
                 if len(sub) < 2:
                     sys.exit(f"allowlist:{n}: removed-ok entry needs <path> <reason>")
+            elif kind == "non-citable":
+                sub = parts[1].split(None, 1) if len(parts) > 1 else []
+                if len(sub) < 2:
+                    sys.exit(f"allowlist:{n}: non-citable entry needs <path> <reason>")
             else:
                 if len(parts) < 2:
                     sys.exit(f"allowlist:{n}: entry has no reason: {line!r}")

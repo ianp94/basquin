@@ -87,8 +87,12 @@ PR-4 starts; **§6.2** (native JFR streaming) still gates PR-5. A follow-on **DD
 
 ## Start here next
 
-One PR is open ([#100](https://github.com/ianp94/basquin/pull/100) — DD-043 PR-1, the `basquin-core`
-extraction; scope under "Open PRs" below). Four threads are ready to pick up, in rough priority:
+Run `gh pr list --state open` for what is open right now — this file does not hand-maintain that
+count, the same rot this line itself once had (it previously asserted "One PR is open (#100)"
+after #100 had already merged). #100/#102/#103/#107 are the four most recently merged (scope and
+dates under "Open PRs" below, which DOES need a manual update per newly-opened/merged PR — see
+that section's own citations for how to check it). Four threads are ready to pick up once nothing
+is open, in rough priority:
 
 0. **DD-043 PR-3 — `basquin-maven-injector` — merged as
    [#103](https://github.com/ianp94/basquin/pull/103) (`b32b394`, 2026-07-31).**
@@ -341,13 +345,27 @@ extraction; scope under "Open PRs" below). Four threads are ready to pick up, in
       visible, and say what unit is being counted — the round-8 miscount came from three documents
       counting shapes, throw sites, and methods without saying which. Full account in `TODO.md`'s DD-045
       item 5.
-   6. **An agent completion contract.** Three subagents were killed mid-work by a session limit; one had
-      already reported success on work whose verification step never ran. A report is accepted only when
-      it contains the pasted output of its own verification, and partial evidence is never committed.
+   6. **An agent completion contract. Delivered.** Three subagents were killed mid-work by a session
+      limit; one had already reported success on work whose verification step never ran. Built as
+      `scripts/check-evidence-complete.py` (a new `citation-integrity` step: every tracked
+      `bench-results/verify-*/`, `verify-rows-*/` and `citations-*/` directory must be a complete
+      record — parseable tally equal to its own table's row count, no committed `NON-CITABLE` run,
+      a `citations-*/` ledger that still balances — today's one verify directory and one citations
+      directory pass with zero grandfathering) and `scripts/check-agent-report.py` (a form
+      validator for one report file: a pasted verification block with a captured `exit=<N>` line,
+      a header stamp matching the checked ref, every named artifact existing on disk, every prose
+      tally/exit claim backed by a pasted block — proven against `scripts/fixtures/agent-report/`,
+      itself re-run in CI on every push/PR). The design's conditional `SubagentStop` hook is also
+      built: event name and blocking semantics were confirmed live against current harness docs
+      (not merely assumed) before writing `scripts/agent-report-hook.py` and
+      `.claude/settings.json`; it fails open on any error and discloses what it could NOT confirm
+      (the transcript's own JSONL schema). A report is accepted only when it contains the pasted
+      output of its own verification, and partial evidence is never committed — the normative text
+      lives in the two scripts' own docstrings, not restated here; full account in `TODO.md`'s
+      DD-045 item 6.
 
    **Entry condition:** none — this is tooling over the existing tree, and it is independently useful
-   before PR-4 begins. 0-5 are now built, delivered, or closed; 6 (the agent completion contract) is the
-   remaining piece.
+   before PR-4 begins. All of 0-6 are now built, delivered, or closed.
 
    **Also worth noting for whoever picks this up:** `scripts/verify-dd043-pr3.sh` is *inside*
    `ci.yml`'s path filters — `'scripts/**'` is in both lists
@@ -386,6 +404,20 @@ the fresh-per-PR approver; **only the human merges**. The cluster is single-node
 time, nothing CPU-heavy during a run.
 
 ## Open PRs
+
+**[#107](https://github.com/ianp94/basquin/pull/107) — DD-045 PR-1, item 4 + item 5's closure.**
+The removed-path cross-reference (4A), commit-SHA reachability folded into `check-citations.py`
+plus the same-PR migration of the 26 then-live-doc occurrences (4B), harness row-label coverage
+(4C), and the `Tree:` stamp on `scripts/verify-dd043-pr3.sh`'s RESULTS.md header. Also carried the
+items 4-6 design and a defect-class audit that found two live defects on then-merged main (twelve
+of thirteen commit SHAs cited across the DD-045 ledger and the checker's own docstring already
+unreachable from `origin/main`; both `reported` allowlist entries matching nothing while the
+checker printed `0 reported to owners` and exited 0 —
+`docs/superpowers/specs/2026-08-04-dd045-defect-class-audit.md` findings 13-14 — both are what
+item 4B and the checker's own unused-suppression assertion now catch). **Merged (squash) as `0fe2071` on 2026-08-07.** Item 6
+(the agent completion contract) rides in a second PR per the design's own PR-shape reasoning
+(same `citation-integrity` job block, so landing second is a trivial rebase) — see `TODO.md`'s
+DD-045 item 6 for its disposition.
 
 **[#103](https://github.com/ianp94/basquin/pull/103) — DD-043 PR-3, `basquin-maven-injector`.**
 Build-time injection with zero edits to the target's source; both halves of spec §5.2 passed; 390 tests,

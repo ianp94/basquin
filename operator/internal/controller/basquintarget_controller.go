@@ -294,6 +294,14 @@ func (r *BasquinTargetReconciler) reconcileObserve(ctx context.Context,
 	// either — freeze it exactly as it is. The target leaves Observed only via a spec change (a
 	// different branch of Reconcile entirely) or the Deployment disappearing (the
 	// DeploymentNotFound branch above, which resets Phase to Pending before this would run again).
+	//
+	// KNOWN, ACCEPTED LIMITATION (the zero-pod edge): because this returns before re-reading
+	// ReadyReplicas, a target whose pods ALL die *after* reaching Observed stays Observed /
+	// Ready:True with InstrumentedReplicas frozen, indefinitely — the campaign gate would treat it
+	// as ready against zero live pods. This is the deliberate cost of not spuriously failing a
+	// running campaign on a transient dip, and it is shared with the Injected path (which keys off
+	// UpdatedReplicas and likewise never reacts to pods crash-looping post-rollout). Surfacing a
+	// permanent zero-pod state honestly is future work; see the plan doc's "Observed is STICKY".
 	if target.Status.Phase == basquinv1alpha1.PhaseObserved {
 		return nil
 	}

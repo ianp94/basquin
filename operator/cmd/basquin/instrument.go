@@ -20,6 +20,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
+	"os"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -112,7 +114,7 @@ func runInstrument(args []string) error {
 	fs.StringVar(&o.invariantMode, "invariant-mode", "", "Invariant mode: soft | hard.")
 	fs.IntVar(&o.latencyMaxMs, "latency-max-ms", 0, "Per-iteration latency threshold (ms).")
 	fs.IntVar(&o.heapDeltaMaxKb, "heap-delta-max-kb", 0, "Per-iteration heap-delta threshold (KB).")
-	fs.BoolVar(&wait, "wait", false, "Wait for the target to reach Injected.")
+	fs.BoolVar(&wait, "wait", false, "Wait for the target to reach a ready phase (Injected or Observed).")
 	fs.DurationVar(&waitFor, "wait-timeout", 3*time.Minute, "How long to wait with --wait.")
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp { // -h/--help: flag already printed usage
@@ -146,7 +148,7 @@ func runInstrument(args []string) error {
 		fmt.Printf("Check progress: kubectl -n %s get basquintarget %s\n", o.namespace, o.name)
 		return nil
 	}
-	return waitForInjected(ctx, c, types.NamespacedName{Namespace: o.namespace, Name: o.name}, waitFor)
+	return waitForInjected(ctx, c, types.NamespacedName{Namespace: o.namespace, Name: o.name}, waitFor, os.Stdout)
 }
 
 // applyTarget creates the target, or updates the spec of an existing one (idempotent re-apply).
@@ -164,8 +166,11 @@ func applyTarget(ctx context.Context, c client.Client, desired *basquinv1alpha1.
 	}
 }
 
-// waitForInjected polls until the target reaches Injected (printing phase changes), or fails/times out.
-func waitForInjected(ctx context.Context, c client.Client, key types.NamespacedName, timeout time.Duration) error {
+// waitForInjected polls until the target reaches a terminal ready phase — Injected (the operator
+// ran the injection) or Observed (a pre-instrumented target; the operator made no changes and is
+// only confirming the build-time instrumentation is up and running) — printing phase changes along
+// the way, or fails/times out. Symmetric with the campaign controller's §2.3 accepted-phase set.
+func waitForInjected(ctx context.Context, c client.Client, key types.NamespacedName, timeout time.Duration, out io.Writer) error {
 	deadline := time.Now().Add(timeout)
 	last := ""
 	for {
@@ -183,13 +188,16 @@ func waitForInjected(ctx context.Context, c client.Client, key types.NamespacedN
 		observed := t.Status.ObservedGeneration >= t.Generation
 		phase := string(t.Status.Phase)
 		if phase != last && phase != "" {
-			fmt.Printf("  phase: %s\n", phase)
+			fmt.Fprintf(out, "  phase: %s\n", phase)
 			last = phase
 		}
 		if observed {
 			switch t.Status.Phase {
 			case basquinv1alpha1.PhaseInjected:
-				fmt.Printf("Injected ✓  coverageEndpoint=%s\n", orNone(t.Status.CoverageEndpoint))
+				fmt.Fprintf(out, "Injected ✓  coverageEndpoint=%s\n", orNone(t.Status.CoverageEndpoint))
+				return nil
+			case basquinv1alpha1.PhaseObserved:
+				fmt.Fprintf(out, "Observed ✓  build-time instrumentation confirmed; the operator made no changes (coverageEndpoint=%s)\n", orNone(t.Status.CoverageEndpoint))
 				return nil
 			case basquinv1alpha1.PhaseError:
 				return fmt.Errorf("target entered Error (see: kubectl -n %s describe basquintarget %s)", key.Namespace, key.Name)

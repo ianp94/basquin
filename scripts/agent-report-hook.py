@@ -41,17 +41,21 @@ level (a path to the conversation JSON, noted to LAG in-memory state) without pu
 line-level JSONL schema. This hook does not read `transcript_path` at all, specifically BECAUSE of
 that gap — `last_assistant_message` is the one field the docs confirm is fresh for the current
 turn, and mutating-tool detection here is DELIBERATELY LIMITED to what can be inferred from that
-text (a crude substring/keyword scan — see `MUTATION_HINT_RE` below), not a transcript walk. This
-is a strictly weaker signal than parsing actual tool_use blocks would be: disclosed, not silently
-claimed as full coverage. A future revision that reads `transcript_path` for exact tool_use
-records would need its own JSONL-schema confirmation pass first, same bar as this file cleared for
-the event/blocking mechanism.
+text (a crude, clause-scoped verb+file+first-person scan — see `has_self_mutation_hint()` below),
+not a transcript walk. This is a strictly weaker signal than parsing actual tool_use blocks would
+be: disclosed, not silently claimed as full coverage. A future revision that reads
+`transcript_path` for exact tool_use records would need its own JSONL-schema confirmation pass
+first, same bar as this file cleared for the event/blocking mechanism.
 
 FAILS OPEN, ALWAYS. Any error — malformed stdin JSON, an unexpected field shape, an exception this
-file's author didn't anticipate — is caught at the top level and answers with exit 0 and no block.
-A hook that crashes or blocks the harness due to ITS OWN bug is a worse failure mode than a missed
-catch: this is a mechanical ASSIST, not a security boundary, and the design's own text says so
-plainly ("it cannot help a killed session; nothing can"). Never raises past `main()`.
+file's author didn't anticipate, OR the module-level import of `check-agent-report.py` itself
+failing (that file moved, renamed, or a transient syntax error) — is caught and answers with exit
+0 and no block. The import is wrapped in its own try/except at module load time specifically so
+that failure mode is not the one thing this file lets through uncaught: see the `_IMPORT_ERROR`
+sentinel below and its check at the top of `main()`. A hook that crashes or blocks the harness due
+to ITS OWN bug is a worse failure mode than a missed catch: this is a mechanical ASSIST, not a
+security boundary, and the design's own text says so plainly ("it cannot help a killed session;
+nothing can"). Never raises past `main()` — nor past the module-level import above it.
 
 Wired in `.claude/settings.json` (tracked, this-checkout-only, requires the user to have approved
 project hooks — an honest boundary, not a durable gate: see check-agent-report.py's own docstring
@@ -65,21 +69,50 @@ import importlib.util
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-_spec = importlib.util.spec_from_file_location(
-    "check_agent_report", ROOT / "scripts" / "check-agent-report.py")
-_check_agent_report = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_check_agent_report)
-FENCE_RE = _check_agent_report.FENCE_RE
-EXIT_LINE_RE = _check_agent_report.EXIT_LINE_RE
+# IMPORT WRAPPED IN try/except, ON PURPOSE (see FAILS OPEN, ALWAYS above): a bare module-level
+# exec_module call would run OUTSIDE every try/except in this file — if check-agent-report.py is
+# ever moved, renamed, or has a transient syntax error, that would raise past this module's own
+# load, past `main()`, and past the `if __name__ == "__main__":` guard's try/except (which only
+# wraps the CALL to main(), not the imports above it) — an uncaught traceback contradicting this
+# file's own "Never raises past main()" claim. Wrapping it here means an import failure is just
+# another disclosed-limited condition: `_IMPORT_ERROR` is checked first thing in `main()`, and a
+# broken import fails open (does nothing) exactly like every other error case in this file.
+try:
+    _spec = importlib.util.spec_from_file_location(
+        "check_agent_report", ROOT / "scripts" / "check-agent-report.py")
+    _check_agent_report = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_check_agent_report)
+    FENCE_RE = _check_agent_report.FENCE_RE
+    EXIT_LINE_RE = _check_agent_report.EXIT_LINE_RE
+    _IMPORT_ERROR = None
+except Exception as _e:
+    FENCE_RE = None
+    EXIT_LINE_RE = None
+    _IMPORT_ERROR = _e
 
 # Crude, disclosed-limited signal (see TRANSCRIPT-SCHEMA CAVEAT): last_assistant_message is prose
 # ABOUT what the subagent did, not a tool-call log, so this can only catch a subagent that
 # describes its own edits in words a human would also use. False negatives are expected and
-# accepted; a false positive (blocking read-only work) would be the worse failure mode here.
-MUTATION_HINT_RE = re.compile(
+# accepted; a false positive (blocking read-only work) would be the worse failure mode here — so
+# a mutation-shaped verb+file phrase ALONE is not enough: a first-person marker (`I`, `my`, `me`,
+# `myself`) must appear BEFORE the verb within the same clause, so a subagent narrating someone
+# ELSE's mutation ("the previous commit had already modified 3 files before I started") does not
+# trip this hook merely because a mutation verb and a first-person pronoun both occur somewhere in
+# its final message — clause-scoped and ordered, not a whole-message keyword search.
+CLAUSE_SPLIT_RE = re.compile(r"[.!?;]+")
+MUTATION_VERB_FILE_RE = re.compile(
     r"\b(edited|wrote|created|modified|updated|deleted|renamed)\b.{0,40}\b(file|files)\b",
     re.IGNORECASE,
 )
+FIRST_PERSON_RE = re.compile(r"\b(I|my|me|myself)\b", re.IGNORECASE)
+
+
+def has_self_mutation_hint(text: str) -> bool:
+    for clause in CLAUSE_SPLIT_RE.split(text):
+        m = MUTATION_VERB_FILE_RE.search(clause)
+        if m and FIRST_PERSON_RE.search(clause[:m.start()]):
+            return True
+    return False
 
 
 def has_contract_marker(text: str) -> bool:
@@ -94,6 +127,9 @@ def has_contract_marker(text: str) -> bool:
 
 
 def main() -> int:
+    if _IMPORT_ERROR is not None:
+        return 0  # fail open — see the import try/except above; nothing to gate with if the
+                  # validator module itself could not load
     try:
         payload = json.load(sys.stdin)
     except Exception:
@@ -101,8 +137,8 @@ def main() -> int:
     text = payload.get("last_assistant_message")
     if not isinstance(text, str) or not text.strip():
         return 0  # nothing to scan — fail open, never block on absence of the field itself
-    if not MUTATION_HINT_RE.search(text):
-        return 0  # no mutation hint — nothing for this hook to gate
+    if not has_self_mutation_hint(text):
+        return 0  # no self-mutation hint — nothing for this hook to gate
     if has_contract_marker(text):
         return 0  # contract marker present — compliant
     print(json.dumps({

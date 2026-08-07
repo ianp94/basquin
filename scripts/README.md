@@ -27,6 +27,13 @@ never committed.**
 
 `check-agent-report.py` grades the REPORT that makes a claim (form only — see its own printed
 limit); `check-evidence-complete.py` grades the EVIDENCE once it reaches `bench-results/` (bytes,
-CI-enforced). Between them: verification artifacts to disk first, the report last, so a killed
-session leaves artifacts without claims — recoverable — rather than claims without artifacts.
-Waits watch a terminal artifact (an `exit=` line, a file that appears), never a process-name poll.
+CI-enforced).
+
+Two clauses below are CONVENTION, not mechanically checked by either script — labeled as such,
+matching the design doc's explicit "Contract clause / convention" distinction (see
+`docs/superpowers/specs/2026-08-04-dd045-items-4-6-design.md`, item 6c):
+
+- **CONVENTION:** verification artifacts to disk first, the report last, so a killed session
+  leaves artifacts without claims — recoverable — rather than claims without artifacts.
+- **CONVENTION:** waits watch a terminal artifact (an `exit=` line, a file that appears), never a
+  process-name poll.

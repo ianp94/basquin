@@ -26,9 +26,17 @@ enforces it (this thread's whole thesis — a claim and its check must not drift
   tally or exit code repeated in prose also appearing, verbatim, inside a pasted block. Partial
   evidence is never committed — `scripts/check-evidence-complete.py` is this contract's CI-side
   half, grading the bytes once they reach `bench-results/`; this script grades the REPORT that
-  claims them, before that. Waits watch terminal artifacts (an `exit=` line, a file that appears),
-  never a process-name poll. Acceptance means the parent/dispatcher actually ran this validator —
-  one command, whose own output is then pasteable into the parent's report under the same rule.
+  claims them, before that.
+
+  CONVENTION, not mechanically checked by this script or `check-evidence-complete.py` (labeled as
+  such per the design doc's explicit "Contract clause / convention" distinction — see
+  `docs/superpowers/specs/2026-08-04-dd045-items-4-6-design.md`, item 6c): verification artifacts
+  land on disk FIRST, the report LAST, so a killed session leaves artifacts without a claim
+  (recoverable) rather than a claim without artifacts. Waits watch terminal artifacts (an `exit=`
+  line, a file that appears), never a process-name poll. Acceptance means the parent/dispatcher
+  actually ran this validator — one command, whose own output is then pasteable into the parent's
+  report under the same rule. Nothing in this script or in CI enforces any of the three; they are
+  habits, named so the habit is visible rather than dressed up as a mechanism.
 
 ITS LIMIT — printed in this tool's own output on every run, not buried in this docstring: it
 validates FORM, never TRUTH. A fabricated paste (a hand-typed "exit=0" that no command produced)
@@ -60,10 +68,18 @@ THE FOUR CHECKS.
      covered. Existence only, on-disk — this does not check the path is TRACKED, since a report
      may legitimately point at a gitignored scratch run directory.
 
-  4. PROSE CLAIMS ARE BACKED BY A PASTE. Every `exit=<N>` or `<P> passed, <F> failed, <S> skipped`
-     occurrence OUTSIDE a fenced block (i.e. in prose) must also occur, as an exact substring,
-     INSIDE some fenced block in the file. A prose-only tally or exit code — the claims-match-
-     their-check rule in checkable form — is red.
+  4. PROSE CLAIMS ARE BACKED BY A PASTE, SCOPED TO THE VERIFICATION SECTION. Every `exit=<N>`
+     occurrence OUTSIDE a fenced block (i.e. in prose) must match a REAL captured `exit=<N>` line
+     (the same `EXIT_LINE_RE` shape check 1 requires, same number) inside a fenced block WITHIN the
+     `## Verification` section found by check 1 — not a bare substring anywhere in the block, and
+     not a fenced block living elsewhere in the file. Every `<P> passed, <F> failed, <S> skipped`
+     prose occurrence must likewise occur, as an exact substring, inside a fenced block within that
+     same section. Both halves of this fix close one observed false-clean: the original
+     implementation joined every fenced block in the WHOLE FILE and did a bare substring test, so a
+     decoy fence anywhere in the document containing the claimed text — unrelated to the actual
+     verification run — made a stale or fabricated prose claim look backed. A prose-only tally or
+     exit code, or one backed only by a paste outside Verification — the claims-match-their-check
+     rule in checkable form — is red.
 
 WHY --ref EXISTS. Check 2 compares against the ACTUAL current HEAD by default, which is exactly
 right for a real report (a report claiming a stale commit IS the defect this check exists to
@@ -76,12 +92,23 @@ against a matching fixed value, independent of when the check runs — the sha-m
 tested deterministically, while real, unflagged usage (no `--ref`) still means "the real current
 HEAD", never a frozen historical value.
 
+`--ref` IS GATED, ON PURPOSE. An unrestricted `--ref` would neutralize check 2 in real use: any
+caller could pass `--ref <the report's own stale stamp>` and make a genuinely stale report compare
+clean against itself — exactly the defect check 2 exists to catch, defeated by the tool's own
+escape hatch. So `--ref` is honored ONLY when the report path being checked resolves under
+`scripts/fixtures/` (this directory); anywhere else, a supplied `--ref` is REFUSED (exit 3, not
+silently ignored and not silently honored) — "I could not check" must never read as either "I
+checked and it is fine" or as a way to launder a stale stamp. Real, unflagged usage against a real
+report is unaffected: it never passes `--ref` and always compares against actual `git rev-parse
+HEAD`.
+
 Exit 0: all four checks pass.
 Exit 1: at least one finding — printed with which check it came from.
 Exit 2: usage error (no report-file argument).
-Exit 3: REFUSED — the report file does not exist or could not be read, or `git rev-parse HEAD`
-        failed with no `--ref` override. Distinct from exit 1: "I could not check" must never
-        read as "I checked and it is fine."
+Exit 3: REFUSED — the report file does not exist or could not be read; `git rev-parse HEAD` failed
+        with no `--ref` override; or `--ref` was supplied for a report path outside
+        `scripts/fixtures/` (see "`--ref` IS GATED" above). Distinct from exit 1: "I could not
+        check" must never read as "I checked and it is fine."
 
 Run: python3 scripts/check-agent-report.py <report.md>
      python3 scripts/check-agent-report.py --ref <sha> <report.md>   (testing only — see above)
@@ -93,6 +120,7 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+FIXTURES_DIR = ROOT / "scripts" / "fixtures"
 
 HEADING_RE = re.compile(r"^(#{1,6})\s*(.+?)\s*$", re.MULTILINE)
 FENCE_RE = re.compile(r"^```[^\n]*\n(.*?)^```", re.MULTILINE | re.DOTALL)
@@ -185,20 +213,36 @@ def check_artifacts_exist(text: str, findings: list[str]) -> None:
                              f"section but does not exist on disk (resolved: {target})")
 
 
-def check_prose_backed_by_paste(text: str, findings: list[str]) -> None:
+def check_prose_backed_by_paste(text: str, findings: list[str]) -> int:
+    """Check 4 (see THE FOUR CHECKS). Scoped to the `## Verification` section's OWN fenced blocks
+    — a decoy fence living anywhere else in the file must never back a prose claim (the false-
+    clean this function used to have: it joined every fenced block in the WHOLE FILE and did a
+    bare substring test, so an unrelated fence elsewhere containing the claimed text made a stale
+    or fabricated claim look backed). An `exit=<N>` claim must additionally match a REAL
+    `EXIT_LINE_RE`-shaped captured line for that same N inside the section's pasted blocks — not a
+    bare substring occurrence, which a hand-typed aside ("see exit=0 above") could satisfy without
+    ever being an actual captured shell exit line. A tally claim keeps the substring rule (no
+    dedicated line-shape regex exists for it) but is scoped the same way."""
+    section = find_section(text, "verification")
+    pasted = "\n".join(fenced_blocks(section)) if section is not None else ""
+    captured_exits = {m.group(1) for m in EXIT_LINE_RE.finditer(pasted)}
     prose = FENCE_RE.sub("", text)
-    pasted = "\n".join(fenced_blocks(text))
-    claims: list[str] = []
-    for m in EXIT_TOKEN_RE.finditer(prose):
-        claims.append(m.group(0))
-    for m in TALLY_TOKEN_RE.finditer(prose):
-        claims.append(m.group(0))
     n_checked = 0
-    for claim in claims:
+    for m in EXIT_TOKEN_RE.finditer(prose):
         n_checked += 1
+        claim, num = m.group(0), m.group(1)
+        if num not in captured_exits:
+            findings.append(f"check 4 (prose backed by paste): prose asserts `{claim}` but the "
+                             f"Verification section has no pasted, captured `exit={num}` line "
+                             f"backing it (a decoy fence elsewhere in the file, or a bare "
+                             f"substring match, does not count)")
+    for m in TALLY_TOKEN_RE.finditer(prose):
+        n_checked += 1
+        claim = m.group(0)
         if claim not in pasted:
             findings.append(f"check 4 (prose backed by paste): prose asserts `{claim}` but no "
-                             f"fenced block in this report contains that exact text")
+                             f"fenced block inside the Verification section contains that exact "
+                             f"text")
     return n_checked
 
 
@@ -206,7 +250,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(add_help=False)
     ap.add_argument("--ref", default=None,
                     help="compare the report's Commit: stamp against this literal string "
-                         "instead of `git rev-parse HEAD` — testing only, see WHY --ref EXISTS")
+                         "instead of `git rev-parse HEAD` — testing only, honored ONLY for a "
+                         "report path under scripts/fixtures/, see WHY --ref EXISTS")
     ap.add_argument("report", nargs="?")
     args = ap.parse_args()
     if not args.report:
@@ -222,6 +267,18 @@ def main() -> int:
         raise Refused(f"could not read {report_path}: {e}")
 
     if args.ref is not None:
+        # GATE (see "`--ref` IS GATED, ON PURPOSE" above): an unrestricted --ref would let a real
+        # invocation pass the report's OWN stale stamp and defeat check 2 entirely. Honored only
+        # for a report living under scripts/fixtures/ — anywhere else, refuse rather than silently
+        # ignore (a silently-ignored --ref could read as "I checked with your ref" when it didn't)
+        # or silently honor (which is the defect this gate exists to close).
+        try:
+            report_path.resolve().relative_to(FIXTURES_DIR.resolve())
+        except ValueError:
+            raise Refused(f"--ref was supplied but {report_path} does not resolve under "
+                          f"{FIXTURES_DIR} — --ref is honored only for fixtures (testing only, "
+                          f"see WHY --ref EXISTS); refusing rather than letting a real "
+                          f"invocation launder a stale commit stamp past check 2")
         ref = args.ref
     else:
         proc = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"],

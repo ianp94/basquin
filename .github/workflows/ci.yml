@@ -169,6 +169,7 @@ jobs:
           check wrong-commit.md 1
           check missing-artifact.md 1
           check prose-only-claim.md 1
+          check decoy-paste.md 1
           exit $FAIL
 
 

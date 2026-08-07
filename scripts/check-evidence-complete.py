@@ -400,6 +400,15 @@ def main() -> int:
     findings: list[str] = []
     stats: dict = {"no-tree-stamp": 0, "non-citable-allowed": 0, "verify-rows-nested-checked": 0}
 
+    # NAME-PREFIX CLASSIFICATION, DISCLOSED: verify-*/, verify-rows-*/, and citations-*/ are told
+    # apart by DIRECTORY-NAME PREFIX alone, not by inspecting the directory's actual contents —
+    # the same standing assumption this script's docstring names for every one of these shapes.
+    # A genuinely truncated or NON-CITABLE machine run committed under a directory name that does
+    # not happen to start with one of these three prefixes lands in `out_of_scope` below —
+    # printed, counted, never silently skipped, but also never GRADED: this is a naming-convention
+    # assumption, not a shape check on the directory's bytes. Renaming a real evidence directory
+    # (by hand, or by a future harness change) out of these prefixes is exactly how a complete
+    # record would stay graded and an incomplete one would stop being — undetectable from here.
     verify_dirs = sorted(d for d in dirs if d.startswith(VERIFY_PREFIX)
                          and not d.startswith(VERIFY_ROWS_PREFIX))
     verify_rows_dirs = sorted(d for d in dirs if d.startswith(VERIFY_ROWS_PREFIX))

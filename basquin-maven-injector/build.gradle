@@ -53,6 +53,21 @@ def writeVersionResource = tasks.register('writeVersionResource', WritePropertie
 }
 sourceSets.main.output.dir(versionResourceDir, builtBy: writeVersionResource)
 
+// DD-043 PR-4 precursor. The JaCoCo version Task 2's injected `jacoco-maven-plugin:instrument`
+// execution will pin to, baked at build time from the SAME shared root `jacocoVersion` property
+// (gradle.properties) that the runner's `org.jacoco.core` dependency and the `jacocoAgent`
+// Tomcat-agent-jar configuration consume (root build.gradle) — never a second hand-typed literal.
+// Same generated-resource mechanism as writeVersionResource just above, for the same reason:
+// offline-instrumented classes reference the version-specific shaded package
+// `org.jacoco.agent.rt.internal_<hash>`, so a plugin/agent version skew would silently break the
+// coverage read rather than fail to compile or resolve.
+def jacocoVersionResourceDir = layout.buildDirectory.dir('generated/basquin-jacoco-version')
+def writeJacocoVersionResource = tasks.register('writeJacocoVersionResource', WriteProperties) {
+    destinationFile = jacocoVersionResourceDir.map { it.file('basquin-injector-jacoco.properties') }
+    property 'version', providers.gradleProperty('jacocoVersion').get()
+}
+sourceSets.main.output.dir(jacocoVersionResourceDir, builtBy: writeJacocoVersionResource)
+
 java {
     withSourcesJar()
 }

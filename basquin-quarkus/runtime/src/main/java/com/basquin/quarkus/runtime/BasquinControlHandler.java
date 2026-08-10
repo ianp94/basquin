@@ -2,8 +2,13 @@ package com.basquin.quarkus.runtime;
 
 import agent.ResultStore;
 import io.vertx.core.Handler;
+import io.vertx.core.buffer.Buffer;
 import io.vertx.ext.web.RoutingContext;
 
+import org.jacoco.agent.rt.IAgent;
+import org.jacoco.agent.rt.RT;
+
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
@@ -33,8 +38,23 @@ import java.util.concurrent.ConcurrentLinkedDeque;
  * <p>{@code mode} and {@code drift} are out of scope here: both are {@code LoadMode}, the DD-029
  * valve strategy flag, and load mode against native/reactive targets is a DD-043 §2 non-goal
  * (DD-042's business). Any path under {@code PREFIX} other than {@code result}/{@code violations}/
- * {@code control/defect/*} — including {@code mode}/{@code drift} — answers {@code err:unknown}
- * and never reaches the app.
+ * {@code control/defect/*}/{@code coverage} — including {@code mode}/{@code drift} — answers
+ * {@code err:unknown} and never reaches the app.
+ *
+ * <h2>Coverage (DD-043 PR-4, spec §6.4)</h2>
+ * {@code coverage} answers offline-JaCoCo execution data for a target instrumented at build time
+ * by {@code basquin-maven-injector} (DD-043 PR-3) — a binary body, so it is dispatched in {@link
+ * #handle(RoutingContext)} ahead of the {@code text/plain} {@link #handle(String, String)} switch,
+ * never through it (see {@link #dispatchCoverage()}). Reads via a direct, compile-time-typed
+ * {@code org.jacoco.agent.rt.RT.getAgent()} call — NEVER reflection, which the DD-043 spike S1
+ * measured failing deterministically under native-image's closed-world analysis — so no {@code
+ * @RegisterForReflection}/reflect-config entry is needed; {@code RT}/{@code IAgent} are ordinary
+ * public compiled types (spec decision A1: the extension's own {@code implementation} dependency
+ * on {@code org.jacoco.agent:...:runtime}, propagating transitively to any target this extension
+ * is injected into). When no agent is reachable, this answers a DISTINCT non-2xx, never an
+ * empty-but-200 body — an empty 200 would be indistinguishable from "measured and genuinely zero
+ * coverage" (DD-040's binding rule). Proven composed, end-to-end, native included, by the seam
+ * spike ({@code .superpowers/sdd/dd043-pr4-seam-spike.md}).
  *
  * <h2>Negative-control defect routes (spec §7.3)</h2>
  * DD-040's binding rule is that a reported zero means "checked and clean", never "never measured".
@@ -138,6 +158,18 @@ public final class BasquinControlHandler implements Handler<RoutingContext> {
                     .end(outcome.body());
             return;
         }
+        if ((PREFIX + "coverage").equals(path)) {
+            // Ahead of the text switch, deliberately: the body is binary (offline JaCoCo
+            // execution data), never text/plain, so it must never fall into
+            // handle(String, String)'s String-returning dispatch below. See dispatchCoverage()'s
+            // javadoc for the read contract.
+            CoverageOutcome outcome = dispatchCoverage();
+            ctx.response()
+                    .setStatusCode(outcome.statusCode())
+                    .putHeader("Content-Type", outcome.contentType())
+                    .end(Buffer.buffer(outcome.body()));
+            return;
+        }
         String query = ctx.request().query();
         String body = handle(path, query);
         ctx.response().putHeader("Content-Type", "text/plain").end(body);
@@ -156,8 +188,8 @@ public final class BasquinControlHandler implements Handler<RoutingContext> {
                 return Long.toString(ResultStore.totalViolations());
             default:
                 // Includes mode/drift (out of scope here, see class javadoc), control/defect/*
-                // (dispatched separately, above — see #handle(RoutingContext)) and anything else:
-                // never reaches the app.
+                // and coverage (both dispatched separately, above — see #handle(RoutingContext))
+                // and anything else: never reaches the app.
                 return "err:unknown";
         }
     }
@@ -188,6 +220,51 @@ public final class BasquinControlHandler implements Handler<RoutingContext> {
             default:
                 return new DefectOutcome(200, "err:unknown");
         }
+    }
+
+    /** The HTTP status + content-type + body bytes the coverage route resolves to (DD-043 PR-4,
+     *  spec §6.4). A record, mirroring {@link DefectOutcome}'s split — writing to a plain data
+     *  holder rather than directly to {@code ctx.response()} so {@link #dispatchCoverage()} is
+     *  testable without a live {@code RoutingContext} — generalized to a {@code byte[]} body and
+     *  an explicit content type, since offline JaCoCo execution data is binary, never text: unlike
+     *  {@code DefectOutcome} this cannot hard-code {@code text/plain} for every outcome. */
+    record CoverageOutcome(int statusCode, String contentType, byte[] body) {}
+
+    /**
+     * Package-visible for tests: the pure dispatch logic for {@code coverage}, isolated from
+     * Vert.x wiring, mirroring {@link #dispatchDefect}'s own split.
+     *
+     * <p>The read is a direct, compile-time-typed call — {@code RT.getAgent()} then {@code
+     * agent.getExecutionData(false)} — NEVER reflection, which the DD-043 spike S1 measured
+     * failing deterministically under native-image's closed-world analysis. {@code RT} and {@code
+     * IAgent} are ordinary public compiled types (spec decision A1: the extension's own {@code
+     * implementation} dependency on {@code org.jacoco.agent:...:runtime} — see this module's
+     * {@code build.gradle}), so this is plain virtual dispatch, visible to closed-world analysis
+     * with no {@code @RegisterForReflection}/reflect-config entry needed — confirmed composed,
+     * end-to-end, native included, by the seam spike ({@code
+     * .superpowers/sdd/dd043-pr4-seam-spike.md}: the extension's typed call is what keeps the
+     * agent AOT-reachable in the image at all). {@code getExecutionData(false)}, never {@code
+     * true}: {@code true} resets the session, but the driver's cross-poll union-merge expects
+     * cumulative data (spec §6.4).
+     *
+     * <p>When no agent is reachable — nothing was ever offline-instrumented into this process, so
+     * {@code RT.getAgent()} throws — this answers a DISTINCT non-2xx (503), never an
+     * empty-but-200 body: an empty 200 would be indistinguishable from "measured and genuinely
+     * zero coverage" (DD-040's binding rule), which is exactly the shape an empty-but-200 response
+     * would manufacture. Mirrors the seam spike's own control-cell finding verbatim (extension
+     * present, nothing instrumented, agent never boots): {@code err:no-jacoco-agent
+     * java.lang.IllegalStateException: JaCoCo agent not started.}
+     */
+    static CoverageOutcome dispatchCoverage() {
+        byte[] data;
+        try {
+            IAgent agent = RT.getAgent();
+            data = agent.getExecutionData(false);
+        } catch (Throwable t) {
+            String body = "err:no-jacoco-agent " + t.getClass().getName() + ": " + t.getMessage();
+            return new CoverageOutcome(503, "text/plain", body.getBytes(StandardCharsets.UTF_8));
+        }
+        return new CoverageOutcome(200, "application/octet-stream", data);
     }
 
     /**

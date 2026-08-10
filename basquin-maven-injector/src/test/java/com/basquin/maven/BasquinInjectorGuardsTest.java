@@ -6,12 +6,18 @@ import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 
 import org.apache.maven.MavenExecutionException;
+import org.apache.maven.model.Build;
+import org.apache.maven.model.BuildBase;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Exclusion;
+import org.apache.maven.model.Plugin;
+import org.apache.maven.model.PluginExecution;
+import org.apache.maven.model.Profile;
 import org.apache.maven.project.MavenProject;
 import org.junit.Test;
 
@@ -629,5 +635,133 @@ public class BasquinInjectorGuardsTest {
 
         assertEquals("no duplicate added", 1, p.getModel().getDependencies().size());
         assertEquals("the repository is still required", 1, p.getRemoteArtifactRepositories().size());
+    }
+
+    // ---- DD-043 PR-4, decision D2 (docs/superpowers/plans/2026-08-10-dd043-pr4-coverage.md):
+    // fail loudly on a conflicting jacoco declaration, matching the §5.1 failOn* posture. ----
+
+    private static Plugin declareJacocoPlugin(MavenProject p, String version, String goal) {
+        if (p.getModel().getBuild() == null) {
+            p.getModel().setBuild(new Build());
+        }
+        Plugin plugin = new Plugin();
+        plugin.setGroupId(BasquinInjector.JACOCO_GROUP_ID);
+        plugin.setArtifactId(BasquinInjector.JACOCO_ARTIFACT_ID);
+        plugin.setVersion(version);
+        PluginExecution exec = new PluginExecution();
+        exec.setId("the-targets-own-execution");
+        exec.addGoal(goal);
+        plugin.addExecution(exec);
+        p.getModel().getBuild().getPlugins().add(plugin);
+        return plugin;
+    }
+
+    /**
+     * The FIRST D2 condition: an ACTIVE {@code instrument}-bound execution conflicts with the one this
+     * injector is about to add, regardless of version — two instrument passes over the same classes is
+     * the hazard, not a version mismatch. The declared version deliberately AGREES with
+     * {@link JacocoVersion#value()} — the same "matching version, so only the guard under test can
+     * fire" isolation idiom this file already uses throughout (e.g.
+     * {@link #acceptsAnOptionalDeclarationBecauseADirectOptionalStillReachesTheClasspath}) — so that
+     * only the instrument-goal branch can fire here.
+     */
+    @Test
+    public void failsLoudlyWhenAnActiveJacocoInstrumentExecutionAlreadyExists() {
+        MavenProject p = project("app");
+        declareJacocoPlugin(p, JacocoVersion.value(), "instrument");
+
+        try {
+            new BasquinInjector().inject(Arrays.asList(p), new Properties());
+            fail("an active instrument execution would run a second instrument pass against the same "
+                    + "classes, so it must not be accepted silently");
+        } catch (MavenExecutionException e) {
+            String m = e.getMessage();
+            assertTrue("message must name the offending goal: " + m, m.contains("instrument"));
+            assertTrue("message must name jacoco-maven-plugin: " + m,
+                    m.contains(BasquinInjector.JACOCO_ARTIFACT_ID));
+            assertTrue("message must name an escape hatch: " + m, m.contains(BasquinInjector.PROP_SKIP));
+        }
+    }
+
+    /**
+     * The SECOND D2 condition: a version collision on the same plugin coordinate, even where its only
+     * execution is a harmless {@code prepare-agent} — offline-instrumented classes reference the
+     * version-specific shaded package {@code org.jacoco.agent.rt.internal_<hash>}, so a plugin/agent
+     * skew is a hazard independent of which goal is bound. The execution is deliberately
+     * {@code prepare-agent} (not {@code instrument}) so only the version branch can fire.
+     */
+    @Test
+    public void failsLoudlyWhenAJacocoDeclarationIsAtAConflictingVersion() {
+        MavenProject p = project("app");
+        declareJacocoPlugin(p, "0.8.12-different", "prepare-agent");
+
+        try {
+            new BasquinInjector().inject(Arrays.asList(p), new Properties());
+            fail("a jacoco-maven-plugin declared at a version other than this injector's is unresolved "
+                    + "Maven plugin-merge territory, so it must not be accepted silently");
+        } catch (MavenExecutionException e) {
+            String m = e.getMessage();
+            assertTrue("message must name the conflicting version: " + m,
+                    m.contains("0.8.12-different"));
+            assertTrue("message must name the version we supply: " + m, m.contains(JacocoVersion.value()));
+            assertTrue("message must name an escape hatch: " + m, m.contains(BasquinInjector.PROP_SKIP));
+        }
+    }
+
+    /**
+     * The measured-harmless shape D2 deliberately does NOT reject: a target's own {@code prepare-agent}
+     * execution, at the agreeing version, is a different (on-line) mechanism from this injector's
+     * (off-line) {@code instrument} goal and does not compete for the same bytecode. The injector must
+     * still add its own instrument execution beside it — accepting the pre-existing declaration must
+     * not turn into silently skipping the injection.
+     */
+    @Test
+    public void acceptsABareJacocoPrepareAgentDeclarationAtTheAgreeingVersion() throws Exception {
+        MavenProject p = project("app");
+        declareJacocoPlugin(p, JacocoVersion.value(), "prepare-agent");
+
+        new BasquinInjector().inject(Arrays.asList(p), new Properties());
+
+        List<Plugin> plugins = p.getModel().getBuild().getPlugins();
+        assertEquals("the pre-existing prepare-agent plugin, plus this injector's own instrument plugin",
+                2, plugins.size());
+        Plugin injected = plugins.get(1);
+        assertEquals(BasquinInjector.JACOCO_EXECUTION_ID, injected.getExecutions().get(0).getId());
+        assertEquals(Arrays.asList("instrument"), injected.getExecutions().get(0).getGoals());
+    }
+
+    /**
+     * D2's profile carve-out. This participant runs at {@code afterProjectsRead}, after Maven has
+     * already merged every ACTIVATED profile into the effective model this guard reads
+     * ({@code p.getModel().getBuild()}). A jacoco declaration living only on a {@link Profile}'s own
+     * {@code getBuild()} — simulating one that was never merged into the effective model, i.e. never
+     * activated for this build — never reaches {@code Model#getBuild()} at all, so it is invisible to
+     * the guard by construction, not by an explicit exclusion the guard has to implement. This test
+     * proves the mechanism directly: the SAME conflicting instrument execution the first test above
+     * rejects is accepted here purely because it lives on {@code Profile#getBuild()} rather than
+     * {@code Model#getBuild()}.
+     */
+    @Test
+    public void acceptsAConflictingJacocoDeclarationLivingOnlyOnAnUnmergedProfile() throws Exception {
+        MavenProject p = project("app");
+        Profile profile = new Profile();
+        profile.setId("it-coverage");
+        BuildBase profileBuild = new BuildBase();
+        Plugin conflicting = new Plugin();
+        conflicting.setGroupId(BasquinInjector.JACOCO_GROUP_ID);
+        conflicting.setArtifactId(BasquinInjector.JACOCO_ARTIFACT_ID);
+        conflicting.setVersion("0.8.12-different");
+        PluginExecution exec = new PluginExecution();
+        exec.setId("profile-only-instrument");
+        exec.addGoal("instrument");
+        conflicting.addExecution(exec);
+        profileBuild.getPlugins().add(conflicting);
+        profile.setBuild(profileBuild);
+        p.getModel().addProfile(profile);
+
+        new BasquinInjector().inject(Arrays.asList(p), new Properties());
+
+        assertEquals("the profile's plugin never reached the effective model — only this injector's "
+                + "own instrument plugin is there", 1, p.getModel().getBuild().getPlugins().size());
     }
 }

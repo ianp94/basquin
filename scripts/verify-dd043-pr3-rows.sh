@@ -193,8 +193,8 @@ _TEST_METHOD_RE = re.compile(
 def neuter_all_tests(rel, expected_count):
     """C2's compound seed: insert `if (true) return;` right after every @Test method's opening
     `{`, so each guard's own test can no longer fail no matter how the guard is neutered. Asserts
-    the substitution count against the file's actual @Test count (23 for
-    BasquinInjectorGuardsTest.java, 8 for BasquinInjectorTest.java) — same anchor discipline as
+    the substitution count against the file's actual @Test count (27 for
+    BasquinInjectorGuardsTest.java, 13 for BasquinInjectorTest.java) — same anchor discipline as
     apply_seed: a wrong count means the subject's shape drifted and this scenario must fail loud,
     not seed a partial mutant silently."""
     text = _read_raw(rel)
@@ -312,22 +312,26 @@ def grade(scn, copy_dir, proc, dt, new_dirs):
         problems.append(f"tallies say F={f} S={s} but exit=0")
     return problems
 
-# ---- the 13 green-run row labels (scripts/verify-dd043-pr3.sh emits exactly these on a green
+# ---- the 15 green-run row labels (scripts/verify-dd043-pr3.sh emits exactly these on a green
 # `unit jar guards` run). A label with no scenario below that targets it is a meta-run failure —
-# computed at the end from the scenario table itself, never by parsing the harness's bash. ----
+# computed at the end from the scenario table itself, never by parsing the harness's bash.
+# DD-043 PR-4, Task 2 added guards:jacoco-instrument-conflict and guards:jacoco-version-conflict
+# (decision D2) to both lists below: they are killed the same way every other GUARDS_PASS_CONTROLS
+# label already is, by C2's neuter_all_tests (below) — no dedicated scenario needed, because C2's
+# expect_fail is derived from GUARDS_PASS_CONTROLS itself, not hand-enumerated. ----
 GREEN_RUN_LABELS = [
     "unit",
     "jar:sisu-index", "jar:baked-version", "jar:gradle-init-version",
     "guards:skip", "guards:managed-version", "guards:managed-exclusions", "guards:managed-scope",
     "guards:declared-version", "guards:declaration-usability", "guards:sibling-scope",
-    "guards:sibling-version",
+    "guards:sibling-version", "guards:jacoco-instrument-conflict", "guards:jacoco-version-conflict",
     "guards:restored",
 ]
 
 GUARDS_PASS_CONTROLS = [
     "guards:skip", "guards:managed-version", "guards:managed-exclusions", "guards:managed-scope",
     "guards:declared-version", "guards:declaration-usability", "guards:sibling-scope",
-    "guards:sibling-version",
+    "guards:sibling-version", "guards:jacoco-instrument-conflict", "guards:jacoco-version-conflict",
 ]
 
 BIT = "basquin-maven-injector/src/test/java/com/basquin/maven/BasquinInjectorTest.java"
@@ -356,7 +360,7 @@ SCENARIOS = [
         name="C1", desc="unit fail branch + guards:restored not-green branch (one invocation)",
         stage_args=["unit", "guards"], expect_exit=1,
         expect_fail=["unit", "guards:restored"], expect_pass=list(GUARDS_PASS_CONTROLS),
-        expect_total_rows=10,
+        expect_total_rows=12,
         seeds=[lambda: apply_seed(
             BIT,
             '        assertTrue("ours is appended after", BasquinInjector.REPO_ID.equals(effective.get(1).getId()));\n'
@@ -370,14 +374,18 @@ SCENARIOS = [
         )],
     ),
     dict(
-        name="C2", desc="all eight guards:<label> guard-is-dead branch",
+        name="C2", desc="all ten guards:<label> guard-is-dead branch",
         stage_args=["guards"], expect_exit=1,
         expect_fail=list(GUARDS_PASS_CONTROLS), expect_pass=["guards:restored"],
-        expect_total_rows=9,
+        expect_total_rows=11,
         branch_pins={label: "guard is dead" for label in GUARDS_PASS_CONTROLS},
         seeds=[
-            lambda: neuter_all_tests(BIT, 8)[0],
-            lambda: neuter_all_tests(BGT, 23)[0],
+            # DD-043 PR-4, Task 2 added 5 tests to BasquinInjectorTest.java (8 -> 13) and 4 to
+            # BasquinInjectorGuardsTest.java (23 -> 27) for decision D2's jacoco-conflict guard;
+            # neuter_all_tests asserts its substitution count against the file's ACTUAL @Test
+            # count (this file's own anchor discipline), so both counts must track the subject.
+            lambda: neuter_all_tests(BIT, 13)[0],
+            lambda: neuter_all_tests(BGT, 27)[0],
         ],
     ),
     dict(
@@ -557,14 +565,18 @@ def main():
         lines.append(f"| {name} | {status} | {observed}; {scn.get('expect_exit', '?')} | {dt:.1f} | {'; '.join(problems) or '-'} |")
     if not SELECT:
         lines.append("")
-        lines.append("## Green-run row coverage (13 labels)")
+        # Derived from GREEN_RUN_LABELS itself, never hand-typed: DD-043 PR-4 grew this list from
+        # 13 to 15 (decision D2's two jacoco-conflict guards), and a literal here would have drifted
+        # silently the moment this report's own header stopped matching the list it describes.
+        lines.append(f"## Green-run row coverage ({len(GREEN_RUN_LABELS)} labels)")
         lines.append("")
         if coverage_problems:
             all_ok = False
             for cp in coverage_problems:
                 lines.append(f"- FAILURE: {cp}")
         else:
-            lines.append("all 13 green-run row labels are killed by at least one PROVEN scenario.")
+            lines.append(f"all {len(GREEN_RUN_LABELS)} green-run row labels are killed by at least "
+                         f"one PROVEN scenario.")
     lines.append("")
     lines.append("## Honest limit")
     lines.append("")

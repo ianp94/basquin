@@ -67,7 +67,9 @@ import java.util.List;
  *       {@code off} disables pod addressing entirely.</li>
  *   <li>the host of {@code -Dbasquin.coverage.jacoco}, when set — in an operator campaign this is the
  *       target's headless coverage Service, which by construction selects exactly the target's
- *       pods.</li>
+ *       pods. (DD-043 PR-4: the spec may now be an HTTP URL instead of {@code host:port} — the
+ *       injected build-time-instrumented target's transport — and the host extraction below reads
+ *       through to either form the same way.)</li>
  *   <li>the base URL's own host — covers a campaign pointed straight at a headless Service.</li>
  * </ol>
  *
@@ -165,8 +167,13 @@ public final class PodPollTargets {
     private static String derivedSource(String base) {
         String jacoco = System.getProperty("basquin.coverage.jacoco");
         if (jacoco != null && !jacoco.trim().isEmpty()) {
+            // The HOST only, for EITHER coverage-spec form: a tcpserver "host:port" entry (6300 is
+            // the JaCoCo port, not the app's HTTP port) or a DD-043 PR-4 HTTP URL entry (e.g.
+            // "http://host:8080/__basquin/coverage" -- the app's own HTTP port is irrelevant here
+            // too; only the pod-addressing host matters). parseEndpoints resolves both forms to an
+            // Endpoint whose #host is populated either way, so one accessor covers both branches --
+            // no separate URL-parsing path needed here.
             try {
-                // The HOST only: 6300 is the JaCoCo tcpserver port, not the app's HTTP port.
                 return JacocoCoverageProvider.parseEndpoints(jacoco).get(0).host;
             } catch (RuntimeException ignored) {
                 // malformed coverage spec: fall through to the base URL's host

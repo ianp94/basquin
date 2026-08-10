@@ -12,7 +12,9 @@ import java.nio.file.Paths;
  * drive the app (typically {@code examples.targets.HttpRouteDriveTarget}).
  *
  * Config:
- * - {@code -Dbasquin.coverage.jacoco=host:port}  JaCoCo tcpserver (default localhost:6300)
+ * - {@code -Dbasquin.coverage.jacoco=host:port}  JaCoCo tcpserver (default localhost:6300), or a
+ *   URL (e.g. {@code http://host:8080/__basquin/coverage}) for a build-time-injected target's HTTP
+ *   coverage transport (DD-043 PR-4) -- see {@link JacocoCoverageProvider#parseEndpoints}
  * - {@code -Dbasquin.coverage.classes=<dir>}     directory of the app's .class files
  * - {@code -Dbasquin.coverage.intervalMs=<n>}    poll interval (default 1000)
  *

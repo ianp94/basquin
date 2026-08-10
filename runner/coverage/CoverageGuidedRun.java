@@ -23,8 +23,9 @@ import java.util.Random;
  * that reach new code — an AFL/Zest feedback loop where the coverage signal comes from the app,
  * over the wire (DD-012). Unlike the round-robin driver, this makes coverage climb.
  *
- * Config: {@code examples.http.baseUrl}, {@code basquin.coverage.jacoco=host:port},
- * {@code basquin.coverage.classes=<dir>}. Arg[0] = iterations.
+ * Config: {@code examples.http.baseUrl}, {@code basquin.coverage.jacoco=host:port} (or a URL for
+ * the DD-043 PR-4 HTTP coverage transport), {@code basquin.coverage.classes=<dir>}.
+ * Arg[0] = iterations.
  */
 public final class CoverageGuidedRun {
 

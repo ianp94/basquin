@@ -1,0 +1,8 @@
+PASS target reached Phase=Observed
+PASS TRIPLE NEGATIVE 1/3: pod-template spec-hash unchanged
+PASS TRIPLE NEGATIVE 2/3: metadata.generation unchanged
+PASS TRIPLE NEGATIVE 3/3: no basquin.dev/* label or annotation appeared
+PASS channel probe: /__basquin/result returned a cost line, not 'miss'
+PASS load campaign reached Completed
+PASS load run reported requests > 0
+PASS operator owns the driver Job (GC wired)

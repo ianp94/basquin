@@ -1,0 +1,44 @@
+apiVersion: basquin.dev/v1alpha1
+kind: BasquinTarget
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"basquin.dev/v1alpha1","kind":"BasquinTarget","metadata":{"annotations":{},"name":"dd044-fixture","namespace":"basquin-system"},"spec":{"container":"dd044-fixture","deploymentRef":{"name":"dd044-fixture"},"preInstrumented":true}}
+  creationTimestamp: "2026-08-07T18:38:21Z"
+  finalizers:
+  - basquin.dev/revert
+  generation: 2
+  name: dd044-fixture
+  namespace: basquin-system
+  resourceVersion: "1074"
+  uid: 7cad5647-5171-4bc8-83b6-abfeafeb5891
+spec:
+  agents:
+    coverage:
+      enabled: false
+      port: 6300
+    threadTracker: true
+    valve: true
+  container: dd044-fixture
+  deploymentRef:
+    name: dd044-fixture
+  invariants:
+    mode: soft
+  jvmOptsVar: JAVA_TOOL_OPTIONS
+  preInstrumented: true
+status:
+  conditions:
+  - lastTransitionTime: "2026-08-07T18:38:37Z"
+    message: single replica, which PR-3.5 supports
+    reason: SingleReplica
+    status: "True"
+    type: ReplicaConfigSupported
+  - lastTransitionTime: "2026-08-07T18:38:37Z"
+    message: 1/1 replica(s) ready; instrumentation is build-time (operator did not
+      modify the pod template)
+    reason: PreInstrumented
+    status: "True"
+    type: Ready
+  instrumentedReplicas: 1
+  observedGeneration: 2
+  phase: Observed

@@ -157,6 +157,17 @@ spec:
                 - CATALINA_OPTS
                 - JAVA_TOOL_OPTIONS
                 type: string
+              preInstrumented:
+                description: |-
+                  PreInstrumented declares that the target's image already carries Basquin's instrumentation —
+                  as produced by basquin-maven-injector at build time (DD-043 §5). The operator then OBSERVES the
+                  Deployment and never mutates its pod template: no initContainer, no volume, no JVM-opts append.
+
+
+                  This is not "disable the agents". Disabling every agent still injects (injection.go:108-115 appends
+                  -javaagent, -Xbootclasspath/a and -Dbasquin.boundary=agent unconditionally), and
+                  -Dbasquin.boundary=agent would name a different boundary than the one the app already has.
+                type: boolean
             required:
             - deploymentRef
             type: object
@@ -261,6 +272,8 @@ spec:
                 - Injecting
                 - Injected
                 - Reverting
+                - Observing
+                - Observed
                 - Error
                 type: string
             type: object

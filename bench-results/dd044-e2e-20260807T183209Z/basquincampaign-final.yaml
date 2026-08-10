@@ -1,0 +1,48 @@
+apiVersion: basquin.dev/v1alpha1
+kind: BasquinCampaign
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"basquin.dev/v1alpha1","kind":"BasquinCampaign","metadata":{"annotations":{},"name":"dd044-fixture-load","namespace":"basquin-system"},"spec":{"baseURL":"http://dd044-fixture.basquin-system.svc.cluster.local:8080","dashboard":{"enabled":false},"driver":{"concurrency":2,"corpusConfigMap":"dd044-fixture-corpus","duration":"20s"},"mode":"load","targetRef":{"name":"dd044-fixture"}}}
+  creationTimestamp: "2026-08-07T18:38:42Z"
+  generation: 1
+  name: dd044-fixture-load
+  namespace: basquin-system
+  resourceVersion: "1156"
+  uid: 0b80d494-bca2-44f9-b3a4-e1ed873b4b73
+spec:
+  baseURL: http://dd044-fixture.basquin-system.svc.cluster.local:8080
+  dashboard:
+    enabled: false
+  driver:
+    classesPath: /usr/local/tomcat/webapps/ROOT/WEB-INF/classes
+    concurrency: 2
+    corpusConfigMap: dd044-fixture-corpus
+    duration: 20s
+  mode: load
+  targetRef:
+    name: dd044-fixture
+status:
+  completionTime: "2026-08-07T18:39:05Z"
+  conditions:
+  - lastTransitionTime: "2026-08-07T18:39:05Z"
+    message: 'load complete: 149424 requests, 7471.0 rps, p99 0ms, latency violations
+      not evaluated (set invariants.latencyMaxMs); heap/thread drift unavailable'
+    reason: Completed
+    status: "True"
+    type: Ready
+  driverJob: dd044-fixture-load-driver
+  load:
+    driftUnavailable: true
+    latencyMs:
+      max: 5
+    requests: 149424
+    throughputRps: "7471.0"
+    violations:
+      notEvaluated:
+      - latency
+      - heap
+      - thread
+  observedGeneration: 1
+  phase: Completed
+  startTime: "2026-08-07T18:38:42Z"

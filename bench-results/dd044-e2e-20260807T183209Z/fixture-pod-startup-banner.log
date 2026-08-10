@@ -1,0 +1,30 @@
+2026-08-07T18:38:19.194365058Z stdout F __  ____  __  _____   ___  __ ____  ______ 
+2026-08-07T18:38:19.194383659Z stdout F  --/ __ \/ / / / _ | / _ \/ //_/ / / / __/ 
+2026-08-07T18:38:19.194385389Z stdout F  -/ /_/ / /_/ / __ |/ , _/ ,< / /_/ /\ \   
+2026-08-07T18:38:19.194386519Z stdout F --\___\_\____/_/ |_/_/|_/_/|_|\____/___/   
+2026-08-07T18:38:19.194387699Z stdout F 2026-08-07 18:38:19,194 INFO  [io.quarkus] (main) fixture 1.0.0-SNAPSHOT native (powered by Quarkus 3.37.3) started in 0.011s. Listening on: http://0.0.0.0:8080
+2026-08-07T18:38:19.194389269Z stdout F 2026-08-07 18:38:19,194 INFO  [io.quarkus] (main) Profile prod activated. 
+2026-08-07T18:38:19.194390349Z stdout F 2026-08-07 18:38:19,194 INFO  [io.quarkus] (main) Installed features: [basquin, cdi, rest, smallrye-context-propagation, vertx]
+2026-08-07T18:38:21.007108245Z stdout F [PROBE] id=probe-29338762945752 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:23.00633503Z stdout F [PROBE] id=probe-29340762457459 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:25.006767331Z stdout F [PROBE] id=probe-29342762888190 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:27.005852624Z stdout F [PROBE] id=probe-29344761969324 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:29.00603596Z stdout F [PROBE] id=probe-29346762180865 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:31.006370504Z stdout F [PROBE] id=probe-29348762504048 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:33.006278444Z stdout F [PROBE] id=probe-29350762405309 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:35.006115495Z stdout F [PROBE] id=probe-29352762254513 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:37.006298942Z stdout F [PROBE] id=probe-29354762404512 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:39.006629498Z stdout F [PROBE] id=probe-29356762721107 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:41.00569466Z stdout F [PROBE] id=probe-29358761828179 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:41.781308409Z stdout F [PROBE] id=probe-29359537442554 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:41.952692306Z stdout F [PROBE] id=probe-29359708824496 path=/__basquin/result status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:42.789823104Z stdout F [PROBE] id=probe-29360545987305 path=/__basquin/mode status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:42.795131929Z stdout F [PROBE] id=probe-29360551256724 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:42.795469626Z stdout F [PROBE] id=probe-29360551623871 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:42.796027132Z stdout F [PROBE] id=probe-29360552234375 path=/__basquin/drift status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:42.796071663Z stdout F [PROBE] id=probe-29360552337675 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:42.796726536Z stdout F [PROBE] id=probe-29360552905761 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:42.796920169Z stdout F [PROBE] id=probe-29360552931197 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:42.797266156Z stdout F [PROBE] id=probe-29360553461453 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:42.79745261Z stdout F [PROBE] id=probe-29360553637646 path=/ok status=200 succeeded=true cause=- ms=0
+2026-08-07T18:38:42.797820462Z stdout F [PROBE] id=probe-29360554002933 path=/ok status=200 succeeded=true cause=- ms=0

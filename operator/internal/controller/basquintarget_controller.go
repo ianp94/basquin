@@ -111,6 +111,9 @@ func (r *BasquinTargetReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			if cerr := r.removeCoverageService(ctx, &target); cerr != nil {
 				return ctrl.Result{}, cerr
 			}
+			// Leaving the observe path (there is no Deployment left to observe): a stale
+			// multi-replica warning must not survive it.
+			meta.RemoveStatusCondition(&target.Status.Conditions, conditionReplicaConfigSupported)
 			meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
 				Type:   "Ready",
 				Status: metav1.ConditionFalse,
@@ -128,79 +131,231 @@ func (r *BasquinTargetReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	// --- inject if drifted ----------------------------------------------------------------------
-	wantHash := specHash(&target.Spec, agentsImage)
-	if !injectionApplied(&deploy, &target.Spec, wantHash) {
-		// If a previous injection exists (spec changed, or out-of-band content drift), revert it
-		// first so applyInjection re-derives from a clean original — this also un-instruments the
-		// old container when spec.Container is retargeted, rather than leaving it instrumented.
-		reverted := false
-		if wasInjected(&deploy) {
-			revertInjection(&deploy)
-			reverted = true
-		}
-		if err := applyInjection(&deploy, &target.Spec, agentsImage); err != nil {
-			// A bad container reference or a valueFrom-sourced jvmOptsVar is the user's to fix;
-			// surface it and stop. Persist the Deployment ONLY if we actually reverted a prior
-			// injection — otherwise `deploy` is unchanged, and writing it would emit a no-op
-			// MODIFIED event that our own Deployment watch re-enqueues, storming on a target that
-			// is permanently misconfigured (e.g. a typo'd spec.Container).
-			if reverted {
-				if uerr := r.Update(ctx, &deploy); uerr != nil {
-					return ctrl.Result{}, uerr
-				}
-			}
-			target.Status.Phase = basquinv1alpha1.PhaseError
-			meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
-				Type: "Ready", Status: metav1.ConditionFalse, Reason: "InjectionRejected",
-				Message: err.Error(),
-			})
-			if uerr := r.Status().Update(ctx, &target); uerr != nil {
-				return ctrl.Result{}, uerr
-			}
-			return ctrl.Result{}, nil
-		}
-		if err := r.Update(ctx, &deploy); err != nil {
+	// --- pre-instrumented observe path (DD-044 / PR-3.5) ------------------------------------------
+	// spec.PreInstrumented declares the image already carries Basquin's instrumentation at build
+	// time (basquin-maven-injector). The operator OBSERVES the Deployment and never mutates its pod
+	// template — except to revert an injection WE previously applied, if preInstrumented was
+	// flipped true on a target we had already injected (design §2.2b). Branching here, before the
+	// inject-if-drifted block below, is what makes "never mutates" true: this must never fall
+	// through to applyInjection.
+	if target.Spec.PreInstrumented {
+		if err := r.reconcileObserve(ctx, &target, &deploy); err != nil {
 			return ctrl.Result{}, err
 		}
-		l.Info("injected agents into Deployment", "deployment", depKey.Name, "hash", wantHash)
+	} else {
+		// The target may carry the ReplicaConfigSupported warning from an earlier
+		// preInstrumented:true stint; it's meaningless once back on the injection path.
+		meta.RemoveStatusCondition(&target.Status.Conditions, conditionReplicaConfigSupported)
+
+		// --- inject if drifted ----------------------------------------------------------------
+		wantHash := specHash(&target.Spec, agentsImage)
+		if !injectionApplied(&deploy, &target.Spec, wantHash) {
+			// If a previous injection exists (spec changed, or out-of-band content drift), revert it
+			// first so applyInjection re-derives from a clean original — this also un-instruments the
+			// old container when spec.Container is retargeted, rather than leaving it instrumented.
+			reverted := false
+			if wasInjected(&deploy) {
+				revertInjection(&deploy)
+				reverted = true
+			}
+			if err := applyInjection(&deploy, &target.Spec, agentsImage); err != nil {
+				// A bad container reference or a valueFrom-sourced jvmOptsVar is the user's to fix;
+				// surface it and stop. Persist the Deployment ONLY if we actually reverted a prior
+				// injection — otherwise `deploy` is unchanged, and writing it would emit a no-op
+				// MODIFIED event that our own Deployment watch re-enqueues, storming on a target that
+				// is permanently misconfigured (e.g. a typo'd spec.Container).
+				if reverted {
+					if uerr := r.Update(ctx, &deploy); uerr != nil {
+						return ctrl.Result{}, uerr
+					}
+				}
+				target.Status.Phase = basquinv1alpha1.PhaseError
+				meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
+					Type: "Ready", Status: metav1.ConditionFalse, Reason: "InjectionRejected",
+					Message: err.Error(),
+				})
+				if uerr := r.Status().Update(ctx, &target); uerr != nil {
+					return ctrl.Result{}, uerr
+				}
+				return ctrl.Result{}, nil
+			}
+			if err := r.Update(ctx, &deploy); err != nil {
+				return ctrl.Result{}, err
+			}
+			l.Info("injected agents into Deployment", "deployment", depKey.Name, "hash", wantHash)
+		}
+
+		// --- coverage Service (P3) --------------------------------------------------------------
+		if err := r.reconcileCoverageService(ctx, &target, &deploy); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		// --- status ------------------------------------------------------------------------------
+		desired := int32(1)
+		if deploy.Spec.Replicas != nil {
+			desired = *deploy.Spec.Replicas
+		}
+		// UpdatedReplicas counts pods already on the latest (now injected) template.
+		instrumented := deploy.Status.UpdatedReplicas
+		target.Status.InstrumentedReplicas = instrumented
+		if instrumented >= desired && desired > 0 {
+			target.Status.Phase = basquinv1alpha1.PhaseInjected
+			meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
+				Type: "Ready", Status: metav1.ConditionTrue, Reason: "Injected",
+				Message: fmt.Sprintf("all %d replica(s) instrumented", desired),
+			})
+		} else {
+			target.Status.Phase = basquinv1alpha1.PhaseInjecting
+			meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
+				Type: "Ready", Status: metav1.ConditionFalse, Reason: "RollingOut",
+				Message: fmt.Sprintf("%d/%d replica(s) instrumented", instrumented, desired),
+			})
+		}
 	}
 
-	// --- coverage Service (P3) ------------------------------------------------------------------
-	if err := r.reconcileCoverageService(ctx, &target, &deploy); err != nil {
+	if err := r.Status().Update(ctx, &target); err != nil {
 		return ctrl.Result{}, err
 	}
+	// While a rollout, a revert, or an observe wait is in flight, poll until it catches up (the
+	// Deployment watch also nudges us, but its status subresource updates don't always route
+	// through our predicate).
+	switch target.Status.Phase {
+	case basquinv1alpha1.PhaseInjecting, basquinv1alpha1.PhaseReverting, basquinv1alpha1.PhaseObserving:
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	}
+	return ctrl.Result{}, nil
+}
 
-	// --- status ---------------------------------------------------------------------------------
+// conditionReplicaConfigSupported is a WARNING-only condition (design §4): PR-3.5 supports only
+// single-replica pre-instrumented targets. It never gates Observed or campaign readiness.
+const conditionReplicaConfigSupported = "ReplicaConfigSupported"
+
+// setReplicaConfigCondition always writes conditionReplicaConfigSupported on the observe path —
+// True/SingleReplica for the supported case, False/MultiReplicaUnsupported otherwise — so a
+// scale-back from >1 replica to 1 is reflected immediately (never left stale) without needing
+// removal while still on the observe path. Removal is for LEAVING the observe path entirely; see
+// the two meta.RemoveStatusCondition call sites in Reconcile.
+func setReplicaConfigCondition(target *basquinv1alpha1.BasquinTarget, desired int32) {
+	if desired > 1 {
+		meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
+			Type: conditionReplicaConfigSupported, Status: metav1.ConditionFalse, Reason: "MultiReplicaUnsupported",
+			Message: fmt.Sprintf(
+				"pre-instrumented targets support only a single replica (PR-3.5); this Deployment requests %d",
+				desired),
+		})
+		return
+	}
+	meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
+		Type: conditionReplicaConfigSupported, Status: metav1.ConditionTrue, Reason: "SingleReplica",
+		Message: "single replica, which PR-3.5 supports",
+	})
+}
+
+// reconcileObserve computes status for a preInstrumented: true target. It never mutates the
+// referenced Deployment's pod template — except to revert an injection WE previously applied
+// (design §2.2b) — and it never creates a coverage Service (design §4: coverage for
+// build-time-instrumented targets is PR-4's work).
+func (r *BasquinTargetReconciler) reconcileObserve(ctx context.Context,
+	target *basquinv1alpha1.BasquinTarget, deploy *appsv1.Deployment) error {
+	// A pre-instrumented target never has a coverage Service, regardless of spec.CoverageService —
+	// tear down any that predates preInstrumented being set, and clear the stale endpoint with it.
+	if err := r.removeCoverageService(ctx, target); err != nil {
+		return err
+	}
+
 	desired := int32(1)
 	if deploy.Spec.Replicas != nil {
 		desired = *deploy.Spec.Replicas
 	}
-	// UpdatedReplicas counts pods already on the latest (now injected) template.
-	instrumented := deploy.Status.UpdatedReplicas
-	target.Status.InstrumentedReplicas = instrumented
-	if instrumented >= desired && desired > 0 {
-		target.Status.Phase = basquinv1alpha1.PhaseInjected
+	// Warning-only condition (design §4): always written on the observe path, never gates Observed
+	// or readiness below.
+	setReplicaConfigCondition(target, desired)
+
+	if wasInjected(deploy) {
+		// design §2.2b — revert-before-observe: our own prior injection is present on this
+		// Deployment. Claiming "operator did not modify the pod template" would be a lie until this
+		// lands, so revert first and do NOT fall through to the readiness check below. Reusing
+		// revertInjection (already exactly pinned by test) rather than adding a second removal path.
+		revertInjection(deploy)
+		if err := r.Update(ctx, deploy); err != nil {
+			return err
+		}
+		target.Status.Phase = basquinv1alpha1.PhaseReverting
+		target.Status.InstrumentedReplicas = 0
 		meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
-			Type: "Ready", Status: metav1.ConditionTrue, Reason: "Injected",
-			Message: fmt.Sprintf("all %d replica(s) instrumented", desired),
+			Type: "Ready", Status: metav1.ConditionFalse, Reason: "Reverting",
+			Message: "reverting a prior injection before observing (preInstrumented was enabled on an already-injected target)",
 		})
-	} else {
-		target.Status.Phase = basquinv1alpha1.PhaseInjecting
+		return nil
+	}
+
+	// Observed is STICKY (Locked decisions): once minted, a transient ReadyReplicas dip must not
+	// revert it to Observing — the phase, condition, and InstrumentedReplicas below are all left as
+	// they were minted; only removeCoverageService (above) and setReplicaConfigCondition (above,
+	// which is warning-only and never gates Observed) still run on every pass while Observed. The
+	// target leaves Observed only via a spec change (a different branch of Reconcile entirely) or the
+	// Deployment disappearing (the DeploymentNotFound branch above, which resets Phase to Pending
+	// before this would run again).
+	//
+	// KNOWN, ACCEPTED LIMITATION (the zero-pod edge): because this returns before re-reading
+	// ReadyReplicas, a target whose pods ALL die *after* reaching Observed stays Observed /
+	// Ready:True with InstrumentedReplicas frozen, indefinitely — the campaign gate would treat it
+	// as ready against zero live pods. This is the deliberate cost of not spuriously failing a
+	// running campaign on a transient dip, and it is shared with the Injected path (which keys off
+	// UpdatedReplicas and likewise never reacts to pods crash-looping post-rollout). Surfacing a
+	// permanent zero-pod state honestly is future work; see the plan doc's "Observed is STICKY".
+	if target.Status.Phase == basquinv1alpha1.PhaseObserved {
+		return nil
+	}
+
+	// The template is clean (never injected, or a prior revert already landed): observe readiness.
+	// ReadyReplicas, not UpdatedReplicas (design §2.2) — there is no rollout to track for an
+	// observe-only target, so readiness is the only honest signal for HOW MANY pods are up.
+	//
+	// But readiness alone is not enough to mint Observed. ReadyReplicas counts Ready pods of ANY
+	// ReplicaSet revision — during a rollout (e.g. right after the revert-before-observe branch above
+	// updates the pod template), the default RollingUpdate maxUnavailable=25% rounds down to 0 at low
+	// replica counts, so the OLD pod stays Ready and keeps ReadyReplicas at desired until its
+	// replacement is Ready too. Minting Observed on that signal would attach "operator did not modify
+	// the pod template" to a pod that may still be running the pre-revert (possibly still-injected)
+	// template — the exact honesty failure this feature exists to prevent. So Observed additionally
+	// requires the rollout to have settled: the Deployment controller has observed the latest
+	// generation, and every replica is on the latest ReplicaSet (Replicas == UpdatedReplicas ==
+	// desired) as well as Ready.
+	ready := deploy.Status.ReadyReplicas
+	target.Status.InstrumentedReplicas = ready
+	settled := deploy.Status.ObservedGeneration >= deploy.Generation &&
+		deploy.Status.UpdatedReplicas >= desired &&
+		deploy.Status.Replicas == deploy.Status.UpdatedReplicas
+
+	if settled && ready >= desired && desired > 0 {
+		target.Status.Phase = basquinv1alpha1.PhaseObserved
 		meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
-			Type: "Ready", Status: metav1.ConditionFalse, Reason: "RollingOut",
-			Message: fmt.Sprintf("%d/%d replica(s) instrumented", instrumented, desired),
+			Type: "Ready", Status: metav1.ConditionTrue, Reason: "PreInstrumented",
+			Message: fmt.Sprintf(
+				"%d/%d replica(s) ready; instrumentation is build-time (operator did not modify the pod template)",
+				ready, desired),
 		})
+		return nil
 	}
-	if err := r.Status().Update(ctx, &target); err != nil {
-		return ctrl.Result{}, err
+
+	// design §2.2a — the pre-ready window: Observed must never be minted on first sight of the
+	// Deployment, nor mid-rollout (see settled above). The campaign gate (a separate controller)
+	// accepts Observed only, never Observing, so a campaign referencing this target stays Pending
+	// rather than launching against zero — or not-yet-clean — pods.
+	target.Status.Phase = basquinv1alpha1.PhaseObserving
+	reason, msg := "WaitingForReplicas", fmt.Sprintf("%d/%d replica(s) ready", ready, desired)
+	if ready >= desired && desired > 0 && !settled {
+		reason = "RolloutNotSettled"
+		msg = fmt.Sprintf(
+			"%d/%d replica(s) ready, but the rollout has not settled yet (updated %d/%d, observedGeneration %d/%d); waiting before observing",
+			ready, desired, deploy.Status.UpdatedReplicas, desired, deploy.Status.ObservedGeneration, deploy.Generation)
 	}
-	// While a rollout is in flight, poll until instrumented replicas catch up (the Deployment watch
-	// also nudges us, but its status subresource updates don't always route through our predicate).
-	if target.Status.Phase == basquinv1alpha1.PhaseInjecting {
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-	}
-	return ctrl.Result{}, nil
+	meta.SetStatusCondition(&target.Status.Conditions, metav1.Condition{
+		Type: "Ready", Status: metav1.ConditionFalse, Reason: reason,
+		Message: msg,
+	})
+	return nil
 }
 
 // revertDeployment restores the target's Deployment to its pre-injection state. A missing Deployment

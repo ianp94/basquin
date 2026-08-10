@@ -1,0 +1,37 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.native
+#1 transferring dockerfile: 887B 0.0s done
+#1 DONE 0.1s
+
+#2 [internal] load metadata for registry.access.redhat.com/ubi9/ubi-minimal:9.7
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 119B 0.0s done
+#3 DONE 0.1s
+
+#4 [1/4] FROM registry.access.redhat.com/ubi9/ubi-minimal:9.7
+#4 DONE 0.0s
+
+#5 [2/4] WORKDIR /work/
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 ...
+
+#7 [3/4] RUN chown 1001 /work     && chmod "g+rwX" /work     && chown 1001:root /work
+#7 DONE 0.2s
+
+#6 [internal] load build context
+#6 transferring context: 48.67MB 1.5s done
+#6 DONE 1.5s
+
+#8 [4/4] COPY --chown=1001:root --chmod=0755 target/*-runner /work/application
+#8 DONE 0.2s
+
+#9 exporting to image
+#9 exporting layers 0.1s done
+#9 writing image sha256:5df3dd4bec46fed280d445e276ada0c6f0d1a2b8a658f1b336b8ebcbb3f61b1e done
+#9 naming to docker.io/basquin/dd044-fixture-native:0.3.0 done
+#9 DONE 0.1s

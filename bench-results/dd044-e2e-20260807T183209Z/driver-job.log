@@ -1,0 +1,28 @@
+Picked up JAVA_TOOL_OPTIONS: -Dexamples.http.baseUrl=http://dd044-fixture.basquin-system.svc.cluster.local:8080 -Dbasquin.summary.out=/dev/termination-log -Dbasquin.status=true -Dbasquin.mode=load -Dbasquin.concurrency=2 -Dbasquin.run.duration=20s -Dbasquin.corpusDir=/basquin-corpus
+[Basquin] 00:00:00 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] load: 2 sequence(s), concurrency=2, warmup=0ms, duration=20000ms
+[Basquin] load: no -Dbasquin.invariant.latency.maxMs — latency is NOT being checked by anyone this run (the target's valve is in passthrough); set invariants.latencyMaxMs on the BasquinTarget or the campaign's driver
+[Basquin] load: mode load toggle not confirmed (got "err:unknown")
+[Basquin] 00:00:01 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:02 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:03 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:04 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:05 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:06 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:07 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:08 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:09 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:10 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:11 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:12 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:13 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:14 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:15 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:16 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:17 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:18 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:19 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] 00:00:20 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0
+[Basquin] load: mode explore toggle not confirmed (got "err:unknown")
+[Basquin] load done: {"load":{"requests":149424,"throughputRps":"7471.0","latencyMs":{"p50":0,"p90":0,"p99":0,"max":5},"driftUnavailable":true,"serverErrors":0,"captureMisses":0,"clientErrors":0,"redirects":0,"redirectTargets":{},"violations":{"notEvaluated":["latency","heap","thread"]}}}
+[Basquin] 00:00:20 iters=0 (0.0/s) crashes=0 leaks=0 driverInv[lat=n/a heap=n/a thr=n/a] lat(last/mean/max)=0/0/0ms heap(last/max)=0/0KB threads=0 resets=0

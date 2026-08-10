@@ -16,7 +16,19 @@ limitations under the License.
 
 package main
 
-import "testing"
+import (
+	"bytes"
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	basquinv1alpha1 "github.com/ianp94/basquin/operator/api/v1alpha1"
+)
 
 func TestBuildTargetMinimal(t *testing.T) {
 	tg := buildTarget(instrumentOpts{name: "app", namespace: "ns", deployment: "app", threadTracker: true})
@@ -104,5 +116,81 @@ func TestValidateInstrument(t *testing.T) {
 				t.Errorf("expected an error, got nil")
 			}
 		})
+	}
+}
+
+// waitTarget builds a BasquinTarget already at the given phase with ObservedGeneration caught up
+// to Generation, so waitForInjected's "has the controller observed THIS spec" gate passes on the
+// very first poll — the tests below don't want to depend on real polling/sleep timing.
+func waitTarget(phase basquinv1alpha1.TargetPhase) *basquinv1alpha1.BasquinTarget {
+	return &basquinv1alpha1.BasquinTarget{
+		ObjectMeta: metav1.ObjectMeta{Name: "app", Namespace: "ns", Generation: 1},
+		Status:     basquinv1alpha1.BasquinTargetStatus{Phase: phase, ObservedGeneration: 1, CoverageEndpoint: "ep:6300"},
+	}
+}
+
+func TestWaitForInjectedInjectedSuccess(t *testing.T) {
+	c := fake.NewClientBuilder().WithScheme(statusScheme(t)).WithObjects(waitTarget(basquinv1alpha1.PhaseInjected)).Build()
+	var buf bytes.Buffer
+	key := types.NamespacedName{Namespace: "ns", Name: "app"}
+	if err := waitForInjected(context.Background(), c, key, time.Second, &buf); err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Injected ✓") {
+		t.Errorf("expected an Injected success line, got:\n%s", out)
+	}
+	if strings.Contains(out, "Observed") {
+		t.Errorf("Injected success line must not mention Observed:\n%s", out)
+	}
+}
+
+// TestWaitForInjectedObservedSuccess is the DD-044 fix under test: against a pre-instrumented
+// target the controller never writes Injected — it writes Observed — so waitForInjected must
+// accept that phase too (§7.7), with a success line distinguishable from the Injected one and
+// that does not claim the operator "instrumented" anything (it didn't; the target already was).
+func TestWaitForInjectedObservedSuccess(t *testing.T) {
+	c := fake.NewClientBuilder().WithScheme(statusScheme(t)).WithObjects(waitTarget(basquinv1alpha1.PhaseObserved)).Build()
+	var buf bytes.Buffer
+	key := types.NamespacedName{Namespace: "ns", Name: "app"}
+	if err := waitForInjected(context.Background(), c, key, time.Second, &buf); err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Observed ✓") {
+		t.Errorf("expected an Observed success line, got:\n%s", out)
+	}
+	if strings.Contains(out, "Injected") {
+		t.Errorf("Observed success line must be distinct from the Injected one, got:\n%s", out)
+	}
+	if strings.Contains(out, "instrumented") {
+		t.Errorf("Observed success line must not claim the operator instrumented the target, got:\n%s", out)
+	}
+}
+
+func TestWaitForInjectedErrorFailure(t *testing.T) {
+	c := fake.NewClientBuilder().WithScheme(statusScheme(t)).WithObjects(waitTarget(basquinv1alpha1.PhaseError)).Build()
+	var buf bytes.Buffer
+	key := types.NamespacedName{Namespace: "ns", Name: "app"}
+	err := waitForInjected(context.Background(), c, key, time.Second, &buf)
+	if err == nil {
+		t.Fatal("expected an error for a target in Error phase")
+	}
+	if !strings.Contains(err.Error(), "Error") {
+		t.Errorf("error should mention the Error phase, got %v", err)
+	}
+}
+
+func TestWaitForInjectedTimeout(t *testing.T) {
+	// Pending never becomes a terminal phase, so this must time out rather than hang or succeed.
+	c := fake.NewClientBuilder().WithScheme(statusScheme(t)).WithObjects(waitTarget(basquinv1alpha1.PhasePending)).Build()
+	var buf bytes.Buffer
+	key := types.NamespacedName{Namespace: "ns", Name: "app"}
+	err := waitForInjected(context.Background(), c, key, 10*time.Millisecond, &buf)
+	if err == nil {
+		t.Fatal("expected a timeout error")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("expected a timeout error, got %v", err)
 	}
 }

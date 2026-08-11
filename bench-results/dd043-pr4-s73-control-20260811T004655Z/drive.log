@@ -1,0 +1,19 @@
+a9fa74b0ebc9151531f1dbe29e7ad8d4b402852fd0395e862a2a5ff69b723761  MANIFEST.md
+manifest-hash-recorded-at: 2026-08-11T01:01:09Z (before app start, before any request of the run this log records)
+[2026-08-11T01:01:16.114Z] binary: /mnt/c/Users/ianpa/OneDrive/Documents/GitHub/quarkus-super-heroes/rest-villains/target/rest-villains-1.0-runner
+[2026-08-11T01:01:17.072Z] binary sha256: 876ef6b6f5b66a6626a698fefa9f0ca99f2af46f816c4e36ac8df1cd4f5b188a
+[2026-08-11T01:01:17.075Z] starting postgres container basquin-s73-control-db (postgres:18, published 55432)
+[2026-08-11T01:01:18.783Z] postgres ready
+[2026-08-11T01:01:18.787Z] app started, pid 900646 (fresh process for this control run — distinct from the published explore run)
+[2026-08-11T01:01:19.816Z] READY /q/health/ready -> 200 (readiness probe; not an application route)
+[2026-08-11T01:01:19.819Z] t0 dump: GET /__basquin/coverage (before any application route)
+[2026-08-11T01:01:19.843Z] t0: HTTP/1.1 200 OK, 176 bytes, first-4-bytes  01 c0 c0 10
+[2026-08-11T01:01:19.846Z] REQUEST 1 (declared sibling): GET /api/villains/random
+[2026-08-11T01:01:19.900Z] REQUEST 1 -> HTTP 200, body 417 bytes (req-random.txt)
+[2026-08-11T01:01:19.903Z] REQUEST 2 (declared sibling): GET /api/villains
+[2026-08-11T01:01:19.928Z] REQUEST 2 -> HTTP 200, body 102011 bytes (req-all.txt)
+[2026-08-11T01:01:19.931Z] t1 dump: GET /__basquin/coverage (after the two sibling requests; the withheld route GET /api/villains/{id} was never sent)
+[2026-08-11T01:01:19.954Z] t1: HTTP/1.1 200 OK, 661 bytes, first-4-bytes  01 c0 c0 10
+[2026-08-11T01:01:19.957Z] drive complete; tearing down
+[2026-08-11T01:01:19.987Z] app pid 900646 stopped
+[2026-08-11T01:01:20.338Z] db container basquin-s73-control-db removed

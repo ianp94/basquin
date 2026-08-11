@@ -1,0 +1,6 @@
+[INFO] Loading exec file t0.exec.
+CLASS ID         HITS/PROBES   CLASS NAME
+Session "Billy-b1da7556": Mon Aug 10 20:12:10 EDT 2026 - Mon Aug 10 21:01:19 EDT 2026
+ad89171dce5f77a9    7 of   8   io/quarkus/sample/superheroes/villain/VillainApplicationLifeCycle
+e8908020e14f111b    1 of  17   io/quarkus/sample/superheroes/villain/Villain
+

@@ -1,0 +1,5 @@
+jacoco-cli jar used by analyze-control.sh (basename): org.jacoco.cli-0.8.15-nodeps.jar
+sha1 (computed now): 1da22eb914b9176037589aaaac612b3f9b65f7ea
+sha1 (the pinned .sha1 file beside it): 1da22eb914b9176037589aaaac612b3f9b65f7ea
+note: the jar lives in the Phase-0 spike's .m2 mirror, which is gitignored (not in
+this repo's tracked tree); this file is the committed pin of what actually ran.

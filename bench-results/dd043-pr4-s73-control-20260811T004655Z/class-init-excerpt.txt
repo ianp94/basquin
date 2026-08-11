@@ -1,0 +1,11 @@
+== obligation-2 pre-check, run BEFORE the control run ==
+report: ../dd043-pr4-2x2-2026-08-10/villains-native/class_initialization_report.csv (committed Task-4 build output)
+checked at: 2026-08-11T01:01:09Z
+
+== count of invoker rows for the withheld method (must be >= 1) ==
+grep -c 'quarkusrestinvoker$getVillain_' => 1
+
+== withheld + declared-sibling invoker rows, verbatim (CR stripped) ==
+io.quarkus.sample.superheroes.villain.api.resources.VillainsResource$quarkusrestinvoker$getAllVillains_fb64b34588a585d896ba1226979ee024c71981bf, BUILD_TIME, from feature io.quarkus.runner.Feature.duringSetup with ''
+io.quarkus.sample.superheroes.villain.api.resources.VillainsResource$quarkusrestinvoker$getRandomVillain_6220cc9664c7cb714990b45d4746b461c0b7487b, BUILD_TIME, from feature io.quarkus.runner.Feature.duringSetup with ''
+io.quarkus.sample.superheroes.villain.api.resources.VillainsResource$quarkusrestinvoker$getVillain_a9655097f1412421e65ffbe969b515b826bd3fe7, BUILD_TIME, from feature io.quarkus.runner.Feature.duringSetup with ''

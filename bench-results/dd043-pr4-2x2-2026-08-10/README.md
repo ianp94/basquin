@@ -11,7 +11,7 @@ plan names as its acceptance bar.
 
 This directory reports **only what actually ran** — every number below is read from a committed
 artifact in this same directory, not typed by hand. Two disclosed, honest caveats are folded in
-below rather than hidden: an unexpected build-time `jacoco.exec` side effect in the sibling clone, and
+below rather than hidden: an unexpected build-time jacoco.exec side effect in the external quarkus-super-heroes clone, and
 a script bug in the shared S3 re-check helper that produced a 404 instead of a 200 on one cell
 (corrected inline, both outcomes shown).
 
@@ -87,8 +87,8 @@ differ even for byte-identical coverage states); (5) a real route-method flip.
 5. Growth, by jacoco-cli parse (`cli-t0.out`/`cli-t1.out`/`cli-t2.out`): `182 → 258 → 743` bytes; each dump point analyzes as **15 classes, zero id-mismatch warnings**.
 6. Flip (`flip.py` against `t0.xml`/`t1.xml`/`t2.xml`, class files preserved in `originals/` from `target/generated-classes/jacoco` before anything else touched the tree): after driving `GET /api/villains/hello` then `GET /api/villains/random` — `HelloVillainResource.hello` INSTRUCTION covered/missed `0/4 → 4/4 → 4/4`; `VillainResource.getRandomVillain` `0/10 → 0/10 → 10/10`. Exact request→flip correspondence: each route flips only its own method.
 
-**Disclosed side effect:** the containerized build left a 0-byte `jacoco.exec` at the sibling clone's
-module root (`rest-villains/jacoco.exec`), consistent with the same build-time class-initialization
+**Disclosed side effect:** the containerized build left a 0-byte jacoco.exec file at the external clone's
+module root (the external clone's rest-villains module — outside this repo, cleaned up), consistent with the same build-time class-initialization
 phenomenon the Task 0 seam spike documented for native builds (§3.2's "t0-pollution baseline" note) —
 here it also occurred once in JVM-mode packaging. It carried zero bytes/no data, was not part of any
 measurement, and was removed immediately after being observed (`git status --porcelain` confirmed
@@ -111,7 +111,7 @@ before and after).
 
 1. Injector line: `build.log:2`/`3`; execution ran at `build.log:78`. `BUILD SUCCESS`, `Total time: 04:33 min` (native-image proper: `Finished generating 'rest-villains-1.0-runner' in 1m 31s`, per the tail of `build.log`).
 2. Zero pom edits: `grep -c "artifactId>basquin-quarkus<" pom.xml` = `0`.
-3. **`-H:+PrintClassInitialization` report present**, as Task 5 needs: `class_initialization_report.csv` (29,648 lines), copied verbatim from `target/rest-villains-1.0-native-image-source-jar/reports/class_initialization_report_20260811_001231.csv`.
+3. **`-H:+PrintClassInitialization` report present**, as Task 5 needs: `class_initialization_report.csv`, copied verbatim from `target/rest-villains-1.0-native-image-source-jar/reports/class_initialization_report_20260811_001231.csv`.
 4. **The composition, measured on the ELF itself**: `strings` on `target/rest-villains-1.0-runner` (a stripped, dynamically-linked x86-64 executable) finds **31** occurrences of `jacoco`, including `org.jacoco.agent.rt.RT`, `org.jacoco.agent.rt.IAgent`, and the shaded `org.jacoco.agent.rt.internal_bac9136.*` runtime classes — the same composition Task 0's seam spike found and hypothesized would generalize: the extension's typed `RT.getAgent()` call is what keeps the jacoco agent AOT-reachable in a real target's image, not just the Phase-0 fixture's.
 5. **§7.2 S3 re-check — all four dispositions reproduced under SubstrateVM, without gating on `X-Basquin-Req`** (`s3-recheck.out`, `s3-app.log`): a normal 200 (`5,0,0|0||` published), a 3xx (`GET /q/swagger-ui` → `302 Found` → `0,0,0|0||` published), an app 500 (`/__basquin/control/defect/error5xx` → HTTP 500 → `0,0,0|0||` published), and a mid-response disconnect (`curl -m 1` against `/__basquin/control/defect/slow?ms=5000`, aborted — `curl` exit 28 — and `s3-app.log` shows `[Basquin] id=s3-disp-disconnect disconnected before response completed: io.vertx.core.http.HttpClosedException` while `/__basquin/result?id=s3-disp-disconnect` stayed `miss`, i.e. never published). This is a separate run with defect routes enabled (`-Dbasquin.quarkus.control.defectsEnabled=true`); the app was restarted clean before the published cell measurement below.
 6. Banner (`banner.txt`): `Installed features: [agroal, basquin, cdi, hibernate-orm, hibernate-orm-panache, hibernate-validator, jdbc-postgresql, kubernetes, micrometer, narayana-jta, opentelemetry, qute, rest, rest-jackson, rest-qute, smallrye-context-propagation, smallrye-health, smallrye-openapi, swagger-ui, vertx]` — identical feature set to the JVM cell. Started on the host directly (PR-3's proven native-run method) in `0.615s`.
@@ -126,7 +126,7 @@ sibling clone stayed empty through build + run).
 
 1. Injector line: `build.log:2`/`3`; execution ran at `build.log:78`. `BUILD SUCCESS`, `Total time: 04:29 min` (native-image proper: `Finished generating 'rest-heroes-1.0-runner' in 1m 27s`).
 2. Zero pom edits: `grep -c "artifactId>basquin-quarkus<" pom.xml` = `0`.
-3. **`-H:+PrintClassInitialization` report present**: `class_initialization_report.csv` (30,404 lines), copied from `target/rest-heroes-1.0-native-image-source-jar/reports/class_initialization_report_20260811_002152.csv`.
+3. **`-H:+PrintClassInitialization` report present**: `class_initialization_report.csv`, copied from `target/rest-heroes-1.0-native-image-source-jar/reports/class_initialization_report_20260811_002152.csv`.
 4. ELF composition: `strings` finds **37** `jacoco` occurrences on `target/rest-heroes-1.0-runner`.
 5. **§7.2 S3 re-check — all four dispositions reproduced under SubstrateVM** (`s3-recheck.out`, `s3-app.log`): the 3xx, 500, and disconnect dispositions reproduced exactly as for villains-native (`302 Found`/`0,0,0|0||`; HTTP 500/`0,0,0|0||`; `curl` exit 28 + the same `[Basquin] id=... disconnected before response completed` log line + `miss` on poll). **One disclosed script bug, corrected inline**: the shared `s3-recheck.sh` helper's disposition-1 check fell through to `GET /api/villains/hello` on this target (that route does not exist here — `rest-heroes` only has `/api/heroes/*`), so the first recorded result is an **HTTP 404** that still published (`2,0,0|0||` — proving `addEndHandler`/`ar.succeeded()==true` fires on a 404 too, which is a superset of what a 200 would show, but not the disposition as labeled). The genuine 200 check was then run directly and appended to `s3-recheck.out`: `GET /api/heroes/hello` → **HTTP 200** → `/__basquin/result` → `4,512,0|0||` (published).
 6. Banner (`banner.txt`): `Installed features: [basquin, cdi, config-yaml, hibernate-orm, hibernate-reactive, hibernate-reactive-panache, hibernate-validator, kubernetes, micrometer, opentelemetry, qute, reactive-pg-client, rest, rest-jackson, rest-qute, smallrye-context-propagation, smallrye-health, smallrye-openapi, swagger-ui, vertx]` — reactive stack + `basquin`, now natively compiled. Started on the host directly in `0.596-0.598s`; **the reactive Postgres client composed with a native image and a real container DB with no headless-infra blocker** — this was the cell the Task 4 brief flagged as most likely to BLOCK, and it did not.

@@ -22,6 +22,7 @@
 snap/snapcraft.yaml planned file — TODO.md's snap-packaging checklist item says "Write" it; deliberately not in the tree yet
 
 # --- upstream repos: files that live in the target application's tree, not ours ---
+jacoco.exec transient 0-byte offline-instrument side-effect file that appears in the EXTERNAL quarkus-super-heroes clone (not this repo); dd043-pr4-2x2 evidence discloses it as observed-and-cleaned, never a committed artifact
 verify.yaml apicurio-registry's CI workflow (upstream repo), cited as evidence context
 verify-cli.yaml apicurio-registry upstream workflow
 verify-build.yaml apicurio-registry upstream workflow

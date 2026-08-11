@@ -1,0 +1,210 @@
+[INFO] Scanning for projects...
+[basquin-injector] added org.jacoco:jacoco-maven-plugin:0.8.15:instrument (basquin-injected-offline-instrument) to rest-villains
+[basquin-injector] instrumented rest-villains (com.basquin:basquin-quarkus:0.3.0 from http://localhost:8010/)
+[INFO] 
+[INFO] ------------< io.quarkus.sample.super-heroes:rest-villains >------------
+[INFO] Building Quarkus Sample :: Super-Heroes :: Villains Microservice 1.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.2.0:clean (default-clean) @ rest-villains ---
+[INFO] Deleting /w/target
+[INFO] 
+[INFO] --- resources:3.5.0:copy-resources (copy-openapi-spec) @ rest-villains ---
+[INFO] Copying 1 resource from src/main/resources/openapi to target/classes/META-INF
+[INFO] 
+[INFO] --- resources:3.5.0:resources (default-resources) @ rest-villains ---
+[INFO] Copying 186 resources from src/main/resources to target/classes
+[INFO] 
+[INFO] --- quarkus:3.37.3:generate-code (default) @ rest-villains ---
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generating server side code for: /w/src/main/resources/openapi/openapi.yml
+[INFO] Generating with dryRun=false
+[WARNING] OpenAPI 3.1 support is still in beta. To report an issue related to 3.1 spec, please kindly open an issue in the Github repo: https://github.com/openAPITools/openapi-generator.
+[INFO] No .openapi-generator-ignore file found.
+[INFO] OpenAPI Generator: quarkus-openapi-generator-server (client)
+[INFO] Generator 'quarkus-openapi-generator-server' is considered stable.
+[INFO] Environment variable JAVA_POST_PROCESS_FILE not defined so the Java code may not be properly formatted. To define it, try 'export JAVA_POST_PROCESS_FILE="/usr/local/bin/clang-format -i"' (Linux/Mac)
+[INFO] NOTE: To enable file post-processing, 'enablePostProcessFile' must be set to `true` (--enable-post-process-file for CLI).
+[INFO] Processing operation getAllVillains
+[INFO] Processing operation replaceAllVillains
+[INFO] Processing operation createVillain
+[INFO] Processing operation deleteAllVillains
+[INFO] Processing operation hello
+[INFO] Processing operation getRandomVillain
+[INFO] Processing operation getVillain
+[INFO] Processing operation fullyUpdateVillain
+[INFO] Processing operation deleteVillain
+[INFO] Processing operation partiallyUpdateVillain
+[WARNING] OpenAPI 3.1 support is still in beta. To report an issue related to 3.1 spec, please kindly open an issue in the Github repo: https://github.com/openAPITools/openapi-generator.
+[INFO] 'host' (OAS 2.0) or 'servers' (OAS 3.0) not defined in the spec. Default to [http://localhost] for server URL [http://localhost/]
+[INFO] 'host' (OAS 2.0) or 'servers' (OAS 3.0) not defined in the spec. Default to [http://localhost] for server URL [http://localhost/]
+[INFO] writing file /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/villain/api/model/Villain.java
+[INFO] Skipped /w/target/generated-sources/quarkus-openapi-generator-server/docs/Villain.md (Skipped by modelDocs options supplied by user.)
+[INFO] writing file /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/villain/api/model/VillainPatch.java
+[INFO] Skipped /w/target/generated-sources/quarkus-openapi-generator-server/docs/VillainPatch.md (Skipped by modelDocs options supplied by user.)
+[WARNING] Failed to get the schema name: null
+[WARNING] Ignoring complex example on request body
+[WARNING] No application/json content media type found in response. Response examples can currently only be generated for application/json media type.
+[INFO] 'host' (OAS 2.0) or 'servers' (OAS 3.0) not defined in the spec. Default to [http://localhost] for server URL [http://localhost/]
+[INFO] writing file /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/villain/api/resources/HelloResource.java
+[INFO] Skipped /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/villain/api/resources/HelloResourceTest.java (Skipped by apiTests options supplied by user.)
+[INFO] Skipped /w/target/generated-sources/quarkus-openapi-generator-server/docs/HelloResource.md (Skipped by apiDocs options supplied by user.)
+[INFO] 'host' (OAS 2.0) or 'servers' (OAS 3.0) not defined in the spec. Default to [http://localhost] for server URL [http://localhost/]
+[INFO] writing file /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/villain/api/resources/VillainsResource.java
+[INFO] Skipped /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/villain/api/resources/VillainsResourceTest.java (Skipped by apiTests options supplied by user.)
+[INFO] Skipped /w/target/generated-sources/quarkus-openapi-generator-server/docs/VillainsResource.md (Skipped by apiDocs options supplied by user.)
+[INFO] Skipping generation of Webhooks.
+[INFO] 'host' (OAS 2.0) or 'servers' (OAS 3.0) not defined in the spec. Default to [http://localhost] for server URL [http://localhost/]
+[INFO] writing file /w/target/generated-sources/quarkus-openapi-generator-server/.openapi-generator-ignore
+[INFO] writing file /w/target/generated-sources/quarkus-openapi-generator-server/.openapi-generator/VERSION
+[INFO] writing file /w/target/generated-sources/quarkus-openapi-generator-server/.openapi-generator/FILES
+############################################################################################
+# Thanks for using OpenAPI Generator.                                                      #
+# We appreciate your support! Please consider donation to help us maintain this project.   #
+# https://opencollective.com/openapi_generator/donate                                      #
+############################################################################################
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generated file: /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/villain/api/model/Villain.java
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generated file: /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/villain/api/model/VillainPatch.java
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generated file: /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/villain/api/resources/HelloResource.java
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generated file: /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/villain/api/resources/VillainsResource.java
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generated file: /w/target/generated-sources/quarkus-openapi-generator-server/.openapi-generator-ignore
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generated file: /w/target/generated-sources/quarkus-openapi-generator-server/.openapi-generator/VERSION
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generated file: /w/target/generated-sources/quarkus-openapi-generator-server/.openapi-generator/FILES
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ rest-villains ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 15 source files with javac [debug release 25] to target/classes
+[INFO] 
+[INFO] --- jacoco:0.8.15:instrument (basquin-injected-offline-instrument) @ rest-villains ---
+[INFO] 
+[INFO] --- quarkus:3.37.3:generate-code-tests (default) @ rest-villains ---
+[INFO] 
+[INFO] --- resources:3.5.0:testResources (default-testResources) @ rest-villains ---
+[INFO] Copying 2 resources from src/test/resources to target/test-classes
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ rest-villains ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 8 source files with javac [debug release 25] to target/test-classes
+[INFO] /w/src/test/java/io/quarkus/sample/superheroes/villain/VillainTests.java: Some input files use or override a deprecated API.
+[INFO] /w/src/test/java/io/quarkus/sample/superheroes/villain/VillainTests.java: Recompile with -Xlint:deprecation for details.
+[INFO] /w/src/test/java/io/quarkus/sample/superheroes/villain/rest/VillainResourceTests.java: /w/src/test/java/io/quarkus/sample/superheroes/villain/rest/VillainResourceTests.java uses unchecked or unsafe operations.
+[INFO] /w/src/test/java/io/quarkus/sample/superheroes/villain/rest/VillainResourceTests.java: Recompile with -Xlint:unchecked for details.
+[INFO] 
+[INFO] --- surefire:3.5.6:test (default-test) @ rest-villains ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.5.0:jar (default-jar) @ rest-villains ---
+[INFO] Building jar: /w/target/rest-villains-1.0.jar
+[INFO] 
+[INFO] --- quarkus:3.37.3:build (default) @ rest-villains ---
+[INFO] [io.quarkus.kubernetes.deployment.KubernetesDeployer] Selecting target 'minikube' since it has the highest priority among the implicitly enabled deployment targets
+[INFO] [io.quarkus.kubernetes.deployment.PropertyUtil] Kubernetes manifests are generated with 'The container port http' having provided value '8084'. The app and manifests will get out of sync if the property 'quarkus.http.port' is changed at runtime.
+[INFO] [io.quarkus.deployment.pkg.jar.NativeImageSourceJarBuilder] Building native image source jar: /w/target/rest-villains-1.0-native-image-source-jar/rest-villains-1.0-runner.jar
+[INFO] Adding existing ConfigMap with name: rest-villains-config.
+[INFO] Adding existing Secret with name: rest-villains-config-creds.
+[INFO] Adding existing Secret with name: villains-db-config.
+[INFO] Adding existing ConfigMap with name: villains-db-init.
+[INFO] Adding existing Deployment with name: villains-db.
+[INFO] Adding existing Service with name: villains-db.
+[WARNING] [io.quarkus.deployment.pkg.jar.ParallelCommonsCompressArchiveCreator] Duplicate entry 'io/quarkus/hibernate/orm/panache/PanacheEntity.class': already added from 'Unknown source', ignoring entry from 'Current application'
+[INFO] [io.quarkus.deployment.pkg.steps.NativeImageBuildStep] Building native image from /w/target/rest-villains-1.0-native-image-source-jar/rest-villains-1.0-runner.jar
+[INFO] [io.quarkus.deployment.pkg.steps.NativeImageBuildStep] Running Quarkus native-image plugin on MANDREL 25.0.3.0 JDK 25.0.3+9-LTS
+[INFO] [io.quarkus.deployment.pkg.steps.NativeImageBuildRunner] /opt/mandrel/bin/native-image -J-Dsun.nio.ch.maxUpdateArraySize=100 -J-DCoordinatorEnvironmentBean.transactionStatusManagerEnable=false -J-Djava.util.logging.manager=org.jboss.logmanager.LogManager -J-Dio.quarkus.caffeine.graalvm.recordStats=true -J-Dvertx.logger-delegate-factory-class-name=io.quarkus.vertx.core.runtime.VertxLogDelegateFactory -J-Dvertx.disableDnsResolver=true -J-Dio.netty.tryReflectionSetAccessible=true -J-Dio.netty.noUnsafe=false -J-Dio.netty.leakDetection.level=DISABLED -J-Dio.netty.allocator.maxOrder=3 -J-Duser.language=en -J-Duser.country=US -J-Dlogging.initial-configurator.min-level=500 -H:+UnlockExperimentalVMOptions -H:IncludeLocales=en-US -H:-UnlockExperimentalVMOptions --enable-native-access=ALL-UNNAMED -J-Dfile.encoding=UTF-8 -J--add-exports=org.graalvm.nativeimage.builder/com.oracle.svm.core.jdk=ALL-UNNAMED --features=io.quarkus.opentelemetry.runtime.graal.UnsignedFeature,io.quarkus.jdbc.postgresql.runtime.graal.SQLXMLFeature,io.quarkus.hibernate.validator.runtime.DisableLoggingFeature,io.quarkus.hibernate.orm.runtime.graal.RegisterStateManagementForReflectionFeature,io.quarkus.hibernate.orm.runtime.graal.RegisterServicesForReflectionFeature,io.quarkus.hibernate.orm.runtime.graal.DisableLoggingFeature,org.hibernate.graalvm.internal.GraalVMStaticFeature,io.quarkus.caffeine.runtime.graal.CacheConstructorsFeature,io.quarkus.runner.Feature,io.quarkus.runtime.graal.DisableLoggingFeature,io.quarkus.runtime.graal.JVMChecksFeature,io.quarkus.runtime.graal.SkipConsoleServiceProvidersFeature,io.quarkus.jackson.runtime.graal.JacksonSerializerRegistrationFeature -J--add-exports=java.security.jgss/sun.security.krb5=ALL-UNNAMED -J--add-exports=java.security.jgss/sun.security.jgss=ALL-UNNAMED -J--add-opens=java.base/java.text=ALL-UNNAMED -J--add-opens=java.base/java.io=ALL-UNNAMED -J--add-opens=java.base/java.lang.invoke=ALL-UNNAMED -J--add-opens=java.base/java.util=ALL-UNNAMED -H:+UnlockExperimentalVMOptions -H:BuildOutputJSONFile=rest-villains-1.0-runner-build-output-stats.json -H:-UnlockExperimentalVMOptions -H:+UnlockExperimentalVMOptions -H:+GenerateBuildArtifactsFile -H:-UnlockExperimentalVMOptions -H:+PrintClassInitialization -H:+UnlockExperimentalVMOptions -H:+AllowFoldMethods -H:-UnlockExperimentalVMOptions -J-Djava.awt.headless=true --no-fallback --link-at-build-time -H:+UnlockExperimentalVMOptions -H:+ReportExceptionStackTraces -H:-UnlockExperimentalVMOptions -H:-AddAllCharsets --enable-url-protocols=http,https -H:NativeLinkerOption=-no-pie --enable-monitoring=jfr,heapdump,threaddump -H:+UnlockExperimentalVMOptions -H:-UseServiceLoaderFeature -H:-UnlockExperimentalVMOptions -J--add-exports=org.graalvm.nativeimage/org.graalvm.nativeimage.impl=ALL-UNNAMED --exclude-config io\.netty\.netty-codec /META-INF/native-image/io\.netty/netty-codec/generated/handlers/reflect-config\.json --exclude-config io\.netty\.netty-handler /META-INF/native-image/io\.netty/netty-handler/generated/handlers/reflect-config\.json rest-villains-1.0-runner -jar rest-villains-1.0-runner.jar
+Warning: The option '-H:+PrintClassInitialization' is experimental and must be enabled via '-H:+UnlockExperimentalVMOptions' in the future.
+Warning: Please re-evaluate whether any experimental option is required, and either remove or unlock it. The build output lists all active experimental options, including where they come from and possible alternatives. If you think an experimental option should be considered as stable, please file an issue.
+Warning: Option 'DynamicProxyConfigurationResources' is deprecated and might be removed in a future release: This can be caused by a proxy-config.json file in your META-INF directory. Consider including proxy configuration in the reflection section of reachability-metadata.md instead.. Please refer to the GraalVM release notes.
+Warning: Option 'DynamicProxyConfigurationResources' is deprecated and might be removed in a future release: This can be caused by a proxy-config.json file in your META-INF directory. Consider including proxy configuration in the reflection section of reachability-metadata.md instead.. Please refer to the GraalVM release notes.
+========================================================================================================================
+GraalVM Native Image: Generating 'rest-villains-1.0-runner' (executable)...
+========================================================================================================================
+For detailed information and explanations on the build output, visit:
+https://github.com/oracle/graal/blob/master/docs/reference-manual/native-image/BuildOutput.md
+------------------------------------------------------------------------------------------------------------------------
+[1/8] Initializing...                                                                                   (16.5s @ 0.35GB)
+ Java version: 25.0.3+9-LTS, vendor version: Mandrel-25.0.3.0-Final
+ Graal compiler: optimization level: 2, target machine: x86-64-v3
+ C compiler: gcc (redhat, x86_64, 11.5.0)
+ Garbage collector: Serial GC (max heap size: 80% of RAM)
+ 15 user-specific feature(s):
+ - com.oracle.svm.thirdparty.gson.GsonFeature
+ - io.quarkus.caffeine.runtime.graal.CacheConstructorsFeature
+ - io.quarkus.hibernate.orm.runtime.graal.DisableLoggingFeature: Disables INFO logging during the analysis phase
+ - io.quarkus.hibernate.orm.runtime.graal.RegisterServicesForReflectionFeature: Makes methods of reachable Hibernate services accessible through Class#getMethods()
+ - io.quarkus.hibernate.orm.runtime.graal.RegisterStateManagementForReflectionFeature: Makes fields of reachable Hibernate StateManagement implementations accessible through Class#getDeclaredField()
+ - io.quarkus.hibernate.validator.runtime.DisableLoggingFeature: Disables INFO logging during the analysis phase for the [org.hibernate.validator.internal.util.Version] categories
+ - io.quarkus.jackson.runtime.graal.JacksonSerializerRegistrationFeature: Conditionally registers Jackson SQL/XML serializers for reflection based on reachability
+ - io.quarkus.jdbc.postgresql.runtime.graal.SQLXMLFeature
+ - io.quarkus.opentelemetry.runtime.graal.UnsignedFeature
+ - io.quarkus.runner.Feature: Auto-generated class by Quarkus from the existing extensions
+ - io.quarkus.runtime.graal.DisableLoggingFeature: Adapts logging during the analysis phase
+ - io.quarkus.runtime.graal.JVMChecksFeature
+ - io.quarkus.runtime.graal.SkipConsoleServiceProvidersFeature: Skip unsupported console service providers when quarkus.native.auto-service-loader-registration is false
+ - org.eclipse.angus.activation.nativeimage.AngusActivationFeature
+ - org.hibernate.graalvm.internal.GraalVMStaticFeature: Hibernate ORM's static reflection registrations for GraalVM
+------------------------------------------------------------------------------------------------------------------------
+ 6 experimental option(s) unlocked:
+ - '-H:+PrintClassInitialization' (origin(s): command line)
+ - '-H:+AllowFoldMethods' (origin(s): command line)
+ - '-H:BuildOutputJSONFile' (origin(s): command line)
+ - '-H:-UseServiceLoaderFeature' (origin(s): command line)
+ - '-H:+GenerateBuildArtifactsFile' (origin(s): command line)
+ - '-H:AddOpens' (alternative API option(s): --add-opens java.base/java.lang=ALL-UNNAMED, --add-opens java.base/java.nio=ALL-UNNAMED, --add-opens java.base/jdk.internal.misc=ALL-UNNAMED; origin(s): command line)
+------------------------------------------------------------------------------------------------------------------------
+Build resources:
+ - 12.67GB of memory (75.6% of system memory, in container)
+ - 8 thread(s) (100.0% of 8 available processor(s), determined at start)
+# Printing class initialization configuration to: /w/target/rest-villains-1.0-native-image-source-jar/reports/class_initialization_configuration_20260811_001210.csv
+00:12:13,048 WARN  [org.hib.val.int.met.agg.CascadingMetaDataBuilder] HV000271: Using `@Valid` on a container (java.util.List) is deprecated. You should apply the annotation on the type argument(s). Affected element: VillainsResource#replaceAllVillains(List)
+00:12:13,055 WARN  [org.hib.val.int.met.agg.CascadingMetaDataBuilder] HV000271: Using `@Valid` on a container (java.util.List) is deprecated. You should apply the annotation on the type argument(s). Affected element: VillainsResource#replaceAllVillains(List)
+# Printing class initialization report to: /w/target/rest-villains-1.0-native-image-source-jar/reports/class_initialization_report_20260811_001231.csv
+[2/8] Performing analysis...  [*****]                                                                   (22.5s @ 3.39GB)
+   28,648 types,  38,616 fields, and 139,070 methods found reachable
+    9,163 types,   1,925 fields, and  18,250 methods registered for reflection
+       63 types,      69 fields, and      55 methods registered for JNI access
+        0 downcalls and 0 upcalls registered for foreign access
+        5 native libraries: dl, m, pthread, rt, z
+[3/8] Building universe...                                                                               (4.1s @ 4.04GB)
+[4/8] Parsing methods...      [**]                                                                       (2.3s @ 6.11GB)
+[5/8] Inlining methods...     [****]                                                                     (1.4s @ 3.99GB)
+[6/8] Compiling methods...    [****]                                                                    (17.8s @ 2.46GB)
+[7/8] Laying out methods...   [***]                                                                      (5.6s @ 2.80GB)
+[8/8] Creating image...       [****]                                                                    (16.5s @ 3.37GB)
+  53.85MB (38.80%) for code area:    95,701 compilation units
+  76.22MB (54.93%) for image heap:  692,520 objects and 302 resources
+   8.70MB ( 6.27%) for other data
+ 138.76MB in total image size, 130.47MB in total file size
+------------------------------------------------------------------------------------------------------------------------
+Top 10 origins of code area:                                Top 10 object types in image heap:
+  13.72MB java.base                                           16.07MB byte[] for code metadata
+   9.20MB org.hibernate.orm.hibernate-core-7.4.4.Final.jar    14.41MB byte[] for general heap data
+   2.83MB svm.jar (Native Image)                              11.54MB byte[] for java.lang.String
+   2.77MB rest-villains-1.0-runner.jar                         6.28MB java.lang.String
+   2.61MB com.google.protobuf.protobuf-java-4.35.0.jar         5.96MB com.oracle.svm.core.hub.DynamicHubCompanion
+   1.68MB org.postgresql.postgresql-42.7.13.jar                4.24MB java.lang.Class
+   1.50MB c.f.jackson.core.jackson-databind-2.22.0.jar         1.51MB byte[] for reflection metadata
+   1.19MB modified-io.vertx.vertx-core-4.5.28.jar              1.22MB java.lang.Object[]
+   1.08MB jdk.jfr                                              1.21MB java.lang.String[]
+   1.00MB jdk.proxy4                                           1.03MB c.o.svm.core.hub.DynamicHub$ReflectionMetadata
+  14.79MB for 188 more packages                               12.75MB for 7011 more object types
+------------------------------------------------------------------------------------------------------------------------
+Recommendations:
+ FUTR: Use '--future-defaults=all' to prepare for future releases.
+ HEAP: Set max heap for improved and more predictable memory usage.
+ CPU:  Enable more CPU features with '-march=native' for improved performance.
+------------------------------------------------------------------------------------------------------------------------
+                        5.9s (6.3% of total time) in 321 GCs | Peak RSS: 7.60GB | CPU load: 4.06
+------------------------------------------------------------------------------------------------------------------------
+Build artifacts:
+ /w/target/rest-villains-1.0-native-image-source-jar/build-artifacts.json (build_info)
+ /w/target/rest-villains-1.0-native-image-source-jar/rest-villains-1.0-runner (executable)
+ /w/target/rest-villains-1.0-native-image-source-jar/rest-villains-1.0-runner-build-output-stats.json (build_info)
+========================================================================================================================
+Finished generating 'rest-villains-1.0-runner' in 1m 31s.
+[INFO] [io.quarkus.deployment.pkg.steps.NativeImageBuildRunner] objcopy --strip-debug rest-villains-1.0-runner
+[INFO] [io.quarkus.deployment.QuarkusAugmentor] Quarkus augmentation completed in 232653ms
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  04:33 min
+[INFO] Finished at: 2026-08-11T00:13:34Z
+[INFO] ------------------------------------------------------------------------

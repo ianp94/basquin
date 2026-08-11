@@ -1,0 +1,19 @@
+=== 1. app 200 disposition ===
+http_code=404
+2,0,0|0||
+=== 3. app 3xx disposition (swagger-ui redirect) ===
+HTTP/1.1 302 Found
+location: /q/swagger-ui/
+0,0,0|0||
+=== 2. app 500 disposition (defect route) ===
+http_code=500
+0,0,0|0||
+=== 4. mid-response disconnect disposition ===
+http_code=000 (expect a timeout/curl error, not 200)
+curl aborted as expected (exit=28)
+-- result poll for disconnect id (expect miss/never-published) --
+miss
+
+=== 1. app 200 disposition (CORRECTED — the shared script fell through to a 404 on /api/villains/hello which does not exist on this target; the genuine 200 check is below) ===
+http_code=200
+4,512,0|0||

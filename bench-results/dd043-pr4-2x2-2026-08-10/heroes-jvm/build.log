@@ -1,0 +1,227 @@
+[INFO] Scanning for projects...
+[basquin-injector] added org.jacoco:jacoco-maven-plugin:0.8.15:instrument (basquin-injected-offline-instrument) to rest-heroes
+[basquin-injector] instrumented rest-heroes (com.basquin:basquin-quarkus:0.3.0 from http://localhost:8010/)
+[INFO] 
+[INFO] -------------< io.quarkus.sample.super-heroes:rest-heroes >-------------
+[INFO] Building Quarkus Sample :: Super-Heroes :: Heroes Microservice 1.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-pg-client/3.37.3/quarkus-reactive-pg-client-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-pg-client/3.37.3/quarkus-reactive-pg-client-3.37.3.pom (3.3 kB at 9.7 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-pg-client-parent/3.37.3/quarkus-reactive-pg-client-parent-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-pg-client-parent/3.37.3/quarkus-reactive-pg-client-parent-3.37.3.pom (771 B at 19 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-datasource/3.37.3/quarkus-reactive-datasource-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-datasource/3.37.3/quarkus-reactive-datasource-3.37.3.pom (2.7 kB at 50 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/vertx/vertx-sql-client/4.5.28/vertx-sql-client-4.5.28.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/vertx/vertx-sql-client/4.5.28/vertx-sql-client-4.5.28.pom (3.6 kB at 86 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/vertx/vertx-sql-client-parent/4.5.28/vertx-sql-client-parent-4.5.28.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/vertx/vertx-sql-client-parent/4.5.28/vertx-sql-client-parent-4.5.28.pom (3.8 kB at 87 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/vertx/vertx-pg-client/4.5.28/vertx-pg-client-4.5.28.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/vertx/vertx-pg-client/4.5.28/vertx-pg-client-4.5.28.pom (8.9 kB at 221 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/com/ongres/scram/scram-client/3.3/scram-client-3.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/com/ongres/scram/scram-client/3.3/scram-client-3.3.pom (2.8 kB at 80 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/com/ongres/scram/scram-common/3.3/scram-common-3.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/com/ongres/scram/scram-common/3.3/scram-common-3.3.pom (2.3 kB at 54 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/com/ongres/stringprep/stringprep/2.4/stringprep-2.4.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/com/ongres/stringprep/stringprep/2.4/stringprep-2.4.pom (1.6 kB at 39 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/com/ongres/stringprep/saslprep/2.4/saslprep-2.4.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/com/ongres/stringprep/saslprep/2.4/saslprep-2.4.pom (1.9 kB at 45 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/smallrye/reactive/smallrye-mutiny-vertx-pg-client/3.22.2/smallrye-mutiny-vertx-pg-client-3.22.2.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/smallrye/reactive/smallrye-mutiny-vertx-pg-client/3.22.2/smallrye-mutiny-vertx-pg-client-3.22.2.pom (6.2 kB at 138 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/smallrye/reactive/smallrye-mutiny-vertx-sql-client/3.22.2/smallrye-mutiny-vertx-sql-client-3.22.2.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/smallrye/reactive/smallrye-mutiny-vertx-sql-client/3.22.2/smallrye-mutiny-vertx-sql-client-3.22.2.pom (5.4 kB at 128 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache/3.37.3/quarkus-hibernate-reactive-panache-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache/3.37.3/quarkus-hibernate-reactive-panache-3.37.3.pom (3.9 kB at 88 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-parent/3.37.3/quarkus-hibernate-reactive-panache-parent-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-parent/3.37.3/quarkus-hibernate-reactive-panache-parent-3.37.3.pom (777 B at 16 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive/3.37.3/quarkus-hibernate-reactive-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive/3.37.3/quarkus-hibernate-reactive-3.37.3.pom (3.9 kB at 76 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-parent/3.37.3/quarkus-hibernate-reactive-parent-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-parent/3.37.3/quarkus-hibernate-reactive-parent-3.37.3.pom (759 B at 15 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/org/hibernate/reactive/hibernate-reactive-core/3.4.2.Final/hibernate-reactive-core-3.4.2.Final.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/org/hibernate/reactive/hibernate-reactive-core/3.4.2.Final/hibernate-reactive-core-3.4.2.Final.pom (2.8 kB at 70 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-transactions/3.37.3/quarkus-reactive-transactions-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-transactions/3.37.3/quarkus-reactive-transactions-3.37.3.pom (2.8 kB at 66 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-transactions-parent/3.37.3/quarkus-reactive-transactions-parent-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-transactions-parent/3.37.3/quarkus-reactive-transactions-parent-3.37.3.pom (708 B at 16 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-common/3.37.3/quarkus-hibernate-reactive-panache-common-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-common/3.37.3/quarkus-hibernate-reactive-panache-common-3.37.3.pom (2.6 kB at 57 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-common-parent/3.37.3/quarkus-hibernate-reactive-panache-common-parent-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-common-parent/3.37.3/quarkus-hibernate-reactive-panache-common-parent-3.37.3.pom (787 B at 17 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-config-yaml/3.37.3/quarkus-config-yaml-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-config-yaml/3.37.3/quarkus-config-yaml-3.37.3.pom (2.8 kB at 71 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-config-yaml-parent/3.37.3/quarkus-config-yaml-parent-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-config-yaml-parent/3.37.3/quarkus-config-yaml-parent-3.37.3.pom (738 B at 15 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/smallrye/config/smallrye-config-source-yaml/3.17.2/smallrye-config-source-yaml-3.17.2.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/smallrye/config/smallrye-config-source-yaml/3.17.2/smallrye-config-source-yaml-3.17.2.pom (1.9 kB at 45 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-test-vertx/3.37.3/quarkus-test-vertx-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-test-vertx/3.37.3/quarkus-test-vertx-3.37.3.pom (1.0 kB at 29 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-pg-client/3.37.3/quarkus-reactive-pg-client-3.37.3.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-pg-client/3.37.3/quarkus-reactive-pg-client-3.37.3.jar (31 kB at 827 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-datasource/3.37.3/quarkus-reactive-datasource-3.37.3.jar
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/vertx/vertx-sql-client/4.5.28/vertx-sql-client-4.5.28.jar
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/vertx/vertx-pg-client/4.5.28/vertx-pg-client-4.5.28.jar
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/com/ongres/scram/scram-client/3.3/scram-client-3.3.jar
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/com/ongres/scram/scram-common/3.3/scram-common-3.3.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-datasource/3.37.3/quarkus-reactive-datasource-3.37.3.jar (29 kB at 696 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/com/ongres/stringprep/saslprep/2.4/saslprep-2.4.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/com/ongres/stringprep/saslprep/2.4/saslprep-2.4.jar (5.4 kB at 70 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/com/ongres/stringprep/stringprep/2.4/stringprep-2.4.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/com/ongres/scram/scram-client/3.3/scram-client-3.3.jar (20 kB at 184 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/smallrye/reactive/smallrye-mutiny-vertx-pg-client/3.22.2/smallrye-mutiny-vertx-pg-client-3.22.2.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/com/ongres/scram/scram-common/3.3/scram-common-3.3.jar (52 kB at 461 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/smallrye/reactive/smallrye-mutiny-vertx-sql-client/3.22.2/smallrye-mutiny-vertx-sql-client-3.22.2.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/com/ongres/stringprep/stringprep/2.4/stringprep-2.4.jar (47 kB at 381 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache/3.37.3/quarkus-hibernate-reactive-panache-3.37.3.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache/3.37.3/quarkus-hibernate-reactive-panache-3.37.3.jar (29 kB at 190 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive/3.37.3/quarkus-hibernate-reactive-3.37.3.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/vertx/vertx-sql-client/4.5.28/vertx-sql-client-4.5.28.jar (175 kB at 1.1 MB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/org/hibernate/reactive/hibernate-reactive-core/3.4.2.Final/hibernate-reactive-core-3.4.2.Final.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/smallrye/reactive/smallrye-mutiny-vertx-pg-client/3.22.2/smallrye-mutiny-vertx-pg-client-3.22.2.jar (25 kB at 155 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-transactions/3.37.3/quarkus-reactive-transactions-3.37.3.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/smallrye/reactive/smallrye-mutiny-vertx-sql-client/3.22.2/smallrye-mutiny-vertx-sql-client-3.22.2.jar (74 kB at 451 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-common/3.37.3/quarkus-hibernate-reactive-panache-common-3.37.3.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/vertx/vertx-pg-client/4.5.28/vertx-pg-client-4.5.28.jar (171 kB at 1.0 MB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-config-yaml/3.37.3/quarkus-config-yaml-3.37.3.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-config-yaml/3.37.3/quarkus-config-yaml-3.37.3.jar (8.2 kB at 40 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/smallrye/config/smallrye-config-source-yaml/3.17.2/smallrye-config-source-yaml-3.17.2.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive/3.37.3/quarkus-hibernate-reactive-3.37.3.jar (58 kB at 276 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-test-vertx/3.37.3/quarkus-test-vertx-3.37.3.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-common/3.37.3/quarkus-hibernate-reactive-panache-common-3.37.3.jar (62 kB at 296 kB/s)
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-transactions/3.37.3/quarkus-reactive-transactions-3.37.3.jar (28 kB at 130 kB/s)
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/smallrye/config/smallrye-config-source-yaml/3.17.2/smallrye-config-source-yaml-3.17.2.jar (13 kB at 51 kB/s)
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-test-vertx/3.37.3/quarkus-test-vertx-3.37.3.jar (35 kB at 139 kB/s)
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/org/hibernate/reactive/hibernate-reactive-core/3.4.2.Final/hibernate-reactive-core-3.4.2.Final.jar (1.4 MB at 4.8 MB/s)
+[INFO] 
+[INFO] --- clean:3.2.0:clean (default-clean) @ rest-heroes ---
+[INFO] 
+[INFO] --- resources:3.5.0:copy-resources (copy-openapi-spec) @ rest-heroes ---
+[INFO] Copying 1 resource from src/main/resources/openapi to target/classes/META-INF
+[INFO] 
+[INFO] --- resources:3.5.0:resources (default-resources) @ rest-heroes ---
+[INFO] Copying 186 resources from src/main/resources to target/classes
+[INFO] 
+[INFO] --- quarkus:3.37.3:generate-code (default) @ rest-heroes ---
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-pg-client-deployment/3.37.3/quarkus-reactive-pg-client-deployment-3.37.3.pom
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-deployment/3.37.3/quarkus-hibernate-reactive-panache-deployment-3.37.3.pom
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-config-yaml-deployment/3.37.3/quarkus-config-yaml-deployment-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-pg-client-deployment/3.37.3/quarkus-reactive-pg-client-deployment-3.37.3.pom (9.0 kB at 191 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-datasource-deployment/3.37.3/quarkus-reactive-datasource-deployment-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-deployment/3.37.3/quarkus-hibernate-reactive-panache-deployment-3.37.3.pom (11 kB at 172 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-common-deployment/3.37.3/quarkus-hibernate-reactive-panache-common-deployment-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-config-yaml-deployment/3.37.3/quarkus-config-yaml-deployment-3.37.3.pom (2.3 kB at 57 kB/s)
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-datasource-deployment/3.37.3/quarkus-reactive-datasource-deployment-3.37.3.pom (3.0 kB at 65 kB/s)
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-common-deployment/3.37.3/quarkus-hibernate-reactive-panache-common-deployment-3.37.3.pom (3.3 kB at 63 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-deployment/3.37.3/quarkus-hibernate-reactive-deployment-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-deployment/3.37.3/quarkus-hibernate-reactive-deployment-3.37.3.pom (10 kB at 244 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-transactions-deployment/3.37.3/quarkus-reactive-transactions-deployment-3.37.3.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-transactions-deployment/3.37.3/quarkus-reactive-transactions-deployment-3.37.3.pom (1.9 kB at 44 kB/s)
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-datasource-deployment/3.37.3/quarkus-reactive-datasource-deployment-3.37.3.jar
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-pg-client-deployment/3.37.3/quarkus-reactive-pg-client-deployment-3.37.3.jar
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-deployment/3.37.3/quarkus-hibernate-reactive-panache-deployment-3.37.3.jar
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-common-deployment/3.37.3/quarkus-hibernate-reactive-panache-common-deployment-3.37.3.jar
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-deployment/3.37.3/quarkus-hibernate-reactive-deployment-3.37.3.jar
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-transactions-deployment/3.37.3/quarkus-reactive-transactions-deployment-3.37.3.jar
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-config-yaml-deployment/3.37.3/quarkus-config-yaml-deployment-3.37.3.jar
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-datasource-deployment/3.37.3/quarkus-reactive-datasource-deployment-3.37.3.jar (18 kB at 364 kB/s)
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-deployment/3.37.3/quarkus-hibernate-reactive-deployment-3.37.3.jar (32 kB at 635 kB/s)
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-pg-client-deployment/3.37.3/quarkus-reactive-pg-client-deployment-3.37.3.jar (21 kB at 421 kB/s)
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-common-deployment/3.37.3/quarkus-hibernate-reactive-panache-common-deployment-3.37.3.jar (18 kB at 353 kB/s)
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-reactive-transactions-deployment/3.37.3/quarkus-reactive-transactions-deployment-3.37.3.jar (7.9 kB at 146 kB/s)
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-config-yaml-deployment/3.37.3/quarkus-config-yaml-deployment-3.37.3.jar (12 kB at 126 kB/s)
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/io/quarkus/quarkus-hibernate-reactive-panache-deployment/3.37.3/quarkus-hibernate-reactive-panache-deployment-3.37.3.jar (19 kB at 185 kB/s)
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generating server side code for: /w/src/main/resources/openapi/openapi.yml
+[INFO] Generating with dryRun=false
+[WARNING] OpenAPI 3.1 support is still in beta. To report an issue related to 3.1 spec, please kindly open an issue in the Github repo: https://github.com/openAPITools/openapi-generator.
+[INFO] No .openapi-generator-ignore file found.
+[INFO] OpenAPI Generator: quarkus-openapi-generator-server (client)
+[INFO] Generator 'quarkus-openapi-generator-server' is considered stable.
+[INFO] Environment variable JAVA_POST_PROCESS_FILE not defined so the Java code may not be properly formatted. To define it, try 'export JAVA_POST_PROCESS_FILE="/usr/local/bin/clang-format -i"' (Linux/Mac)
+[INFO] NOTE: To enable file post-processing, 'enablePostProcessFile' must be set to `true` (--enable-post-process-file for CLI).
+[INFO] Processing operation getAllHeroes
+[INFO] Processing operation replaceAllHeroes
+[INFO] Processing operation createHero
+[INFO] Processing operation deleteAllHeroes
+[INFO] Processing operation hello
+[INFO] Processing operation getRandomHero
+[INFO] Processing operation getHero
+[INFO] Processing operation fullyUpdateHero
+[INFO] Processing operation deleteHero
+[INFO] Processing operation partiallyUpdateHero
+[WARNING] OpenAPI 3.1 support is still in beta. To report an issue related to 3.1 spec, please kindly open an issue in the Github repo: https://github.com/openAPITools/openapi-generator.
+[INFO] 'host' (OAS 2.0) or 'servers' (OAS 3.0) not defined in the spec. Default to [http://localhost] for server URL [http://localhost/]
+[INFO] 'host' (OAS 2.0) or 'servers' (OAS 3.0) not defined in the spec. Default to [http://localhost] for server URL [http://localhost/]
+[INFO] writing file /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/hero/api/model/Hero.java
+[INFO] Skipped /w/target/generated-sources/quarkus-openapi-generator-server/docs/Hero.md (Skipped by modelDocs options supplied by user.)
+[INFO] writing file /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/hero/api/model/HeroPatch.java
+[INFO] Skipped /w/target/generated-sources/quarkus-openapi-generator-server/docs/HeroPatch.md (Skipped by modelDocs options supplied by user.)
+[WARNING] Failed to get the schema name: null
+[WARNING] Ignoring complex example on request body
+[WARNING] No application/json content media type found in response. Response examples can currently only be generated for application/json media type.
+[INFO] 'host' (OAS 2.0) or 'servers' (OAS 3.0) not defined in the spec. Default to [http://localhost] for server URL [http://localhost/]
+[INFO] writing file /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/hero/api/resources/HelloResource.java
+[INFO] Skipped /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/hero/api/resources/HelloResourceTest.java (Skipped by apiTests options supplied by user.)
+[INFO] Skipped /w/target/generated-sources/quarkus-openapi-generator-server/docs/HelloResource.md (Skipped by apiDocs options supplied by user.)
+[INFO] 'host' (OAS 2.0) or 'servers' (OAS 3.0) not defined in the spec. Default to [http://localhost] for server URL [http://localhost/]
+[INFO] writing file /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/hero/api/resources/HeroesResource.java
+[INFO] Skipped /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/hero/api/resources/HeroesResourceTest.java (Skipped by apiTests options supplied by user.)
+[INFO] Skipped /w/target/generated-sources/quarkus-openapi-generator-server/docs/HeroesResource.md (Skipped by apiDocs options supplied by user.)
+[INFO] Skipping generation of Webhooks.
+[INFO] 'host' (OAS 2.0) or 'servers' (OAS 3.0) not defined in the spec. Default to [http://localhost] for server URL [http://localhost/]
+[INFO] writing file /w/target/generated-sources/quarkus-openapi-generator-server/.openapi-generator-ignore
+[INFO] writing file /w/target/generated-sources/quarkus-openapi-generator-server/.openapi-generator/VERSION
+[INFO] writing file /w/target/generated-sources/quarkus-openapi-generator-server/.openapi-generator/FILES
+############################################################################################
+# Thanks for using OpenAPI Generator.                                                      #
+# We appreciate your support! Please consider donation to help us maintain this project.   #
+# https://opencollective.com/openapi_generator/donate                                      #
+############################################################################################
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generated file: /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/hero/api/model/Hero.java
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generated file: /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/hero/api/model/HeroPatch.java
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generated file: /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/hero/api/resources/HelloResource.java
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generated file: /w/target/generated-sources/quarkus-openapi-generator-server/io/quarkus/sample/superheroes/hero/api/resources/HeroesResource.java
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generated file: /w/target/generated-sources/quarkus-openapi-generator-server/.openapi-generator-ignore
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generated file: /w/target/generated-sources/quarkus-openapi-generator-server/.openapi-generator/VERSION
+[INFO] [io.quarkiverse.openapi.server.generator.deployment.codegen.openapitools.OpenAPIToolsServerCodegen] Generated file: /w/target/generated-sources/quarkus-openapi-generator-server/.openapi-generator/FILES
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ rest-heroes ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 14 source files with javac [debug release 25] to target/classes
+[INFO] 
+[INFO] --- jacoco:0.8.15:instrument (basquin-injected-offline-instrument) @ rest-heroes ---
+[INFO] 
+[INFO] --- quarkus:3.37.3:generate-code-tests (default) @ rest-heroes ---
+[INFO] 
+[INFO] --- resources:3.5.0:testResources (default-testResources) @ rest-heroes ---
+[INFO] Copying 2 resources from src/test/resources to target/test-classes
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ rest-heroes ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 8 source files with javac [debug release 25] to target/test-classes
+[INFO] /w/src/test/java/io/quarkus/sample/superheroes/hero/service/HeroServiceTests.java: /w/src/test/java/io/quarkus/sample/superheroes/hero/service/HeroServiceTests.java uses or overrides a deprecated API.
+[INFO] /w/src/test/java/io/quarkus/sample/superheroes/hero/service/HeroServiceTests.java: Recompile with -Xlint:deprecation for details.
+[INFO] /w/src/test/java/io/quarkus/sample/superheroes/hero/rest/HeroResourceTests.java: /w/src/test/java/io/quarkus/sample/superheroes/hero/rest/HeroResourceTests.java uses unchecked or unsafe operations.
+[INFO] /w/src/test/java/io/quarkus/sample/superheroes/hero/rest/HeroResourceTests.java: Recompile with -Xlint:unchecked for details.
+[INFO] 
+[INFO] --- surefire:3.5.6:test (default-test) @ rest-heroes ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.5.0:jar (default-jar) @ rest-heroes ---
+[INFO] Building jar: /w/target/rest-heroes-1.0.jar
+[INFO] 
+[INFO] --- quarkus:3.37.3:build (default) @ rest-heroes ---
+[INFO] [io.quarkus.kubernetes.deployment.KubernetesDeployer] Selecting target 'minikube' since it has the highest priority among the implicitly enabled deployment targets
+[INFO] [io.quarkus.kubernetes.deployment.PropertyUtil] Kubernetes manifests are generated with 'The container port http' having provided value '8083'. The app and manifests will get out of sync if the property 'quarkus.http.port' is changed at runtime.
+[INFO] Adding existing ConfigMap with name: rest-heroes-config.
+[INFO] Adding existing Secret with name: rest-heroes-config-creds.
+[INFO] Adding existing Secret with name: heroes-db-config.
+[INFO] Adding existing ConfigMap with name: heroes-db-init.
+[INFO] Adding existing Deployment with name: heroes-db.
+[INFO] Adding existing Service with name: heroes-db.
+[INFO] [io.quarkus.deployment.QuarkusAugmentor] Quarkus augmentation completed in 21084ms
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  56.751 s
+[INFO] Finished at: 2026-08-11T00:03:54Z
+[INFO] ------------------------------------------------------------------------

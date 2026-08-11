@@ -1,0 +1,1 @@
+{"id":1900,"level":38,"name":"Fembots","otherName":"","picture":"https://raw.githubusercontent.com/quarkusio/quarkus-super-heroes/characterdata/images/fembots-6870752461699762801.jpg","powers":"Durability, Stamina, Endurance, Marksmanship, Master Martial Artist, Master Tactician, Weapon-based Powers"}

@@ -1,0 +1,19 @@
+
+   ___                   _                ____                        _
+  / _ \ _   _  __ _ _ __| | ___   _ ___  / ___| _   _ _ __   ___ _ __| |__   ___ _ __ ___   ___  ___
+ | | | | | | |/ _` | '__| |/ / | | / __| \___ \| | | | '_ \ / _ \ '__| '_ \ / _ \ '__/ _ \ / _ \/ __|
+ | |_| | |_| | (_| | |  |   <| |_| \__ \  ___) | |_| | |_) |  __/ |  | | | |  __/ | | (_) |  __/\__ \
+  \__\_\\__,_|\__,_|_|  |_|\_\\__,_|___/ |____/ \__,_| .__/ \___|_|  |_| |_|\___|_|  \___/ \___||___/
+  _   _                                              |_|
+ | | | | ___ _ __ ___   ___  ___
+ | |_| |/ _ \ '__/ _ \ / _ \/ __|
+ |  _  |  __/ | | (_) |  __/\__ \
+ |_| |_|\___|_|  \___/ \___||___/
+
+
+                                                                            Powered by Quarkus 3.37.3
+2026-08-10 20:24:21,130 INFO  [io.quarkus] (main) rest-heroes 1.0 native (powered by Quarkus 3.37.3) started in 0.598s. Listening on: http://0.0.0.0:8083
+2026-08-10 20:24:21,133 INFO  [io.quarkus] (main) Profile prod activated. 
+2026-08-10 20:24:21,133 INFO  [io.quarkus] (main) Installed features: [basquin, cdi, config-yaml, hibernate-orm, hibernate-reactive, hibernate-reactive-panache, hibernate-validator, kubernetes, micrometer, opentelemetry, qute, reactive-pg-client, rest, rest-jackson, rest-qute, smallrye-context-propagation, smallrye-health, smallrye-openapi, swagger-ui, vertx]
+[Basquin] id=s3-disp-disconnect disconnected before response completed: io.vertx.core.http.HttpClosedException: Connection was closed
+2026-08-10 20:25:12,528 INFO  [io.quarkus] (Shutdown thread) rest-heroes stopped in 0.005s

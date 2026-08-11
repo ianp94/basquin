@@ -1,0 +1,10 @@
+/home/ian/.m2/repository/com/basquin
+/home/ian/.m2/repository/com/basquin/basquin-quarkus
+/home/ian/.m2/repository/com/basquin/basquin-quarkus-deployment
+/home/ian/.m2/repository/com/basquin/basquin-core
+/home/ian/.m2/repository/com/basquin/basquin-quarkus/maven-metadata-local.xml
+/home/ian/.m2/repository/com/basquin/basquin-quarkus/0.3.0
+/home/ian/.m2/repository/com/basquin/basquin-quarkus-deployment/maven-metadata-local.xml
+/home/ian/.m2/repository/com/basquin/basquin-quarkus-deployment/0.3.0
+/home/ian/.m2/repository/com/basquin/basquin-core/maven-metadata-local.xml
+/home/ian/.m2/repository/com/basquin/basquin-core/0.3.0

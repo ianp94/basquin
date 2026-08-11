@@ -1,0 +1,294 @@
+[INFO] Scanning for projects...
+[INFO] Inspecting build with total of 1 modules
+[INFO] Installing Central Publishing features
+[INFO] 
+[INFO] -----------------------< org.mybatis:jpetstore >------------------------
+[INFO] Building JPetStore Demo 6 6.3.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ war ]---------------------------------
+[INFO] 
+[INFO] --- enforcer:3.6.3:enforce (enforce-java) @ jpetstore ---
+[INFO] Skipping Rule Enforcement.
+[INFO] 
+[INFO] --- git-commit-id:10.0.0:revision (git-commit-id) @ jpetstore ---
+[INFO] 
+[INFO] --- jacoco:0.8.14:prepare-agent (prepare-agent) @ jpetstore ---
+[INFO] argLine set to -javaagent:/home/ian/.m2/repository/org/jacoco/org.jacoco.agent/0.8.14/org.jacoco.agent-0.8.14-runtime.jar=destfile=/tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/5f840f7a-f81d-434b-aa96-706be25f9d56/scratchpad/jpetstore-6/target/jacoco.exec -javaagent:${settings.localRepository}/net/bytebuddy/byte-buddy-agent/1.18.11/byte-buddy-agent-1.18.11.jar
+[INFO] 
+[INFO] --- whitespace:1.6.0:trim (default) @ jpetstore ---
+[INFO] Processing the following extensions: 4gl,42m,c,cb,cfg,cpp,css,dat,groovy,h,html,ini,java,js,json,jsonp,jsp,jspx,jsx,ksh,kt,kts,md,mk,msg,pl,pm,properties,scala,scss,sh,sql,toml,ts,tsx,wadl,wsdl,xhtml,xml,xsd,yaml,yml
+[INFO] 
+[INFO] --- formatter:2.29.0:format (default) @ jpetstore ---
+[INFO] Processed 42 files in 240ms (Formatted: 0, Skipped: 42, Unchanged: 0, Failed: 0, Readonly: 0)
+[INFO] 
+[INFO] --- impsort:1.13.0:sort (default) @ jpetstore ---
+[INFO] Processed 42 files in 00:00.016 (Already Sorted: 42, Needed Sorting: 0)
+[INFO] 
+[INFO] >>> rewrite:6.40.0:run (default) > process-test-classes @ jpetstore >>>
+[INFO] 
+[INFO] --- enforcer:3.6.3:enforce (enforce-java) @ jpetstore ---
+[INFO] Skipping Rule Enforcement.
+[INFO] 
+[INFO] --- git-commit-id:10.0.0:revision (git-commit-id) @ jpetstore ---
+[INFO] 
+[INFO] --- jacoco:0.8.14:prepare-agent (prepare-agent) @ jpetstore ---
+[INFO] argLine set to -javaagent:/home/ian/.m2/repository/org/jacoco/org.jacoco.agent/0.8.14/org.jacoco.agent-0.8.14-runtime.jar=destfile=/tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/5f840f7a-f81d-434b-aa96-706be25f9d56/scratchpad/jpetstore-6/target/jacoco.exec -javaagent:${settings.localRepository}/net/bytebuddy/byte-buddy-agent/1.18.11/byte-buddy-agent-1.18.11.jar
+[INFO] 
+[INFO] --- whitespace:1.6.0:trim (default) @ jpetstore ---
+[INFO] Processing the following extensions: 4gl,42m,c,cb,cfg,cpp,css,dat,groovy,h,html,ini,java,js,json,jsonp,jsp,jspx,jsx,ksh,kt,kts,md,mk,msg,pl,pm,properties,scala,scss,sh,sql,toml,ts,tsx,wadl,wsdl,xhtml,xml,xsd,yaml,yml
+[INFO] 
+[INFO] --- formatter:2.29.0:format (default) @ jpetstore ---
+[INFO] Processed 42 files in 14ms (Formatted: 0, Skipped: 42, Unchanged: 0, Failed: 0, Readonly: 0)
+[INFO] 
+[INFO] --- impsort:1.13.0:sort (default) @ jpetstore ---
+[INFO] Processed 42 files in 00:00.002 (Already Sorted: 42, Needed Sorting: 0)
+[INFO] 
+[INFO] --- license:5.0.0:format (default) @ jpetstore ---
+[INFO] Updating license headers...
+[WARNING] Shallow git repository detected. Year property values may not be accurate.
+[WARNING] Shallow git repository detected. Author property values may not be accurate.
+[INFO] 
+[INFO] --- resources:3.5.0:resources (default-resources) @ jpetstore ---
+[INFO] Copying 11 resources from src/main/resources to target/classes
+[INFO] Copying 2 resources from . to target/classes/META-INF
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ jpetstore ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- bnd:7.2.3:bnd-process (bnd-process) @ jpetstore ---
+[INFO] WAB mode enabled. Bnd output will be expanded into the 'maven-war-plugin' <webappDirectory>:/tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/5f840f7a-f81d-434b-aa96-706be25f9d56/scratchpad/jpetstore-6/target/jpetstore
+[INFO] 
+[INFO] --- resources:3.5.0:testResources (default-testResources) @ jpetstore ---
+[INFO] Copying 1 resource from src/test/resources to target/test-classes
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ jpetstore ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] <<< rewrite:6.40.0:run (default) < process-test-classes @ jpetstore <<<
+[INFO] 
+[INFO] 
+[INFO] --- rewrite:6.40.0:run (default) @ jpetstore ---
+[INFO] Using active recipe(s) [org.openrewrite.java.RemoveUnusedImports]
+[INFO] Using active styles(s) []
+[INFO] Validating active recipes...
+[INFO] Project [JPetStore Demo 6] Resolving Poms...
+[INFO] Project [JPetStore Demo 6] Parsing source files
+[WARNING] There were problems parsing some source files, run with --errors to see full stack traces
+[WARNING] There were problems parsing src/main/webapp/WEB-INF/jsp/account/EditAccountForm.jsp
+[WARNING] There were problems parsing src/main/webapp/WEB-INF/jsp/account/NewAccountForm.jsp
+[WARNING] There were problems parsing src/main/webapp/WEB-INF/jsp/common/IncludeBottom.jsp
+[WARNING] There were problems parsing src/main/webapp/WEB-INF/jsp/order/NewOrderForm.jsp
+[WARNING] There were problems parsing src/main/webapp/WEB-INF/jsp/order/ShippingForm.jsp
+[WARNING] There were problems parsing src/main/webapp/WEB-INF/jsp/account/EditAccountForm.jsp
+[WARNING] There were problems parsing src/main/webapp/WEB-INF/jsp/account/NewAccountForm.jsp
+[WARNING] There were problems parsing src/main/webapp/WEB-INF/jsp/common/IncludeBottom.jsp
+[WARNING] There were problems parsing src/main/webapp/WEB-INF/jsp/order/NewOrderForm.jsp
+[WARNING] There were problems parsing src/main/webapp/WEB-INF/jsp/order/ShippingForm.jsp
+[INFO] Running recipe(s)...
+[WARNING] The recipe produced 26 warning(s). Please report this to the recipe author.
+[WARNING] Run with `--debug` or `-Drewrite.exportDatatables=true` to see all warnings.
+org.openrewrite.xml.XmlParsingException: Syntax error in /tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/5f840f7a-f81d-434b-aa96-706be25f9d56/scratchpad/jpetstore-6/src/main/webapp/WEB-INF/jsp/account/EditAccountForm.jsp at line 40:2 no viable alternative at input '<%@'.
+    at org.openrewrite.xml.XmlParser$ForwardingErrorListener.syntaxError (XmlParser.java:154)
+    at org.antlr.v4.runtime.ProxyErrorListener.syntaxError (ProxyErrorListener.java:41)
+    at org.antlr.v4.runtime.Parser.notifyErrorListeners (Parser.java:544)
+    at org.antlr.v4.runtime.DefaultErrorStrategy.reportNoViableAlternative (DefaultErrorStrategy.java:310)
+    at org.antlr.v4.runtime.DefaultErrorStrategy.reportError (DefaultErrorStrategy.java:136)
+    at org.openrewrite.xml.internal.grammar.XMLParser.element (XMLParser.java:1210)
+    at org.openrewrite.xml.internal.grammar.XMLParser.content (XMLParser.java:1000)
+    at org.openrewrite.xml.internal.grammar.XMLParser.element (XMLParser.java:1163)
+    at org.openrewrite.xml.internal.grammar.XMLParser.document (XMLParser.java:185)
+    at org.openrewrite.xml.XmlParser.lambda$parseInputs$0 (XmlParser.java:104)
+    at java.util.stream.ReferencePipeline$3$1.accept (ReferencePipeline.java:197)
+    at java.util.stream.ReferencePipeline$2$1.accept (ReferencePipeline.java:179)
+    at java.util.ArrayList$ArrayListSpliterator.forEachRemaining (ArrayList.java:1625)
+    at java.util.stream.AbstractPipeline.copyInto (AbstractPipeline.java:509)
+    at java.util.stream.AbstractPipeline.wrapAndCopyInto (AbstractPipeline.java:499)
+    at java.util.stream.StreamSpliterators$WrappingSpliterator.forEachRemaining (StreamSpliterators.java:310)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:735)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:734)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:734)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:735)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:734)
+    at java.util.stream.AbstractPipeline.copyInto (AbstractPipeline.java:509)
+    at java.util.stream.AbstractPipeline.wrapAndCopyInto (AbstractPipeline.java:499)
+    at java.util.stream.StreamSpliterators$WrappingSpliterator.forEachRemaining (StreamSpliterators.java:310)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:735)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:734)
+    at java.util.stream.AbstractPipeline.copyInto (AbstractPipeline.java:509)
+    at java.util.stream.AbstractPipeline.wrapAndCopyInto (AbstractPipeline.java:499)
+    at java.util.stream.StreamSpliterators$WrappingSpliterator.forEachRemaining (StreamSpliterators.java:310)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:734)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:734)
+    at java.util.stream.AbstractPipeline.copyInto (AbstractPipeline.java:509)
+    at java.util.stream.AbstractPipeline.wrapAndCopyInto (AbstractPipeline.java:499)
+    at java.util.stream.ForEachOps$ForEachOp.evaluateSequential (ForEachOps.java:150)
+    at java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential (ForEachOps.java:173)
+    at java.util.stream.AbstractPipeline.evaluate (AbstractPipeline.java:234)
+    at java.util.stream.ReferencePipeline.forEach (ReferencePipeline.java:596)
+    at java.util.stream.ReferencePipeline$7$1.accept (ReferencePipeline.java:276)
+    at java.util.ArrayList$ArrayListSpliterator.forEachRemaining (ArrayList.java:1625)
+    at java.util.stream.AbstractPipeline.copyInto (AbstractPipeline.java:509)
+    at java.util.stream.AbstractPipeline.wrapAndCopyInto (AbstractPipeline.java:499)
+    at java.util.stream.ReduceOps$ReduceOp.evaluateSequential (ReduceOps.java:921)
+    at java.util.stream.AbstractPipeline.evaluate (AbstractPipeline.java:234)
+    at java.util.stream.ReferencePipeline.collect (ReferencePipeline.java:682)
+    at org.openrewrite.maven.AbstractRewriteBaseRunMojo.sourcesWithAutoDetectedStyles (AbstractRewriteBaseRunMojo.java:286)
+    at org.openrewrite.maven.AbstractRewriteBaseRunMojo.loadSourceSet (AbstractRewriteBaseRunMojo.java:241)
+    at org.openrewrite.maven.AbstractRewriteBaseRunMojo.listResults (AbstractRewriteBaseRunMojo.java:156)
+    at org.openrewrite.maven.AbstractRewriteRunMojo.execute (AbstractRewriteRunMojo.java:66)
+    at org.apache.maven.plugin.DefaultBuildPluginManager.executeMojo (DefaultBuildPluginManager.java:126)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.doExecute2 (MojoExecutor.java:328)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.doExecute (MojoExecutor.java:316)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.execute (MojoExecutor.java:212)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.execute (MojoExecutor.java:174)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.access$000 (MojoExecutor.java:75)
+    at org.apache.maven.lifecycle.internal.MojoExecutor$1.run (MojoExecutor.java:162)
+    at org.apache.maven.plugin.DefaultMojosExecutionStrategy.execute (DefaultMojosExecutionStrategy.java:39)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.execute (MojoExecutor.java:159)
+    at org.apache.maven.lifecycle.internal.LifecycleModuleBuilder.buildProject (LifecycleModuleBuilder.java:105)
+    at org.apache.maven.lifecycle.internal.LifecycleModuleBuilder.buildProject (LifecycleModuleBuilder.java:73)
+    at org.apache.maven.lifecycle.internal.builder.singlethreaded.SingleThreadedBuilder.build (SingleThreadedBuilder.java:53)
+    at org.apache.maven.lifecycle.internal.LifecycleStarter.execute (LifecycleStarter.java:118)
+    at org.apache.maven.DefaultMaven.doExecute (DefaultMaven.java:261)
+    at org.apache.maven.DefaultMaven.doExecute (DefaultMaven.java:173)
+    at org.apache.maven.DefaultMaven.execute (DefaultMaven.java:101)
+    at org.apache.maven.cli.MavenCli.execute (MavenCli.java:919)
+    at org.apache.maven.cli.MavenCli.doMain (MavenCli.java:285)
+    at org.apache.maven.cli.MavenCli.main (MavenCli.java:207)
+    at jdk.internal.reflect.NativeMethodAccessorImpl.invoke0 (Native Method)
+    at jdk.internal.reflect.NativeMethodAccessorImpl.invoke (NativeMethodAccessorImpl.java:77)
+    at jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke (DelegatingMethodAccessorImpl.java:43)
+    at java.lang.reflect.Method.invoke (Method.java:569)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.launchEnhanced (Launcher.java:255)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.launch (Launcher.java:201)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.mainWithExitCode (Launcher.java:362)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.main (Launcher.java:314)
+    at jdk.internal.reflect.NativeMethodAccessorImpl.invoke0 (Native Method)
+    at jdk.internal.reflect.NativeMethodAccessorImpl.invoke (NativeMethodAccessorImpl.java:77)
+    at jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke (DelegatingMethodAccessorImpl.java:43)
+    at java.lang.reflect.Method.invoke (Method.java:569)
+    at org.apache.maven.wrapper.BootstrapMainStarter.start (BootstrapMainStarter.java:52)
+    at org.apache.maven.wrapper.WrapperExecutor.execute (WrapperExecutor.java:161)
+    at org.apache.maven.wrapper.MavenWrapperMain.main (MavenWrapperMain.java:73)
+Caused by: org.antlr.v4.runtime.NoViableAltException
+    at org.antlr.v4.runtime.atn.ParserATNSimulator.noViableAlt (ParserATNSimulator.java:2014)
+    at org.antlr.v4.runtime.atn.ParserATNSimulator.execATN (ParserATNSimulator.java:445)
+    at org.antlr.v4.runtime.atn.ParserATNSimulator.adaptivePredict (ParserATNSimulator.java:371)
+    at org.openrewrite.xml.internal.grammar.XMLParser.element (XMLParser.java:1169)
+    at org.openrewrite.xml.internal.grammar.XMLParser.content (XMLParser.java:1000)
+    at org.openrewrite.xml.internal.grammar.XMLParser.element (XMLParser.java:1163)
+    at org.openrewrite.xml.internal.grammar.XMLParser.document (XMLParser.java:185)
+    at org.openrewrite.xml.XmlParser.lambda$parseInputs$0 (XmlParser.java:104)
+    at java.util.stream.ReferencePipeline$3$1.accept (ReferencePipeline.java:197)
+    at java.util.stream.ReferencePipeline$2$1.accept (ReferencePipeline.java:179)
+    at java.util.ArrayList$ArrayListSpliterator.forEachRemaining (ArrayList.java:1625)
+    at java.util.stream.AbstractPipeline.copyInto (AbstractPipeline.java:509)
+    at java.util.stream.AbstractPipeline.wrapAndCopyInto (AbstractPipeline.java:499)
+    at java.util.stream.StreamSpliterators$WrappingSpliterator.forEachRemaining (StreamSpliterators.java:310)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:735)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:734)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:734)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:735)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:734)
+    at java.util.stream.AbstractPipeline.copyInto (AbstractPipeline.java:509)
+    at java.util.stream.AbstractPipeline.wrapAndCopyInto (AbstractPipeline.java:499)
+    at java.util.stream.StreamSpliterators$WrappingSpliterator.forEachRemaining (StreamSpliterators.java:310)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:735)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:734)
+    at java.util.stream.AbstractPipeline.copyInto (AbstractPipeline.java:509)
+    at java.util.stream.AbstractPipeline.wrapAndCopyInto (AbstractPipeline.java:499)
+    at java.util.stream.StreamSpliterators$WrappingSpliterator.forEachRemaining (StreamSpliterators.java:310)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:734)
+    at java.util.stream.Streams$ConcatSpliterator.forEachRemaining (Streams.java:734)
+    at java.util.stream.AbstractPipeline.copyInto (AbstractPipeline.java:509)
+    at java.util.stream.AbstractPipeline.wrapAndCopyInto (AbstractPipeline.java:499)
+    at java.util.stream.ForEachOps$ForEachOp.evaluateSequential (ForEachOps.java:150)
+    at java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential (ForEachOps.java:173)
+    at java.util.stream.AbstractPipeline.evaluate (AbstractPipeline.java:234)
+    at java.util.stream.ReferencePipeline.forEach (ReferencePipeline.java:596)
+    at java.util.stream.ReferencePipeline$7$1.accept (ReferencePipeline.java:276)
+    at java.util.ArrayList$ArrayListSpliterator.forEachRemaining (ArrayList.java:1625)
+    at java.util.stream.AbstractPipeline.copyInto (AbstractPipeline.java:509)
+    at java.util.stream.AbstractPipeline.wrapAndCopyInto (AbstractPipeline.java:499)
+    at java.util.stream.ReduceOps$ReduceOp.evaluateSequential (ReduceOps.java:921)
+    at java.util.stream.AbstractPipeline.evaluate (AbstractPipeline.java:234)
+    at java.util.stream.ReferencePipeline.collect (ReferencePipeline.java:682)
+    at org.openrewrite.maven.AbstractRewriteBaseRunMojo.sourcesWithAutoDetectedStyles (AbstractRewriteBaseRunMojo.java:286)
+    at org.openrewrite.maven.AbstractRewriteBaseRunMojo.loadSourceSet (AbstractRewriteBaseRunMojo.java:241)
+    at org.openrewrite.maven.AbstractRewriteBaseRunMojo.listResults (AbstractRewriteBaseRunMojo.java:156)
+    at org.openrewrite.maven.AbstractRewriteRunMojo.execute (AbstractRewriteRunMojo.java:66)
+    at org.apache.maven.plugin.DefaultBuildPluginManager.executeMojo (DefaultBuildPluginManager.java:126)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.doExecute2 (MojoExecutor.java:328)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.doExecute (MojoExecutor.java:316)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.execute (MojoExecutor.java:212)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.execute (MojoExecutor.java:174)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.access$000 (MojoExecutor.java:75)
+    at org.apache.maven.lifecycle.internal.MojoExecutor$1.run (MojoExecutor.java:162)
+    at org.apache.maven.plugin.DefaultMojosExecutionStrategy.execute (DefaultMojosExecutionStrategy.java:39)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.execute (MojoExecutor.java:159)
+    at org.apache.maven.lifecycle.internal.LifecycleModuleBuilder.buildProject (LifecycleModuleBuilder.java:105)
+    at org.apache.maven.lifecycle.internal.LifecycleModuleBuilder.buildProject (LifecycleModuleBuilder.java:73)
+    at org.apache.maven.lifecycle.internal.builder.singlethreaded.SingleThreadedBuilder.build (SingleThreadedBuilder.java:53)
+    at org.apache.maven.lifecycle.internal.LifecycleStarter.execute (LifecycleStarter.java:118)
+    at org.apache.maven.DefaultMaven.doExecute (DefaultMaven.java:261)
+    at org.apache.maven.DefaultMaven.doExecute (DefaultMaven.java:173)
+    at org.apache.maven.DefaultMaven.execute (DefaultMaven.java:101)
+    at org.apache.maven.cli.MavenCli.execute (MavenCli.java:919)
+    at org.apache.maven.cli.MavenCli.doMain (MavenCli.java:285)
+    at org.apache.maven.cli.MavenCli.main (MavenCli.java:207)
+    at jdk.internal.reflect.NativeMethodAccessorImpl.invoke0 (Native Method)
+    at jdk.internal.reflect.NativeMethodAccessorImpl.invoke (NativeMethodAccessorImpl.java:77)
+    at jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke (DelegatingMethodAccessorImpl.java:43)
+    at java.lang.reflect.Method.invoke (Method.java:569)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.launchEnhanced (Launcher.java:255)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.launch (Launcher.java:201)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.mainWithExitCode (Launcher.java:362)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.main (Launcher.java:314)
+    at jdk.internal.reflect.NativeMethodAccessorImpl.invoke0 (Native Method)
+    at jdk.internal.reflect.NativeMethodAccessorImpl.invoke (NativeMethodAccessorImpl.java:77)
+    at jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke (DelegatingMethodAccessorImpl.java:43)
+    at java.lang.reflect.Method.invoke (Method.java:569)
+    at org.apache.maven.wrapper.BootstrapMainStarter.start (BootstrapMainStarter.java:52)
+    at org.apache.maven.wrapper.WrapperExecutor.execute (WrapperExecutor.java:161)
+    at org.apache.maven.wrapper.MavenWrapperMain.main (MavenWrapperMain.java:73)
+[INFO] 
+[INFO] --- license:5.0.0:format (default) @ jpetstore ---
+[INFO] Updating license headers...
+[WARNING] Shallow git repository detected. Year property values may not be accurate.
+[WARNING] Shallow git repository detected. Author property values may not be accurate.
+[INFO] 
+[INFO] --- resources:3.5.0:resources (default-resources) @ jpetstore ---
+[INFO] Copying 11 resources from src/main/resources to target/classes
+[INFO] Copying 2 resources from . to target/classes/META-INF
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ jpetstore ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- bnd:7.2.3:bnd-process (bnd-process) @ jpetstore ---
+[INFO] WAB mode enabled. Bnd output will be expanded into the 'maven-war-plugin' <webappDirectory>:/tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/5f840f7a-f81d-434b-aa96-706be25f9d56/scratchpad/jpetstore-6/target/jpetstore
+[INFO] 
+[INFO] --- resources:3.5.0:testResources (default-testResources) @ jpetstore ---
+[INFO] Copying 1 resource from src/test/resources to target/test-classes
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ jpetstore ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.6:test (default-test) @ jpetstore ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- war:3.5.1:war (default-war) @ jpetstore ---
+[INFO] Packaging webapp
+[INFO] Assembling webapp [jpetstore] in [/tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/5f840f7a-f81d-434b-aa96-706be25f9d56/scratchpad/jpetstore-6/target/jpetstore]
+[INFO] Processing war project
+[INFO] Copying webapp resources [/tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/5f840f7a-f81d-434b-aa96-706be25f9d56/scratchpad/jpetstore-6/src/main/webapp]
+[INFO] deleting outdated resource WEB-INF/lib/hsqldb-2.7.4.jar
+[INFO] Building war: /tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/5f840f7a-f81d-434b-aa96-706be25f9d56/scratchpad/jpetstore-6/target/jpetstore.war
+[INFO] 
+[INFO] --- site:3.22.0:attach-descriptor (attach-descriptor) @ jpetstore ---
+[INFO] Skipping because packaging 'war' is not pom.
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  8.350 s
+[INFO] Finished at: 2026-08-10T21:40:36-04:00
+[INFO] ------------------------------------------------------------------------

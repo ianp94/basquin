@@ -32,7 +32,10 @@ configurations {
     jacocoAgent   // resolves the standalone jacocoagent.jar to inject into the target JVM
 }
 
-def jacocoVersion = '0.8.12'
+// Single shared source of truth, NOT a script-local literal: see gradle.properties for the
+// property definition and the full list of consumers (this file's org.jacoco.core dependency +
+// jacocoAgent configuration, and basquin-maven-injector's generated JacocoVersion constant).
+def jacocoVersion = providers.gradleProperty('jacocoVersion').get()
 
 dependencies {
     javalinDemo 'io.javalin:javalin:5.6.2'

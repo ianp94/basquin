@@ -1,0 +1,8 @@
+--- t0.xml ---
+  io/quarkus/sample/superheroes/villain/rest/VillainResource.getRandomVillain: covered=0 missed=10
+  io/quarkus/sample/superheroes/villain/rest/VillainResource.getAllVillains: covered=0 missed=20
+  io/quarkus/sample/superheroes/villain/rest/VillainResource.getVillain: covered=0 missed=12
+--- t1.xml ---
+  io/quarkus/sample/superheroes/villain/rest/VillainResource.getRandomVillain: covered=10 missed=0
+  io/quarkus/sample/superheroes/villain/rest/VillainResource.getAllVillains: covered=15 missed=5
+  io/quarkus/sample/superheroes/villain/rest/VillainResource.getVillain: covered=0 missed=12

@@ -1,0 +1,17 @@
+== application-route request lines in drive.log (the complete set) ==
+[2026-08-11T01:01:19.846Z] REQUEST 1 (declared sibling): GET /api/villains/random
+[2026-08-11T01:01:19.900Z] REQUEST 1 -> HTTP 200, body 417 bytes (req-random.txt)
+[2026-08-11T01:01:19.903Z] REQUEST 2 (declared sibling): GET /api/villains
+[2026-08-11T01:01:19.928Z] REQUEST 2 -> HTTP 200, body 102011 bytes (req-all.txt)
+
+== non-application requests (readiness probe + coverage dumps) ==
+[2026-08-11T01:01:19.816Z] READY /q/health/ready -> 200 (readiness probe; not an application route)
+[2026-08-11T01:01:19.819Z] t0 dump: GET /__basquin/coverage (before any application route)
+[2026-08-11T01:01:19.931Z] t1 dump: GET /__basquin/coverage (after the two sibling requests; the withheld route GET /api/villains/{id} was never sent)
+
+== application-route URLs actually requested ==
+/api/villains
+/api/villains/random
+
+== withheld-shaped among them: /api/villains/<segment> with <segment> != random ==
+NONE — no withheld-shaped request was sent in this run

@@ -1,0 +1,14 @@
+== round B: product/item views, search, account, cart, order forms ==
+200 GET viewProduct FI-SW-01
+200 GET viewProduct K9-BD-01
+200 GET viewProduct RP-SN-01
+200 GET viewProduct AV-CB-01
+200 GET viewItem EST-1
+200 GET viewItem EST-6
+200 GET viewItem EST-10
+200 GET viewItem EST-18
+200 GET searchProducts keyword=fish
+200 GET Account.action signonForm
+200 GET Account.action newAccountForm
+200 GET Cart.action viewCart
+200 GET Order.action newOrderForm

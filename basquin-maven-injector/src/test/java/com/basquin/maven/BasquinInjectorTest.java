@@ -15,6 +15,8 @@ import org.apache.maven.artifact.repository.ArtifactRepository;
 import org.apache.maven.artifact.repository.ArtifactRepositoryPolicy;
 import org.apache.maven.artifact.repository.layout.DefaultRepositoryLayout;
 import org.apache.maven.model.Dependency;
+import org.apache.maven.model.Plugin;
+import org.apache.maven.model.PluginExecution;
 import org.apache.maven.model.Repository;
 import org.apache.maven.model.RepositoryPolicy;
 import org.apache.maven.project.MavenProject;
@@ -178,6 +180,104 @@ public class BasquinInjectorTest {
                 assertNotSame("ArtifactRepository aliased across projects",
                         reactor.get(i).getRemoteArtifactRepositories().get(0),
                         reactor.get(j).getRemoteArtifactRepositories().get(0));
+            }
+        }
+    }
+
+    /**
+     * DD-043 PR-4, Task 2. Mirrors {@link #injectsTheDependencyIntoEveryProjectInTheReactor}: the
+     * jacoco offline-instrument execution is a second, independent mutation this injector makes to
+     * every project in the reactor, not only to the one carrying basquin-quarkus.
+     */
+    @Test
+    public void injectsTheJacocoInstrumentExecutionIntoEveryProjectInTheReactor() throws Exception {
+        List<MavenProject> reactor = Arrays.asList(project("a"), project("b"), project("c"));
+
+        new BasquinInjector().inject(reactor, props());
+
+        for (MavenProject p : reactor) {
+            List<Plugin> plugins = p.getModel().getBuild().getPlugins();
+            assertEquals("exactly one plugin injected into " + p.getArtifactId(), 1, plugins.size());
+            Plugin plugin = plugins.get(0);
+            assertEquals(BasquinInjector.JACOCO_GROUP_ID, plugin.getGroupId());
+            assertEquals(BasquinInjector.JACOCO_ARTIFACT_ID, plugin.getArtifactId());
+            assertEquals(JacocoVersion.value(), plugin.getVersion());
+        }
+    }
+
+    /**
+     * Pins every field {@link BasquinInjector#addJacocoInstrumentExecution} sets on the
+     * {@link PluginExecution}, not just the plugin coordinate — the same PR #103 round-5-finding-5
+     * discipline {@link #pinsTheInjectedRepositorysReleaseAndSnapshotPolicies} already applies to the
+     * repository injection. The id and phase are what the §8.2 spike measured reaching Maven's
+     * execution plan; the goal is what makes the execution actually run {@code instrument} rather than
+     * some other jacoco mojo.
+     */
+    @Test
+    public void pinsTheInjectedJacocoExecutionsIdPhaseAndGoal() throws Exception {
+        MavenProject p = project("a");
+
+        new BasquinInjector().inject(Arrays.asList(p), props());
+
+        Plugin plugin = p.getModel().getBuild().getPlugins().get(0);
+        assertEquals(1, plugin.getExecutions().size());
+        PluginExecution exec = plugin.getExecutions().get(0);
+        assertEquals(BasquinInjector.JACOCO_EXECUTION_ID, exec.getId());
+        assertEquals(BasquinInjector.JACOCO_PHASE, exec.getPhase());
+        assertEquals(Arrays.asList(BasquinInjector.JACOCO_GOAL), exec.getGoals());
+    }
+
+    /**
+     * The version injected is never a hand-typed literal — it is baked from the shared root
+     * {@code gradle.properties jacocoVersion} property via {@link JacocoVersion#value()}, the same
+     * lockstep {@code JacocoVersionLockstepTest} checks against the checked-in property text.
+     */
+    @Test
+    public void injectedJacocoExecutionUsesTheSharedGradlePropertyVersion() throws Exception {
+        MavenProject p = project("a");
+
+        new BasquinInjector().inject(Arrays.asList(p), props());
+
+        assertEquals(JacocoVersion.value(), p.getModel().getBuild().getPlugins().get(0).getVersion());
+    }
+
+    /**
+     * A1 (docs/superpowers/plans/2026-08-10-dd043-pr4-coverage.md): the jacoco runtime dependency
+     * arrives transitively through basquin-quarkus's own {@code implementation
+     * org.jacoco:org.jacoco.agent:runtime} dependency, never as a second thing this injector adds
+     * directly. Only the basquin-quarkus dependency itself may appear in the model's dependency list.
+     */
+    @Test
+    public void doesNotAddAJacocoRuntimeDependencyDirectly() throws Exception {
+        MavenProject p = project("a");
+
+        new BasquinInjector().inject(Arrays.asList(p), props());
+
+        List<Dependency> deps = p.getModel().getDependencies();
+        assertEquals("only the basquin-quarkus dependency, never a jacoco one", 1, deps.size());
+        assertEquals(BasquinInjector.ARTIFACT_ID, deps.get(0).getArtifactId());
+    }
+
+    /**
+     * §5's aliasing rule, extended to the jacoco mutation: Maven's model objects are mutable, so a
+     * {@link Plugin}/{@link PluginExecution} instance hoisted above the per-project loop would alias
+     * across the whole reactor, and a later in-place mutation on one module's copy would bleed into
+     * every other module's. Mirrors {@link #allocatesFreshModelObjectsPerProject}, which pins the same
+     * property for the dependency/repository mutations — a single-module reactor cannot catch either.
+     */
+    @Test
+    public void allocatesFreshJacocoPluginObjectsPerProject() throws Exception {
+        List<MavenProject> reactor = Arrays.asList(project("a"), project("b"), project("c"));
+
+        new BasquinInjector().inject(reactor, props());
+
+        for (int i = 0; i < reactor.size(); i++) {
+            for (int j = i + 1; j < reactor.size(); j++) {
+                Plugin pluginI = reactor.get(i).getModel().getBuild().getPlugins().get(0);
+                Plugin pluginJ = reactor.get(j).getModel().getBuild().getPlugins().get(0);
+                assertNotSame("Plugin aliased across projects", pluginI, pluginJ);
+                assertNotSame("PluginExecution aliased across projects",
+                        pluginI.getExecutions().get(0), pluginJ.getExecutions().get(0));
             }
         }
     }

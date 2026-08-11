@@ -1,0 +1,138 @@
+NOTE: Picked up JDK_JAVA_OPTIONS:  --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.rmi/sun.rmi.transport=ALL-UNNAMED
+Basquin Agent initialized
+11-Aug-2026 01:41:17.299 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Server version name:   Apache Tomcat/9.0.120
+11-Aug-2026 01:41:17.301 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Server built:          Jul 3 2026 07:49:53 UTC
+11-Aug-2026 01:41:17.301 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Server version number: 9.0.120.0
+11-Aug-2026 01:41:17.301 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log OS Name:               Linux
+11-Aug-2026 01:41:17.301 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log OS Version:            6.18.33.2-microsoft-standard-WSL2
+11-Aug-2026 01:41:17.301 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Architecture:          amd64
+11-Aug-2026 01:41:17.301 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Java Home:             /opt/java/openjdk
+11-Aug-2026 01:41:17.301 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log JVM Version:           17.0.19+10
+11-Aug-2026 01:41:17.301 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log JVM Vendor:            Eclipse Adoptium
+11-Aug-2026 01:41:17.301 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log CATALINA_BASE:         /usr/local/tomcat
+11-Aug-2026 01:41:17.302 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log CATALINA_HOME:         /usr/local/tomcat
+11-Aug-2026 01:41:17.302 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: --add-opens=java.base/java.lang=ALL-UNNAMED
+11-Aug-2026 01:41:17.302 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: --add-opens=java.base/java.lang.invoke=ALL-UNNAMED
+11-Aug-2026 01:41:17.302 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+11-Aug-2026 01:41:17.302 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: --add-opens=java.base/java.io=ALL-UNNAMED
+11-Aug-2026 01:41:17.302 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: --add-opens=java.base/java.util=ALL-UNNAMED
+11-Aug-2026 01:41:17.302 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: --add-opens=java.base/java.util.concurrent=ALL-UNNAMED
+11-Aug-2026 01:41:17.303 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: --add-opens=java.rmi/sun.rmi.transport=ALL-UNNAMED
+11-Aug-2026 01:41:17.303 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -Djava.util.logging.config.file=/usr/local/tomcat/conf/logging.properties
+11-Aug-2026 01:41:17.303 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -Djava.util.logging.manager=org.apache.juli.ClassLoaderLogManager
+11-Aug-2026 01:41:17.303 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -Djdk.tls.ephemeralDHKeySize=2048
+11-Aug-2026 01:41:17.303 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -Djava.protocol.handler.pkgs=org.apache.catalina.webresources
+11-Aug-2026 01:41:17.303 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -Dsun.io.useCanonCaches=false
+11-Aug-2026 01:41:17.303 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -Dorg.apache.catalina.security.SecurityListener.UMASK=0027
+11-Aug-2026 01:41:17.303 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -javaagent:/jacocoagent.jar=output=tcpserver,address=0.0.0.0,port=6300,includes=org.mybatis.jpetstore.*
+11-Aug-2026 01:41:17.303 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -javaagent:/usr/local/tomcat/basquin-agent.jar
+11-Aug-2026 01:41:17.304 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -Xbootclasspath/a:/usr/local/tomcat/basquin-agent.jar
+11-Aug-2026 01:41:17.304 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -Dbasquin.invariant.mode=soft
+11-Aug-2026 01:41:17.304 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -Dbasquin.invariant.latency.maxMs=50
+11-Aug-2026 01:41:17.304 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -Dbasquin.invariant.heapDelta.maxKb=256
+11-Aug-2026 01:41:17.304 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -Dignore.endorsed.dirs=
+11-Aug-2026 01:41:17.304 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -Dcatalina.base=/usr/local/tomcat
+11-Aug-2026 01:41:17.304 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -Dcatalina.home=/usr/local/tomcat
+11-Aug-2026 01:41:17.304 INFO [main] org.apache.catalina.startup.VersionLoggerListener.log Command line argument: -Djava.io.tmpdir=/usr/local/tomcat/temp
+11-Aug-2026 01:41:17.306 INFO [main] org.apache.catalina.core.AprLifecycleListener.lifecycleEvent Loaded Apache Tomcat Native library [1.3.8] using APR version [1.7.2].
+11-Aug-2026 01:41:17.306 INFO [main] org.apache.catalina.core.AprLifecycleListener.lifecycleEvent APR capabilities: IPv6 [true], sendfile [true], accept filters [false], random [true], UDS [true].
+11-Aug-2026 01:41:17.306 INFO [main] org.apache.catalina.core.AprLifecycleListener.lifecycleEvent APR/OpenSSL configuration: useAprConnector [false], useOpenSSL [true]
+11-Aug-2026 01:41:17.308 INFO [main] org.apache.catalina.core.AprLifecycleListener.initializeSSL OpenSSL successfully initialized [OpenSSL 3.0.13 30 Jan 2024]
+11-Aug-2026 01:41:17.424 INFO [main] org.apache.coyote.AbstractProtocol.init Initializing ProtocolHandler ["http-nio-8080"]
+11-Aug-2026 01:41:17.431 INFO [main] org.apache.catalina.startup.Catalina.load Server initialization in [209] milliseconds
+11-Aug-2026 01:41:17.446 INFO [main] org.apache.catalina.core.StandardService.startInternal Starting service [Catalina]
+11-Aug-2026 01:41:17.446 INFO [main] org.apache.catalina.core.StandardEngine.startInternal Starting Servlet engine: [Apache Tomcat/9.0.120]
+11-Aug-2026 01:41:17.453 INFO [main] org.apache.catalina.startup.HostConfig.deployWAR Deploying web application archive [/usr/local/tomcat/webapps/ROOT.war]
+11-Aug-2026 01:41:18.003 INFO [main] org.apache.jasper.servlet.TldScanner.scanJars At least one JAR was scanned for TLDs yet contained no TLDs. Enable debug logging for this logger for a complete list of JARs that were scanned but no TLDs were found in them. Skipping unneeded JARs during scanning can improve startup time and JSP compilation time.
+[main] INFO org.springframework.web.context.ContextLoader -  COMMONS-LOGGING Root WebApplicationContext: initialization started
+[main] INFO org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseFactory -  COMMONS-LOGGING Starting embedded database: url='jdbc:hsqldb:mem:dataSource', username='sa'
+[main] INFO org.springframework.web.context.ContextLoader -  COMMONS-LOGGING Root WebApplicationContext initialized in 662 ms
+[main] INFO net.sourceforge.stripes.vfs.VFS -  COMMONS-LOGGING Using VFS adapter net.sourceforge.stripes.vfs.DefaultVFS
+[main] INFO net.sourceforge.stripes.localization.DefaultLocalePicker -  COMMONS-LOGGING No locale list specified, defaulting to single locale: en_US
+[main] WARN net.sourceforge.stripes.controller.multipart.DefaultMultipartWrapperFactory -  COMMONS-LOGGING No MultipartWrapper implementation could be loaded
+[main] INFO net.sourceforge.stripes.controller.StripesFilter -  COMMONS-LOGGING Stripes Initialization Complete. Version: 1.6.0, Build: 1.6.0
+11-Aug-2026 01:41:18.866 INFO [main] org.apache.catalina.startup.HostConfig.deployWAR Deployment of web application archive [/usr/local/tomcat/webapps/ROOT.war] has finished in [1,413] ms
+11-Aug-2026 01:41:18.868 INFO [main] org.apache.coyote.AbstractProtocol.start Starting ProtocolHandler ["http-nio-8080"]
+11-Aug-2026 01:41:18.874 INFO [main] org.apache.catalina.startup.Catalina.start Server startup in [1443] milliseconds
+Beginning iteration
+[Basquin] Iteration 1 metrics: latency=9ms, heapDelta=+1980 KB, threads=24 (+0)
+[Basquin][Invariant] Iteration 1 violated 'heapDelta': 1980KB > 256KB
+Ending iteration
+Beginning iteration
+[http-nio-8080-exec-2] INFO net.sourceforge.stripes.validation.expression.ExpressionValidator -  COMMONS-LOGGING Expression validation will be performed using: net.sourceforge.stripes.validation.expression.Jsp21ExpressionExecutor
+[Basquin][Invariant] Iteration 2 violated 'latency': 487ms > 50ms
+[Basquin][Invariant] Iteration 2 violated 'heapDelta': 7335KB > 256KB
+[Basquin] Iteration 2 metrics: latency=487ms, heapDelta=+7335 KB, threads=24 (+0)
+Ending iteration
+Beginning iteration
+[Basquin] Iteration 3 metrics: latency=106ms, heapDelta=+18008 KB, threads=24 (+0)
+[Basquin][Invariant] Iteration 3 violated 'latency': 106ms > 50ms
+[Basquin][Invariant] Iteration 3 violated 'heapDelta': 18008KB > 256KB
+Ending iteration
+Beginning iteration
+[Basquin] Iteration 4 metrics: latency=4ms, heapDelta=+0 KB, threads=24 (+0)
+Ending iteration
+Beginning iteration
+[Basquin] Iteration 5 metrics: latency=8ms, heapDelta=+0 KB, threads=24 (+0)
+Ending iteration
+Beginning iteration
+[Basquin] Iteration 6 metrics: latency=6ms, heapDelta=+0 KB, threads=24 (+0)
+Ending iteration
+Beginning iteration
+[Basquin] Iteration 7 metrics: latency=5ms, heapDelta=+0 KB, threads=24 (+0)
+Ending iteration
+Beginning iteration
+[Basquin] Iteration 8 metrics: latency=94ms, heapDelta=+18746 KB, threads=24 (+0)
+[Basquin][Invariant] Iteration 8 violated 'latency': 94ms > 50ms
+[Basquin][Invariant] Iteration 8 violated 'heapDelta': 18746KB > 256KB
+Ending iteration
+Beginning iteration
+[Basquin] Iteration 9 metrics: latency=5ms, heapDelta=+354 KB, threads=24 (+0)
+[Basquin][Invariant] Iteration 9 violated 'heapDelta': 354KB > 256KB
+Ending iteration
+Beginning iteration
+[Basquin] Iteration 10 metrics: latency=4ms, heapDelta=+423 KB, threads=24 (+0)
+[Basquin][Invariant] Iteration 10 violated 'heapDelta': 423KB > 256KB
+Ending iteration
+Beginning iteration
+[Basquin][Invariant] Iteration 11 violated 'heapDelta': 423KB > 256KB
+[Basquin] Iteration 11 metrics: latency=4ms, heapDelta=+423 KB, threads=24 (+0)
+Ending iteration
+Beginning iteration
+[Basquin][Invariant] Iteration 12 violated 'latency': 60ms > 50ms
+[Basquin][Invariant] Iteration 12 violated 'heapDelta': 14513KB > 256KB
+[Basquin] Iteration 12 metrics: latency=60ms, heapDelta=+14513 KB, threads=24 (+0)
+Ending iteration
+Beginning iteration
+[Basquin] Iteration 13 metrics: latency=4ms, heapDelta=+0 KB, threads=24 (+0)
+Ending iteration
+Beginning iteration
+[Basquin] Iteration 14 metrics: latency=3ms, heapDelta=+423 KB, threads=24 (+0)
+[Basquin][Invariant] Iteration 14 violated 'heapDelta': 423KB > 256KB
+Ending iteration
+Beginning iteration
+[Basquin] Iteration 15 metrics: latency=3ms, heapDelta=+423 KB, threads=24 (+0)
+[Basquin][Invariant] Iteration 15 violated 'heapDelta': 423KB > 256KB
+Ending iteration
+Beginning iteration
+[Basquin][Invariant] Iteration 16 violated 'latency': 51ms > 50ms
+[Basquin][Invariant] Iteration 16 violated 'heapDelta': 14201KB > 256KB
+[Basquin] Iteration 16 metrics: latency=51ms, heapDelta=+14201 KB, threads=24 (+0)
+Ending iteration
+Beginning iteration
+[Basquin] Iteration 17 metrics: latency=41ms, heapDelta=+13624 KB, threads=24 (+0)
+[Basquin][Invariant] Iteration 17 violated 'heapDelta': 13624KB > 256KB
+Ending iteration
+Beginning iteration
+[http-nio-8080-exec-4] INFO net.sourceforge.stripes.tag.BeanFirstPopulationStrategy -  COMMONS-LOGGING Could not find property [repeatedPassword] on ActionBean.net.sourceforge.stripes.util.bean.NoSuchPropertyException: Bean class org.mybatis.jpetstore.web.actions.AccountActionBean does not contain a property called 'repeatedPassword'. As a result the following expression could not be evaluated: repeatedPassword
+[Basquin] Iteration 18 metrics: latency=51ms, heapDelta=+17831 KB, threads=24 (+0)
+[Basquin][Invariant] Iteration 18 violated 'latency': 51ms > 50ms
+[Basquin][Invariant] Iteration 18 violated 'heapDelta': 17831KB > 256KB
+Ending iteration
+Beginning iteration
+[Basquin] Iteration 19 metrics: latency=49ms, heapDelta=-106452 KB, threads=24 (+0)
+Ending iteration
+Beginning iteration
+[Basquin][Invariant] Iteration 20 violated 'heapDelta': 553KB > 256KB
+[Basquin] Iteration 20 metrics: latency=6ms, heapDelta=+553 KB, threads=24 (+0)
+Ending iteration

@@ -23,8 +23,9 @@ import java.util.Random;
  * that reach new code — an AFL/Zest feedback loop where the coverage signal comes from the app,
  * over the wire (DD-012). Unlike the round-robin driver, this makes coverage climb.
  *
- * Config: {@code examples.http.baseUrl}, {@code basquin.coverage.jacoco=host:port},
- * {@code basquin.coverage.classes=<dir>}. Arg[0] = iterations.
+ * Config: {@code examples.http.baseUrl}, {@code basquin.coverage.jacoco=host:port} (or a URL for
+ * the DD-043 PR-4 HTTP coverage transport), {@code basquin.coverage.classes=<dir>}.
+ * Arg[0] = iterations.
  */
 public final class CoverageGuidedRun {
 
@@ -342,8 +343,12 @@ public final class CoverageGuidedRun {
             StatusReporter.recordTargetViolations(targetViolationsAtEnd - targetViolationsAtStart);
         }
         StatusReporter.renderFinal();
-        System.out.printf("CoverageGuidedRun done: corpus=%d coverage=%d/%d pheromone=%s seed=%d%n",
-                corpus.size(), best, total, pheromoneOn ? "on" : "off", seed);
+        // F1: a persistent (D1) all-skip must never print as "coverage=0/0" -- that reads exactly
+        // like a real, if flat, measured zero. coverageUnmeasurable is permanent once set (see its
+        // javadoc), so this is the one place that decides which form the summary takes.
+        String coverageField = coverageUnmeasurable ? "unmeasured" : (best + "/" + total);
+        System.out.printf("CoverageGuidedRun done: corpus=%d coverage=%s pheromone=%s seed=%d%n",
+                corpus.size(), coverageField, pheromoneOn ? "on" : "off", seed);
         if (crossOriginRedirects > 0) {
             System.out.println("[Basquin] explore: " + crossOriginRedirects + " cross-origin redirect(s)"
                     + " refused. If this is close to the iteration count, the target renders redirects"
@@ -796,6 +801,19 @@ public final class CoverageGuidedRun {
     private static volatile long lastCoverageTotal = 0;
 
     /**
+     * F1 (approver finding on DD-043 PR-4): true once {@link #sampleCoverage} has caught a {@link
+     * JacocoCoverageProvider.CoverageUnmeasurableException} — the provider's D1 all-skip guard,
+     * which only fires when EVERY supplied class file failed to analyze. That condition is
+     * deterministic (the provider's class bytes never change across a run), so one occurrence means
+     * every future sample() call will hit it too; this flag is therefore permanent for the rest of
+     * the run, never cleared. It exists so the run summary can print {@code coverage=unmeasured}
+     * instead of a numerator/denominator that would otherwise read as a real, if flat, "no new
+     * coverage" 0/0 — package-private so the consumer-layer tests can assert it directly without
+     * booting a whole run.
+     */
+    static volatile boolean coverageUnmeasurable = false;
+
+    /**
      * Run one transaction: every step in order against the current session. A failing step is
      * recorded as a finding but does not abort the sequence — later steps may still reach code,
      * and stopping early would hide it.
@@ -836,15 +854,31 @@ public final class CoverageGuidedRun {
         }
     }
 
-    /** Sample coverage, keeping the panel updated; returns covered probes (0 if unavailable). */
-    private static long sampleCoverage(JacocoCoverageProvider cov) {
+    /**
+     * Sample coverage, keeping the panel updated; returns covered probes (0 if unavailable).
+     *
+     * <p>F1: once {@link #coverageUnmeasurable} is set, later calls short-circuit without touching
+     * {@code cov} at all — retrying a sample that has already proven every supplied class file is
+     * permanently unanalyzable is pure overhead (see the field's javadoc for why one occurrence is
+     * conclusive, not merely suggestive). Package-private for testing: the consumer-side tests need
+     * to call this directly against a real {@link JacocoCoverageProvider} without booting a run.
+     */
+    static long sampleCoverage(JacocoCoverageProvider cov) {
+        if (coverageUnmeasurable) return 0; // already surfaced; every future call would repeat it
         try {
             JacocoCoverageProvider.Coverage c = cov.sample();
             lastCoverageTotal = c.total;
             StatusReporter.recordCoverage(c.covered, c.total, c.sourcesResponded, c.sourcesTotal);
             return c.covered;
+        } catch (JacocoCoverageProvider.CoverageUnmeasurableException e) {
+            // D1, one layer up: every supplied class file failed to analyze, and that cannot change
+            // mid-run (the provider's class bytes are fixed at construction) -- this is NOT a blip
+            // to ride out. Surface it loudly instead of letting it read as "no new coverage".
+            coverageUnmeasurable = true;
+            System.err.println("[Basquin] FATAL: coverage is unmeasurable -- " + e.getMessage());
+            return 0;
         } catch (Throwable ignored) {
-            return 0; // agent blip; treat as "no new coverage" rather than failing the run
+            return 0; // agent blip (e.g. a restarting pod); tolerated -- must not kill the campaign
         }
     }
 

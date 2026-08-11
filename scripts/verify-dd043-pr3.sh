@@ -602,6 +602,19 @@ PY
           "failsLoudlyWhenAnotherBasquinArtifactIsDeclaredAtAnUnusableScope" "sibling-scope"
   _mutate '("            if (declared != null && !declared.equals(version)) {", "            if (false) {")' \
           "failsLoudlyWhenAnotherBasquinArtifactIsDeclaredAtAConflictingVersion" "sibling-version"
+  # DD-043 PR-4, Task 2, decision D2. failOnConflictingJacocoDeclaration has TWO independent
+  # conditions — an active instrument-bound execution, then a version collision — guarding the
+  # target's own org.jacoco:jacoco-maven-plugin declaration against the execution this injector is
+  # about to add. Same reasoning as sibling-scope/sibling-version just above: a whole-method
+  # mutation would leave one branch unbound, so each condition gets its own row. The goal-check
+  # anchor is unique to this guard (its sibling in failOnConflictingManagedVersion checks
+  # managedScope, not exec.getGoals()); the version-check anchor's variable name "jacocoVersion"
+  # (not "version") is what keeps it distinct from the declared-version/sibling-version anchors
+  # just above, which read from a variable literally named "version".
+  _mutate '("                if (exec.getGoals() != null && exec.getGoals().contains(JACOCO_GOAL)) {", "                if (false) {")' \
+          "failsLoudlyWhenAnActiveJacocoInstrumentExecutionAlreadyExists" "jacoco-instrument-conflict"
+  _mutate '("            if (declared != null && !declared.equals(jacocoVersion)) {", "            if (false) {")' \
+          "failsLoudlyWhenAJacocoDeclarationIsAtAConflictingVersion" "jacoco-version-conflict"
 
   # guards:restored previously keyed on gradle's exit code alone — the precise trap _mutate
   # refuses above: rc=0 cannot distinguish "ran green" from "did not run", and its -q log

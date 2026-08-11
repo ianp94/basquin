@@ -1,0 +1,191 @@
+package runner.coverage;
+
+import com.sun.net.httpserver.HttpServer;
+import org.jacoco.core.data.ExecutionDataWriter;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Locale;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+/**
+ * DD-043 PR-4 decision D1: {@code JacocoCoverageProvider#sample()}'s {@code analyzeClass} used to
+ * catch its exception and skip the class silently -- a class-file bytecode version JaCoCo's ASM
+ * predates (0.8.12 vs. the targets' Java-25/major-69 classfiles) made EVERY supplied class
+ * unanalyzable, and the silently-empty result reported a "clean" 0/0 exactly as if the app had no
+ * code at all. This is the cardinal defect the 0.8.15 bump exists to prevent.
+ *
+ * <p>The fixture below reproduces the real failure mode, not a stand-in for it: it takes a
+ * genuinely valid, compiled class file and corrupts ONLY its major-version field (offset 6-7, the
+ * classfile spec's version field), which sends it through the exact ASM code path a too-old JaCoCo
+ * hits on a too-new classfile ({@code IllegalArgumentException: Unsupported class file major
+ * version <n>}, wrapped by {@code Analyzer#analyzeClass} as an {@code IOException}) -- verified by
+ * hand against this repo's real JaCoCo 0.8.15 jar before this test was written.
+ *
+ * <p>F3 (a related, approver-found sibling defect on the same PR): the constructor's per-file class
+ * read silently skipped an unreadable {@code .class} entry, so a classes dir that was SUPPLIED but
+ * yielded zero readable classes (a typo'd path, an extraction gone wrong) let {@code sample()} go
+ * on to report a clean {@code Coverage(0, 0)} with no error at all -- the same silent-zero shape as
+ * D1, reached a different way, one layer earlier (construction, not {@code sample()}). Those tests
+ * live below alongside D1's; a classes dir with genuinely zero {@code .class} files supplied is a
+ * DIFFERENT condition from D1's all-skip (nothing was even attempted, vs. everything attempted and
+ * failed) but both must refuse to construct/report as if zero were real coverage.
+ */
+public class JacocoLoudSkipTest {
+
+    /** A trivial, genuinely valid, genuinely analyzable fixture class. */
+    public static final class GoodClass {
+        public static int identity(int x) {
+            return x;
+        }
+    }
+
+    private HttpServer server;
+
+    @Before
+    public void setUp() throws IOException {
+        // Minimal but wire-valid exec body: just the file header (magic + format version), no
+        // session-info/execution-data blocks. Real and parseable -- ExecutionDataReader accepts it
+        // and visits zero blocks -- so dumpHttpInto() succeeds ("this endpoint responded") without
+        // needing a live agent; what these tests exercise is the ANALYZE side (classBytes), not the
+        // dump side (that is JacocoHttpTransportTest's job).
+        byte[] headerOnly = ExecutionDataWriter.getFileHeader();
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/coverage", exchange -> {
+            exchange.sendResponseHeaders(200, headerOnly.length);
+            exchange.getResponseBody().write(headerOnly);
+            exchange.close();
+        });
+        server.start();
+    }
+
+    @After
+    public void tearDown() {
+        if (server != null) {
+            server.stop(0);
+        }
+    }
+
+    private String coverageUrl() {
+        return "http://127.0.0.1:" + server.getAddress().getPort() + "/coverage";
+    }
+
+    private static byte[] classBytesOf(Class<?> c) throws IOException {
+        String resource = "/" + c.getName().replace('.', '/') + ".class";
+        try (InputStream in = c.getResourceAsStream(resource)) {
+            assertTrue("fixture class resource must be found: " + resource, in != null);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = in.read(buf)) != -1) {
+                out.write(buf, 0, n);
+            }
+            return out.toByteArray();
+        }
+    }
+
+    /** {@code good}'s bytes with the major-version field (offset 6-7, big-endian) set past anything
+     *  any real JaCoCo release supports -- ASM throws {@code IllegalArgumentException}, which
+     *  {@code Analyzer#analyzeClass} wraps as {@code IOException}; {@code sample()}'s catch is
+     *  {@code catch (Exception e)}, so either shape is caught the same way this defect always was. */
+    private static byte[] corruptMajorVersion(byte[] good) {
+        byte[] bad = good.clone();
+        bad[6] = (byte) 0x27;
+        bad[7] = (byte) 0x0F;   // major version 9999
+        return bad;
+    }
+
+    @Test
+    public void allClassesUnanalyzableFailsLoudlyInsteadOfReportingAShrunkDenominator() throws Exception {
+        Path classesDir = Files.createTempDirectory("basquin-loudskip-allbad");
+        Files.write(classesDir.resolve("GoodClass.class"), corruptMajorVersion(classBytesOf(GoodClass.class)));
+
+        JacocoCoverageProvider provider = new JacocoCoverageProvider(
+                JacocoCoverageProvider.parseEndpoints(coverageUrl()), classesDir);
+
+        try {
+            provider.sample();
+            fail("every supplied class file was unanalyzable -- sample() must throw, not silently "
+                    + "report a 0/0 \"clean\" result (the exact silent-zero D1 exists to prevent)");
+        } catch (IOException expected) {
+            String msg = expected.getMessage().toLowerCase(Locale.ROOT);
+            assertTrue("exception should name the silent-zero it refuses to report: " + expected.getMessage(),
+                    msg.contains("silent-zero") || msg.contains("skipped"));
+        }
+    }
+
+    @Test
+    public void aPartialSkipStillReportsRealNumbersAndDoesNotThrow() throws Exception {
+        Path classesDir = Files.createTempDirectory("basquin-loudskip-partial");
+        Files.write(classesDir.resolve("Good.class"), classBytesOf(GoodClass.class));
+        Files.write(classesDir.resolve("Bad.class"), corruptMajorVersion(classBytesOf(GoodClass.class)));
+
+        JacocoCoverageProvider provider = new JacocoCoverageProvider(
+                JacocoCoverageProvider.parseEndpoints(coverageUrl()), classesDir);
+        JacocoCoverageProvider.Coverage c = provider.sample();
+
+        assertEquals("one class analyzed, one skipped -- a PARTIAL skip must not throw", 1, c.classesAnalyzed);
+        assertEquals(1, c.classesSkipped);
+    }
+
+    /**
+     * F3 (approver finding on DD-043 PR-4): this test used to be {@code
+     * noSuppliedClassFilesAtAllDoesNotTripTheAllSkipGuard} and asserted the OPPOSITE of what
+     * follows -- that construction against a dir with zero {@code .class} files succeeded and
+     * {@code sample()} quietly reported {@code Coverage(0, 0)}. That premise is now wrong on
+     * purpose: every caller that reaches this constructor has already decided to supply a classes
+     * dir (the genuinely-optional "no coverage classes at all" mode lives OUTSIDE this class --
+     * {@code CoverageDriver} simply never constructs a provider when {@code
+     * -Dbasquin.coverage.classes} is unset), so ending up with zero readable class files here is
+     * never legitimate and must fail loudly at construction rather than let {@code sample()} go on
+     * to report a clean, silently-wrong {@code Coverage(0, 0)}.
+     */
+    @Test
+    public void suppliedClassesDirWithZeroClassFilesFailsAtConstruction() throws Exception {
+        Path classesDir = Files.createTempDirectory("basquin-loudskip-empty");
+
+        try {
+            new JacocoCoverageProvider(JacocoCoverageProvider.parseEndpoints(coverageUrl()), classesDir);
+            fail("a classes dir was supplied but contained zero .class files -- construction must "
+                    + "fail rather than silently proceed toward a clean Coverage(0, 0)");
+        } catch (IOException expected) {
+            String msg = expected.getMessage().toLowerCase(Locale.ROOT);
+            assertTrue("exception should name the zero-readable-classes condition: " + expected.getMessage(),
+                    msg.contains("zero") && msg.contains("readable"));
+        }
+    }
+
+    /**
+     * F3's other half: a classes dir that is non-empty but whose only {@code .class}-suffixed entry
+     * cannot be read as bytes still ends up with zero readable classes and must fail the same way.
+     * A subdirectory literally named {@code Weird.class} reproduces "present but unreadable"
+     * portably (matches the {@code .class} filter, but {@code Files.readAllBytes} on a directory
+     * always throws) without depending on POSIX permission bits, which chmod-based simulations
+     * cannot rely on running as a non-root test user everywhere this suite runs.
+     */
+    @Test
+    public void suppliedClassesDirWithOnlyUnreadableClassEntriesFailsAtConstruction() throws Exception {
+        Path classesDir = Files.createTempDirectory("basquin-loudskip-unreadable");
+        Files.createDirectory(classesDir.resolve("Weird.class"));
+
+        try {
+            new JacocoCoverageProvider(JacocoCoverageProvider.parseEndpoints(coverageUrl()), classesDir);
+            fail("the only \".class\"-matching entry was unreadable (a directory) -- construction "
+                    + "must fail rather than silently proceed toward a clean Coverage(0, 0)");
+        } catch (IOException expected) {
+            String msg = expected.getMessage().toLowerCase(Locale.ROOT);
+            assertTrue("exception should name the zero-readable-classes condition: " + expected.getMessage(),
+                    msg.contains("zero") && msg.contains("readable"));
+        }
+    }
+}

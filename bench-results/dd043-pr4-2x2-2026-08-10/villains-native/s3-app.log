@@ -1,0 +1,26 @@
+
+   ___                   _                ____                        _
+  / _ \ _   _  __ _ _ __| | ___   _ ___  / ___| _   _ _ __   ___ _ __| |__   ___ _ __ ___   ___  ___
+ | | | | | | |/ _` | '__| |/ / | | / __| \___ \| | | | '_ \ / _ \ '__| '_ \ / _ \ '__/ _ \ / _ \/ __|
+ | |_| | |_| | (_| | |  |   <| |_| \__ \  ___) | |_| | |_) |  __/ |  | | | |  __/ | | (_) |  __/\__ \
+  \__\_\\__,_|\__,_|_|  |_|\_\\__,_|___/ |____/ \__,_| .__/ \___|_|  |_| |_|\___|_|  \___/ \___||___/
+ __     ___ _ _       _                              |_|
+ \ \   / (_) | | __ _(_)_ __  ___
+  \ \ / /| | | |/ _` | | '_ \/ __|
+   \ V / | | | | (_| | | | | \__ \
+    \_/  |_|_|_|\__,_|_|_| |_|___/
+
+
+                                                                            Powered by Quarkus 3.37.3
+2026-08-10 20:16:09,916 INFO  [io.quarkus.sample.superheroes.villain.VillainApplicationLifeCycle] (main)  __     ___ _ _       _             _    ____ ___ 
+2026-08-10 20:16:09,919 INFO  [io.quarkus.sample.superheroes.villain.VillainApplicationLifeCycle] (main)  \ \   / (_) | | __ _(_)_ __       / \  |  _ \_ _|
+2026-08-10 20:16:09,919 INFO  [io.quarkus.sample.superheroes.villain.VillainApplicationLifeCycle] (main)   \ \ / /| | | |/ _` | | '_ \     / _ \ | |_) | | 
+2026-08-10 20:16:09,920 INFO  [io.quarkus.sample.superheroes.villain.VillainApplicationLifeCycle] (main)    \ V / | | | | (_| | | | | |   / ___ \|  __/| | 
+2026-08-10 20:16:09,920 INFO  [io.quarkus.sample.superheroes.villain.VillainApplicationLifeCycle] (main)     \_/  |_|_|_|\__,_|_|_| |_|  /_/   \_\_|  |___|
+2026-08-10 20:16:09,920 INFO  [io.quarkus.sample.superheroes.villain.VillainApplicationLifeCycle] (main) The application VILLAIN is starting with profile [prod]
+2026-08-10 20:16:09,932 INFO  [io.quarkus] (main) rest-villains 1.0 native (powered by Quarkus 3.37.3) started in 0.610s. Listening on: http://0.0.0.0:8084
+2026-08-10 20:16:09,932 INFO  [io.quarkus] (main) Profile prod activated. 
+2026-08-10 20:16:09,932 INFO  [io.quarkus] (main) Installed features: [agroal, basquin, cdi, hibernate-orm, hibernate-orm-panache, hibernate-validator, jdbc-postgresql, kubernetes, micrometer, narayana-jta, opentelemetry, qute, rest, rest-jackson, rest-qute, smallrye-context-propagation, smallrye-health, smallrye-openapi, swagger-ui, vertx]
+[Basquin] id=s3-disp-disconnect disconnected before response completed: io.vertx.core.http.HttpClosedException: Connection was closed
+2026-08-10 20:16:51,668 INFO  [io.quarkus.sample.superheroes.villain.VillainApplicationLifeCycle] (Shutdown thread) The application VILLAIN is stopping...
+2026-08-10 20:16:51,673 INFO  [io.quarkus] (Shutdown thread) rest-villains stopped in 0.006s

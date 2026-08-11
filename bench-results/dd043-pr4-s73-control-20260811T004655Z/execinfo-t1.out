@@ -1,0 +1,12 @@
+[INFO] Loading exec file t1.exec.
+CLASS ID         HITS/PROBES   CLASS NAME
+Session "Billy-b1da7556": Mon Aug 10 20:12:10 EDT 2026 - Mon Aug 10 21:01:19 EDT 2026
+029dfe473ddc4dc6    6 of  42   io/quarkus/sample/superheroes/villain/service/VillainService
+ad89171dce5f77a9    7 of   8   io/quarkus/sample/superheroes/villain/VillainApplicationLifeCycle
+e8908020e14f111b    4 of  17   io/quarkus/sample/superheroes/villain/Villain
+cea55e3a0f9e1607   13 of  37   io/quarkus/sample/superheroes/villain/mapping/VillainMapperImpl
+bedc0fac762cc110   13 of  51   io/quarkus/sample/superheroes/villain/api/model/Villain
+ac2977868212e9ad    1 of  15   io/quarkus/sample/superheroes/villain/mapping/VillainPartialUpdateMapperImpl
+7e364ffb48647e7a   10 of  53   io/quarkus/sample/superheroes/villain/rest/VillainResource
+e1ef50fe8d6af9ee    1 of   3   io/quarkus/sample/superheroes/villain/mapping/VillainFullUpdateMapperImpl
+

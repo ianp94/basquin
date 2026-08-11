@@ -37,6 +37,12 @@ quarkusExtension {
     deploymentArtifact = "com.basquin:basquin-quarkus-deployment:${version}"
 }
 
+// DD-043 PR-4 §6.4/A1: single shared source of truth, NOT a hand-typed literal — see
+// gradle.properties for the property definition and the full list of consumers (root
+// build.gradle's org.jacoco.core dependency + jacocoAgent configuration, and
+// basquin-maven-injector's generated JacocoVersion constant; this dependency is a third).
+def jacocoVersion = providers.gradleProperty('jacocoVersion').get()
+
 dependencies {
     // DD-043 §4.1: the framework-neutral measurement core (Invariants, ResultStore), moved here
     // rather than duplicated. `implementation` (not `api`): callers of basquin-quarkus never need
@@ -46,6 +52,20 @@ dependencies {
     // vertx-core) plus quarkus-core. Pinned directly rather than importing the quarkus-bom
     // platform, matching this module's existing convention of one explicit Quarkus coordinate.
     implementation 'io.quarkus:quarkus-vertx-http:3.37.3'
+    // DD-043 PR-4 (decision A1): the offline-JaCoCo runtime BasquinControlHandler's
+    // /__basquin/coverage route reads via the direct, compile-time-typed
+    // RT.getAgent().getExecutionData(false) call (spec §6.4) -- `implementation`, not
+    // `compileOnly`, so it (a) lands on THIS module's compileClasspath (the typed call compiles)
+    // and (b) is published in this module's pom at ordinary <scope>runtime</scope> via the plain
+    // `from components.java` publication below, propagating transitively to any target the
+    // injector has added basquin-quarkus to -- the A1 channel, confirmed end-to-end (injected
+    // instrument + this transitive runtime + the typed read compose in one image) by the seam
+    // spike, `.superpowers/sdd/dd043-pr4-seam-spike.md`. Version pinned in lockstep with the
+    // injector's injected instrument goal and the runner's cli/analyzer (see gradle.properties) --
+    // skew between the plugin that instruments and the agent that reads breaks the offline read at
+    // runtime (both reference the version-specific shaded package,
+    // org.jacoco.agent.rt.internal_<hash>).
+    implementation "org.jacoco:org.jacoco.agent:${jacocoVersion}:runtime"
 
     testImplementation 'junit:junit:4.13.2'
 }

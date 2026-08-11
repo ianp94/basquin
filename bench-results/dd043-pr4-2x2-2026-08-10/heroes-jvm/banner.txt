@@ -1,0 +1,1 @@
+2026-08-11 00:05:51,311 INFO  [io.quarkus] (main) Installed features: [basquin, cdi, config-yaml, hibernate-orm, hibernate-reactive, hibernate-reactive-panache, hibernate-validator, kubernetes, micrometer, opentelemetry, qute, reactive-pg-client, rest, rest-jackson, rest-qute, smallrye-context-propagation, smallrye-health, smallrye-openapi, swagger-ui, vertx]

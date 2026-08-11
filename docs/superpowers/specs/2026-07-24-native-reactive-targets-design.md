@@ -22,7 +22,8 @@ and native for the **dependency half** of §5's mechanism — the half it exerci
 degradation stays a contingency. S4 never injected a **plugin execution**, which §5 requires in equal
 measure; that half is unmeasured and is now §8.2, a PR-4 entry gate. *(Written when §5 named two
 injections. §5 has since gained a third — the repository, measured by spike S5 during PR-3 — and the
-plugin execution remains the only unmeasured one.)*
+plugin execution was, at the time, the only unmeasured one. Resolved since, by DD-043 PR-4: see the
+PR-4 amendments below and §8.2, now RESOLVED.)*
 
 | Spike | Verdict | Sections it forced changes in |
 |---|---|---|
@@ -122,6 +123,25 @@ is a description of the round, not something a reader can reconstruct from histo
 - **`REPORT.md`'s amendment table is not renumbered.** Amendments 1–8 are what the *evidence* forced;
   round 2 is what a *review* forced. Merging them would make the report claim spike backing for edits no
   spike produced.
+
+### PR-4 amendments (2026-08-10)
+
+DD-043 PR-4 (`docs/superpowers/plans/2026-08-10-dd043-pr4-coverage.md`) closed §8.2 — the only part of
+§5's mechanism this ledger left unmeasured — and made two decisions worth recording alongside the
+Phase-0 and Round-2 entries above.
+
+| # | Decision | Sections changed |
+|---|---|---|
+| **A1** | The jacoco-*runtime*-dependency channel is the `basquin-quarkus` extension's own runtime pom — an ordinary `implementation` dependency on `org.jacoco:org.jacoco.agent:<version>:runtime` — not a fourth thing the injector adds. It lands on the extension's own compile classpath (so §6.4's typed `RT.getAgent().getExecutionData(false)` call compiles) and is published in the extension's pom at ordinary `<scope>runtime</scope>` via the module's plain `from components.java` publication, so it propagates transitively to any target the injector has already added `basquin-quarkus` to | §5, §6.4 |
+| **A2** | §8.2 is **SETTLED**. A committed native 2×2 acceptance (`bench-results/dd043-pr4-2x2-2026-08-10/`) proves the injected `jacoco-maven-plugin:instrument` execution composes with the A1 runtime dependency and the `/__basquin/coverage` read — on `rest-villains` and `rest-heroes`, in both JVM and native packaging, with zero pom edits, all four cells COMPLETED. This supersedes the pre-build §8.2 seam spike that de-risked the same composition on a synthetic fixture (session-local scratch, not committed to this repo's history) | §5, §5.1, §8.2, §9 |
+| **D1** | JaCoCo bumped `0.8.12 → 0.8.15` in lockstep across the injected `instrument` execution, the A1 runtime dependency, and the runner's analyzer/jacoco-cli, from one shared Gradle property. `0.8.12`'s ASM could not parse the targets' Java-25 classfiles, and `Analyzer#analyzeClass` swallowed the resulting exception per class — a silent zero-denominator "clean" result, this branch's defining defect class recurring on a new path. `JacocoCoverageProvider#sample()` now counts unanalyzable classes and throws a distinct `CoverageUnmeasurableException` when every supplied class is unanalyzable, rather than publish that zero. **Approver-review correction (F1):** the first cut of this decision stopped at the provider — its two consumers, `CoverageGuidedRun#sampleCoverage` and `CoverageDriver`'s poll loop, both caught that exception the same way they caught an ordinary transport blip (silently, no log), so a persistent all-skip still ended as a published `coverage=0/0` with nothing in the logs to explain it, the exact silent-zero this decision exists to prevent, one layer up. Both consumers now catch `CoverageUnmeasurableException` distinctly and surface it: `CoverageGuidedRun` logs it once and reports `coverage=unmeasured` in its final summary instead of a numerator/denominator; `CoverageDriver`'s poller logs it once and stops rather than retrying a deterministically doomed sample forever. An ordinary `IOException` (a restarting pod, a dropped connection) is still tolerated by both, exactly as before — one blip must not end a campaign | §6.4 |
+| **D2** | The injector fails loudly (`MavenExecutionException`) on a conflicting jacoco declaration before adding its own `instrument` execution — an already-**active** `instrument`-bound execution, or a declared `jacoco-maven-plugin` version other than the one it supplies — naming the same `basquin.inject.skip` escape hatch as every other injector guard. A target's own **online** `prepare-agent` execution is deliberately not itself a conflict: it instruments a running JVM via a Java agent, a different mechanism from this injector's **offline**, on-disk `instrument` goal, and the two do not compete for the same bytecode | §5.1 |
+
+A1 and A2 correct §5, §6.4 and §8.2 **in place**, below, rather than leaving a refuted claim standing
+beside a ledger note that disclaims it: §6.4 no longer states that the injector adds the jacoco
+runtime dependency (A1 says who does), §5's "three things" enumeration is reworded so the plugin
+execution is the third injection and the runtime dependency arrives separately through the
+extension's pom, and §8.2's "open question" framing is marked RESOLVED where it stands.
 
 ---
 
@@ -501,8 +521,8 @@ Per request:
 
 **Corrected 2026-07-25 against the code; an earlier draft of this list was wrong in a way that would
 have shipped a broken extension.** It said the filter *assigns* `<RUN_SALT>-<n>` and writes
-`X-Basquin-Req` as a **response** header. The driver assigns it — `CoverageGuidedRun.java:1031`,
-`RUN_SALT + "-" + REQ_SEQ.getAndIncrement()` — and sends it **inbound** (`:1056`); both existing
+`X-Basquin-Req` as a **response** header. The driver assigns it — `CoverageGuidedRun.java:1065`,
+`RUN_SALT + "-" + REQ_SEQ.getAndIncrement()` — and sends it **inbound** (`:1090`); both existing
 boundaries read it (`BasquinValve.java:62`, `TomcatBoundaryAdvice.java:30`). An extension that minted
 its own ids would publish results under ids the driver never sent, so every poll would miss — DD-040's
 exact failure mode, rebuilt from a spec sentence.
@@ -585,15 +605,16 @@ the **Quarkus bootstrap resolver** fetched on its own during `generate-code`. Ev
 `bench-results/dd043-s5-repo-injection-2026-07-26/` (`findings.md`, `build-s5-injected.log`,
 `http-access.log`).
 
-**Two of those three injections are measured; the plugin execution is not.** S4 injected a
-`Dependency` and nothing else (`s4-injection/probe-participant/…/InjectProbe.java:26-43`); S5
-measured the repository injection, both levels. No spike ever injected a plugin *execution*. It is not the same
-operation — a dependency and a repository are consumed by resolution, while a plugin execution has
-to survive into the per-project **execution plan**, which Maven computes at a different point in the
-lifecycle. So "§5's mechanism holds" is true of the dependency and repository injections and
-**unmeasured** for the plugin execution. §8.2 carries it as an open question and PR-4 cannot start on the
-assumption that it is settled. **PR-3 shipped the first two injections only** — the offline-JaCoCo
-plugin execution is PR-4's, behind §8.2's entry gate (§9).
+**All three injections are now measured.** S4 injected a `Dependency` and nothing else
+(`s4-injection/probe-participant/…/InjectProbe.java:26-43`); S5 measured the repository injection,
+both levels. Neither spike ever injected a plugin *execution* — it is not the same operation, since a
+dependency and a repository are consumed by resolution while a plugin execution has to survive into
+the per-project **execution plan**, which Maven computes at a different point in the lifecycle. That
+third injection is PR-4's: the injector adds a `jacoco-maven-plugin:instrument` execution the same
+way, and §8.2 records the result — **RESOLVED**, settled by a native 2×2 acceptance on two real
+targets rather than a spike fixture (decision A2, PR-4 amendment ledger above). **PR-3 shipped the
+first two injections; PR-4 shipped the third** — the offline-JaCoCo plugin execution, past what was
+§8.2's entry gate (§9).
 
 **Gradle:** an init script (`-I basquin-init.gradle`, repository root) doing the same via
 `allprojects { … }`, deliberately sharing the Maven injector's three system properties
@@ -674,8 +695,8 @@ it always was. S5 (2026-07-26) then extended the same result to the **repository
 bootstrap consumed the participant-refreshed `${project.remoteProjectRepositories}` and fetched the
 deployment artifact from the injected repository on its own
 (`bench-results/dd043-s5-repo-injection-2026-07-26/findings.md`). The **plugin-execution** injection
-§5 also requires was part of neither experiment and
-is not covered by either result (§8.2).
+§5 also requires was part of neither experiment and was not covered by either result at the time
+(§8.2) — DD-043 PR-4 closed that gap: see §8.2 below, now RESOLVED.
 The reasoning is retained because it is why S4 existed, and because the same hazard would return for
 any resolver that behaves differently.
 
@@ -697,8 +718,9 @@ must **fail loudly**, never silently — implemented in PR-3: a conflicting mana
 version both hard-fail the build, with the escape hatches named in the message); and builds that run
 inside their own Dockerfile never see our
 `MAVEN_OPTS`. Injecting a plugin *execution* is harder than injecting a dependency, and after S4 and
-S5 it is the **only part of §5 with no evidence at all** — promoted out of this list to §8.2, because a risk
-buried in a trailing sentence is how it stayed invisible to round 1's scope blocks.
+S5 it was, at the time, the **only part of §5 with no evidence at all** — promoted out of this list to
+§8.2, because a risk buried in a trailing sentence is how it stayed invisible to round 1's scope
+blocks. §8.2 now carries the evidence that closed it (RESOLVED, DD-043 PR-4).
 
 ### 5.2 Injection is proven by the banner, not assumed
 
@@ -993,10 +1015,12 @@ IAgent agent = RT.getAgent();          // org.jacoco.agent.rt.RT — public API
 byte[] data = agent.getExecutionData(false);
 ```
 
-`RT` and `IAgent` are ordinary public compiled types in `org.jacoco.agent:runtime`, which the injector
-already adds as a compile-scope dependency. Ordinary virtual dispatch is visible to native-image's
-closed-world analysis like any other call, so it needs no `@RegisterForReflection` and no
-`reflect-config.json`.
+`RT` and `IAgent` are ordinary public compiled types in `org.jacoco.agent:runtime`, which
+`basquin-quarkus`'s own runtime module declares as an ordinary `implementation` dependency (decision
+A1, PR-4 amendment ledger above) — the injector never adds this dependency itself; it reaches the
+target transitively through the `basquin-quarkus` dependency the injector does add (§5). Ordinary
+virtual dispatch is visible to native-image's closed-world analysis like any other call, so it needs
+no `@RegisterForReflection` and no `reflect-config.json`.
 
 **A reflective read does not survive AOT.** An earlier draft of this section specified
 `Class.forName(...).getMethod(...).invoke(...)`. S1 measured that form failing deterministically in
@@ -1420,29 +1444,44 @@ version mismatch between the extension and its target; whichever substitute row 
 first to. Settle it the way S4 and S5 settled theirs — a spike on the chosen target's Quarkus
 version, checked against §5.2's banner — before row 5 publishes anything.
 
-### 8.2 Does `afterProjectsRead` model mutation reach the *execution plan*, not just resolution?
+### 8.2 Does `afterProjectsRead` model mutation reach the *execution plan*, not just resolution? — RESOLVED: YES (2026-08-10)
 
-Unresolved, and the only part of §5 with no evidence behind it. §5 requires the injector to add three
-things to each `MavenProject`: the `basquin-quarkus` **dependency**, the **repository** that makes it
-resolvable, and the offline-JaCoCo **plugin execution** (§6.4). S4 measured the first
-(`InjectProbe.java:26-43` adds a `Dependency` and nothing else) and S5 measured the second, two-level
-form (`bench-results/dd043-s5-repo-injection-2026-07-26/`); nothing has ever attempted the third — so
-"§5's mechanism holds" is a claim about two thirds of a mechanism.
+**DD-043 PR-4 settled this.** The injector adds a `jacoco-maven-plugin:instrument` execution
+(id `basquin-injected-offline-instrument`, bound to `process-classes`) to each `MavenProject`'s
+model at `afterProjectsRead`, exactly the way §5 always said it would, and that execution runs: the
+build log carries the execution id per module, `BUILD SUCCESS` follows, and the resulting offline-
+instrumented classes serve real, strictly-growing execution data through `basquin-quarkus`'s
+`/__basquin/coverage` route (§6.4, decision A1) — proved end-to-end on two real third-party targets,
+`rest-villains` and `rest-heroes`, in both JVM and native packaging, with zero pom edits. Evidence:
+`bench-results/dd043-pr4-2x2-2026-08-10/` (`README.md`'s summary table and per-cell detail). This
+supersedes the pre-build seam spike that first exercised the composition on a synthetic fixture
+(session-local scratch, not committed to this repo's history) — the 2×2 directory above is the
+load-bearing, committed record.
+
+Below is the question as it stood before that evidence existed, kept for the reasoning it recorded.
+
+§5 requires the injector to add three things to each `MavenProject`: the `basquin-quarkus`
+**dependency**, the **repository** that makes it resolvable, and the offline-JaCoCo **plugin
+execution** (§6.4). S4 measured the first (`InjectProbe.java:26-43` adds a `Dependency` and nothing
+else) and S5 measured the second, two-level form
+(`bench-results/dd043-s5-repo-injection-2026-07-26/`); at the time nothing had ever attempted the
+third — so "§5's mechanism holds" was a claim about two thirds of a mechanism.
 
 They are not obviously equivalent. A dependency and a repository are consumed by *resolution*, which
 S4 and S5 showed reads the in-memory session state the participant mutated. A plugin execution has to
 survive into the per-project **execution plan**, which
 Maven computes at a different point in the lifecycle; `afterProjectsRead` fires before that
-computation, so it *should* work, but "should" is what S4 existed to replace with a measurement.
+computation, so it *should* work, but "should" is what S4 existed to replace with a measurement, and
+what the PR-4 2×2 above replaced with one.
 
-**This is a PR-4 entry gate.** PR-4 needs `jacoco-maven-plugin:instrument` bound to `process-classes`
-in the app's model, and it is the first PR that cannot proceed without it. Settle it the way S4 settled
-the dependency half: inject a plugin execution with an observable side effect into the spike fixture,
-build, and show the effect in the build log — an hour's work, and the alternative is discovering the
-hole after PR-1 through PR-3 have landed on the strength of a claim that covered only the other half.
-If it does not work, the fallback is §5.1's named-app pom edit, which the benchmark row must record —
-and the coverage story for unmodified third-party apps changes materially, which is why this is a gate
-and not a footnote.
+**This was PR-4's entry gate.** PR-4 needed `jacoco-maven-plugin:instrument` bound to
+`process-classes` in the app's model, and it was the first PR that could not proceed without it.
+Settled the way S4 settled the dependency half — a plugin execution with an observable side effect,
+built, with the effect shown in the build log — now on the real targets rather than only the spike
+fixture. Had it failed, the fallback would have been §5.1's named-app pom edit; it did not.
+The §8.2 single-module caveat still stands regardless: both acceptance targets are standalone poms
+(§5's own multi-module hazard, carried forward from PR-3), so a multi-module Maven reactor remains
+unexercised by this settled mechanism too.
 
 ## 9. Delivery — six PRs in dependency order
 
@@ -1458,8 +1497,8 @@ history says this repo needs.
 | **PR-1** | `basquin-core` extraction (§4.1) — pure refactor, zero behaviour change, existing tests green, no Quarkus code — **DONE** (324 → 326 tests, 0 failures; branch `dd043-pr1-basquin-core`, not yet merged) | PR-0 — cleared |
 | **PR-2** | `basquin-quarkus` MVP — filter boundary, result store + a `/__basquin/{result,violations}` control surface sharing `ResultStore`'s wire format (§4.4a), control defect routes (§7.3); validated on `rest-villains` **JVM mode** | PR-1 · **entry requirement: §4.1** — `Invariants`, `evaluateAndMaybeFail`, `Result` (+ accessors) and `Violation`'s fields are all package-private and must be widened together before the boundary filter can call this artifact. The publishing half is resolved: `maven-publish` ships both a local and a Pages-served Maven repo |
 | **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits — **DONE.** Shipped: the core extension injecting the dependency **and** the repository at both levels (§5), **8 operator guards** (grew from 7 in round 7, when review found a managed `<scope>` reaches `basquin-core` the same way a managed `<exclusions>` does — see `docs/ROADMAP.md` and `docs/THIRD-PARTY-APPS.md` for the current, checkable enumeration rather than trusting this snapshot), each mutation-checked by `scripts/verify-dd043-pr3.sh` — **all eight, no exception**: eight `_mutate` rows, one per item in the list below, each proven able to fail when its own branch is neutered, all PASS in `bench-results/RUN-OF-RECORD/RESULTS.md` as one `guards:<label>` row apiece, plus `guards:restored`. Cited by row key rather than line, because two mid-table insertions have already shifted that table's numbering twice: skip; conflicting managed version; conflicting managed exclusions; an unusable managed scope; conflicting declared version; an unusable declaration — wrong scope, `pom`/`test-jar` type, a classifier, or exclusions; and, on a *sibling* `com.basquin` artifact declared directly (`basquin-core` above all), an unusable sibling scope and a conflicting sibling version. **All but `skip` fail loudly per §5.1 — seven of the eight**; `skip` is the operator opt-out, not a guard. The scope, type/classifier, managed-exclusions, managed-scope and both sibling shapes were each found by review AFTER the preceding guard landed, so the declared-artifact check is written as a whitelist of what is usable rather than a list of known-bad values — while the sibling check enumerates the two fields measured to be hazards, `type`/`classifier`/`exclusions` having been measured harmless there. The eight live in **four** guard methods — `failOnUnusableDeclaration`, `failOnConflictingDeclaredVersion`, `failOnConflictingManagedVersion`, `failOnUnusableSiblingDeclaration` — read their javadoc in `BasquinInjector.java` for the shape-by-shape detail; this count and the line numbers below it move every time a guard is added, so a hand-typed number here is a snapshot, not a fact. And the Pages repo widened to all four artifacts (§3). **31 module tests** (23 in `BasquinInjectorGuardsTest.java` + 8 in `BasquinInjectorTest.java` — the two JUnit XMLs under
-`bench-results/RUN-OF-RECORD/guard-restore-junit/` report `tests="23"` and `tests="8"`; the `guards:restored` row of that run's `RESULTS.md` records the clean module suite as `31 tests, 0 failures`, derived from those XMLs); **390 repo-wide, 0 failures** (`bench-results/RUN-OF-RECORD/suite-counts.txt:1` reads `390 0`; `RESULTS.md:10`). §5.2's JVM half **PASSED on `rest-villains`** with zero edits to its tree (`bench-results/dd043-pr3-restvillains-2026-07-26/`, banner lists `basquin`); §5.2's native half **PASSED on the Phase-0 fixture, not rest-villains** (`bench-results/dd043-pr3-native-2026-07-26/`, banner `[basquin, cdi, rest, smallrye-context-propagation, vertx]`) — rest-villains' native buildability stays **unmeasured** and belongs to PR-4's native 2×2 cells (§7.2). **No multi-module Maven reactor was ever built end-to-end with the injector on `maven.ext.class.path`**: both acceptances are single-module — `rest-villains` is a standalone pom, so is the Phase-0 fixture — while `inject()` loops `session.getProjects()` and mutates a `MavenProject` instance per reactor member, which is exactly the shape this spec flags a hazard in ("The injector must construct a fresh `Dependency` per `MavenProject`", this file, the paragraph beginning with that sentence) and exactly the shape "the real targets are multi-module" a few lines below it refers to. The two unit tests that pin per-project freshness build a synthetic three-project list in memory, not a live Maven reactor; a real reactor build exercises paths — shared parent-pom inheritance into the effective model, Maven's own per-module lifecycle sequencing — that a synthetic list and a standalone pom cannot. The Gradle init script is a **stub**: it implements only the `skip` opt-out (`basquin-init.gradle:20,24`) — **none of the other seven operator guards have a Gradle counterpart**, so a conflicting version, an unusable declaration or an unusable sibling declaration on a Gradle target is resolved silently by Gradle's own defaults rather than failing loudly — and it was never exercised against a Gradle-built Quarkus target (§5). Both acceptances resolved over localhost HTTP; the real Pages HTTPS repository stays unexercised until the first `v*` tag (§3). The offline-JaCoCo plugin execution was **not** injected — §8.2 stands unmeasured, PR-4's entry gate | PR-2 — cleared |
-| **PR-4** | Coverage — offline-JaCoCo execution injection, `/__basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells | PR-3 · **entry gate: §8.2** (plugin-execution injection is unmeasured); the native cells additionally carry §7.2's S3 re-check |
+`bench-results/RUN-OF-RECORD/guard-restore-junit/` report `tests="23"` and `tests="8"`; the `guards:restored` row of that run's `RESULTS.md` records the clean module suite as `31 tests, 0 failures`, derived from those XMLs); **390 repo-wide, 0 failures** (`bench-results/RUN-OF-RECORD/suite-counts.txt:1` reads `390 0`; `RESULTS.md:10`). §5.2's JVM half **PASSED on `rest-villains`** with zero edits to its tree (`bench-results/dd043-pr3-restvillains-2026-07-26/`, banner lists `basquin`); §5.2's native half **PASSED on the Phase-0 fixture, not rest-villains** (`bench-results/dd043-pr3-native-2026-07-26/`, banner `[basquin, cdi, rest, smallrye-context-propagation, vertx]`) — rest-villains' native buildability was **unmeasured** at the time; PR-4's native 2×2 cells now cover it (§7.2, `bench-results/dd043-pr4-2x2-2026-08-10/`). **No multi-module Maven reactor was ever built end-to-end with the injector on `maven.ext.class.path`**: both acceptances are single-module — `rest-villains` is a standalone pom, so is the Phase-0 fixture — while `inject()` loops `session.getProjects()` and mutates a `MavenProject` instance per reactor member, which is exactly the shape this spec flags a hazard in ("The injector must construct a fresh `Dependency` per `MavenProject`", this file, the paragraph beginning with that sentence) and exactly the shape "the real targets are multi-module" a few lines below it refers to. The two unit tests that pin per-project freshness build a synthetic three-project list in memory, not a live Maven reactor; a real reactor build exercises paths — shared parent-pom inheritance into the effective model, Maven's own per-module lifecycle sequencing — that a synthetic list and a standalone pom cannot. The Gradle init script is a **stub**: it implements only the `skip` opt-out (`basquin-init.gradle:20,24`) — **none of the other seven operator guards have a Gradle counterpart**, so a conflicting version, an unusable declaration or an unusable sibling declaration on a Gradle target is resolved silently by Gradle's own defaults rather than failing loudly — and it was never exercised against a Gradle-built Quarkus target (§5). Both acceptances resolved over localhost HTTP; the real Pages HTTPS repository stays unexercised until the first `v*` tag (§3). The offline-JaCoCo plugin execution was **not** injected by PR-3 — §8.2 stood unmeasured at the time, PR-3's own entry gate for PR-4; PR-4 injected it and §8.2 is now **RESOLVED** (below) | PR-2 — cleared |
+| **PR-4** | Coverage — offline-JaCoCo execution injection, `/__basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells — **built** on branch `dd043-pr4-coverage`, not yet opened as a GitHub PR; all four native-2×2 cells COMPLETED (`bench-results/dd043-pr4-2x2-2026-08-10/`) | PR-3 · **entry gate: §8.2 — RESOLVED**; the native cells additionally carry §7.2's S3 re-check |
 | **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs. **Entry condition:** §7.4's rule that the heap column, taint rate and `UNMEASURED` count render only when §7.3's firing controls passed is today **documented discipline, not enforced code** — nothing reads control-pass state, and it holds only because no renderer exists yet. PR-5 must make it a checkable gate in `render_page.py`, not a convention. **Also owns four gaps PR-2 measured:** the `UNMEASURED` disposition and §6.1's in-flight taint — both need a `ResultStore.Entry` field, and until they land §7.3's sub-quantum control **fails** and the heap invariant is **not publishable**; the watchdog, without which `block-loop`'s control cannot be claimed; **negative** heap deltas (measured `-16,456 KB` on `rest-villains`), which the in-flight counter structurally cannot detect because a GC is not a request; and **GC-contaminated positive** deltas, which the sign rule cannot see either — the general detector is a `GarbageCollectorMXBean.getCollectionCount()` delta across the window, whose SubstrateVM support is itself a PR-5 precondition | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |
 
 Docs land with their PR: `THIRD-PARTY-APPS.md` gains a build-time-injection section, `ARCHITECTURE.md`

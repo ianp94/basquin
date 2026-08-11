@@ -6,10 +6,14 @@ order is what it is*. If you find a detail stated here and nowhere else, it is i
 (The benchmark page had exactly this drift and it is what `deploy/bench/render_page.py` now exists to
 prevent.)
 
-Last reviewed: 2026-08-07. DD-043 PR-1 (#100), PR-2 (#102), and **PR-3
+Last reviewed: 2026-08-10. DD-043 PR-1 (#100), PR-2 (#102), and **PR-3
 ([#103](https://github.com/ianp94/basquin/pull/103), squash-merged as `b32b394` on 2026-07-31)** are all
-**merged**. A new follow-on — **DD-044 / PR-3.5** — is specced and reviewed but not started. The
-DD-040→DD-039 arc was completed and merged 2026-07-23. See "Start here next".
+**merged**. **PR-4 (coverage)** is built on branch `dd043-pr4-coverage` — not yet opened as a GitHub
+PR — and its entry gate, spec §8.2, is now **SETTLED**: a committed native 2×2 acceptance
+(`bench-results/dd043-pr4-2x2-2026-08-10/`) demonstrates the composed inject-plus-read mechanism on
+two real third-party targets, in both JVM and native packaging. A new follow-on — **DD-044 / PR-3.5**
+— is specced and reviewed but not started. The DD-040→DD-039 arc was completed and merged 2026-07-23.
+See "Start here next".
 
 ---
 
@@ -51,8 +55,15 @@ ranked Debezium Server (Quarkus 3.33.1.1) > Eclipse Hono HTTP adapter (3.27.4.1,
 infra) > Apicurio 2.6.x, the last only behind a compatibility spike since `basquin-quarkus` is pinned to
 3.37.3. A **new row-5 gate** follows: the Quarkus version range over which one `basquin-quarkus` build
 augments is untested, since heroes and villains are both pinned at the toolchain's own version.
-**PR-4's entry gate §8.2 (plugin-execution injection) is still UNMEASURED** and must be settled before
-PR-4 starts; **§6.2** (native JFR streaming) still gates PR-5. A follow-on **DD-044 / PR-3.5** is
+**PR-4's entry gate, §8.2 (plugin-execution injection), is now SETTLED**: a committed native 2×2
+acceptance (`bench-results/dd043-pr4-2x2-2026-08-10/`) demonstrates the injected `jacoco-maven-plugin`
+`instrument` execution composing with the extension's A1 jacoco-runtime channel and the
+`/__basquin/coverage` read, on both `rest-villains` and `rest-heroes`, in JVM and native packaging,
+with zero pom edits — all four cells COMPLETED, superseding the pre-build §8.2/seam spikes that only
+de-risked the assumption. **PR-4 is built on branch `dd043-pr4-coverage`, not yet opened as a GitHub
+PR**; its own §8.2 caveat carries forward from PR-3 — both acceptance targets are standalone poms, so
+a multi-module Maven reactor remains unexercised by this mechanism either. **§6.2** (native JFR
+streaming) still gates PR-5. A follow-on **DD-044 / PR-3.5** is
 [specced](superpowers/specs/2026-07-26-preinstrumented-targets-design.md) but not started | nothing (Phase 0 cleared it) | [spec](superpowers/specs/2026-07-24-native-reactive-targets-design.md) · [plan](superpowers/plans/2026-07-24-dd043-phase0-spikes.md) · [evidence](../bench-results/dd043-spikes-2026-07-24/REPORT.md) |
 
 ### Why that order
@@ -201,12 +212,19 @@ is open, in rough priority:
    in `BasquinInjector.java`, cross-referenced by `BasquinInjectorGuardsTest.java`'s matching tests, both
    of which change before this doc can.
 
-   **Next: PR-4** (coverage — offline-JaCoCo execution injection, `/__basquin/coverage`, the native 2×2
-   cells). Its **entry gate is spec §8.2** — whether `afterProjectsRead` model mutation reaches the
-   per-project *execution plan*, not just resolution — and that is **still unmeasured**. S4 injected a
-   dependency; nobody has injected a plugin *execution*. Settle it the way S4 and S5 settled their
-   halves — inject a plugin execution with an observable side effect into the spike fixture, build, and
-   show the effect in the log — before building on the assumption.
+   **PR-4 (coverage) is built** on branch `dd043-pr4-coverage` — offline-JaCoCo execution injection,
+   `/__basquin/coverage`, the native 2×2 cells — but **not yet opened as a GitHub PR**. Its entry
+   gate, spec §8.2 — whether `afterProjectsRead` model mutation reaches the per-project *execution
+   plan*, not just resolution — is now **SETTLED**: the injector adds a
+   `jacoco-maven-plugin:instrument` execution alongside the dependency and repository it already
+   injected, and a committed native 2×2 acceptance
+   (`bench-results/dd043-pr4-2x2-2026-08-10/README.md`) proves that execution composes with the
+   `/__basquin/coverage` read — on `rest-villains` and `rest-heroes`, in both JVM and native
+   packaging, with zero pom edits, all four cells COMPLETED. This supersedes the pre-build §8.2/seam
+   spikes that de-risked the assumption (session-local scratch, not committed to this repo's
+   history); the 2×2 directory above is the load-bearing evidence. Its own §8.2 single-module caveat
+   still stands: both targets are standalone poms, so a multi-module Maven reactor remains
+   unexercised.
 
    **DD-044 / PR-3.5 is specced but not started**
    (`docs/superpowers/specs/2026-07-26-preinstrumented-targets-design.md`): the operator cannot today

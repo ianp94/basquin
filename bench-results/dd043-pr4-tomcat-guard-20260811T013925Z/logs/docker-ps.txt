@@ -1,0 +1,2 @@
+CONTAINER ID   IMAGE                      COMMAND             CREATED         STATUS         PORTS                                                                                      NAMES
+c95b2e5e2ec9   tomcat:9.0-jdk17-temurin   "catalina.sh run"   2 minutes ago   Up 2 minutes   0.0.0.0:6300->6300/tcp, [::]:6300->6300/tcp, 0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp   agent-af93a83b5ac3ae601-tomcat9-coverage-1

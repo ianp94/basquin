@@ -14,8 +14,11 @@ import org.apache.maven.artifact.repository.ArtifactRepositoryPolicy;
 import org.apache.maven.artifact.repository.MavenArtifactRepository;
 import org.apache.maven.artifact.repository.layout.DefaultRepositoryLayout;
 import org.apache.maven.execution.MavenSession;
+import org.apache.maven.model.Build;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
+import org.apache.maven.model.Plugin;
+import org.apache.maven.model.PluginExecution;
 import org.apache.maven.model.Repository;
 import org.apache.maven.model.RepositoryPolicy;
 import org.apache.maven.project.MavenProject;
@@ -61,6 +64,18 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
     static final String PROP_REPO_URL = "basquin.inject.repo.url";
     static final String PROP_VERSION = "basquin.inject.version";
 
+    // DD-043 PR-4, Task 2 (docs/superpowers/plans/2026-08-10-dd043-pr4-coverage.md). The
+    // execution id/phase/goal are fixed, operator-visible constants — not properties — because
+    // unlike the basquin-quarkus dependency (which a target may legitimately want to pin itself),
+    // nothing about this execution is meant to be overridden: it exists solely so
+    // basquin-quarkus's /__basquin/coverage route (A1) has real offline-instrumented classes and
+    // preserved originals (target/generated-classes/jacoco) to serve and analyze against.
+    static final String JACOCO_GROUP_ID = "org.jacoco";
+    static final String JACOCO_ARTIFACT_ID = "jacoco-maven-plugin";
+    static final String JACOCO_EXECUTION_ID = "basquin-injected-offline-instrument";
+    static final String JACOCO_PHASE = "process-classes";
+    static final String JACOCO_GOAL = "instrument";
+
     private static final String LOG = "[basquin-injector] ";
 
     @Override
@@ -79,10 +94,16 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
         }
         String version = orDefault(props.getProperty(PROP_VERSION), InjectorVersion.value());
         String url = orDefault(props.getProperty(PROP_REPO_URL), DEFAULT_REPO_URL);
+        // DD-043 PR-4. Never a hand-typed literal — see JacocoVersion's javadoc: offline-instrumented
+        // classes reference the version-specific shaded package org.jacoco.agent.rt.internal_<hash>,
+        // so this must stay in lockstep with the extension's runtime dependency (A1) and the runner's
+        // analyzer (Task 3), all three baked from the same root gradle.properties jacocoVersion.
+        String jacocoVersion = JacocoVersion.value();
 
         for (MavenProject p : projects) {
             failOnConflictingManagedVersion(p, version);
             failOnUnusableSiblingDeclaration(p, version);
+            failOnConflictingJacocoDeclaration(p, jacocoVersion);
             // Every model object below is allocated fresh inside this loop. Maven's model objects are
             // mutable; hoisting an allocation would alias one instance across the whole reactor, so a
             // later in-place mutation on one module would bleed into all the others. A single-module
@@ -105,6 +126,7 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
                 addDependency(p, version);
             }
             addRepository(p, url);
+            addJacocoInstrumentExecution(p, jacocoVersion);
             System.out.println(LOG + "instrumented " + p.getArtifactId()
                     + " (" + GROUP_ID + ":" + ARTIFACT_ID + ":" + effective + " from " + url + ")");
         }
@@ -510,6 +532,98 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
         }
     }
 
+    /**
+     * DD-043 PR-4, decision D2 (docs/superpowers/plans/2026-08-10-dd043-pr4-coverage.md). This
+     * injector is about to append its own {@code org.jacoco:jacoco-maven-plugin} {@code instrument}
+     * execution ({@link #addJacocoInstrumentExecution}) to the project's build. A target that already
+     * carries a jacoco declaration of its own is a hazard this method must catch loudly rather than let
+     * the two compose silently — the same {@code failOn*} posture every other guard in this class takes,
+     * per spec §5.1.
+     *
+     * <p><b>"Conflicting" is defined precisely as two independent conditions, checked per declared
+     * {@code org.jacoco:jacoco-maven-plugin} entry in the ALREADY-MERGED effective model
+     * ({@code p.getModel().getBuild().getPlugins()}):</b>
+     * <ol>
+     *   <li><b>An ACTIVE {@code instrument}-bound execution.</b> This injector's own execution runs
+     *       {@code instrument} at {@code process-classes} against the module's compiled classes and
+     *       preserves the pre-instrumentation originals under {@code target/generated-classes/jacoco}
+     *       (the §8.2 spike's measured default behaviour). A second, independently declared
+     *       {@code instrument} execution would run against the SAME classes — jacoco's instrumenter is
+     *       not idempotent against already-instrumented bytecode, so the second pass can corrupt the
+     *       classes or fail the build outright, and either way the coverage this injector's mechanism
+     *       exists to serve cannot be trusted.</li>
+     *   <li><b>A version collision.</b> Declaring {@code org.jacoco:jacoco-maven-plugin} at any version
+     *       other than the one this injector supplies (baked in lockstep from the shared
+     *       {@code gradle.properties jacocoVersion} property — {@link JacocoVersion#value()}) means two
+     *       {@code <plugin>} entries for the same coordinate at different versions land in the merged
+     *       model, which is unresolved Maven plugin-merge territory this injector does not rely on being
+     *       safe. Even where it resolves, offline-instrumented classes reference the version-specific
+     *       shaded package {@code org.jacoco.agent.rt.internal_<hash>}
+     *       ({@code JacocoVersionLockstepTest}'s own reasoning) — a plugin/agent version skew silently
+     *       breaks the coverage read rather than failing to compile.</li>
+     * </ol>
+     *
+     * <p><b>A target's own {@code prepare-agent} execution is deliberately NOT, by itself, either
+     * condition.</b> {@code prepare-agent} instruments classes ON-LINE, in the running JVM, via a Java
+     * agent — a different mechanism entirely from this injector's OFF-LINE, on-disk {@code instrument}
+     * goal, and the two do not compete for the same bytecode. A {@code prepare-agent}-only declaration AT
+     * THE AGREEING version therefore trips neither branch above and is accepted; only an {@code
+     * instrument} goal, or any version other than this injector's, does.
+     *
+     * <p><b>Profiles need no special handling here, because this method never sees them.</b> This
+     * participant runs at {@code afterProjectsRead}, by which point Maven has already merged every
+     * ACTIVATED profile's contributions into {@code p.getModel()} — the effective model this method
+     * reads. A jacoco declaration living only in a profile that never activates for this build simply
+     * never reaches {@code getModel().getBuild().getPlugins()} at all, so it is invisible to this guard
+     * by construction, not by an explicit exclusion this method has to implement.
+     */
+    private void failOnConflictingJacocoDeclaration(MavenProject p, String jacocoVersion)
+            throws MavenExecutionException {
+        if (p.getModel().getBuild() == null) {
+            return;
+        }
+        for (Plugin plugin : p.getModel().getBuild().getPlugins()) {
+            if (!JACOCO_GROUP_ID.equals(plugin.getGroupId())
+                    || !JACOCO_ARTIFACT_ID.equals(plugin.getArtifactId())) {
+                continue;
+            }
+            for (PluginExecution exec : plugin.getExecutions()) {
+                if (exec.getGoals() != null && exec.getGoals().contains(JACOCO_GOAL)) {
+                    throw new MavenExecutionException(
+                            "basquin-injector: " + p.getArtifactId() + " already declares an ACTIVE "
+                                    + JACOCO_GROUP_ID + ":" + JACOCO_ARTIFACT_ID + " execution '"
+                                    + exec.getId() + "' bound to goal '" + JACOCO_GOAL + "'. This"
+                                    + " injector adds its own offline-instrument execution ("
+                                    + JACOCO_EXECUTION_ID + ") at " + JACOCO_PHASE + ", and Maven would"
+                                    + " then run BOTH instrument executions against the same compiled"
+                                    + " classes — jacoco's instrumenter is not idempotent against"
+                                    + " already-instrumented bytecode, so the second pass can corrupt"
+                                    + " the classes or fail the build outright, and the coverage this"
+                                    + " injector exists to serve cannot be trusted either way. Remove"
+                                    + " the existing instrument execution, or pass -D" + PROP_SKIP
+                                    + "=true to leave this build uninstrumented deliberately.",
+                            p.getFile());
+                }
+            }
+            String declared = plugin.getVersion();
+            if (declared != null && !declared.equals(jacocoVersion)) {
+                throw new MavenExecutionException(
+                        "basquin-injector: " + p.getArtifactId() + " already declares "
+                                + JACOCO_GROUP_ID + ":" + JACOCO_ARTIFACT_ID + " at version " + declared
+                                + ", but this injector's offline-instrument execution supplies "
+                                + jacocoVersion + ". Two declarations of the same plugin at different"
+                                + " versions is unresolved Maven plugin-merge territory this injector"
+                                + " does not rely on, and offline-instrumented classes reference the"
+                                + " version-specific shaded package org.jacoco.agent.rt.internal_<hash>"
+                                + " — a plugin/agent version skew silently breaks the coverage read"
+                                + " rather than failing to compile. Align the target's "
+                                + JACOCO_ARTIFACT_ID + " to " + jacocoVersion + ", or pass -D"
+                                + PROP_SKIP + "=true to leave this build uninstrumented deliberately.",
+                        p.getFile());
+            }
+        }
+    }
+
     private void addDependency(MavenProject p, String version) {
         Dependency d = new Dependency();
         d.setGroupId(GROUP_ID);
@@ -546,6 +660,50 @@ public class BasquinInjector extends AbstractMavenLifecycleParticipant {
         List<ArtifactRepository> repos = new ArrayList<>(p.getRemoteArtifactRepositories());
         repos.add(ar);
         p.setRemoteArtifactRepositories(repos);
+    }
+
+    /**
+     * DD-043 PR-4, Task 2. Adds the {@code jacoco-maven-plugin:<jacocoVersion>:instrument} execution
+     * that gives {@code basquin-quarkus}'s {@code /__basquin/coverage} route (A1) real
+     * offline-instrumented classes to serve execution data for, and preserves the pre-instrumentation
+     * originals under {@code target/generated-classes/jacoco} for the driver's analyzer to check
+     * against — the default {@code instrument} behaviour the §8.2 spike measured, with no explicit
+     * configuration needed.
+     *
+     * <p>Deliberately does NOT add the jacoco runtime dependency: that arrives transitively through
+     * {@code basquin-quarkus}'s own {@code implementation org.jacoco:org.jacoco.agent:runtime}
+     * dependency (decision A1, Task 1) — one channel, so there is no second injected-artifact guard
+     * surface for this method to own.
+     *
+     * <p><b>Fresh {@link Plugin}/{@link PluginExecution} objects, allocated inside this call.</b> The
+     * same §5 aliasing rule {@link #addDependency} and {@link #addRepository} already follow: Maven's
+     * model objects are mutable, so a shared instance hoisted above the per-project loop would alias
+     * one {@code Plugin} across the whole reactor, and a later in-place mutation on one module's copy
+     * would bleed into every other module's. A single-module reactor cannot detect that, which is why
+     * {@code BasquinInjectorTest} pins this against a synthetic multi-project list.
+     *
+     * <p>{@code getModel().getBuild()} is {@code null} on a project whose model never had a
+     * {@code <build>} element set (measured: a freshly constructed {@link MavenProject} in this
+     * module's own test suite) — a fresh {@link Build} is allocated here if needed, same discipline as
+     * {@link #addRepository} allocating a fresh policy pair rather than assuming one exists.
+     */
+    private void addJacocoInstrumentExecution(MavenProject p, String jacocoVersion) {
+        if (p.getModel().getBuild() == null) {
+            p.getModel().setBuild(new Build());
+        }
+        Plugin plugin = new Plugin();
+        plugin.setGroupId(JACOCO_GROUP_ID);
+        plugin.setArtifactId(JACOCO_ARTIFACT_ID);
+        plugin.setVersion(jacocoVersion);
+        PluginExecution exec = new PluginExecution();
+        exec.setId(JACOCO_EXECUTION_ID);
+        exec.setPhase(JACOCO_PHASE);
+        exec.addGoal(JACOCO_GOAL);
+        plugin.addExecution(exec);
+        p.getModel().getBuild().getPlugins().add(plugin);
+        System.out.println(LOG + "added " + JACOCO_GROUP_ID + ":" + JACOCO_ARTIFACT_ID + ":"
+                + jacocoVersion + ":" + JACOCO_GOAL + " (" + JACOCO_EXECUTION_ID + ") to "
+                + p.getArtifactId());
     }
 
     private static String orDefault(String value, String fallback) {

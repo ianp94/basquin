@@ -65,4 +65,51 @@ public class JacocoEndpointParseTest {
     public void rejectsAnEmptySpec() {
         JacocoCoverageProvider.parseEndpoints("   ");
     }
+
+    /**
+     * DD-043 PR-4: a URL-form entry (contains {@code "://"}) selects the HTTP transport instead of
+     * tcpserver. {@code host}/{@code port} are still populated from the URL (so {@link
+     * PodPollTargets}'s existing {@code .host} read-through works unchanged for either form).
+     */
+    @Test
+    public void parsesAUrlEndpointAsTheHttpTransport() {
+        List<Endpoint> eps = JacocoCoverageProvider.parseEndpoints("http://coverage-host:8080/__basquin/coverage");
+        assertEquals(1, eps.size());
+        assertEquals("coverage-host", eps.get(0).host);
+        assertEquals(8080, eps.get(0).port);
+        assertTrue(eps.get(0).isHttp());
+    }
+
+    @Test
+    public void aBareHostPortEndpointIsNotTheHttpTransport() {
+        List<Endpoint> eps = JacocoCoverageProvider.parseEndpoints("localhost:6300");
+        assertFalse(eps.get(0).isHttp());
+    }
+
+    @Test
+    public void mixesUrlAndHostPortEndpointsInOneCommaSeparatedSpec() {
+        List<Endpoint> eps = JacocoCoverageProvider.parseEndpoints(
+                "http://a-host:8080/__basquin/coverage,b-host:6300");
+        assertEquals(2, eps.size());
+        assertTrue(eps.get(0).isHttp());
+        assertEquals("a-host", eps.get(0).host);
+        assertFalse(eps.get(1).isHttp());
+        assertEquals("b-host", eps.get(1).host);
+        assertEquals(6300, eps.get(1).port);
+    }
+
+    @Test
+    public void aUrlWithNoExplicitPortUsesHttpsDefaultPort() {
+        List<Endpoint> eps = JacocoCoverageProvider.parseEndpoints("https://coverage-host/__basquin/coverage");
+        assertEquals("coverage-host", eps.get(0).host);
+        assertEquals(443, eps.get(0).port);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void rejectsAMalformedUrlEndpoint() {
+        // An unknown/invalid scheme -- java.net.URL rejects this as MalformedURLException, which
+        // parseEndpoints wraps as IllegalArgumentException (the same exception type every other
+        // malformed-spec case in this file throws).
+        JacocoCoverageProvider.parseEndpoints("not-a-real-scheme://coverage-host/__basquin/coverage");
+    }
 }

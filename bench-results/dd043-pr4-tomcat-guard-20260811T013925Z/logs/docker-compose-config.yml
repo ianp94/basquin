@@ -1,0 +1,46 @@
+name: agent-af93a83b5ac3ae601
+services:
+  tomcat9-coverage:
+    environment:
+      CATALINA_OPTS: '-javaagent:/jacocoagent.jar=output=tcpserver,address=0.0.0.0,port=6300,includes=org.mybatis.jpetstore.* -javaagent:/usr/local/tomcat/basquin-agent.jar -Xbootclasspath/a:/usr/local/tomcat/basquin-agent.jar -Dbasquin.invariant.mode=soft -Dbasquin.invariant.latency.maxMs=50 -Dbasquin.invariant.heapDelta.maxKb=256 '
+    image: tomcat:9.0-jdk17-temurin
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 8080
+        published: "8080"
+        protocol: tcp
+      - mode: ingress
+        target: 6300
+        published: "6300"
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: /tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/5f840f7a-f81d-434b-aa96-706be25f9d56/scratchpad/jpetstore-6/target/jpetstore.war
+        target: /usr/local/tomcat/webapps/ROOT.war
+        read_only: true
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/.claude/worktrees/agent-af93a83b5ac3ae601/build/stage/basquin-agent.jar
+        target: /usr/local/tomcat/basquin-agent.jar
+        read_only: true
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/.claude/worktrees/agent-af93a83b5ac3ae601/build/stage/basquin-valve.jar
+        target: /usr/local/tomcat/lib/basquin-valve.jar
+        read_only: true
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/.claude/worktrees/agent-af93a83b5ac3ae601/deploy/valve/context.xml
+        target: /usr/local/tomcat/conf/context.xml
+        read_only: true
+        bind: {}
+      - type: bind
+        source: /mnt/c/Users/ianpa/OneDrive/Documents/GitHub/closureJVM/.claude/worktrees/agent-af93a83b5ac3ae601/build/jacoco/jacocoagent.jar
+        target: /jacocoagent.jar
+        read_only: true
+        bind: {}
+networks:
+  default:
+    name: agent-af93a83b5ac3ae601_default

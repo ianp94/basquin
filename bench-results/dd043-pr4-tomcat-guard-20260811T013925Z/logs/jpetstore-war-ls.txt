@@ -1,0 +1,1 @@
+-rw-r--r-- 1 ian ian 11988631 Aug 10 21:34 /tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/5f840f7a-f81d-434b-aa96-706be25f9d56/scratchpad/jpetstore-6/target/jpetstore.war

@@ -1,0 +1,8 @@
+== round A: index + catalog category browse ==
+200 GET /
+200 GET /actions/Catalog.action
+200 GET Catalog.action?viewCategory=&categoryId=FISH
+200 GET Catalog.action?viewCategory=&categoryId=DOGS
+200 GET Catalog.action?viewCategory=&categoryId=CATS
+200 GET Catalog.action?viewCategory=&categoryId=REPTILES
+200 GET Catalog.action?viewCategory=&categoryId=BIRDS

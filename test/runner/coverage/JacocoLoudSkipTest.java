@@ -15,7 +15,6 @@ import java.nio.file.Path;
 import java.util.Locale;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -32,6 +31,15 @@ import static org.junit.Assert.fail;
  * hits on a too-new classfile ({@code IllegalArgumentException: Unsupported class file major
  * version <n>}, wrapped by {@code Analyzer#analyzeClass} as an {@code IOException}) -- verified by
  * hand against this repo's real JaCoCo 0.8.15 jar before this test was written.
+ *
+ * <p>F3 (a related, approver-found sibling defect on the same PR): the constructor's per-file class
+ * read silently skipped an unreadable {@code .class} entry, so a classes dir that was SUPPLIED but
+ * yielded zero readable classes (a typo'd path, an extraction gone wrong) let {@code sample()} go
+ * on to report a clean {@code Coverage(0, 0)} with no error at all -- the same silent-zero shape as
+ * D1, reached a different way, one layer earlier (construction, not {@code sample()}). Those tests
+ * live below alongside D1's; a classes dir with genuinely zero {@code .class} files supplied is a
+ * DIFFERENT condition from D1's all-skip (nothing was even attempted, vs. everything attempted and
+ * failed) but both must refuse to construct/report as if zero were real coverage.
  */
 public class JacocoLoudSkipTest {
 
@@ -130,19 +138,54 @@ public class JacocoLoudSkipTest {
         assertEquals(1, c.classesSkipped);
     }
 
+    /**
+     * F3 (approver finding on DD-043 PR-4): this test used to be {@code
+     * noSuppliedClassFilesAtAllDoesNotTripTheAllSkipGuard} and asserted the OPPOSITE of what
+     * follows -- that construction against a dir with zero {@code .class} files succeeded and
+     * {@code sample()} quietly reported {@code Coverage(0, 0)}. That premise is now wrong on
+     * purpose: every caller that reaches this constructor has already decided to supply a classes
+     * dir (the genuinely-optional "no coverage classes at all" mode lives OUTSIDE this class --
+     * {@code CoverageDriver} simply never constructs a provider when {@code
+     * -Dbasquin.coverage.classes} is unset), so ending up with zero readable class files here is
+     * never legitimate and must fail loudly at construction rather than let {@code sample()} go on
+     * to report a clean, silently-wrong {@code Coverage(0, 0)}.
+     */
     @Test
-    public void noSuppliedClassFilesAtAllDoesNotTripTheAllSkipGuard() throws Exception {
-        // A directory with zero .class files is a pre-existing, different condition (nothing to
-        // skip -- the D1 guard is specifically about classes that WERE supplied but couldn't be
-        // analyzed) and must not be swept into the new loud-fail path.
+    public void suppliedClassesDirWithZeroClassFilesFailsAtConstruction() throws Exception {
         Path classesDir = Files.createTempDirectory("basquin-loudskip-empty");
 
-        JacocoCoverageProvider provider = new JacocoCoverageProvider(
-                JacocoCoverageProvider.parseEndpoints(coverageUrl()), classesDir);
-        JacocoCoverageProvider.Coverage c = provider.sample();
+        try {
+            new JacocoCoverageProvider(JacocoCoverageProvider.parseEndpoints(coverageUrl()), classesDir);
+            fail("a classes dir was supplied but contained zero .class files -- construction must "
+                    + "fail rather than silently proceed toward a clean Coverage(0, 0)");
+        } catch (IOException expected) {
+            String msg = expected.getMessage().toLowerCase(Locale.ROOT);
+            assertTrue("exception should name the zero-readable-classes condition: " + expected.getMessage(),
+                    msg.contains("zero") && msg.contains("readable"));
+        }
+    }
 
-        assertEquals(0, c.classesAnalyzed);
-        assertEquals(0, c.classesSkipped);
-        assertFalse("no class files supplied is not the D1 all-skip condition", c.classesAnalyzed == 0 && c.classesSkipped > 0);
+    /**
+     * F3's other half: a classes dir that is non-empty but whose only {@code .class}-suffixed entry
+     * cannot be read as bytes still ends up with zero readable classes and must fail the same way.
+     * A subdirectory literally named {@code Weird.class} reproduces "present but unreadable"
+     * portably (matches the {@code .class} filter, but {@code Files.readAllBytes} on a directory
+     * always throws) without depending on POSIX permission bits, which chmod-based simulations
+     * cannot rely on running as a non-root test user everywhere this suite runs.
+     */
+    @Test
+    public void suppliedClassesDirWithOnlyUnreadableClassEntriesFailsAtConstruction() throws Exception {
+        Path classesDir = Files.createTempDirectory("basquin-loudskip-unreadable");
+        Files.createDirectory(classesDir.resolve("Weird.class"));
+
+        try {
+            new JacocoCoverageProvider(JacocoCoverageProvider.parseEndpoints(coverageUrl()), classesDir);
+            fail("the only \".class\"-matching entry was unreadable (a directory) -- construction "
+                    + "must fail rather than silently proceed toward a clean Coverage(0, 0)");
+        } catch (IOException expected) {
+            String msg = expected.getMessage().toLowerCase(Locale.ROOT);
+            assertTrue("exception should name the zero-readable-classes condition: " + expected.getMessage(),
+                    msg.contains("zero") && msg.contains("readable"));
+        }
     }
 }

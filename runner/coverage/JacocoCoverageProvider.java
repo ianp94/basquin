@@ -65,8 +65,21 @@ import java.util.stream.Stream;
  * class file (e.g. a bytecode major version its ASM predates); a version skewed enough to make
  * every supplied class unanalyzable used to be swallowed silently, reporting a "clean" 0/0 instead
  * of failing — a silent-zero denominator indistinguishable from "the app truly has no code". {@link
- * #sample()} now counts skips, surfaces the count via {@link Coverage#classesSkipped}, and throws
- * when EVERY supplied class file failed to analyze.
+ * #sample()} now counts skips, surfaces the count via {@link Coverage#classesSkipped}, and throws a
+ * {@link CoverageUnmeasurableException} — a type distinct from a plain transport {@code
+ * IOException} on purpose — when EVERY supplied class file failed to analyze. That distinction
+ * matters one layer up: {@code CoverageGuidedRun}/{@code CoverageDriver} must tolerate a plain
+ * {@code IOException} (a blipped agent, a restarting pod) without ending the campaign, but must
+ * NOT tolerate a {@code CoverageUnmeasurableException} the same way — {@link #classBytes} never
+ * changes across a run, so this is a deterministic, structural failure that will recur on every
+ * future {@link #sample()} call too, not a one-off to ride out.
+ *
+ * <p><b>F3 — the empty/unreadable classes dir guard.</b> The constructor throws when a classes
+ * dir IS supplied but yields zero readable {@code .class} files (a typo'd path, an extraction that
+ * silently produced nothing, a permissions problem) — there is no legitimate reason to poll
+ * coverage against zero supplied classes, and letting construction succeed used to let {@link
+ * #sample()} report a clean {@code Coverage(0, 0)} with no error at all, the same silent-zero
+ * shape as D1 one layer earlier.
  */
 public final class JacocoCoverageProvider {
 
@@ -117,9 +130,22 @@ public final class JacocoCoverageProvider {
                 try {
                     classBytes.add(Files.readAllBytes(p));
                 } catch (IOException ignored) {
-                    // skip unreadable class; analysis just omits it
+                    // skip unreadable class; analysis just omits it -- but see the check below:
+                    // an all-unreadable dir must not silently fall through to zero supplied classes.
                 }
             }
+        }
+        // F3: a classes dir WAS supplied (this constructor requires a Path; the genuinely-optional
+        // "no coverage classes at all" mode lives outside this class -- CoverageDriver simply never
+        // constructs a provider when -Dbasquin.coverage.classes is unset), so ending up with zero
+        // readable class files here is never legitimate: a typo'd path, an extraction that produced
+        // nothing, or every file unreadable. Without this check, sample() would go on to report a
+        // clean Coverage(0, 0) with no error -- the same silent-zero shape D1 guards against one
+        // layer later, just reached a different way.
+        if (classBytes.isEmpty()) {
+            throw new IOException("supplied coverage classes dir " + classesDir + " yielded zero "
+                    + "readable .class file(s) -- there is no legitimate reason to poll coverage "
+                    + "against zero supplied classes. Check -Dbasquin.coverage.classes.");
         }
     }
 
@@ -188,6 +214,28 @@ public final class JacocoCoverageProvider {
             this.sourcesTotal = sourcesTotal;
             this.classesAnalyzed = classesAnalyzed;
             this.classesSkipped = classesSkipped;
+        }
+    }
+
+    /**
+     * D1/F1: thrown by {@link #sample()} when EVERY supplied class file failed to analyze — a
+     * deterministic, structural incompatibility between the pinned JaCoCo/ASM version and the
+     * target's class-file bytecode version (e.g. a future target's classfile major version passing
+     * this JaCoCo release's ASM ceiling), never a transient condition. {@link #classBytes} is read
+     * once at construction and never changes across a run, so a sample that hits this once WILL hit
+     * it on every future {@link #sample()} call too. A distinct type (rather than a plain {@code
+     * IOException}, which also covers ordinary transport blips — an unreachable pod, a dropped
+     * connection) lets a consumer tell the two apart: an approver-found defect was consumers
+     * ({@code CoverageGuidedRun#sampleCoverage}, {@code CoverageDriver}'s poll loop) catching {@code
+     * Throwable} broadly and silently returning/reporting as if this were just another blip, which
+     * let a persistent all-skip publish a "clean" {@code coverage=0/0} with no diagnostics — the
+     * exact silent-zero D1 was written to prevent, recurring one layer up. Consumers must surface
+     * this (abort, or at minimum log once and report "unmeasured" rather than a numerator/
+     * denominator) while still tolerating a plain {@code IOException} as a blip.
+     */
+    public static final class CoverageUnmeasurableException extends IOException {
+        CoverageUnmeasurableException(String message) {
+            super(message);
         }
     }
 
@@ -270,10 +318,11 @@ public final class JacocoCoverageProvider {
         // class set and MUST fail loudly rather than report a "clean" 0/0 as if it were real zero
         // coverage.
         if (!classBytes.isEmpty() && analyzed == 0) {
-            throw new IOException("JaCoCo analyzed 0 of " + classBytes.size() + " supplied class "
-                    + "file(s) -- all " + skipped + " were skipped (unanalyzable). This is the "
-                    + "silent-zero denominator D1 guards against: refusing to report it as coverage. "
-                    + "Check the JaCoCo version against the target's class-file bytecode version.");
+            throw new CoverageUnmeasurableException("JaCoCo analyzed 0 of " + classBytes.size()
+                    + " supplied class file(s) -- all " + skipped + " were skipped (unanalyzable). "
+                    + "This is the silent-zero denominator D1 guards against: refusing to report it "
+                    + "as coverage. Check the JaCoCo version against the target's class-file bytecode "
+                    + "version.");
         }
         long covered = 0, totalProbes = 0;
         for (IClassCoverage c : builder.getClasses()) {

@@ -43,11 +43,24 @@ public final class CoverageDriver {
         runner.GenericRunner.main(args);
     }
 
-    private static void pollLoop(JacocoCoverageProvider provider, long intervalMs) {
+    /** Package-private for testing: the all-skip termination path needs to be asserted directly. */
+    static void pollLoop(JacocoCoverageProvider provider, long intervalMs) {
         while (true) {
             try {
                 JacocoCoverageProvider.Coverage c = provider.sample();
                 StatusReporter.recordCoverage(c.covered, c.total, c.sourcesResponded, c.sourcesTotal);
+            } catch (JacocoCoverageProvider.CoverageUnmeasurableException e) {
+                // F1 (approver finding, DD-043 PR-4): the provider's D1 all-skip guard -- EVERY
+                // supplied class file failed to analyze. This is deterministic (the provider's class
+                // bytes never change across a run), so silently retrying forever would just repeat
+                // the identical failure on every future poll. Unlike an ordinary blip (below), this
+                // must be surfaced, not swallowed: log it once, then stop polling -- the driven
+                // campaign (runner.GenericRunner, on the main thread) continues without a coverage
+                // signal rather than either dying for a display-only defect or spinning silently.
+                System.err.println("[Basquin][Coverage] FATAL: coverage is unmeasurable -- "
+                        + e.getMessage() + " -- stopping the coverage poller; the driven campaign"
+                        + " continues without a coverage signal.");
+                return;
             } catch (Throwable t) {
                 // Agent may not be up yet, or the socket blipped; keep trying quietly.
             }

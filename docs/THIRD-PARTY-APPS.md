@@ -286,3 +286,81 @@ Where the build host cannot reach any repository URL, pre-populate the local rep
 a containerised build then needs that directory mounted. This is a documented **fallback**, not the
 mechanism — the injector's repository injection makes it unnecessary whenever the URL is reachable
 (spike S5, `bench-results/dd043-s5-repo-injection-2026-07-26/`).
+
+### Coverage — offline JaCoCo over HTTP, on the same build-time-injected target
+
+DD-043 PR-4 adds a third thing to the injection above, and a route to read it back. Design and
+evidence: DD-043 spec §5/§6.4/§8.2
+(`docs/superpowers/specs/2026-07-24-native-reactive-targets-design.md`) and the native 2×2
+acceptance below.
+
+**What the injector adds.** Alongside the `basquin-quarkus` dependency and the repository (the two
+injections described above), the injector also adds a `jacoco-maven-plugin:instrument` execution
+(id `basquin-injected-offline-instrument`, bound to the `process-classes` phase) to each project's
+model — the plugin-execution injection that spec §8.2 flagged as the one unmeasured third of §5's
+mechanism, and that this PR settles by building it into the injector and exercising it on real
+targets. This offline-instruments the target's own compiled classes in place and preserves the
+pre-instrumentation originals under `target/generated-classes/jacoco`, exactly as JaCoCo's own
+offline mode always has — no other file in the target's tree changes.
+
+**How the runtime side reads it back — decision A1.** The jacoco *agent runtime* that actually
+serves that execution data does not arrive through a fourth injector mutation. It arrives through
+`basquin-quarkus`'s own runtime module pom: the extension declares
+`org.jacoco:org.jacoco.agent:<version>:runtime` as an ordinary `implementation` dependency. That
+single declaration does two jobs at once — it lands on the extension's own compile classpath, so
+the direct, compile-time-typed `RT.getAgent().getExecutionData(false)` call the spec's §6.4 requires
+actually compiles; and because the module publishes via plain `from components.java`, the dependency
+is published in the extension's own pom at ordinary `<scope>runtime</scope>` and so propagates
+transitively to any target the injector has already added `basquin-quarkus` to. One channel, no new
+injected-artifact guard surface, and the version stays in lockstep with the injected `instrument`
+execution automatically because both are baked from the same source.
+
+The extension serves the resulting execution data at `/__basquin/coverage`: a binary
+`application/octet-stream` body on success, and — when no jacoco agent is reachable — a **distinct
+non-2xx**, never an empty-but-200 body, matching the "a reported zero must mean checked and clean"
+rule the rest of this repo's boundary already follows. The runner (`JacocoCoverageProvider`) reads
+that route the same way it already reads a tcpserver coverage endpoint, just over a different
+transport: its endpoint spec accepts a comma-separated mix of `host:port` and URL forms, and a URL
+entry is dumped over an HTTP GET instead of a raw socket.
+
+**Version lockstep, and why a stale JaCoCo silently lies.** The injected `instrument` execution, the
+extension's A1 runtime dependency, and the runner's own analyzer/jacoco-cli are all pinned from one
+shared Gradle property, never a hand-typed literal in more than one place — offline-instrumented
+classes reference a version-specific shaded package name, so a plugin/agent version skew breaks the
+read at runtime without failing to compile. That property was bumped from a pre-existing `0.8.12` to
+`0.8.15`: `0.8.12`'s ASM could not parse the targets' Java-25 classfiles, and the old analyzer
+swallowed the resulting exception per class, silently reporting a "clean" zero for a target it never
+actually analyzed — the exact "reported zero means checked and clean" failure mode DD-040 exists to
+prevent, now fixed on this path too (decision D1). The analyzer now counts unanalyzable classes and
+**fails loudly** rather than publish that zero when every supplied class is unanalyzable.
+
+**Fail loudly on a conflicting jacoco declaration (decision D2).** The injector is about to add its
+own `instrument` execution, so — the same posture as every other injector guard on this page — it
+hard-fails rather than compose silently with a target that already declares one: an *active*
+`jacoco-maven-plugin` `instrument`-bound execution, or any declared `jacoco-maven-plugin` version
+other than the one it supplies. A target's own `prepare-agent` execution (JaCoCo's *online* mode) is
+deliberately not itself a conflict — it instruments a different way, in a running JVM, and does not
+compete for the same bytecode — so it trips neither branch as long as any declared version agrees.
+The guard message names the same `basquin.inject.skip` escape hatch as the other guards.
+
+**Verified end-to-end — the native 2×2.** Both `rest-villains` (blocking, JDBC/Hibernate ORM) and
+`rest-heroes` (reactive, Hibernate Reactive/reactive-pg-client) — the two targets already named
+above — were built with **zero pom edits**, in both JVM and native (Mandrel) packaging: all four
+cells completed, each one showing, in order, the read succeeding first (an HTTP 2xx plus JaCoCo's
+own execution-data magic bytes on `/__basquin/coverage`, checked *before* any application route was
+driven — an error body is non-empty too, so "non-empty" is never accepted as the read check),
+execution data growing across further dump points, and a real per-request route-method coverage
+flip read back against the preserved pre-instrumentation classes. On the two native cells, the
+built binary itself was inspected directly and found to carry the jacoco runtime classes, confirming
+the extension's `RT.getAgent()` call is what keeps the agent reachable through native-image's
+closed-world analysis, not merely compiled against. No cross-mode coverage percentage is computed
+anywhere in that evidence — native's denominator differs from the JVM's (spec §6.4/§7.4) and stays
+out of scope here. Evidence: `bench-results/dd043-pr4-2x2-2026-08-10/` (`README.md`'s summary table
+and per-cell detail).
+
+**The §8.2 single-module caveat, carried forward.** Both targets in that acceptance are standalone
+poms — no `<parent>`, one project per sparse checkout, never a reactor member. The injector's
+per-project loop, including the new `instrument`-execution injection, has therefore still only ever
+run over a one-project reactor; a multi-module Maven reactor remains unexercised by this mechanism,
+the same open caveat the dependency-and-repository half of this injector already carries from PR-3.
+See `bench-results/dd043-pr4-2x2-2026-08-10/README.md`'s own caveat section for the checked detail.

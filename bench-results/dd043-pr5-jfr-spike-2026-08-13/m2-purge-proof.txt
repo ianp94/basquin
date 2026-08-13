@@ -1,0 +1,6 @@
+=== before ===
+/tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/5f840f7a-f81d-434b-aa96-706be25f9d56/scratchpad/dd043-pr5-jfr-spike/.m2/.m2/repository/com/basquin/basquin-quarkus/0.3.0/basquin-quarkus-0.3.0.jar
+/tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/5f840f7a-f81d-434b-aa96-706be25f9d56/scratchpad/dd043-pr5-jfr-spike/.m2/.m2/repository/com/basquin/basquin-quarkus-deployment/0.3.0/basquin-quarkus-deployment-0.3.0.jar
+/tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/5f840f7a-f81d-434b-aa96-706be25f9d56/scratchpad/dd043-pr5-jfr-spike/.m2/.m2/repository/com/basquin/basquin-core/0.3.0/basquin-core-0.3.0.jar
+=== after ===
+(empty = purged)

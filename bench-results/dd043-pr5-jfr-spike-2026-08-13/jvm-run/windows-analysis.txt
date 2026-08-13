@@ -1,0 +1,36 @@
+state at each snapshot: ['OPEN', 'OPEN', 'OPEN', 'OPEN', 'OPEN']
+IDLE-1 (20s)                       deltaWeight=     116,816 B  deltaSamples=     1  wall=  20.0s  appThreads=     116,816 B  jfrThreads=           0 B
+    vert.x-eventloop-thread-2                      +116,816 B
+TRIVIAL (50x /ok)                  deltaWeight=   1,923,024 B  deltaSamples=    10  wall=   3.2s  appThreads=   1,923,024 B  jfrThreads=           0 B
+    vert.x-eventloop-thread-1                      +983,064 B
+    vert.x-eventloop-thread-7                      +192,272 B
+    executor-thread-1                              +146,784 B
+    vert.x-eventloop-thread-2                      +146,552 B
+    vert.x-eventloop-thread-6                      +133,648 B
+    vert.x-eventloop-thread-4                      +120,488 B
+    vert.x-eventloop-thread-0                      +119,584 B
+    vert.x-acceptor-thread-0                        +74,072 B
+    vert.x-eventloop-thread-3                        +6,560 B
+ALLOC (50x alloc?bytes=4194304)    deltaWeight= 210,691,272 B  deltaSamples=    68  wall=   3.4s  appThreads= 210,490,768 B  jfrThreads=     200,504 B
+    executor-thread-1                          +209,899,872 B
+    vert.x-eventloop-thread-4                      +250,512 B
+    JFR Event Stream 1                             +198,840 B
+    vert.x-acceptor-thread-0                       +106,896 B
+    vert.x-eventloop-thread-5                       +47,064 B
+    vert.x-eventloop-thread-6                       +42,512 B
+    vert.x-eventloop-thread-1                       +41,312 B
+    vert.x-eventloop-thread-0                       +41,040 B
+    vert.x-eventloop-thread-3                       +40,928 B
+    vert.x-eventloop-thread-7                        +9,296 B
+    vert.x-eventloop-thread-2                        +9,296 B
+    C1 CompilerThread0                               +2,040 B
+    JFR Periodic Tasks                               +1,664 B
+IDLE-2 (20s)                       deltaWeight=           0 B  deltaSamples=     0  wall=  20.0s  appThreads=           0 B  jfrThreads=           0 B
+
+-- raw per-window totals (delivery-time attribution, drains included in active windows) --
+ALLOC=210,691,272 vs max(other)=1,923,024  ->  ALLOC RANKS FIRST (raw): True
+
+-- app-thread-only totals (JFR-machinery threads excluded by name prefix 'JFR') --
+ALLOC=210,490,768 vs max(other)=1,923,024  ratio=109.5x  ->  ALLOC RANKS FIRST (app threads): True
+
+cumulative topClassesByWeight at end: [B:257493184,java.util.ArrayList$Itr:37934608,sun.nio.ch.SelectionKeyImpl:2564536,[Ljava.lang.Object;:1932240,java.lang.String:1878472

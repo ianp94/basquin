@@ -18,6 +18,18 @@ import static org.junit.Assert.assertTrue;
  * package-private {@code lastCorpus} field and {@code writeSummary} method.
  */
 public class CostRankedReplayTest {
+    @Test
+    public void unmeasuredCoverageIsRetainedWithoutAClaimedCost() {
+        CostCorpus corpus = new CostCorpus(java.util.List.of(), true);
+        corpus.consider("/coverage", 9999, 20, 400, 2, 1, true, 2, false);
+        corpus.consider("/not-coverage", 9999, 20, 400, 2, 1, false, 2, false);
+        org.junit.Assert.assertEquals(1, corpus.snapshotByCost().size());
+        CorpusEntry entry = corpus.snapshotByCost().get(0);
+        org.junit.Assert.assertFalse(entry.heapMeasured);
+        org.junit.Assert.assertEquals(0.0, entry.cost, 0.0);
+        org.junit.Assert.assertEquals("/coverage", entry.input);
+    }
+
 
     @Test
     public void enabledPutsTheHighCostInputFirstInTheWrittenSummary() throws Exception {

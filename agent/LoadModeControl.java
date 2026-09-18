@@ -51,6 +51,8 @@ public final class LoadModeControl {
             case "drift":
                 return LoadMode.driftSnapshotCsv();
             case "result": {
+                String wire = param(query, "wire");
+                if (wire != null && !"2".equals(wire)) return ResultStore.UPGRADE_REQUIRED;
                 String id = param(query, "id");
                 // Bounded wait on ITERATION_LOCK: Agent.end() sleeps 25ms BEFORE measuring, so on a
                 // committed response the client reaches EOF while the entry is still ~25ms away.
@@ -58,7 +60,10 @@ public final class LoadModeControl {
                 // A timeout (not an indefinite block) so a target wedged inside the app misses
                 // rather than hanging the driver.
                 RequestBoundary.awaitQuiescence(QUIESCENCE_WAIT_MS);
-                return ResultStore.format(ResultStore.take(id));
+                java.util.List<ResultStore.Entry> entries = ResultStore.take(id);
+                return "2".equals(wire)
+                        ? ResultStore.SERIALIZED_WIRE + "\n" + ResultStore.format(entries)
+                        : ResultStore.formatLegacy(entries);
             }
             case "violations":
                 return Long.toString(ResultStore.totalViolations());

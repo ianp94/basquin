@@ -18,9 +18,9 @@ The [PR-5 plan](superpowers/plans/2026-08-13-dd043-pr5-reactive.md) defines the 
 
 Task 1's five-field result format and producer changes are present on this **in-progress branch**.
 The driver now excludes explicitly unmeasured/unknown dispositions from heap cost and blocks
-composite scoring for those chains while retaining recovered findings. Target-model negotiation,
-producer classification, and summary/export attribution are still pending; reactive measurement
-accounting is not complete. Track the [follow-through checklist](superpowers/plans/2026-09-18-pr5-follow-through.md).
+composite scoring for those chains while retaining recovered findings. Wire negotiation, target-model identification, retained-corpus attribution, and reactive
+heap exclusion producers are implemented. Summary counters, driver disconnect classification,
+and real-app controls remain pending; reactive measurement accounting is not complete. Track the [follow-through checklist](superpowers/plans/2026-09-18-pr5-follow-through.md).
 
 Continue in the plan's order:
 1. Finish disposition handling and version-skew coverage (Task 1).

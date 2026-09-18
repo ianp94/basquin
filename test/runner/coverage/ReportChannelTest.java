@@ -59,7 +59,7 @@ public class ReportChannelTest {
         server.createContext("/__basquin/result", (HttpExchange ex) -> {
             pollHits.incrementAndGet();
             String q = ex.getRequestURI().getQuery();
-            String id = q != null && q.startsWith("id=") ? q.substring(3) : null;
+            String id = q != null && q.startsWith("id=") ? q.substring(3).split("&", 2)[0] : null;
             pollIds.add(id);
             // A stamped poll would leave a stale id on a pooled connector thread and later publish
             // some probe's metrics under a driver id, so its absence is asserted, not assumed.

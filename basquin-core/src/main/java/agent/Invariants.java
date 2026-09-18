@@ -66,6 +66,14 @@ public final class Invariants {
                                      long heapDeltaBytes,
                                      int threadsNow,
                                      int threadsDelta) {
+        return evaluateAvailable(iterationNumber, elapsedMs, heapDeltaBytes, threadsNow,
+                threadsDelta, true, true);
+    }
+
+    /** Evaluate only signals the caller actually measured; never substitute zeros for absence. */
+    public static Result evaluateAvailable(int iterationNumber, long elapsedMs, long heapDeltaBytes,
+                                           int threadsNow, int threadsDelta,
+                                           boolean heapAvailable, boolean threadsAvailable) {
         List<Violation> violations = new ArrayList<>();
 
         // Latency
@@ -81,7 +89,7 @@ public final class Invariants {
         // Heap delta (Kb)
         Long heapMaxKb = getLongProp("basquin.invariant.heapDelta.maxKb");
         long heapDeltaKb = heapDeltaBytes / 1024L;
-        if (heapMaxKb != null && heapDeltaKb > heapMaxKb) {
+        if (heapAvailable && heapMaxKb != null && heapDeltaKb > heapMaxKb) {
             violations.add(new Violation("heapDelta", String.format("%dKB > %dKB", heapDeltaKb, heapMaxKb)));
             logViolation(iterationNumber, "heapDelta", String.format("%dKB > %dKB", heapDeltaKb, heapMaxKb));
             if (isHard("basquin.invariant.heapDelta.mode")) {
@@ -91,7 +99,7 @@ public final class Invariants {
 
         // Thread count delta
         Integer thrMax = getIntProp("basquin.invariant.threadDelta.max");
-        if (thrMax != null && threadsDelta > thrMax) {
+        if (threadsAvailable && thrMax != null && threadsDelta > thrMax) {
             violations.add(new Violation("threadDelta", String.format("%d > %d (threadsNow=%d)", threadsDelta, thrMax, threadsNow)));
             logViolation(iterationNumber, "threadDelta", String.format("%d > %d (threadsNow=%d)", threadsDelta, thrMax, threadsNow));
             if (isHard("basquin.invariant.threadDelta.mode")) {

@@ -49,16 +49,24 @@ A one-liner that builds everything the Tomcat-valve path needs:
 
 ## PR-5 result-wire compatibility (in development)
 
-DD-043 PR-5 adds a fifth field to each result line:
-`costCsv|invariantCount|detail|leak|disposition`.
-Upgrade the runner before deploying producers that emit this format. A pre-PR-5 runner splits
-at four fields and reads `leak|measured` as its leak flag, so it silently misses the leak.
-Existing cost and invariant-count fields still parse; this does not make the mixed deployment safe.
+New runners poll `/__basquin/result?id=...&wire=2`. Updated targets identify the measurement
+model with a `basquin-result-v2:serialized` or `basquin-result-v2:reactive` preamble, followed by
+five-field result lines. Missing reactive dispositions and unknown models cannot supply heap costs.
 
-The new runner accepts legacy four-field records, and regression tests cover a redirect chain
-containing both formats. Disposition-aware reactive accounting is still in progress: successful
-parsing alone does not establish that a reactive heap sample is attributable to the request.
-See the [PR-5 plan](superpowers/plans/2026-08-13-dd043-pr5-reactive.md) for the measurement gates.
+A Tomcat target serving an old runner returns the original four-field wire, preserving leak flags.
+A reactive target rejects old or unknown wire versions with `err:result-wire-upgrade-required`
+without consuming the stored result. Old runners count this as a report miss and use their existing
+missing-report failure gate; they cannot interpret reactive exclusions safely.
+
+Pre-negotiation targets ignore the added query parameter. Because their response does not identify
+the measurement model, the runner retains the historical serialized default; when testing an
+older reactive target, set `-Dbasquin.report.legacyModel=reactive` so absent dispositions are unknown.
+Upgrade reactive targets to the negotiated protocol before relying on automatic model detection.
+
+Reactive heap is excluded for overlap, less than 1 MiB, negative deltas, and changed/unavailable
+GC collection counts. Non-driver requests participate in overlap tracking. Disconnect records
+contain no numeric measurements. Summary counters, driver disconnect classification, and real-app
+control acceptance remain pending; see the [follow-through checklist](superpowers/plans/2026-09-18-pr5-follow-through.md).
 
 ## Run a target app locally
 

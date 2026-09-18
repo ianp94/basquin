@@ -156,9 +156,9 @@ public final class ResultStore {
      * <p><b>Version skew (D1), pinned honestly rather than claimed impossible:</b> a pre-PR-5
      * driver parses these lines with {@code split("\\|", 4)}, so on a five-field line its
      * {@code f[3]} reads {@code "leak|<disposition>"} and its {@code "leak".equals(f[3])} check is
-     * a silent leak FALSE-NEGATIVE — a documented consequence of widening, tested on the driver
-     * side ({@code ResultWireSkewTest}). A PR-5 driver reading a four-field line from an old
-     * producer sees the disposition as absent, never assumes one.
+     * a silent leak FALSE-NEGATIVE if negotiation is bypassed (pinned by {@code ResultWireSkewTest}).
+     * Endpoints therefore emit this format only for {@code wire=2}; legacy serialized clients
+     * receive {@link #formatLegacy}, and reactive targets reject legacy polling.
      *
      * <p>Null or empty is {@link #MISS}, so {@code LoadModeControl}'s caller and the driver's
      * {@code POLL_MISS.equals(body)} check are unchanged by accumulation.
@@ -177,6 +177,22 @@ public final class ResultStore {
         }
         return sb.length() == 0 ? MISS : sb.toString();
     }
+
+    /** Original wire for serialized targets serving old runners. Never append a fifth field. */
+    public static String formatLegacy(List<Entry> hops) {
+        String body = format(hops);
+        if (MISS.equals(body)) return body;
+        StringBuilder out = new StringBuilder();
+        for (String line : body.split("\n")) {
+            if (out.length() > 0) out.append('\n');
+            out.append(line, 0, line.lastIndexOf('|'));
+        }
+        return out.toString();
+    }
+
+    public static final String SERIALIZED_WIRE = "basquin-result-v2:serialized";
+    public static final String REACTIVE_WIRE = "basquin-result-v2:reactive";
+    public static final String UPGRADE_REQUIRED = "err:result-wire-upgrade-required";
 
     private static String sanitize(String field) {
         return field == null ? ""

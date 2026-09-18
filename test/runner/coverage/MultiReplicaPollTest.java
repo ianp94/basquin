@@ -57,7 +57,7 @@ public class MultiReplicaPollTest {
             server.createContext("/__basquin/result", (HttpExchange ex) -> {
                 polls.incrementAndGet();
                 String q = ex.getRequestURI().getQuery();
-                String id = q != null && q.startsWith("id=") ? q.substring(3) : null;
+                String id = q != null && q.startsWith("id=") ? q.substring(3).split("&", 2)[0] : null;
                 // Remove-on-read, per-JVM: this pod can only ever answer for ids IT served.
                 String body = id == null ? null : store.remove(id);
                 byte[] out = (body == null ? "miss" : body).getBytes(StandardCharsets.UTF_8);

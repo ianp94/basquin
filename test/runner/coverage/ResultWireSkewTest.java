@@ -29,9 +29,8 @@ import static org.junit.Assert.assertTrue;
  *   <li><b>New producer → old driver:</b> the frozen pre-PR-5 parse was {@code split("\\|", 4)}
  *       with {@code "leak".equals(f[3])}; on a five-field line its {@code f[3]} reads
  *       {@code "leak|<disposition>"}, so the old driver silently records a leak FALSE-NEGATIVE.
- *       That is a documented, tested consequence of widening the wire — the alternative (a version
- *       handshake) was considered and not taken for one added field. This test is the
- *       documentation.</li>
+ *       That is a documented failure mode if negotiation is bypassed. Endpoint negotiation now
+ *       prevents this format from being served to an old runner.</li>
  * </ul>
  */
 public class ResultWireSkewTest {
@@ -51,6 +50,8 @@ public class ResultWireSkewTest {
         server.setExecutor(null);
         server.createContext("/__basquin/result", (HttpExchange ex) -> {
             try {
+                assertTrue("new runner must explicitly negotiate wire 2",
+                        ex.getRequestURI().getQuery().contains("wire=2"));
                 String body = pendingBody;
                 pendingBody = null;                                  // remove-on-read
                 byte[] out = (body == null ? "miss" : body).getBytes(StandardCharsets.UTF_8);
@@ -135,6 +136,38 @@ public class ResultWireSkewTest {
     }
 
     @Test
+    public void reactiveMissingDispositionAndUnknownModelFailClosed() {
+        for (String preamble : new String[]{agent.ResultStore.REACTIVE_WIRE,
+                "basquin-result-v2:future-model"}) {
+            pendingBody = preamble + "\n1,900,0|0||";
+            CoverageGuidedRun.CostSample s =
+                    CoverageGuidedRun.pollResult(base, "model", "/x", 1);
+            assertTrue(s.measured);
+            assertFalse(s.heapMeasured);
+            assertEquals(0L, s.heapDeltaKb);
+        }
+    }
+
+    @Test
+    public void malformedOrPartialHeapCannotBeScored() {
+        for (String body : new String[]{"1,20,bad|0|||measured",
+                "bad|0|||measured", "1,20,0|0|||measured"}) {
+            pendingBody = body;
+            CoverageGuidedRun.CostSample s =
+                    CoverageGuidedRun.pollResult(base, "partial", "/x", 2);
+            assertFalse(CoverageGuidedRun.scoreable(true, s));
+        }
+    }
+
+    @Test
+    public void pollingRequestsWireTwo() {
+        pendingBody = agent.ResultStore.SERIALIZED_WIRE + "\n1,2,0|0|||measured";
+        CoverageGuidedRun.CostSample s = CoverageGuidedRun.pollResult(base, "wire-two", "/x", 1);
+        assertTrue(s.heapMeasured);
+        assertEquals(2L, s.heapDeltaKb);
+    }
+
+    @Test
     public void unmeasuredHeapDoesNotEraseARealLatencyFinding() throws Exception {
         pendingBody = "12,99999,0|1|latency: slow||UNMEASURED\n"
                 + "5,10,0|0|||measured";
@@ -166,7 +199,7 @@ public class ResultWireSkewTest {
     }
 
     /**
-     * NEW producer → OLD driver, the accepted loss: this replicates the frozen pre-PR-5 parse
+     * NEW producer → OLD driver, the failure negotiation prevents: this replicates the frozen pre-PR-5 parse
      * verbatim ({@code CoverageGuidedRun}'s former {@code split("\\|", 4)} +
      * {@code "leak".equals(f[3].trim())}) against a five-field line and asserts the OUTCOME —
      * a silent leak false-negative. If this test ever fails, the wire format changed in a way
@@ -179,8 +212,7 @@ public class ResultWireSkewTest {
         String[] f = newFormatLine.split("\\|", 4);   // the frozen old limit
         assertEquals("the old driver's f[3] swallows the new field", "leak|measured", f[3].trim());
         assertFalse("DOCUMENTED CONSEQUENCE (D1): an old driver reading a new producer drops the "
-                        + "leak flag — a false-negative, deliberately accepted over a version "
-                        + "handshake for one added field",
+                        + "leak flag — the false-negative prevented by negotiated endpoint formatting",
                 "leak".equals(f[3].trim()));
 
         // The rest of the old parse is UNAFFECTED by the widening: count and cost still read.

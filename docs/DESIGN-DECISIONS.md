@@ -2123,3 +2123,25 @@ the surviving heap sum would present a partial observation as a complete cost.
 Target-model negotiation, old-runner compatibility, producer classification, summary counters,
 and explicit attribution in exported coverage-retained corpus entries remain pending in
 [the follow-through checklist](superpowers/plans/2026-09-18-pr5-follow-through.md).
+
+## PR-5 continuation — negotiated wire and reactive heap windows (2026-09-18)
+
+**Decision.** A `wire=2` query parameter opts into five-field records with a model preamble.
+The same endpoint preserves four-field leak flags for old serialized clients; reactive targets
+refuse legacy polling before consuming results. This replaces the previous rollout-only policy.
+A versioned path was rejected because existing endpoints already ignore unknown query parameters,
+allowing one request to work with older producers. Legacy responses cannot identify their model:
+the explicit `basquin.report.legacyModel=reactive` override is required for older reactive targets.
+
+Process-wide overlap epochs retain contamination even if the overlapping peer finishes first.
+Non-driver application traffic participates; control/meta routes remain exempt. GC counts are
+summed across all beans after optional pre-measure GC. Unknown GC counts, overlap, sub-quantum
+and negative deltas exclude heap; the invariant evaluator skips unavailable signals rather than
+substituting zeros. Reactive thread-delta checks are suppressed. Disconnects publish a disposition
+without numeric measurements, and every end-handler releases its window in a finally block.
+
+Corpus entries retain heap attribution; unavailable entries may survive for coverage but cannot
+train cost retention or receive a composite score. Replay export contains only input strings,
+so no new numeric export schema is introduced. Malformed costs and incomplete hop recovery also
+disable composite scoring. Summary counters and driver-side disconnect classification are still
+pending; this is not the end-to-end acceptance checkpoint.

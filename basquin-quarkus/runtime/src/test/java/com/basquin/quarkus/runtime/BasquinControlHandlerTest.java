@@ -31,12 +31,21 @@ public class BasquinControlHandlerTest {
     }
 
     @Test
+    public void legacyRunnerIsRejectedWithoutConsumingTheRecord() {
+        ResultStore.put("legacy", new ResultStore.Entry("1,2,0", 0, null, false, "UNMEASURED"));
+        assertEquals(ResultStore.UPGRADE_REQUIRED,
+                BasquinControlHandler.handle("/__basquin/result", "id=legacy"));
+        assertEquals(ResultStore.REACTIVE_WIRE + "\n1,2,0|0|||UNMEASURED",
+                BasquinControlHandler.handle("/__basquin/result", "id=legacy&wire=2"));
+    }
+
+    @Test
     public void resultReturnsTheFormattedEntryOncePublished() {
         ResultStore.put("probe-1", new ResultStore.Entry("42,2,3", 0, null, false,
                 ResultStore.DISPOSITION_MEASURED));
 
         // Five wire fields since DD-043 PR-5 (D1): costCsv|count|detail|leak|disposition.
-        assertEquals("42,2,3|0|||measured", BasquinControlHandler.handle("/__basquin/result", "id=probe-1"));
+        assertEquals(ResultStore.REACTIVE_WIRE + "\n42,2,3|0|||measured", BasquinControlHandler.handle("/__basquin/result", "id=probe-1&wire=2"));
     }
 
     /**
@@ -51,7 +60,8 @@ public class BasquinControlHandlerTest {
         long boundMs = resultPollTimeoutMs();
         long start = System.nanoTime();
 
-        assertEquals("miss", BasquinControlHandler.handle("/__basquin/result", "id=never-published"));
+        assertEquals(ResultStore.REACTIVE_WIRE + "\nmiss",
+                BasquinControlHandler.handle("/__basquin/result", "id=never-published&wire=2"));
 
         long elapsedMs = (System.nanoTime() - start) / 1_000_000L;
         assertTrue("must return at the bound, not hang (took " + elapsedMs + "ms, bound " + boundMs + "ms)",

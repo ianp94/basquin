@@ -1,7 +1,7 @@
 # PR-5 follow-through
 
 A focused continuation of [the PR-5 plan](2026-08-13-dd043-pr5-reactive.md).
-Existing uncommitted work belongs to the current branch and must be preserved.
+Continue on draft PR #111; merge only after the planned acceptance and review gates.
 
 ## Review checkpoints
 
@@ -10,16 +10,17 @@ Existing uncommitted work belongs to the current branch and must be preserved.
       reject cost scoring when any recovered hop explicitly lacks a valid measurement.
       Retain real invariant findings even when heap cannot be measured.
 - [x] Pin mixed-chain, unknown-disposition, and disconnected cost exclusion with driver tests.
-- [ ] Carry attribution into exported coverage-retained corpus entries; never label a partial
-      heap value as a complete measurement.
-- [ ] Resolve protocol compatibility before release: require an explicit negotiation or a
-      versioned endpoint that prevents old runners silently losing leak flags. Updating the
-      runner first is the interim documented rollout constraint, not a completed handshake.
-- [ ] Identify the target measurement model explicitly so legacy Tomcat records remain usable
-      while missing reactive dispositions stay unknown.
-- [ ] Implement Task 2's process-global in-flight tracking, overlap history, sub-quantum,
-      negative and GC-contaminated heap handling; decrement on every completion path.
-- [ ] Publish disconnects without adding them to latency or crash populations.
+- [x] Carry heap attribution into retained corpus entries. Replay export contains input strings
+      only; unavailable cost cannot train retention or receive a composite score.
+- [x] Negotiate wire=2; serve legacy Tomcat formatting and refuse legacy reactive polls
+      without consuming results. Old-runner/new-producer leak loss is prevented at the endpoint.
+- [x] Identify the model in negotiated responses. Older reactive producers require the documented
+      legacyModel override because their response cannot identify the model.
+- [x] Implement process-global in-flight tracking, overlap history, sub-quantum, negative and
+      GC-contaminated heap exclusions; add lifecycle and unavailable-signal regression tests.
+- [ ] Prove these producers through real-app controls, including GC ordering and all native paths.
+- [x] Publish disconnect records without numeric measurements.
+- [ ] Exclude disconnects from driver-side latency/crash populations end to end.
 - [ ] Expose disposition/taint counters and control-pass state in summary records; add a loud
       failure threshold without conflating intentional heap exclusions with transport misses.
 - [ ] Implement the separate-pass JFR cross-check and then the event-loop watchdog.

@@ -7,6 +7,7 @@ public final class CorpusEntry {
     public final double cost;
     public final long latencyMs;
     public final long heapDeltaKb;
+    public final boolean heapMeasured;
     public final int threadDelta;
     public final int invariantCount;
     /** true = retained because it hit new coverage (never evicted); false = retained purely for cost. */
@@ -29,6 +30,13 @@ public final class CorpusEntry {
      *  here with {@code hops = 1}, so the ~20 existing construction sites compile unchanged. */
     public CorpusEntry(String input, double cost, long latencyMs, long heapDeltaKb,
                        int threadDelta, int invariantCount, boolean coverageFind, int hops) {
+        this(input, cost, latencyMs, heapDeltaKb, threadDelta, invariantCount, coverageFind, hops, true);
+    }
+
+    public CorpusEntry(String input, double cost, long latencyMs, long heapDeltaKb,
+                       int threadDelta, int invariantCount, boolean coverageFind, int hops,
+                       boolean heapMeasured) {
+        this.heapMeasured = heapMeasured;
         this.input = input;
         this.cost = cost;
         this.latencyMs = latencyMs;

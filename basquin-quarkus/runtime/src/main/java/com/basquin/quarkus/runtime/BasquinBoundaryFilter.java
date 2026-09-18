@@ -28,9 +28,8 @@ import java.util.List;
  * exact failure mode.
  *
  * <h2>No header, no measurement</h2>
- * If {@code X-Basquin-Req} is absent this is not an explore request: {@link #handle} does nothing
- * beyond {@code ctx.next()} — no timers start, no {@code addEndHandler} is registered, nothing is
- * stored.
+ * Requests without {@code X-Basquin-Req} participate only in process-wide overlap tracking.
+ * They publish no result, but their lifetime can taint a driver's heap window.
  *
  * <h2>Soft by structure</h2>
  * The measurement runs in {@code addEndHandler}, which fires only after the response is fully
@@ -38,12 +37,10 @@ import java.util.List;
  * {@code Invariants.Result#hardFailureMessage} is deliberately never thrown here; it is a real,
  * documented semantic difference from the Tomcat path, which defaults to hard failure.
  *
- * <h2>Every disposition, but not every disposition published</h2>
+ * <h2>Every completion releases the process-wide window</h2>
  * {@code addEndHandler} fires on success, error responses, redirects <b>and</b> client disconnect
- * (spike S3). {@code ar.succeeded()} is {@code false} on disconnect; that disposition is logged,
- * never written to {@link ResultStore} — publishing a latency figure for a request that never
- * received its response would be exactly the fabricated-number defect this channel exists to
- * avoid (spec §6 / §6.5's exclusion of disconnected samples from the latency population).
+ * (spike S3). Disconnects publish only a disposition, without latency or heap values.
+ * Successful responses publish heap only when the window is attributable.
  *
  * <h2>No {@code ThreadLocal}</h2>
  * Requests interleave on the event loop, so per-request state rides the {@link RoutingContext}
@@ -72,6 +69,9 @@ public final class BasquinBoundaryFilter implements Handler<RoutingContext> {
     private static final String CTX_BASELINE_HEAP = "basquin.baselineHeapBytes";
     private static final String CTX_BASELINE_THREADS = "basquin.baselineThreadCount";
 
+    private static final String CTX_GC = "basquin.gcCount";
+    private static final ReactiveWindows WINDOWS = new ReactiveWindows();
+
     private static final ThreadMXBean THREAD_MX = ManagementFactory.getThreadMXBean();
 
     @Override
@@ -95,32 +95,34 @@ public final class BasquinBoundaryFilter implements Handler<RoutingContext> {
         }
 
         String reqId = ctx.request().getHeader(REQ_ID_HEADER);
-        if (reqId == null || reqId.isEmpty()) {
-            // No header => not an explore request. Do nothing beyond continuing the chain.
-            ctx.next();
-            return;
+        ReactiveWindows.Window window = WINDOWS.begin();
+        try {
+            // Track non-driver traffic too: it contaminates another request's heap window.
+            if (reqId != null && !reqId.isEmpty()) {
+                if (Boolean.getBoolean("basquin.heap.gcBeforeMeasure")) System.gc();
+                ctx.put(CTX_GC, collectionCount());
+                ctx.put(CTX_REQ_ID, reqId);
+                ctx.put(CTX_START_NANOS, System.nanoTime());
+                ctx.put(CTX_BASELINE_HEAP, usedHeapBytes());
+                ctx.put(CTX_BASELINE_THREADS, THREAD_MX.getThreadCount());
+            }
+            ctx.addEndHandler(ar -> onEnd(ctx, ar, window));
+        } catch (Throwable failure) {
+            WINDOWS.end(window);
+            throw failure;
         }
-
-        ctx.put(CTX_REQ_ID, reqId);
-        ctx.put(CTX_START_NANOS, System.nanoTime());
-        ctx.put(CTX_BASELINE_HEAP, usedHeapBytes());
-        ctx.put(CTX_BASELINE_THREADS, THREAD_MX.getThreadCount());
-
-        ctx.addEndHandler(ar -> onEnd(ctx, ar));
         ctx.next();
     }
 
-    private static void onEnd(RoutingContext ctx, AsyncResult<Void> ar) {
-        String reqId = ctx.get(CTX_REQ_ID);
+    private static void onEnd(RoutingContext ctx, AsyncResult<Void> ar, ReactiveWindows.Window window) {
+        String reqId = null;
+        boolean ended = false;
         try {
+            reqId = ctx.get(CTX_REQ_ID);
+            if (reqId == null) return;
             if (!ar.succeeded()) {
-                // disconnected: neither served cleanly nor demonstrably broken by the app (spec
-                // §6's disposition table). Logged for visibility; never published as a
-                // measurement — a disconnected sample must not enter the latency population
-                // (§6.5), and publishing one would fabricate a number for a request that never
-                // received its response.
-                System.err.println("[Basquin] id=" + reqId + " disconnected before response completed: "
-                        + ar.cause());
+                // Publish the disposition only: no fabricated latency, heap, or crash finding.
+                ResultStore.put(reqId, new ResultStore.Entry(null, 0, null, false, "disconnected"));
                 return;
             }
 
@@ -133,11 +135,35 @@ public final class BasquinBoundaryFilter implements Handler<RoutingContext> {
             int threadsNow = THREAD_MX.getThreadCount();
             int threadsDelta = threadsNow - baselineThreadCount;
 
-            publish(reqId, elapsedMs, heapDeltaBytes, threadsNow, threadsDelta);
+            long gcAfter = collectionCount();
+            long gcBefore = ctx.get(CTX_GC);
+            boolean overlap = WINDOWS.end(window);
+            ended = true;
+            publish(reqId, elapsedMs, heapDeltaBytes, threadsNow, threadsDelta,
+                    heapAvailable(heapDeltaBytes, overlap, gcBefore, gcAfter));
         } catch (Throwable t) {
             // Never let boundary bookkeeping fail a request whose response is already written.
             System.err.println("[Basquin] boundary end-handler failed for id=" + reqId + ": " + t);
+        } finally {
+            if (!ended) WINDOWS.end(window);
         }
+    }
+
+    static boolean heapAvailable(long bytes, boolean overlap, long gcBefore, long gcAfter) {
+        return !overlap && bytes >= 1_048_576L && gcBefore >= 0 && gcAfter == gcBefore;
+    }
+
+    static long collectionCount() {
+        long sum = 0;
+        java.util.List<java.lang.management.GarbageCollectorMXBean> beans =
+                ManagementFactory.getGarbageCollectorMXBeans();
+        if (beans.isEmpty()) return -1;
+        for (java.lang.management.GarbageCollectorMXBean bean : beans) {
+            long count = bean.getCollectionCount();
+            if (count < 0) return -1;
+            sum += count;
+        }
+        return sum;
     }
 
     /**
@@ -174,7 +200,14 @@ public final class BasquinBoundaryFilter implements Handler<RoutingContext> {
      * none at the boundary").
      */
     static void publish(String reqId, long elapsedMs, long heapDeltaBytes, int threadsNow, int threadsDelta) {
-        Invariants.Result r = Invariants.evaluateAndMaybeFail(0, elapsedMs, heapDeltaBytes, threadsNow, threadsDelta);
+        publish(reqId, elapsedMs, heapDeltaBytes, threadsNow, threadsDelta,
+                heapAvailable(heapDeltaBytes, false, 0, 0));
+    }
+
+    static void publish(String reqId, long elapsedMs, long heapDeltaBytes, int threadsNow,
+                        int threadsDelta, boolean heapAvailable) {
+        Invariants.Result r = Invariants.evaluateAvailable(0, elapsedMs, heapDeltaBytes,
+                threadsNow, threadsDelta, heapAvailable, false);
         List<Invariants.Violation> violations = r.violations;
         int invariantCount = violations.size();
         // Format must match the Tomcat path (Agent.java:475 publishes `name + ": " + detail`).
@@ -187,14 +220,10 @@ public final class BasquinBoundaryFilter implements Handler<RoutingContext> {
         // r.hardFailureMessage is deliberately never thrown: soft by structure (see class javadoc).
 
         // Mirrors agent/RequestBoundary.java's costCsv composition exactly.
-        String costCsv = elapsedMs + "," + (heapDeltaBytes / 1024L) + "," + threadsDelta;
-        // Disposition (DD-043 PR-5, D1): this method is only reached for a completed response, and
-        // §6.1's UNMEASURED producers (overlap, sub-quantum, negative/GC-contaminated) plus the
-        // `disconnected` publication do not exist yet — they land with Task 2, which turns this
-        // constant into a computed value. Until then a completed response is stamped `measured`
-        // exactly as PR-2 implicitly treated it.
+        String costCsv = elapsedMs + "," + (heapAvailable ? Long.toString(heapDeltaBytes / 1024L) : "") + ",0";
+        // An unavailable heap window stays empty on the wire; latency findings remain valid.
         ResultStore.put(reqId, new ResultStore.Entry(costCsv, invariantCount, detail, false,
-                ResultStore.DISPOSITION_MEASURED));
+                heapAvailable ? ResultStore.DISPOSITION_MEASURED : "UNMEASURED"));
     }
 
     private static long usedHeapBytes() {

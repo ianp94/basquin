@@ -333,7 +333,7 @@ public final class CoverageGuidedRun {
             if (pheromoneOn && parent != null && measured) corpus.reinforce(parent, cost);
             if (coverageFind || measured) {
                 corpus.consider(input, cost, latMs, sample.heapDeltaKb, sample.threadDelta,
-                        sample.invariantCount, coverageFind, sample.hops);
+                        sample.invariantCount, coverageFind, sample.hops, sample.measured && sample.heapMeasured);
             }
         }
         // DD-040: close the window BEFORE the summary is rendered/written (the summary rides a
@@ -1167,6 +1167,8 @@ public final class CoverageGuidedRun {
                 url = next.toString();                               // the FULL url is dialled; only
                                                                      // the recorded key is stripped
             }
+            // Only the serialized Tomcat boundary emits these headers. A future reactive
+            // header producer must carry dispositions rather than inheriting this attribution.
             if (headerReported) sample = new CostSample(heapKb, threadDelta, invCount, true, hops);
             if (hops > 0) {
                 InputStream is = code >= 400 ? c.getErrorStream() : c.getInputStream();
@@ -1285,7 +1287,17 @@ public final class CoverageGuidedRun {
         List<String[]> breaching = new ArrayList<>();     // {hop, count, detail-or-null, podMeta}
         for (int b = 0; b < bodies.size(); b++) {
             String podMeta = servedBy.get(b) == null ? "" : "\npod=" + servedBy.get(b);
-            for (String line : bodies.get(b).split("\n")) {
+            String body = bodies.get(b);
+            String model = System.getProperty("basquin.report.legacyModel", "serialized");
+            if (body.startsWith("basquin-result-")) {
+                int newline = body.indexOf('\n');
+                String preamble = newline < 0 ? body : body.substring(0, newline);
+                if (agent.ResultStore.SERIALIZED_WIRE.equals(preamble)) model = "serialized";
+                else if (agent.ResultStore.REACTIVE_WIRE.equals(preamble)) model = "reactive";
+                else model = "unknown";
+                body = newline < 0 ? "" : body.substring(newline + 1);
+            }
+            for (String line : body.split("\n")) {
                 if (line.isEmpty()) continue;
                 // 5-field limit (DD-043 PR-5, D1): `costCsv|count|detail|leak|disposition`. The
                 // limit exists because `detail` is app-derived and a version-skewed target could
@@ -1307,14 +1319,20 @@ public final class CoverageGuidedRun {
                 // Legacy/empty dispositions retain the existing compatibility behavior until
                 // target-model negotiation lands. Explicit unknown values fail closed.
                 String disposition = f.length > 4 ? f[4].trim() : "";
-                boolean attributable = disposition.isEmpty() || "measured".equals(disposition);
+                boolean attributable = ("serialized".equals(model) || "reactive".equals(model))
+                        && ("measured".equals(disposition)
+                            || (disposition.isEmpty() && "serialized".equals(model)));
                 heapMeasured &= attributable;
                 String[] cost = f[0].split(",");
                 if (cost.length == 3 && attributable) {
                     try {
-                        heapKb += Long.parseLong(cost[1].trim());
-                        threadDelta += Integer.parseInt(cost[2].trim());
-                    } catch (NumberFormatException ignored) { }
+                        long parsedHeap = Long.parseLong(cost[1].trim());
+                        int parsedThreads = Integer.parseInt(cost[2].trim());
+                        heapKb += parsedHeap;
+                        threadDelta += parsedThreads;
+                    } catch (NumberFormatException ignored) { heapMeasured = false; }
+                } else {
+                    heapMeasured = false;
                 }
                 if (f.length > 3 && "leak".equals(f[3].trim())) { anyLeak = true; leakPod = podMeta; }
                 if (count > 0) {
@@ -1353,6 +1371,7 @@ public final class CoverageGuidedRun {
         // measured and misses is deliberate — it keeps the recovered violations scored while never
         // letting partials alone trip missesAreTheMajority into a spurious run failure.
         if (parsedLines < hops) {
+            heapMeasured = false;
             reportMisses++;
             StatusReporter.recordReportMiss();
         }
@@ -1368,7 +1387,7 @@ public final class CoverageGuidedRun {
     private static String fetchResult(String base, String reqId) {
         try {
             HttpURLConnection pc = (HttpURLConnection) new URL(
-                    base + "/__basquin/result?id=" + java.net.URLEncoder.encode(reqId, "UTF-8")).openConnection();
+                    base + "/__basquin/result?id=" + java.net.URLEncoder.encode(reqId, "UTF-8") + "&wire=2").openConnection();
             pc.setConnectTimeout(2000);
             // Must outlast the handler's bounded ITERATION_LOCK wait, or a poll queued behind the
             // very iteration that is about to write this entry is scored as a miss, every time.

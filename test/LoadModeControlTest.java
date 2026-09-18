@@ -14,6 +14,20 @@ import static org.junit.Assert.*;
  */
 public class LoadModeControlTest {
 
+    @Test public void legacyRunnerStillSeesTheLeakFlag() {
+        ResultStore.put("legacy-leak", new ResultStore.Entry("1,2,0", 0, null, true, "measured"));
+        String body = LoadModeControl.handle("/__basquin/result", "id=legacy-leak");
+        assertEquals("leak", body.split("\\|", 4)[3]);
+    }
+
+    @Test public void wireNegotiationIdentifiesSerializedModelAndRejectsUnknownVersionWithoutTaking() {
+        ResultStore.put("wire-test", new ResultStore.Entry("1,2,0", 0, null, false, "measured"));
+        assertEquals(ResultStore.UPGRADE_REQUIRED,
+                LoadModeControl.handle("/__basquin/result", "id=wire-test&wire=99"));
+        assertEquals(ResultStore.SERIALIZED_WIRE + "\n1,2,0|0|||measured",
+                LoadModeControl.handle("/__basquin/result", "id=wire-test&wire=2"));
+    }
+
     @After public void reset() { LoadMode.setExplore(); }
 
     @Test public void nonControlPathReturnsNull() {

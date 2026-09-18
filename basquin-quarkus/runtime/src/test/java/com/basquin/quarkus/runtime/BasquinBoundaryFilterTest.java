@@ -35,7 +35,7 @@ public class BasquinBoundaryFilterTest {
         System.clearProperty("basquin.invariant.mode");
     }
 
-    /** Store shape mirrors agent/RequestBoundary.java:177-178 exactly. */
+    /** Store shape mirrors agent/RequestBoundary.java's publishResult exactly. */
     @Test
     public void publishesCostCsvInLatencyHeapKbThreadDeltaOrder() {
         BasquinBoundaryFilter.publish("req-1", 42L, 2048L, 7, 3);
@@ -47,6 +47,9 @@ public class BasquinBoundaryFilterTest {
         assertEquals(0, e.invariantCount());
         assertNull(e.detail());
         assertFalse(e.leakDetected());
+        // DD-043 PR-5 Task 1: publish() is only reached for a completed response, which is stamped
+        // `measured` until Task 2 lands §6.1's real disposition producers and computes this value.
+        assertEquals(ResultStore.DISPOSITION_MEASURED, e.disposition());
     }
 
     /** A second poll for the same id legitimately misses: take() is destructive. */

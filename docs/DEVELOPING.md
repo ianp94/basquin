@@ -47,6 +47,19 @@ A one-liner that builds everything the Tomcat-valve path needs:
 ./gradlew jar :tomcat-valve:jar copyJacocoAgent
 ```
 
+## PR-5 result-wire compatibility (in development)
+
+DD-043 PR-5 adds a fifth field to each result line:
+`costCsv|invariantCount|detail|leak|disposition`.
+Upgrade the runner before deploying producers that emit this format. A pre-PR-5 runner splits
+at four fields and reads `leak|measured` as its leak flag, so it silently misses the leak.
+Existing cost and invariant-count fields still parse; this does not make the mixed deployment safe.
+
+The new runner accepts legacy four-field records, and regression tests cover a redirect chain
+containing both formats. Disposition-aware reactive accounting is still in progress: successful
+parsing alone does not establish that a reactive heap sample is attributable to the request.
+See the [PR-5 plan](superpowers/plans/2026-08-13-dd043-pr5-reactive.md) for the measurement gates.
+
 ## Run a target app locally
 
 Four `docker-compose*.yml` files at the repo root stand up **an unmodified target app** on Tomcat

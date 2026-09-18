@@ -9,7 +9,8 @@ public class ResultStoreTest {
     @Before public void reset() { ResultStore.clearForTest(); }
 
     @Test public void putThenTakeReturnsTheEntryExactlyOnce() {
-        ResultStore.put("salt-1", new ResultStore.Entry("12,340,0", 2, "latency: 719ms > 250ms", false));
+        ResultStore.put("salt-1", new ResultStore.Entry("12,340,0", 2, "latency: 719ms > 250ms", false,
+                ResultStore.DISPOSITION_MEASURED));
         java.util.List<ResultStore.Entry> e = ResultStore.take("salt-1");
         assertEquals(1, e.size());
         assertEquals(2, e.get(0).invariantCount());
@@ -26,7 +27,7 @@ public class ResultStoreTest {
     // size() still counts IDS, not hops, so this test says what it always said.
     @Test public void evictsOldestBeyondCapacityAndStaysBounded() {
         for (int i = 0; i < ResultStore.CAPACITY + 50; i++) {
-            ResultStore.put("s-" + i, new ResultStore.Entry("1,2,0", 0, null, false));
+            ResultStore.put("s-" + i, new ResultStore.Entry("1,2,0", 0, null, false, ResultStore.DISPOSITION_MEASURED));
         }
         assertEquals(ResultStore.CAPACITY, ResultStore.size());
         assertTrue("oldest evicted", ResultStore.take("s-0").isEmpty());
@@ -37,7 +38,8 @@ public class ResultStoreTest {
     // part of the measurement. detail is capped like the header path already caps it.
     @Test public void detailIsCappedSoRetentionIsBounded() {
         String huge = "x".repeat(5000);
-        ResultStore.put("s-cap", new ResultStore.Entry("1,2,0", 1, huge, false));
+        ResultStore.put("s-cap", new ResultStore.Entry("1,2,0", 1, huge, false,
+                ResultStore.DISPOSITION_MEASURED));
         assertTrue(ResultStore.take("s-cap").get(0).detail().length() <= 200);
     }
 
@@ -87,7 +89,7 @@ public class ResultStoreTest {
                 java.util.concurrent.ThreadLocalRandom rnd = java.util.concurrent.ThreadLocalRandom.current();
                 for (int i = 0; i < OPS_PER_THREAD; i++) {
                     int k = rnd.nextInt(POOL);
-                    ResultStore.put("c-" + k, new ResultStore.Entry("1,2,0", k, null, false));
+                    ResultStore.put("c-" + k, new ResultStore.Entry("1,2,0", k, null, false, ResultStore.DISPOSITION_MEASURED));
                 }
             } catch (Throwable t) {
                 failure.compareAndSet(null, t);
@@ -130,29 +132,55 @@ public class ResultStoreTest {
 
     // DD-040: detail is app-derived, so an app that logs a literal '|' in an invariant message
     // must not be able to shift the wire format's field boundaries. format() sanitizes '|' -> '/'
-    // in detail before joining; without that, this detail would produce a 5th field and push
-    // "leak" out of the 4th (last) position, and a naive driver-side split('|') would silently
-    // parse the leak flag as part of detail instead.
-    // format now takes a list; one entry must still be exactly one four-field line.
-    @Test public void formatSanitizesPipesInDetailSoTheWireFormatStaysFourFields() {
-        ResultStore.Entry e = new ResultStore.Entry("12,340,0", 2, "a|b|c", true);
+    // in detail before joining; without that, this detail would add wire fields and push "leak"
+    // (and, since DD-043 PR-5, the disposition) out of position, and a naive driver-side
+    // split('|') would silently parse the leak flag as part of detail instead.
+    // format now takes a list; one entry must still be exactly one five-field line.
+    @Test public void formatSanitizesPipesInDetailSoTheWireFormatStaysFiveFields() {
+        ResultStore.Entry e = new ResultStore.Entry("12,340,0", 2, "a|b|c", true,
+                ResultStore.DISPOSITION_MEASURED);
         String body = ResultStore.format(java.util.List.of(e));
         assertEquals("one entry is exactly one line", 1, body.split("\n", -1).length);
         String[] fields = body.split("\\|", -1);
-        assertEquals("detail containing '|' must not add wire fields: " + body, 4, fields.length);
+        assertEquals("detail containing '|' must not add wire fields: " + body, 5, fields.length);
         assertEquals("12,340,0", fields[0]);
         assertEquals("2", fields[1]);
         assertEquals("a/b/c", fields[2]);
         assertEquals("leak flag must stay in the 4th field, not get pushed out by an unescaped '|'",
                 "leak", fields[3]);
+        assertEquals("disposition is the 5th and final field (DD-043 PR-5, D1)",
+                "measured", fields[4]);
+    }
+
+    // The disposition is producer-controlled vocabulary, never app text — but format() sanitizes it
+    // exactly like detail anyway (defense in depth): a separator or newline smuggled into that
+    // string must not be able to shift fields or forge a hop line.
+    @Test public void aPipeOrNewlineInDispositionCannotShiftFieldsOrForgeAHop() {
+        String body = ResultStore.format(java.util.List.of(
+                new ResultStore.Entry("1,2,0", 0, null, false, "bad|token\n9,9,9|9|forged|leak|measured")));
+        assertEquals("no forged hop line: " + body, 1, body.split("\n", -1).length);
+        assertEquals("no extra fields: " + body, 5, body.split("\\|", -1).length);
+    }
+
+    // Version skew, producer half (DD-043 PR-5, D1): an Entry whose disposition is null (no
+    // producer should build one, but the formatter must stay total) formats as an EMPTY fifth
+    // field — absent on the wire, never defaulted to "measured".
+    @Test public void aNullDispositionFormatsAsAbsentNeverAssumed() {
+        String body = ResultStore.format(java.util.List.of(
+                new ResultStore.Entry("1,2,0", 0, null, false, null)));
+        String[] fields = body.split("\\|", -1);
+        assertEquals(5, fields.length);
+        assertEquals("absent, not assumed", "", fields[4]);
     }
 
     // THE test for §4b. DD-040's put REPLACED by key, so a two-hop chain stamped with one id
     // recovered exactly one hop — which is why 189 violations stayed lost. Revert put() to
     // MAP.put(id, e) and this fails with "expected:<2> but was:<1>".
     @Test public void twoPutsUnderOneIdYieldTwoHopsFromOneTake() {
-        ResultStore.put("salt-chain", new ResultStore.Entry("5,10,0", 1, "hop0 latency", false));
-        ResultStore.put("salt-chain", new ResultStore.Entry("900,4096,2", 3, "hop1 latency", false));
+        ResultStore.put("salt-chain", new ResultStore.Entry("5,10,0", 1, "hop0 latency", false,
+                ResultStore.DISPOSITION_MEASURED));
+        ResultStore.put("salt-chain", new ResultStore.Entry("900,4096,2", 3, "hop1 latency", false,
+                ResultStore.DISPOSITION_MEASURED));
 
         java.util.List<ResultStore.Entry> hops = ResultStore.take("salt-chain");
 
@@ -167,7 +195,7 @@ public class ResultStoreTest {
     @Test public void overflowDropsTheOldestHopAndCountsIt() {
         long before = ResultStore.overflowedHops();
         for (int i = 0; i < ResultStore.MAX_HOPS_PER_ID + 2; i++) {
-            ResultStore.put("salt-long", new ResultStore.Entry("1,2,0", i, null, false));
+            ResultStore.put("salt-long", new ResultStore.Entry("1,2,0", i, null, false, ResultStore.DISPOSITION_MEASURED));
         }
         java.util.List<ResultStore.Entry> hops = ResultStore.take("salt-long");
         assertEquals(ResultStore.MAX_HOPS_PER_ID, hops.size());
@@ -187,13 +215,16 @@ public class ResultStoreTest {
 
     @Test public void formatEmitsOneLinePerHopAndTheDriverCanSplitThem() {
         String body = ResultStore.format(java.util.List.of(
-                new ResultStore.Entry("12,340,0", 2, "d0", false),
-                new ResultStore.Entry("900,4096,1", 3, "d1", true)));
+                new ResultStore.Entry("12,340,0", 2, "d0", false, ResultStore.DISPOSITION_MEASURED),
+                new ResultStore.Entry("900,4096,1", 3, "d1", true, ResultStore.DISPOSITION_MEASURED)));
         String[] lines = body.split("\n", -1);
         assertEquals(2, lines.length);
-        assertEquals("2", lines[0].split("\\|", 4)[1]);
-        assertEquals("3", lines[1].split("\\|", 4)[1]);
-        assertEquals("leak", lines[1].split("\\|", 4)[3]);
+        // The driver's exact parse shape since DD-043 PR-5: split("\\|", 5), leak at f[3],
+        // disposition at f[4].
+        assertEquals("2", lines[0].split("\\|", 5)[1]);
+        assertEquals("3", lines[1].split("\\|", 5)[1]);
+        assertEquals("leak", lines[1].split("\\|", 5)[3]);
+        assertEquals("measured", lines[1].split("\\|", 5)[4]);
     }
 
     // NEW hazard created by the multi-line format: detail is app-derived, and a '\n' in it would
@@ -201,15 +232,17 @@ public class ResultStoreTest {
     // sanitisation has always existed for the field-shifting version of this; the newline one is new.
     @Test public void aNewlineInDetailCannotForgeAnExtraHopLine() {
         String body = ResultStore.format(java.util.List.of(
-                new ResultStore.Entry("1,2,0", 1, "boom\n9,9,9|99|forged|leak", false)));
+                new ResultStore.Entry("1,2,0", 1, "boom\n9,9,9|99|forged|leak", false,
+                        ResultStore.DISPOSITION_MEASURED)));
         assertEquals("app-derived text must not be able to add a hop: " + body,
                 1, body.split("\n", -1).length);
-        assertFalse("nor smuggle a leak flag in", body.endsWith("|leak"));
+        assertEquals("nor smuggle a leak flag into the leak field", "",
+                body.split("\\|", 5)[3]);
     }
 
     @Test public void violationsTotalAccumulatesAcrossEntries() {
-        ResultStore.put("v-1", new ResultStore.Entry("1,2,0", 3, null, false));
-        ResultStore.put("v-2", new ResultStore.Entry("1,2,0", 4, null, false));
+        ResultStore.put("v-1", new ResultStore.Entry("1,2,0", 3, null, false, ResultStore.DISPOSITION_MEASURED));
+        ResultStore.put("v-2", new ResultStore.Entry("1,2,0", 4, null, false, ResultStore.DISPOSITION_MEASURED));
         assertEquals(7, ResultStore.totalViolations());
     }
 }

@@ -32,9 +32,11 @@ public class BasquinControlHandlerTest {
 
     @Test
     public void resultReturnsTheFormattedEntryOncePublished() {
-        ResultStore.put("probe-1", new ResultStore.Entry("42,2,3", 0, null, false));
+        ResultStore.put("probe-1", new ResultStore.Entry("42,2,3", 0, null, false,
+                ResultStore.DISPOSITION_MEASURED));
 
-        assertEquals("42,2,3|0||", BasquinControlHandler.handle("/__basquin/result", "id=probe-1"));
+        // Five wire fields since DD-043 PR-5 (D1): costCsv|count|detail|leak|disposition.
+        assertEquals("42,2,3|0|||measured", BasquinControlHandler.handle("/__basquin/result", "id=probe-1"));
     }
 
     /**
@@ -64,7 +66,8 @@ public class BasquinControlHandlerTest {
 
     @Test
     public void violationsReturnsTheRunningTotal() {
-        ResultStore.put("x", new ResultStore.Entry("1,0,0", 2, "detail", false));
+        ResultStore.put("x", new ResultStore.Entry("1,0,0", 2, "detail", false,
+                ResultStore.DISPOSITION_MEASURED));
         ResultStore.take("x"); // consume, but totalViolations is a separate running counter
 
         assertEquals("2", BasquinControlHandler.handle("/__basquin/violations", null));

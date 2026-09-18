@@ -905,12 +905,19 @@ public final class CoverageGuidedRun {
      */
     static final class CostSample {
         final long heapDeltaKb; final int threadDelta; final int invariantCount; final boolean measured;
+        /** Report recovery and heap attribution are independent: a latency finding can be real
+         * even when an overlapping heap window cannot be used for cost ranking. */
+        final boolean heapMeasured;
         /** DD-039: how many HTTP requests the chain fired (1 for a non-redirecting input). Rides onto
          *  the CorpusEntry so a cost-ranked corpus records that a multi-hop cost is explore-side. */
         final int hops;
         CostSample(long h, int t, int inv, boolean measured) { this(h, t, inv, measured, 1); }
         CostSample(long h, int t, int inv, boolean measured, int hops) {
+            this(h, t, inv, measured, hops, measured);
+        }
+        CostSample(long h, int t, int inv, boolean measured, int hops, boolean heapMeasured) {
             heapDeltaKb = h; threadDelta = t; invariantCount = inv; this.measured = measured; this.hops = hops;
+            this.heapMeasured = heapMeasured;
         }
         /** No measurement — deliberately NOT named EMPTY: it is not "a measured zero". */
         static final CostSample UNMEASURED = new CostSample(0, 0, 0, false);
@@ -973,7 +980,7 @@ public final class CoverageGuidedRun {
      * being enabled is not enough — the sample must actually carry a measurement.
      */
     static boolean scoreable(boolean costEnabled, CostSample s) {
-        return costEnabled && s != null && s.measured;
+        return costEnabled && s != null && s.measured && s.heapMeasured;
     }
 
     /**
@@ -1273,24 +1280,37 @@ public final class CoverageGuidedRun {
         if (bodies.isEmpty()) return null;
 
         int totalCount = 0; long heapKb = 0; int threadDelta = 0; boolean anyLeak = false;
-        int hop = 0; int parsedLines = 0;
+        int hop = 0; int parsedLines = 0; boolean heapMeasured = true;
         String leakPod = "";
         List<String[]> breaching = new ArrayList<>();     // {hop, count, detail-or-null, podMeta}
         for (int b = 0; b < bodies.size(); b++) {
             String podMeta = servedBy.get(b) == null ? "" : "\npod=" + servedBy.get(b);
             for (String line : bodies.get(b).split("\n")) {
                 if (line.isEmpty()) continue;
-                // 4-field limit: `detail` is app-derived and a version-skewed target could still emit
-                // a separator. The count and the cost come from fields the app cannot reach.
-                String[] f = line.split("\\|", 4);
+                // 5-field limit (DD-043 PR-5, D1): `costCsv|count|detail|leak|disposition`. The
+                // limit exists because `detail` is app-derived and a version-skewed target could
+                // still emit a separator; the count and the cost come from fields the app cannot
+                // reach. Version skew, both directions: a 4-field line from a pre-PR-5 producer
+                // has an absent disposition. Legacy cost behavior is retained until target-model
+                // negotiation can distinguish serialized Tomcat from reactive samples.
+                // The reverse direction — an OLD driver's
+                // split("\\|", 4) reading a 5-field line — is a silent leak false-negative
+                // ("leak|<disposition>" lands in its f[3]); documented + pinned in
+                // ResultWireSkewTest, not claimed impossible.
+                String[] f = line.split("\\|", 5);
                 if (f.length < 2) continue;              // a truncated tail line: discard, never shift
                 int count;
                 try { count = Integer.parseInt(f[1].trim()); }
                 catch (NumberFormatException e) { continue; }
                 parsedLines++;
                 totalCount += count;
+                // Legacy/empty dispositions retain the existing compatibility behavior until
+                // target-model negotiation lands. Explicit unknown values fail closed.
+                String disposition = f.length > 4 ? f[4].trim() : "";
+                boolean attributable = disposition.isEmpty() || "measured".equals(disposition);
+                heapMeasured &= attributable;
                 String[] cost = f[0].split(",");
-                if (cost.length == 3) {
+                if (cost.length == 3 && attributable) {
                     try {
                         heapKb += Long.parseLong(cost[1].trim());
                         threadDelta += Integer.parseInt(cost[2].trim());
@@ -1336,7 +1356,7 @@ public final class CoverageGuidedRun {
             reportMisses++;
             StatusReporter.recordReportMiss();
         }
-        return new CostSample(heapKb, threadDelta, totalCount, true, hops);
+        return new CostSample(heapKb, threadDelta, totalCount, true, hops, heapMeasured);
     }
 
     /**
@@ -1361,7 +1381,7 @@ public final class CoverageGuidedRun {
                     String line;
                     // DD-039: PRESERVE the '\n'. readLine() strips the terminator and the pre-DD-039
                     // loop appended none back, so an accumulated N-hop body arrived as ONE
-                    // concatenated string and pollResult's split("\\|", 4) read hop 0's count and
+                    // concatenated string and pollResult's field-limited split read hop 0's count and
                     // silently discarded hops 1..N-1. One missing character was the difference
                     // between closing DD-040's 189-violation gap and closing none of it.
                     //

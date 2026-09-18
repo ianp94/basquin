@@ -52,7 +52,8 @@ public class LoadModeControlTest {
 
     @Test public void resultEndpointReturnsTheEntryThenMisses() {
         ResultStore.clearForTest();
-        ResultStore.put("s-9", new ResultStore.Entry("5,10,0", 1, "latency: 300ms > 250ms", false));
+        ResultStore.put("s-9", new ResultStore.Entry("5,10,0", 1, "latency: 300ms > 250ms", false,
+                ResultStore.DISPOSITION_MEASURED));
         assertTrue(LoadModeControl.handle("/__basquin/result", "id=s-9").contains("5,10,0"));
         assertEquals(ResultStore.MISS, LoadModeControl.handle("/__basquin/result", "id=s-9"));
     }
@@ -67,7 +68,8 @@ public class LoadModeControlTest {
         ResultStore.clearForTest();
         Thread writer = new Thread(() -> {
             RequestBoundary.lockForTest();
-            try { Thread.sleep(100); ResultStore.put("s-w", new ResultStore.Entry("1,2,0", 1, "x", false)); }
+            try { Thread.sleep(100); ResultStore.put("s-w", new ResultStore.Entry("1,2,0", 1, "x", false,
+                    ResultStore.DISPOSITION_MEASURED)); }
             catch (InterruptedException ignored) { }
             finally { RequestBoundary.unlockForTest(); }
         });

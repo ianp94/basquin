@@ -2104,3 +2104,22 @@ DD-039's own acceptance evidence is
   different *follow* handling: load measures redirects, explore traverses them.
 - **Do nothing; require grammars to avoid login redirects.** Pushes an HTTP-client bug onto every
   grammar author, and cannot be expressed anyway — the grammar cannot see the 302.
+
+## PR-5 continuation — recovered reports versus attributable heap (2026-09-18)
+
+**Context.** The five-field result parser accepted dispositions but still summed every hop's heap.
+A recovered latency violation is useful even when that request's heap window is contaminated.
+
+**Decision.** Keep report recovery (`CostSample.measured`) separate from heap attribution
+(`heapMeasured`). Explicit dispositions other than `measured` exclude that hop's heap/thread cost
+and make the chain ineligible for composite cost scoring. Preserve its real invariant findings.
+Unknown dispositions fail closed for scoring. This avoids training cost ranking on a partial sum.
+The legacy four-field/empty-field behavior is unchanged pending target-model negotiation.
+
+**Rejected alternatives.** Dropping the whole report would lose valid latency findings. Scoring
+the surviving heap sum would present a partial observation as a complete cost.
+
+**Limits.** This is the driver-side exclusion checkpoint, not completed reactive semantics.
+Target-model negotiation, old-runner compatibility, producer classification, summary counters,
+and explicit attribution in exported coverage-retained corpus entries remain pending in
+[the follow-through checklist](superpowers/plans/2026-09-18-pr5-follow-through.md).

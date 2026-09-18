@@ -308,10 +308,11 @@ public class ReportChannelTest {
 
     /**
      * {@code detail} is app-derived. The store sanitises separators out of it, but a version-skewed
-     * target could still emit one — so the driver parses with a 4-field limit, which bounds the
-     * damage: the count and the cost are read from fields the app cannot reach, and the surplus text
-     * lands in the last field rather than shifting every field along and being read as something
-     * else. It must NOT, in particular, let app-controlled text forge a leak finding.
+     * target could still emit one — so the driver parses with a field limit (5 since DD-043 PR-5's
+     * disposition widening), which bounds the damage: the count is read from fields
+     * the app cannot reach, and the surplus text lands in the tail fields rather than shifting
+     * every field along and being read as something else. It must NOT, in particular, let
+     * app-controlled text forge a leak finding.
      */
     @Test
     public void anAppDerivedDetailContainingAPipeCannotShiftTheFields() throws Exception {
@@ -323,7 +324,9 @@ public class ReportChannelTest {
         withResultsDir(dir, () -> {
             CoverageGuidedRun.CostSample s = CoverageGuidedRun.request(base, "/pipe");
             assertEquals("the count is unaffected by separators in the detail", 1, s.invariantCount);
-            assertEquals("the cost is unaffected too", 1, s.heapDeltaKb);
+            assertEquals("an unrecognized disposition must not contribute heap", 0, s.heapDeltaKb);
+            assertFalse("malformed records cannot be cost-ranked",
+                    CoverageGuidedRun.scoreable(true, s));
             assertTrue(waitForFinding(dir, "Invariant-Remote").contains("heap: a"));
             assertEquals("app-derived text must not be able to forge a leak finding",
                     0, countFindings(dir, "Leak-Remote"));

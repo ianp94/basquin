@@ -21,7 +21,7 @@ import java.util.List;
  *
  * <h2>The request id is INBOUND — this filter reads it, never mints one</h2>
  * The driver generates {@code <RUN_SALT>-<n>} and sends it as the <b>request</b> header
- * {@code X-Basquin-Req} ({@code runner/coverage/CoverageGuidedRun.java:1031,1056}). Both existing
+ * {@code X-Basquin-Req} ({@code runner/coverage/CoverageGuidedRun.java:1065,1090}). Both existing
  * boundaries only read it ({@code tomcat-valve/.../BasquinValve.java:62},
  * {@code agent/TomcatBoundaryAdvice.java:30}); this filter does the same. Minting an id here
  * would publish results under ids the driver never sent, so every poll would miss — DD-040's
@@ -186,9 +186,15 @@ public final class BasquinBoundaryFilter implements Handler<RoutingContext> {
                 : null;
         // r.hardFailureMessage is deliberately never thrown: soft by structure (see class javadoc).
 
-        // Mirrors agent/RequestBoundary.java:177-178 exactly.
+        // Mirrors agent/RequestBoundary.java's costCsv composition exactly.
         String costCsv = elapsedMs + "," + (heapDeltaBytes / 1024L) + "," + threadsDelta;
-        ResultStore.put(reqId, new ResultStore.Entry(costCsv, invariantCount, detail, false));
+        // Disposition (DD-043 PR-5, D1): this method is only reached for a completed response, and
+        // §6.1's UNMEASURED producers (overlap, sub-quantum, negative/GC-contaminated) plus the
+        // `disconnected` publication do not exist yet — they land with Task 2, which turns this
+        // constant into a computed value. Until then a completed response is stamped `measured`
+        // exactly as PR-2 implicitly treated it.
+        ResultStore.put(reqId, new ResultStore.Entry(costCsv, invariantCount, detail, false,
+                ResultStore.DISPOSITION_MEASURED));
     }
 
     private static long usedHeapBytes() {

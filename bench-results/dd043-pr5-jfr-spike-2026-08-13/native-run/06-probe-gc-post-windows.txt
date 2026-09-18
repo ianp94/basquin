@@ -1,0 +1,17 @@
+garbageAllocatedMb=0
+sink=0
+beans=2
+bean.0.name=young generation scavenger
+bean.0.countBefore=2
+bean.0.timeBefore=0
+bean.1.name=complete scavenger
+bean.1.countBefore=7
+bean.1.timeBefore=23
+gcCalls=1
+bean.0.countAfter=2
+bean.0.timeAfter=0
+bean.1.countAfter=8
+bean.1.timeAfter=27
+heapUsedBefore=223098928
+heapUsedAfter=218380336
+heapUsedDelta=-4718592

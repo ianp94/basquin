@@ -14,6 +14,20 @@ import static org.junit.Assert.*;
  */
 public class LoadModeControlTest {
 
+    @Test public void legacyRunnerStillSeesTheLeakFlag() {
+        ResultStore.put("legacy-leak", new ResultStore.Entry("1,2,0", 0, null, true, "measured"));
+        String body = LoadModeControl.handle("/__basquin/result", "id=legacy-leak");
+        assertEquals("leak", body.split("\\|", 4)[3]);
+    }
+
+    @Test public void wireNegotiationIdentifiesSerializedModelAndRejectsUnknownVersionWithoutTaking() {
+        ResultStore.put("wire-test", new ResultStore.Entry("1,2,0", 0, null, false, "measured"));
+        assertEquals(ResultStore.UPGRADE_REQUIRED,
+                LoadModeControl.handle("/__basquin/result", "id=wire-test&wire=99"));
+        assertEquals(ResultStore.SERIALIZED_WIRE + "\n1,2,0|0|||measured",
+                LoadModeControl.handle("/__basquin/result", "id=wire-test&wire=2"));
+    }
+
     @After public void reset() { LoadMode.setExplore(); }
 
     @Test public void nonControlPathReturnsNull() {
@@ -52,7 +66,8 @@ public class LoadModeControlTest {
 
     @Test public void resultEndpointReturnsTheEntryThenMisses() {
         ResultStore.clearForTest();
-        ResultStore.put("s-9", new ResultStore.Entry("5,10,0", 1, "latency: 300ms > 250ms", false));
+        ResultStore.put("s-9", new ResultStore.Entry("5,10,0", 1, "latency: 300ms > 250ms", false,
+                ResultStore.DISPOSITION_MEASURED));
         assertTrue(LoadModeControl.handle("/__basquin/result", "id=s-9").contains("5,10,0"));
         assertEquals(ResultStore.MISS, LoadModeControl.handle("/__basquin/result", "id=s-9"));
     }
@@ -67,7 +82,8 @@ public class LoadModeControlTest {
         ResultStore.clearForTest();
         Thread writer = new Thread(() -> {
             RequestBoundary.lockForTest();
-            try { Thread.sleep(100); ResultStore.put("s-w", new ResultStore.Entry("1,2,0", 1, "x", false)); }
+            try { Thread.sleep(100); ResultStore.put("s-w", new ResultStore.Entry("1,2,0", 1, "x", false,
+                    ResultStore.DISPOSITION_MEASURED)); }
             catch (InterruptedException ignored) { }
             finally { RequestBoundary.unlockForTest(); }
         });

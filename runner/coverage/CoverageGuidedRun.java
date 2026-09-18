@@ -333,7 +333,7 @@ public final class CoverageGuidedRun {
             if (pheromoneOn && parent != null && measured) corpus.reinforce(parent, cost);
             if (coverageFind || measured) {
                 corpus.consider(input, cost, latMs, sample.heapDeltaKb, sample.threadDelta,
-                        sample.invariantCount, coverageFind, sample.hops);
+                        sample.invariantCount, coverageFind, sample.hops, sample.measured && sample.heapMeasured);
             }
         }
         // DD-040: close the window BEFORE the summary is rendered/written (the summary rides a
@@ -905,12 +905,19 @@ public final class CoverageGuidedRun {
      */
     static final class CostSample {
         final long heapDeltaKb; final int threadDelta; final int invariantCount; final boolean measured;
+        /** Report recovery and heap attribution are independent: a latency finding can be real
+         * even when an overlapping heap window cannot be used for cost ranking. */
+        final boolean heapMeasured;
         /** DD-039: how many HTTP requests the chain fired (1 for a non-redirecting input). Rides onto
          *  the CorpusEntry so a cost-ranked corpus records that a multi-hop cost is explore-side. */
         final int hops;
         CostSample(long h, int t, int inv, boolean measured) { this(h, t, inv, measured, 1); }
         CostSample(long h, int t, int inv, boolean measured, int hops) {
+            this(h, t, inv, measured, hops, measured);
+        }
+        CostSample(long h, int t, int inv, boolean measured, int hops, boolean heapMeasured) {
             heapDeltaKb = h; threadDelta = t; invariantCount = inv; this.measured = measured; this.hops = hops;
+            this.heapMeasured = heapMeasured;
         }
         /** No measurement — deliberately NOT named EMPTY: it is not "a measured zero". */
         static final CostSample UNMEASURED = new CostSample(0, 0, 0, false);
@@ -973,7 +980,7 @@ public final class CoverageGuidedRun {
      * being enabled is not enough — the sample must actually carry a measurement.
      */
     static boolean scoreable(boolean costEnabled, CostSample s) {
-        return costEnabled && s != null && s.measured;
+        return costEnabled && s != null && s.measured && s.heapMeasured;
     }
 
     /**
@@ -1160,6 +1167,8 @@ public final class CoverageGuidedRun {
                 url = next.toString();                               // the FULL url is dialled; only
                                                                      // the recorded key is stripped
             }
+            // Only the serialized Tomcat boundary emits these headers. A future reactive
+            // header producer must carry dispositions rather than inheriting this attribution.
             if (headerReported) sample = new CostSample(heapKb, threadDelta, invCount, true, hops);
             if (hops > 0) {
                 InputStream is = code >= 400 ? c.getErrorStream() : c.getInputStream();
@@ -1273,28 +1282,57 @@ public final class CoverageGuidedRun {
         if (bodies.isEmpty()) return null;
 
         int totalCount = 0; long heapKb = 0; int threadDelta = 0; boolean anyLeak = false;
-        int hop = 0; int parsedLines = 0;
+        int hop = 0; int parsedLines = 0; boolean heapMeasured = true;
         String leakPod = "";
         List<String[]> breaching = new ArrayList<>();     // {hop, count, detail-or-null, podMeta}
         for (int b = 0; b < bodies.size(); b++) {
             String podMeta = servedBy.get(b) == null ? "" : "\npod=" + servedBy.get(b);
-            for (String line : bodies.get(b).split("\n")) {
+            String body = bodies.get(b);
+            String model = System.getProperty("basquin.report.legacyModel", "serialized");
+            if (body.startsWith("basquin-result-")) {
+                int newline = body.indexOf('\n');
+                String preamble = newline < 0 ? body : body.substring(0, newline);
+                if (agent.ResultStore.SERIALIZED_WIRE.equals(preamble)) model = "serialized";
+                else if (agent.ResultStore.REACTIVE_WIRE.equals(preamble)) model = "reactive";
+                else model = "unknown";
+                body = newline < 0 ? "" : body.substring(newline + 1);
+            }
+            for (String line : body.split("\n")) {
                 if (line.isEmpty()) continue;
-                // 4-field limit: `detail` is app-derived and a version-skewed target could still emit
-                // a separator. The count and the cost come from fields the app cannot reach.
-                String[] f = line.split("\\|", 4);
+                // 5-field limit (DD-043 PR-5, D1): `costCsv|count|detail|leak|disposition`. The
+                // limit exists because `detail` is app-derived and a version-skewed target could
+                // still emit a separator; the count and the cost come from fields the app cannot
+                // reach. Version skew, both directions: a 4-field line from a pre-PR-5 producer
+                // has an absent disposition. Legacy cost behavior is retained until target-model
+                // negotiation can distinguish serialized Tomcat from reactive samples.
+                // The reverse direction — an OLD driver's
+                // split("\\|", 4) reading a 5-field line — is a silent leak false-negative
+                // ("leak|<disposition>" lands in its f[3]); documented + pinned in
+                // ResultWireSkewTest, not claimed impossible.
+                String[] f = line.split("\\|", 5);
                 if (f.length < 2) continue;              // a truncated tail line: discard, never shift
                 int count;
                 try { count = Integer.parseInt(f[1].trim()); }
                 catch (NumberFormatException e) { continue; }
                 parsedLines++;
                 totalCount += count;
+                // Legacy/empty dispositions retain the existing compatibility behavior until
+                // target-model negotiation lands. Explicit unknown values fail closed.
+                String disposition = f.length > 4 ? f[4].trim() : "";
+                boolean attributable = ("serialized".equals(model) || "reactive".equals(model))
+                        && ("measured".equals(disposition)
+                            || (disposition.isEmpty() && "serialized".equals(model)));
+                heapMeasured &= attributable;
                 String[] cost = f[0].split(",");
-                if (cost.length == 3) {
+                if (cost.length == 3 && attributable) {
                     try {
-                        heapKb += Long.parseLong(cost[1].trim());
-                        threadDelta += Integer.parseInt(cost[2].trim());
-                    } catch (NumberFormatException ignored) { }
+                        long parsedHeap = Long.parseLong(cost[1].trim());
+                        int parsedThreads = Integer.parseInt(cost[2].trim());
+                        heapKb += parsedHeap;
+                        threadDelta += parsedThreads;
+                    } catch (NumberFormatException ignored) { heapMeasured = false; }
+                } else {
+                    heapMeasured = false;
                 }
                 if (f.length > 3 && "leak".equals(f[3].trim())) { anyLeak = true; leakPod = podMeta; }
                 if (count > 0) {
@@ -1333,10 +1371,11 @@ public final class CoverageGuidedRun {
         // measured and misses is deliberate — it keeps the recovered violations scored while never
         // letting partials alone trip missesAreTheMajority into a spurious run failure.
         if (parsedLines < hops) {
+            heapMeasured = false;
             reportMisses++;
             StatusReporter.recordReportMiss();
         }
-        return new CostSample(heapKb, threadDelta, totalCount, true, hops);
+        return new CostSample(heapKb, threadDelta, totalCount, true, hops, heapMeasured);
     }
 
     /**
@@ -1348,7 +1387,7 @@ public final class CoverageGuidedRun {
     private static String fetchResult(String base, String reqId) {
         try {
             HttpURLConnection pc = (HttpURLConnection) new URL(
-                    base + "/__basquin/result?id=" + java.net.URLEncoder.encode(reqId, "UTF-8")).openConnection();
+                    base + "/__basquin/result?id=" + java.net.URLEncoder.encode(reqId, "UTF-8") + "&wire=2").openConnection();
             pc.setConnectTimeout(2000);
             // Must outlast the handler's bounded ITERATION_LOCK wait, or a poll queued behind the
             // very iteration that is about to write this entry is scored as a miss, every time.
@@ -1361,7 +1400,7 @@ public final class CoverageGuidedRun {
                     String line;
                     // DD-039: PRESERVE the '\n'. readLine() strips the terminator and the pre-DD-039
                     // loop appended none back, so an accumulated N-hop body arrived as ONE
-                    // concatenated string and pollResult's split("\\|", 4) read hop 0's count and
+                    // concatenated string and pollResult's field-limited split read hop 0's count and
                     // silently discarded hops 1..N-1. One missing character was the difference
                     // between closing DD-040's 189-violation gap and closing none of it.
                     //

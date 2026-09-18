@@ -183,7 +183,9 @@ public final class BasquinControlHandler implements Handler<RoutingContext> {
         String sub = path.substring(PREFIX.length());
         switch (sub) {
             case "result":
-                return pollResult(param(query, "id"));
+                // Reject before take(): an old runner cannot represent reactive dispositions.
+                if (!"2".equals(param(query, "wire"))) return ResultStore.UPGRADE_REQUIRED;
+                return ResultStore.REACTIVE_WIRE + "\n" + pollResult(param(query, "id"));
             case "violations":
                 return Long.toString(ResultStore.totalViolations());
             default:

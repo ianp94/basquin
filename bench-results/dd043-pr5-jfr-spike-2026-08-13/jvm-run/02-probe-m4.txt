@@ -1,0 +1,9 @@
+impl=com.sun.management.internal.HotSpotThreadImpl
+instanceofComSunManagementThreadMXBean=true
+threadAllocatedMemorySupported=true
+threadAllocatedMemoryEnabled=true
+knownAllocationBytes=8388608
+threadAllocatedBefore=1761120
+threadAllocatedAfter=10149904
+threadAllocatedDelta=8388784
+checksum=36

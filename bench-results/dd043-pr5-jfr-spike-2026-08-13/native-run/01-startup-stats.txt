@@ -1,0 +1,5 @@
+state=OPEN
+totalWeight=7759904
+sampleCount=248
+topClassesByWeight=com.oracle.svm.core.jfr.sampler.AbstractJfrExecutionSampler$UpdateJfrExecutionSamplerOperation:6448264,[Ljava.lang.Object;:354872,io.netty.buffer.PoolSubpage:227144,java.util.concurrent.locks.ReentrantLock$NonfairSync:206760,java.util.HashMap$Node:120944
+threads=main=6539688:13,vert.x-eventloop-thread-0=547544:116,executor-thread-1=468944:98,JFR Periodic Tasks=145648:5,vert.x-eventloop-thread-3=8336:2,vert.x-eventloop-thread-1=8320:2,vert.x-eventloop-thread-7=8272:2,vert.x-eventloop-thread-6=8272:2,vert.x-eventloop-thread-5=8272:2,vert.x-eventloop-thread-4=8272:2,vert.x-eventloop-thread-2=8272:2,vert.x-acceptor-thread-0=32:1,JFR Event Stream 1=32:1

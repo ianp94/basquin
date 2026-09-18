@@ -1,0 +1,1 @@
+dumped=/tmp/claude-1000/-mnt-c-Users-ianpa-OneDrive-Documents-GitHub-closureJVM/5f840f7a-f81d-434b-aa96-706be25f9d56/scratchpad/dd043-pr5-jfr-spike/native-run/recording-native.jfr size=325269

@@ -143,6 +143,24 @@ runtime dependency (A1 says who does), §5's "three things" enumeration is rewor
 execution is the third injection and the runtime dependency arrives separately through the
 extension's pom, and §8.2's "open question" framing is marked RESOLVED where it stands.
 
+### PR-5 amendments (2026-08-13)
+
+Commit 1 of DD-043 PR-5 (`docs/superpowers/plans/2026-08-13-dd043-pr5-reactive.md`) cleared §6.2's
+entry gate before any PR-5 task started, per `.superpowers/sdd/dd043-pr5-validation.md` §5 (A1-A3),
+and lands the amendments here rather than beside a disclaiming note, matching the A1/A2 pattern PR-4
+set above.
+
+| # | Decision | Sections changed |
+|---|---|---|
+| **§6.2** | **CLEARED.** A PR-5 entry-gate spike opened a `RecordingStream` in-process inside the pinned Mandrel 25.0.3 native image with zero JFR runtime flags, enabled `jdk.ObjectAllocationSample`, and drove `/__basquin/control/defect/alloc`: the alloc window ranked first by sampled bytes (3.2x the next window, 316x the trivial-route window), and the dumped recording's 1,515 events were independently parsed by the JDK 25 `jfr` CLI. Two of §6.2's own premises were refuted in the favorable direction: native JFR events **do** carry full application stack traces at `--stack-depth 64` (810 lines named `com.basquin` classes; 78 events carried a `BasquinControlHandler` frame; 23 were MB-scale `byte[]` samples attributed verbatim to `allocDefect(String) line: 311`) — the "no stack traces" premise was a JDK `jfr` CLI default-depth artifact, not a toolchain fact — and M4 resolved **TRUE**: native `ThreadMXBean` **is** a `com.sun.management.ThreadMXBean`, with `getThreadAllocatedBytes` exact to 128 B on a known 8 MiB allocation, so the JVM-exact/native-statistical split collapses and native gets the same exact per-thread cross-check. `getCollectionCount()` also works under SubstrateVM, but a single-bean detector is blind there — `System.gc()` moves only `complete scavenger`, never `young generation scavenger` — so §6.1's window check must sum across every `GarbageCollectorMXBean`. Evidence: `bench-results/dd043-pr5-jfr-spike-2026-08-13/` | §6.1, §6.2, §7.3, §9 |
+| **A1** | §7.3's table was not exhaustive over §6.1's own four `UNMEASURED` producers: the only firing row covered sub-quantum, and nothing forced the GC-contaminated-positive detector — which subsumes the negative-delta producer — to fire at all, violating the table's own closed-set rule. Added the missing firing row: `/__basquin/control/defect/alloc` sized to force an in-window collection while still netting a positive, above-quantum delta; the control passes only if the summed `getCollectionCount()` moved and the sample was dispositioned `UNMEASURED`, never published as a number | §7.3 |
+| **A2** | §9's PR-5 row said the control-pass-state gate "holds only because no renderer exists yet" — false; `render_page.py` has rendered the Tomcat page from collected records since #93/#97. Corrected to the true state: the renderer exists and reads records, but control-pass state exists in none of the records, the runner summary, or the renderer. The entry condition itself — PR-5 must make the render-gate a checkable gate, not a convention — is unchanged | §9 |
+| **A3** | §6's "measured on the JVM and assumed on native" disposition-table claim, and §7.2's S3-re-check entry condition, are both **RESOLVED** — DD-043 PR-4's native 2×2 ran all four dispositions under SubstrateVM on both native cells, `addEndHandler` fired on each, and the disconnect disposition logged `ar.succeeded()==false` with the same `HttpClosedException` type S3 found on the JVM. This was already true before PR-5 (PR-4 shipped it); PR-5 records it in place rather than leaving §6/§7.2 read as still-unmeasured under AOT. Evidence: `bench-results/dd043-pr4-2x2-2026-08-10/` | §6, §7.2 |
+
+§6.2, A1's §7.3 row, A2's §9 wording, and A3's §6/§7.2 text are all corrected **in place** above, not
+merely noted here — the same discipline PR-4's A1/A2 set: a refuted or superseded claim does not
+survive in the body beside a ledger entry that disclaims it.
+
 ---
 
 ## 1. Context
@@ -770,15 +788,20 @@ number. §6.5 already excludes it from the latency distribution; this excludes i
 for the same reason. Evidence: `bench-results/dd043-spikes-2026-07-24/s3-boundary/probe.log`,
 `curl.txt`.
 
-**Scope of that evidence: S3 ran in JVM mode only** — `s3-boundary/findings.md:5-6` ("JVM mode only,
-per Task 2's scope — no native build was run") and `:162-163` ("native-mode behavior of
-`addEndHandler` is Task 3's question, not answered here"). The disposition table above is therefore
-**measured on the JVM and assumed on native.** Do not read it as settled under AOT: S1 is this
-branch's own proof that a JVM-mode result need not transfer — the identical reflective read worked in
-JVM mode and was stripped by `native-image`. The specific things that could differ under SubstrateVM
-are whether `addEndHandler` fires at all on native close detection, and whether `ar.cause()` is the
-same `HttpClosedException` type. §7.2's two native cells must re-run S3's four dispositions before any
-native row publishes a crash count.
+**Scope of that original evidence: S3 ran in JVM mode only** — `s3-boundary/findings.md:5-6` ("JVM
+mode only, per Task 2's scope — no native build was run") and `:162-163` ("native-mode behavior of
+`addEndHandler` is Task 3's question, not answered here"). The disposition table above was therefore
+**measured on the JVM and assumed on native — RESOLVED since, by DD-043 PR-4's native 2×2.** The
+re-check §7.2 requires ran all four dispositions under SubstrateVM on both native cells,
+`addEndHandler` fired on each, the disconnect disposition logged `ar.succeeded()==false` with the
+same `HttpClosedException` type S3 found on the JVM, and none of the four was ever published as a
+success it wasn't (`bench-results/dd043-pr4-2x2-2026-08-10/README.md`, item 5 for both native cells,
+`s3-recheck.out`/`s3-app.log`). The table is now measured on both modes, not merely assumed on one of
+them. S1 remains this branch's standing proof that a JVM-mode result need not transfer on this
+toolchain *without its own check* — which is exactly what this re-check supplied, not a reason to
+distrust its result. The specific things that could have differed under SubstrateVM — whether
+`addEndHandler` fires at all on native close detection, and whether `ar.cause()` is the same
+`HttpClosedException` type — are both now measured, above.
 
 **All invariants on this path are soft by structure.** `Invariants.evaluateAndMaybeFail` throwing at
 the end handler can fail nothing — the response is fully written by definition of the hook. Tomcat
@@ -858,11 +881,21 @@ positive-but-contaminated case the sign rule cannot see.
 
 Two caveats before PR-5 builds it. It is `java.lang.management`, **not** `com.sun.management` — so it
 avoids the exclusion §6.2 records for `getThreadAllocatedBytes`, and the extension already uses
-`java.lang.management.ThreadMXBean` — but **whether it works under SubstrateVM is unverified** and is a
-PR-5 precondition, not an assumption. And a collection-count check makes the heap invariant strictly
-*more* conservative: on a busy target many windows will contain a GC and go `UNMEASURED`, which is
-honest but may leave few measurable samples. That trade — fewer numbers, all of them real — is the one
-this project has consistently chosen.
+`java.lang.management.ThreadMXBean`. **Whether it works under SubstrateVM — RESOLVED: yes, by PR-5's
+§6.2 entry-gate spike.** Three successive `System.gc()` calls under Mandrel 25.0.3 moved the
+`complete scavenger` `GarbageCollectorMXBean`'s count 1→2, then 2→5 (+1 per call), each alongside a
+real heap-used drop
+(`bench-results/dd043-pr5-jfr-spike-2026-08-13/native-run/03-probe-gc-garbage.txt`,
+`native-run/04-probe-gc-bare-x3.txt`). **But a detector watching a single bean is blind on native**:
+those same calls never moved `young generation scavenger` at all, while ordinary window traffic moved
+that bean 0→2 on its own with no explicit call in sight
+(`bench-results/dd043-pr5-jfr-spike-2026-08-13/native-run/06-probe-gc-post-windows.txt`). **§6.1's
+window check must sum `getCollectionCount()` across every bean `getGarbageCollectorMXBeans()`
+returns, not read one** — a single-bean detector would miss exactly the GC activity §6.1 needs it to
+catch. And a collection-count check makes the heap invariant strictly *more* conservative: on a busy
+target many windows will contain a GC and go `UNMEASURED`, which is honest but may leave few
+measurable samples. That trade — fewer numbers, all of them real — is the one this project has
+consistently chosen.
 
 **A fifth candidate, unconfirmed and design-shaping.** A response that never triggers `addEndHandler`
 at all — a protocol upgrade, an indefinitely streaming response, a connection that never sees FIN/RST.
@@ -920,50 +953,77 @@ default**, and record in the bench manifest whether it was on, since it changes 
 detectable delta means. Collecting *after* the window as well as before is a plausible further
 reduction; untested, so not specified.
 
-### 6.2 The JFR cross-check, redefined so it can actually fail
+### 6.2 The JFR cross-check, redefined so it can actually fail — CLEARED (2026-08-13)
 
-**Nothing in this section is verified on this toolchain, and it is the only section of which that is
-true.** `jdk.ObjectAllocationSample` is *documented* as supported in native-image JFR (Serial GC), and
-native JFR event streaming is what the §7.3 control below assumes as its transport. Phase 0 ran **no
-JFR analysis**: S2 established only that `-Dquarkus.native.monitoring=jfr,nmt` is accepted at config
-parse and survives a full native compile (§5) — that is evidence about a *build flag*, not about
-whether a `RecordingStream` can be opened inside the image or whether `ObjectAllocationSample` is
-emitted there. An earlier draft of this paragraph said "verified" with no artifact behind it, in the
-same document whose ledger called §6.2 unverified; that is precisely the failure this PR's own
-`bench-results/dd043-target-pins-2026-07-24/README.md:3-8` records the approver rejecting once already.
+**Verified, not merely accepted at config parse — this section's own entry gate.** A PR-5 entry-gate
+spike opened a `RecordingStream` in-process inside the pinned Mandrel 25.0.3 native image — zero
+`-XX:+FlightRecorder` / `-XX:StartFlightRecording` flags needed, purely programmatic — enabled
+`jdk.ObjectAllocationSample`, and drove `/__basquin/control/defect/alloc`: the alloc window's sampled
+bytes (160,768,048 B) ranked first on both raw and app-thread-only bases, 3.2x the next window and
+316x the trivial-route window, and the dumped recording held 1,515 `jdk.ObjectAllocationSample`
+events independently parsed by the JDK 25 `jfr` CLI. The transport exists, the events arrive, and the
+alloc route ranks first — §7.3's JFR row precondition is met and the row is no longer demoted to
+diagnostic-only. Evidence: `bench-results/dd043-pr5-jfr-spike-2026-08-13/`
+(`native-run/windows-analysis.txt`, `jfr-cli-verify.txt`); full protocol and adversarial controls in
+that directory's `README.md`.
 
-**What would verify it:** on the pinned Mandrel 25.0.3 image, open a `RecordingStream` in-process,
-enable `jdk.ObjectAllocationSample`, drive `/__basquin/control/defect/alloc`, and show non-zero sampled
-bytes attributed to that route — i.e. §7.3's JFR row, run and passing, with the recording committed as
-an artifact. Until that exists §6.2 produces **no published figure**, and §7.3's row already prescribes
-the fallback: demote the cross-check to diagnostic-only. **This is a PR-5 entry gate (§9), not a PR-5
-assumption.**
-
-The design point below stands independently of that, because it is a statement about what the two
-quantities *mean* rather than about availability. The earlier draft compared `ObjectAllocationSample`
-against net heap delta and called divergence a finding. Those two quantities **never agree**: `ObjectAllocationSample` is a *throttled
-statistical sampler* estimating **gross** allocation (a request allocating tens of KB may emit zero
-samples), while `totalMemory - freeMemory` is **net** — allocation minus collection plus resize
-artifacts. Without a stated comparator that test is unfalsifiable: it either always "diverges" and is
-ignored, or gets a tolerance wide enough never to fire. Both are DD-040 shapes.
+The design point below stands as specced, because it is a statement about what the two quantities
+*mean* rather than about availability. `ObjectAllocationSample` is a *throttled statistical sampler*
+estimating **gross** allocation (a request allocating tens of KB may emit zero samples), while
+`totalMemory - freeMemory` is **net** — allocation minus collection plus resize artifacts. Those two
+quantities never agree at request grain, so comparing them per-request would be unfalsifiable: it
+either always "diverges" and is ignored, or gets a tolerance wide enough never to fire. Both are
+DD-040 shapes.
 
 DD-004 already ruled on this: *"JFR allocation sampling … is statistical; if adopted later it belongs
 behind soft signals only."* That ruling stands and this spec now respects it.
 
-**Redefined:** aggregate `ObjectAllocationSample` over the **whole run** (or per-route over many
-iterations) and compare **per-route rankings**, not per-request magnitudes. Native JFR streaming
-events carry no stack traces, so a divergence cannot be localised further than a route.
+**Redefined, and now measured to be required, not merely preferred:** aggregate
+`ObjectAllocationSample` over the **whole run** (or per-route over many iterations) and compare
+**per-route rankings**, not per-request magnitudes. Two measured reasons this form is load-bearing
+rather than a stylistic choice: `RecordingStream` delivery lags event occurrence by **more than 1s**
+— even with a 3s pre-boundary drain, roughly a quarter of the native alloc window's sampled bytes
+arrived in the following window — so any short-window comparison must bucket by event time
+(`RecordedEvent.getEndTime()`), not delivery time, while whole-run per-route aggregation is immune to
+this by construction; and the `RecordingStream` consumer's own delivery machinery allocates
+measurably (one control-run window showed tens of megabytes of churn attributable to the stream's own
+path), which whole-run per-route ranking also survives because `jdk.ObjectAllocationSample` carries
+`eventThread` even where stacks are absent — per-thread aggregation excludes the consumer's own
+thread rather than letting it contaminate the ranking. Evidence for both:
+`bench-results/dd043-pr5-jfr-spike-2026-08-13/README.md` (Findings 4 and 5).
 
-**The exact cross-check is expected to live in the JVM-mode cells.**
-`com.sun.management.ThreadMXBean.getThreadAllocatedBytes` on the event-loop thread is exact and
-per-thread. The premise that it is *unavailable* on native — that SubstrateVM does not implement the
-`com.sun.management` extensions — is **uncited and unspiked**, and it is what produces the whole
-**JVM cells = exact cross-check, native cells = statistical** split. It is therefore a hypothesis in
-the same state as everything else in §6.2, and it is cheap to settle: a single call to
-`ManagementFactory.getThreadMXBean() instanceof com.sun.management.ThreadMXBean` in the native image
-resolves it, and it can ride the same PR-5 entry gate. If the extension *is* available on native, the
-split collapses and native gets the exact cross-check too — a better outcome the spec should not
-foreclose by asserting the negative.
+**Corrected: native JFR streaming events DO carry full application stack traces on this toolchain —
+the opposite of what this section previously asserted.** The JDK `jfr` CLI's default disassembly
+truncates deep stacks before reaching application frames, which is why a shallow-depth pass reads as
+stack-less; an explicit `--stack-depth 64` parse of the same dumped recording resolves them: 810
+lines name `com.basquin` classes, 78 of the 1,515 events carry a `BasquinControlHandler` frame, and
+23 are MB-scale `byte[]` samples attributed verbatim to `BasquinControlHandler.allocDefect(String)
+line: 311`, full stack through the Vert.x worker-thread dispatch chain
+(`bench-results/dd043-pr5-jfr-spike-2026-08-13/README.md`, "Stack traces: the refuted premise";
+`native-allocsamples-deep.txt.gz` in that directory). §6.2's *published* form stays whole-run
+per-route ranking regardless — DD-004's ruling is about what the quantity means, not about whether
+stacks are available — but the premise that native events carry no stacks at all was toolchain-stale,
+not toolchain-true, and PR-5 may use per-thread/per-stack attribution as a diagnostic aid without
+inventing new machinery to get it.
+
+**M4 resolved TRUE, and the JVM-exact / native-statistical split collapses.**
+`ManagementFactory.getThreadMXBean() instanceof com.sun.management.ThreadMXBean` is `true` in the
+native image (`impl=com.oracle.svm.core.jdk.management.SubstrateThreadMXBean`), and
+`getThreadAllocatedBytes` measured **8,388,736 B** around a known **8,388,608 B** allocation — 128 B
+error, the same exact per-thread cross-check the JVM cells get
+(`bench-results/dd043-pr5-jfr-spike-2026-08-13/native-run/02-probe-m4.txt`). The premise that
+SubstrateVM does not implement the `com.sun.management` extensions, which produced the **JVM cells =
+exact cross-check, native cells = statistical** split, was uncited and is now measured false. PR-5
+budgets the exact `getThreadAllocatedBytes` cross-check on **both** modes; there is no native cell
+left that can only carry the statistical sampler.
+
+No fallback is needed anywhere in this section: native heap positives are publishable, the JFR row is
+buildable on native as specced, and §6.1's four-producer disposition design — including the
+GC-contaminated-positive detector, whose own SubstrateVM precondition (§6.1) is resolved by this same
+spike — is fully buildable on native. The build recipe for any published JFR row is PR-4's exact
+vehicle plus **`-Dquarkus.native.monitoring=jfr`** — the one new flag, proven to compose with the
+injector and the offline-JaCoCo instrument execution on the same image
+(`bench-results/dd043-pr5-jfr-spike-2026-08-13/build-native.log`).
 
 ### 6.3 Event-loop blocking: an extension-owned watchdog, not the log-only checker
 
@@ -1233,17 +1293,23 @@ never injected a plugin execution (§8.2).
 | **`rest-villains`** (blocking) | is the extension itself correct? | does build-time attachment survive AOT? |
 | **`rest-heroes`** (reactive) | are the reactive boundary semantics right? | ← the actual target |
 
-**Both native cells carry an S3 re-check as an entry condition.** S3 measured §4.3's hooks and §6's
-disposition table in **JVM mode only**, and S1 is this branch's proof that a JVM-mode result need not
-survive AOT. So before a native cell publishes any crash count or latency distribution, it must
-reproduce S3's four dispositions under SubstrateVM — `/ok` 200, an app 500, a 3xx, and a mid-response
-client disconnect — and confirm that `addEndHandler` fires on each, that `ar.succeeded()` is `false`
-on the disconnect. **Do not gate on `addHeadersEndHandler`'s `X-Basquin-Req` reaching the client** — an
-earlier draft did, and that criterion can never pass: the extension never writes that header (§4.3),
-only S3's probe fixture did. Gating a native cell on it would block PR-4 on an impossible check. If `addEndHandler` does not fire on native close detection, the boundary records nothing for that
-disposition and the crash counter silently reverts to the `getStatusCode()`-reads-200 behaviour
-amendment 3 exists to prevent. The check is cheap — the extension's own control routes (§7.3) already
-provide three of the four dispositions.
+**Both native cells carry an S3 re-check as an entry condition — RESOLVED for both of PR-4's native
+cells.** S3 measured §4.3's hooks and §6's disposition table in **JVM mode only**, and S1 is this
+branch's proof that a JVM-mode result need not survive AOT. So before a native cell publishes any
+crash count or latency distribution, it must reproduce S3's four dispositions under SubstrateVM —
+`/ok` 200, an app 500, a 3xx, and a mid-response client disconnect — and confirm that `addEndHandler`
+fires on each, that `ar.succeeded()` is `false` on the disconnect. That re-check ran on both
+`rest-villains` and `rest-heroes`: all four dispositions fired `addEndHandler`, the disconnect logged
+`ar.succeeded()==false` with the same `HttpClosedException` type S3 found on the JVM, and none was
+ever published as a success it wasn't (`bench-results/dd043-pr4-2x2-2026-08-10/README.md`, item 5 for
+both native cells, `s3-recheck.out`/`s3-app.log`). **Do not gate on `addHeadersEndHandler`'s
+`X-Basquin-Req` reaching the client** — an earlier draft did, and that criterion can never pass: the
+extension never writes that header (§4.3), only S3's probe fixture did. Gating a native cell on it
+would have blocked PR-4 on an impossible check. If `addEndHandler` does not fire on native close
+detection, the boundary records nothing for that disposition and the crash counter silently reverts
+to the `getStatusCode()`-reads-200 behaviour amendment 3 exists to prevent. The check is cheap — the
+extension's own control routes (§7.3) already provide three of the four dispositions — and this
+paragraph stays live as the same entry condition for any later native cell a future PR adds.
 
 Each cell isolates one variable from its neighbours. The four builds are logically independent and
 driven by concurrent subagents, but **`native-image` wants ≥4 cores and several GB each and this host
@@ -1284,9 +1350,10 @@ zero live rather than structural.
 | heap | `/__basquin/control/defect/alloc`, sized well above the quantum | delta recorded **and not tainted** (§6.1) |
 | **heap, taint — the firing half** | a **deliberately overlapping request**: a second connection sent against any route while `/__basquin/control/defect/slow` is in flight on the driver's connection | the in-flight counter must exceed 1; the overlapped iteration must be **counted as tainted** and dispositioned `UNMEASURED`; and the run summary's **taint rate must come back strictly greater than zero**. A run that reports `0%` with the overlap injected **fails** — the counter is per-request, or its decrement is unreachable, and `0%` then means "never detected", not "clean" (§6.1) |
 | **heap, `UNMEASURED` — the firing half** | `/__basquin/control/defect/alloc` sized **below one quantum** (≪ 524,288 B) | the sample must be recorded as `UNMEASURED` and **must not** appear as a number anywhere downstream of the boundary. A numeric delta here **fails** the control: the instrument cannot resolve that allocation, so any number it prints is manufactured (§6.1) |
+| **heap, GC-contaminated positive — the firing half (added, A1, 2026-08-13)** | `/__basquin/control/defect/alloc` sized to force a collection *inside* the measurement window — large enough that the collector runs before `addEndHandler`, e.g. the same order of magnitude S2's `/alloc` bracket used, driven so the net delta still lands positive and above §6.1's quantum | the window's summed `getCollectionCount()` (across every `GarbageCollectorMXBean`, per §6.1) must show it moved, and the sample must be dispositioned `UNMEASURED` — never published as a number, even though the net delta is positive and clears the quantum. A numeric delta here **fails** the control: a net-positive, above-quantum reading with a collection inside the window is exactly the +1 MB-nets-from-a-3 MB-alloc-minus-a-2 MB-collection case §6.1 names as the fourth producer, and publishing it is the silent-contamination defect this row exists to catch. Without this row §7.3's closed-set rule (below) was violated: the table's only `UNMEASURED` firing row covered sub-quantum, and nothing forced the GC-contamination detector — which subsumes the negative-delta producer too — to fire at all |
 | heap, **positive-noise** | idle window, no driver request | the sample must be recorded — as exactly `0` or as `UNMEASURED` — and **any reading at or above §6.1's practical minimum (1,048,576 B) with no request in flight fails the control.** Stated as a threshold rather than "~zero or `UNMEASURED`", which passed on either branch and so could not fail. This is the control that catches probe pollution and the `heapDriftKb` class of error |
 | coverage | routes exercised progressively, with **one pre-registered application route withheld** from the driver (§7.1) | the total must increase **and** the withheld route's *method* must read `0 covered` **against a live execution-data record for its own class** — i.e. at a dump point where at least one sibling method of that class has already flipped to covered. Two ways to fail rather than pass vacuously: if no sibling has flipped, the class has no record and the zero measures nothing; if the withheld method's invoker class is absent from the build's `-H:+PrintClassInitialization` report, reachability analysis deleted it and the zero is a structural absence (§7.1). **A never-exercised *class* reading zero is not this control** — amendment 8 disproved that instrument, and using it would admit the coverage percentage on a measurement that never happened |
-| **JFR cross-check** (§6.2) | `/__basquin/control/defect/alloc` driven across a run alongside ordinary routes | first, the transport must exist at all: a `RecordingStream` opens in the native image and `jdk.ObjectAllocationSample` events arrive (§6.2 — **unverified**, so this is a precondition, not an assumption). Then the alloc route must rank **first** by aggregated sample totals. If either half cannot be made to hold, the cross-check is demoted to **diagnostic-only, not published**, and §6.2 says so |
+| **JFR cross-check** (§6.2) | `/__basquin/control/defect/alloc` driven across a run alongside ordinary routes | first, the transport must exist at all: a `RecordingStream` opens in the native image and `jdk.ObjectAllocationSample` events arrive — **CLEARED** (§6.2; `bench-results/dd043-pr5-jfr-spike-2026-08-13/`), so this is a satisfied precondition, not an open one. Then the alloc route must rank **first** by aggregated sample totals — also shown by that same evidence (native ALLOC ranked first, 3.2x the next window). The row is therefore runnable and publishable, not demoted to diagnostic-only; the real-target Phase-2 run against the published heroes/villains rows is still owed by PR-5's Task 6 |
 
 **This table is exhaustive over §6 by construction, and that property is load-bearing.** Three signals were
 found silently exempt from it in successive reviews — the JFR cross-check, then 5xx/crash, then **thread
@@ -1499,7 +1566,7 @@ history says this repo needs.
 | **PR-3** | `basquin-maven-injector` + Gradle init stub; acceptance is §5.2's banner, zero pom edits — **DONE.** Shipped: the core extension injecting the dependency **and** the repository at both levels (§5), **8 operator guards** (grew from 7 in round 7, when review found a managed `<scope>` reaches `basquin-core` the same way a managed `<exclusions>` does — see `docs/ROADMAP.md` and `docs/THIRD-PARTY-APPS.md` for the current, checkable enumeration rather than trusting this snapshot), each mutation-checked by `scripts/verify-dd043-pr3.sh` — **all eight, no exception**: eight `_mutate` rows, one per item in the list below, each proven able to fail when its own branch is neutered, all PASS in `bench-results/RUN-OF-RECORD/RESULTS.md` as one `guards:<label>` row apiece, plus `guards:restored`. Cited by row key rather than line, because two mid-table insertions have already shifted that table's numbering twice: skip; conflicting managed version; conflicting managed exclusions; an unusable managed scope; conflicting declared version; an unusable declaration — wrong scope, `pom`/`test-jar` type, a classifier, or exclusions; and, on a *sibling* `com.basquin` artifact declared directly (`basquin-core` above all), an unusable sibling scope and a conflicting sibling version. **All but `skip` fail loudly per §5.1 — seven of the eight**; `skip` is the operator opt-out, not a guard. The scope, type/classifier, managed-exclusions, managed-scope and both sibling shapes were each found by review AFTER the preceding guard landed, so the declared-artifact check is written as a whitelist of what is usable rather than a list of known-bad values — while the sibling check enumerates the two fields measured to be hazards, `type`/`classifier`/`exclusions` having been measured harmless there. The eight live in **four** guard methods — `failOnUnusableDeclaration`, `failOnConflictingDeclaredVersion`, `failOnConflictingManagedVersion`, `failOnUnusableSiblingDeclaration` — read their javadoc in `BasquinInjector.java` for the shape-by-shape detail; this count and the line numbers below it move every time a guard is added, so a hand-typed number here is a snapshot, not a fact. And the Pages repo widened to all four artifacts (§3). **31 module tests** (23 in `BasquinInjectorGuardsTest.java` + 8 in `BasquinInjectorTest.java` — the two JUnit XMLs under
 `bench-results/RUN-OF-RECORD/guard-restore-junit/` report `tests="23"` and `tests="8"`; the `guards:restored` row of that run's `RESULTS.md` records the clean module suite as `31 tests, 0 failures`, derived from those XMLs); **390 repo-wide, 0 failures** (`bench-results/RUN-OF-RECORD/suite-counts.txt:1` reads `390 0`; `RESULTS.md:10`). §5.2's JVM half **PASSED on `rest-villains`** with zero edits to its tree (`bench-results/dd043-pr3-restvillains-2026-07-26/`, banner lists `basquin`); §5.2's native half **PASSED on the Phase-0 fixture, not rest-villains** (`bench-results/dd043-pr3-native-2026-07-26/`, banner `[basquin, cdi, rest, smallrye-context-propagation, vertx]`) — rest-villains' native buildability was **unmeasured** at the time; PR-4's native 2×2 cells now cover it (§7.2, `bench-results/dd043-pr4-2x2-2026-08-10/`). **No multi-module Maven reactor was ever built end-to-end with the injector on `maven.ext.class.path`**: both acceptances are single-module — `rest-villains` is a standalone pom, so is the Phase-0 fixture — while `inject()` loops `session.getProjects()` and mutates a `MavenProject` instance per reactor member, which is exactly the shape this spec flags a hazard in ("The injector must construct a fresh `Dependency` per `MavenProject`", this file, the paragraph beginning with that sentence) and exactly the shape "the real targets are multi-module" a few lines below it refers to. The two unit tests that pin per-project freshness build a synthetic three-project list in memory, not a live Maven reactor; a real reactor build exercises paths — shared parent-pom inheritance into the effective model, Maven's own per-module lifecycle sequencing — that a synthetic list and a standalone pom cannot. The Gradle init script is a **stub**: it implements only the `skip` opt-out (`basquin-init.gradle:20,24`) — **none of the other seven operator guards have a Gradle counterpart**, so a conflicting version, an unusable declaration or an unusable sibling declaration on a Gradle target is resolved silently by Gradle's own defaults rather than failing loudly — and it was never exercised against a Gradle-built Quarkus target (§5). Both acceptances resolved over localhost HTTP; the real Pages HTTPS repository stays unexercised until the first `v*` tag (§3). The offline-JaCoCo plugin execution was **not** injected by PR-3 — §8.2 stood unmeasured at the time, PR-3's own entry gate for PR-4; PR-4 injected it and §8.2 is now **RESOLVED** (below) | PR-2 — cleared |
 | **PR-4** | Coverage — offline-JaCoCo execution injection, `/__basquin/coverage`, `JacocoCoverageProvider` HTTP transport; the native 2×2 cells — **built** on branch `dd043-pr4-coverage`, not yet opened as a GitHub PR; all four native-2×2 cells COMPLETED (`bench-results/dd043-pr4-2x2-2026-08-10/`) | PR-3 · **entry gate: §8.2 — RESOLVED**; the native cells additionally carry §7.2's S3 re-check |
-| **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs. **Entry condition:** §7.4's rule that the heap column, taint rate and `UNMEASURED` count render only when §7.3's firing controls passed is today **documented discipline, not enforced code** — nothing reads control-pass state, and it holds only because no renderer exists yet. PR-5 must make it a checkable gate in `render_page.py`, not a convention. **Also owns four gaps PR-2 measured:** the `UNMEASURED` disposition and §6.1's in-flight taint — both need a `ResultStore.Entry` field, and until they land §7.3's sub-quantum control **fails** and the heap invariant is **not publishable**; the watchdog, without which `block-loop`'s control cannot be claimed; **negative** heap deltas (measured `-16,456 KB` on `rest-villains`), which the in-flight counter structurally cannot detect because a GC is not a request; and **GC-contaminated positive** deltas, which the sign rule cannot see either — the general detector is a `GarbageCollectorMXBean.getCollectionCount()` delta across the window, whose SubstrateVM support is itself a PR-5 precondition | PR-4 · **entry gate: §6.2** — native JFR streaming and `com.sun.management`-on-SubstrateVM are both unverified; establish or demote before budgeting the cross-check |
+| **PR-5** | Reactive invariant set (§6.3 watchdog), `render_page.py` per-target sets, benchmark rows, docs. **Entry condition:** §7.4's rule that the heap column, taint rate and `UNMEASURED` count render only when §7.3's firing controls passed is today **documented discipline, not enforced code** — nothing reads control-pass state, and it holds only because there is nothing to read: `render_page.py` exists and renders the Tomcat page from collected records (has since #93/#97), but control-pass state exists nowhere — not in the records, not in the runner summary, not in the renderer (A2, 2026-08-13; ledger below). PR-5 must make it a checkable gate in `render_page.py`, not a convention. **Also owns four gaps PR-2 measured:** the `UNMEASURED` disposition and §6.1's in-flight taint — both need a `ResultStore.Entry` field, and until they land §7.3's sub-quantum control **fails** and the heap invariant is **not publishable**; the watchdog, without which `block-loop`'s control cannot be claimed; **negative** heap deltas (measured `-16,456 KB` on `rest-villains`), which the in-flight counter structurally cannot detect because a GC is not a request; and **GC-contaminated positive** deltas, which the sign rule cannot see either — the general detector is a `GarbageCollectorMXBean.getCollectionCount()` delta across the window, whose SubstrateVM support is RESOLVED (§6.1, same spike) | PR-4 · **entry gate: §6.2 — RESOLVED (commit 1, 2026-08-13)**: native JFR streaming and `com.sun.management`-on-SubstrateVM are both CLEARED (`bench-results/dd043-pr5-jfr-spike-2026-08-13/`); the cross-check is budgeted on both modes, not demoted |
 
 Docs land with their PR: `THIRD-PARTY-APPS.md` gains a build-time-injection section, `ARCHITECTURE.md`
 gains the build-vs-runtime injection symmetry.

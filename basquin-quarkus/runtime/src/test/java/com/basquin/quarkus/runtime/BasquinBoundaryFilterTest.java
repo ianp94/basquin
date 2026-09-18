@@ -35,18 +35,21 @@ public class BasquinBoundaryFilterTest {
         System.clearProperty("basquin.invariant.mode");
     }
 
-    /** Store shape mirrors agent/RequestBoundary.java:177-178 exactly. */
+    /** Store shape mirrors agent/RequestBoundary.java's publishResult exactly. */
     @Test
     public void publishesCostCsvInLatencyHeapKbThreadDeltaOrder() {
-        BasquinBoundaryFilter.publish("req-1", 42L, 2048L, 7, 3);
+        BasquinBoundaryFilter.publish("req-1", 42L, 2_097_152L, 7, 3);
 
         List<ResultStore.Entry> hops = ResultStore.take("req-1");
         assertEquals(1, hops.size());
         ResultStore.Entry e = hops.get(0);
-        assertEquals("42,2,3", e.costCsv());
+        assertEquals("42,2048,0", e.costCsv());
         assertEquals(0, e.invariantCount());
         assertNull(e.detail());
         assertFalse(e.leakDetected());
+        // DD-043 PR-5 Task 1: publish() is only reached for a completed response, which is stamped
+        // `measured` until Task 2 lands §6.1's real disposition producers and computes this value.
+        assertEquals(ResultStore.DISPOSITION_MEASURED, e.disposition());
     }
 
     /** A second poll for the same id legitimately misses: take() is destructive. */
@@ -198,5 +201,10 @@ public class BasquinBoundaryFilterTest {
         assertTrue("must register the end-of-response hook -- only happens on the instrumented "
                         + "branch, never on the control-surface bypass",
                 ctxHandler.called("addEndHandler"));
+        @SuppressWarnings("unchecked")
+        io.vertx.core.Handler<io.vertx.core.AsyncResult<Void>> end =
+                (io.vertx.core.Handler<io.vertx.core.AsyncResult<Void>>)
+                        ctxHandler.arguments("addEndHandler")[0];
+        end.handle(io.vertx.core.Future.succeededFuture());
     }
 }

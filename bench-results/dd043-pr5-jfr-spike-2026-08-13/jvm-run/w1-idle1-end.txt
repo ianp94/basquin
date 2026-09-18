@@ -1,0 +1,6 @@
+state=OPEN
+totalWeight=97442632
+sampleCount=97
+topClassesByWeight=[B:47593312,java.util.ArrayList$Itr:37932944,[Ljava.lang.Object;:1886456,java.lang.String:1876432,java.lang.StringBuilder:1025872
+threads=executor-thread-1=43950456:44,main=38322480:2,vert.x-eventloop-thread-1=7326832:15,JFR Event Stream 1=5372616:13,vert.x-eventloop-thread-6=428016:2,vert.x-eventloop-thread-5=374472:4,vert.x-acceptor-thread-0=348216:2,vert.x-eventloop-thread-3=344752:3,vert.x-eventloop-thread-0=336856:2,vert.x-eventloop-thread-2=244104:3,vert.x-eventloop-thread-4=191232:2,vert.x-eventloop-thread-7=102120:1,JFR Periodic Tasks=97072:1,C1 CompilerThread0=3296:2,Reference Reaper #1=112:1
+1786453982.073136878

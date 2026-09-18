@@ -127,6 +127,14 @@ public final class CostCorpus {
      *  cost-ranked corpus records that a multi-hop cost is an explore-side (not load-side) measurement. */
     public synchronized void consider(String input, double cost, long latencyMs, long heapDeltaKb,
                                       int threadDelta, int invariantCount, boolean coverageFind, int hops) {
+        consider(input, cost, latencyMs, heapDeltaKb, threadDelta, invariantCount, coverageFind, hops, true);
+    }
+
+    public synchronized void consider(String input, double cost, long latencyMs, long heapDeltaKb,
+                                      int threadDelta, int invariantCount, boolean coverageFind, int hops,
+                                      boolean heapMeasured) {
+        if (!heapMeasured && !coverageFind) return;
+        if (!heapMeasured) cost = 0.0;
         boolean retain = coverageFind;
         if (enabled && !coverageFind) {
             samples++;
@@ -136,7 +144,7 @@ public final class CostCorpus {
             emaCost = emaCost == 0.0 ? cost : emaAlpha * cost + (1 - emaAlpha) * emaCost;
         }
         if (!retain) return;
-        CorpusEntry e = new CorpusEntry(input, cost, latencyMs, heapDeltaKb, threadDelta, invariantCount, coverageFind, hops);
+        CorpusEntry e = new CorpusEntry(input, cost, latencyMs, heapDeltaKb, threadDelta, invariantCount, coverageFind, hops, heapMeasured);
         if (pheromone) { e.pheromone = emaCost + cost; totalPheromone += e.pheromone; }
         entries.add(e);
         if (enabled) evictIfOverCap();

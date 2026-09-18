@@ -1,0 +1,33 @@
+jfr tool: /opt/mandrel/bin/jfr
+=== NATIVE recording summary (grep relevant) ===
+ Event Type                              Count  Size (bytes) 
+ jdk.ObjectAllocationSample               1515         21411
+ jdk.CPUTimeStampCounter                     0             0
+ jdk.ObjectCount                             0             0
+ jdk.ObjectCountAfterGC                      0             0
+ jdk.ZStatisticsCounter                      0             0
+=== first 2 ObjectAllocationSample events, verbatim ===
+jdk.ObjectAllocationSample {
+  startTime = 09:14:43.280 (2026-08-11)
+  objectClass = com.oracle.svm.core.jfr.sampler.AbstractJfrExecutionSampler$UpdateJfrExecutionSamplerOperation (classLoader = app)
+  weight = 6.1 MB
+  eventThread = "main" (javaThreadId = 3)
+  stackTrace = [
+    com.oracle.svm.core.genscavenge.ThreadLocalAllocation.slowPathNewInstanceWithoutAllocation0(Class, UnsignedWord) line: 248
+    com.oracle.svm.core.genscavenge.ThreadLocalAllocation.slowPathNewInstanceWithoutAllocating(Class, UnsignedWord) line: 235
+    com.oracle.svm.core.genscavenge.ThreadLocalAllocation.slowPathNewInstance(Word) line: 223
+    com.oracle.svm.core.genscavenge.graal.GenScavengeAllocationSupport.slowNewInstanceInterruptibly(Word) line: 190
+    com.oracle.svm.core.genscavenge.graal.GenScavengeAllocationSupport.slowNewInstance(Word) line: 137
+    ...
+  ]
+}
+
+jdk.ObjectAllocationSample {
+  startTime = 09:14:43.280 (2026-08-11)
+  objectClass = java.lang.Object[] (classLoader = null)
+  weight = 8.0 kB
+  eventThread = "main" (javaThreadId = 3)
+  stackTrace = [
+    com.oracle.svm.core.genscavenge.ThreadLocalAllocation.slowPathNewArrayLikeObjectWithoutAllocation0(Class, int, UnsignedWord, byte[]) line: 321
+=== JVM recording, same checks ===
+ jdk.ObjectAllocationSample                176          2569

@@ -6,14 +6,32 @@ order is what it is*. If you find a detail stated here and nowhere else, it is i
 (The benchmark page had exactly this drift and it is what `deploy/bench/render_page.py` now exists to
 prevent.)
 
-Last reviewed: 2026-08-10. DD-043 PR-1 (#100), PR-2 (#102), and **PR-3
-([#103](https://github.com/ianp94/basquin/pull/103), squash-merged as `b32b394` on 2026-07-31)** are all
-**merged**. **PR-4 (coverage)** is built on branch `dd043-pr4-coverage` — not yet opened as a GitHub
-PR — and its entry gate, spec §8.2, is now **SETTLED**: a committed native 2×2 acceptance
-(`bench-results/dd043-pr4-2x2-2026-08-10/`) demonstrates the composed inject-plus-read mechanism on
-two real third-party targets, in both JVM and native packaging. A new follow-on — **DD-044 / PR-3.5**
-— is specced and reviewed but not started. The DD-040→DD-039 arc was completed and merged 2026-07-23.
-See "Start here next".
+Last reviewed: 2026-09-18 against local history and GitHub's merged PR list.
+**DD-043 PR-4 merged as [#110](https://github.com/ianp94/basquin/pull/110)**;
+**DD-044 / PR-3.5 merged as [#109](https://github.com/ianp94/basquin/pull/109)**;
+DD-045's completion contract merged as [#108](https://github.com/ianp94/basquin/pull/108).
+The active checkout is **DD-043 PR-5**, branch `dd043-pr5-reactive`.
+Its native JFR entry gate is **CLEARED**; see the [spike evidence](../bench-results/dd043-pr5-jfr-spike-2026-08-13/README.md).
+The [PR-5 plan](superpowers/plans/2026-08-13-dd043-pr5-reactive.md) defines the remaining sequence.
+
+### Immediate next work: finish PR-5
+
+Task 1's five-field result format and producer changes are present on this **in-progress branch**.
+The driver now excludes explicitly unmeasured/unknown dispositions from heap cost and blocks
+composite scoring for those chains while retaining recovered findings. Wire negotiation, target-model identification, retained-corpus attribution, and reactive
+heap exclusion producers are implemented. Summary counters, driver disconnect classification,
+and real-app controls remain pending; reactive measurement accounting is not complete. Track the [follow-through checklist](superpowers/plans/2026-09-18-pr5-follow-through.md).
+
+Continue in the plan's order:
+1. Finish disposition handling and version-skew coverage (Task 1).
+2. Implement reactive in-flight/overlap, sub-quantum, negative and GC-contaminated measurement
+   handling, disconnect reporting, and driver accounting (Task 2).
+3. Add the separate-pass JFR heap cross-check, then the event-loop watchdog (Tasks 3-4).
+4. Gate rendered results on recorded control passes and run the real-target JVM/native 2×2
+   acceptance matrix (Tasks 5-6).
+
+The section below retains the earlier rationale and evidence. DD-041 clustered exploration and
+DD-042 load-mode assertions remain later work; neither supersedes the active PR-5 sequence.
 
 ---
 
@@ -60,11 +78,10 @@ acceptance (`bench-results/dd043-pr4-2x2-2026-08-10/`) demonstrates the injected
 `instrument` execution composing with the extension's A1 jacoco-runtime channel and the
 `/__basquin/coverage` read, on both `rest-villains` and `rest-heroes`, in JVM and native packaging,
 with zero pom edits — all four cells COMPLETED, superseding the pre-build §8.2/seam spikes that only
-de-risked the assumption. **PR-4 is built on branch `dd043-pr4-coverage`, not yet opened as a GitHub
-PR**; its own §8.2 caveat carries forward from PR-3 — both acceptance targets are standalone poms, so
+de-risked the assumption. **PR-4 is merged as [#110](https://github.com/ianp94/basquin/pull/110)**; its own §8.2 caveat carries forward from PR-3 — both acceptance targets are standalone poms, so
 a multi-module Maven reactor remains unexercised by this mechanism either. **§6.2** (native JFR
-streaming) still gates PR-5. A follow-on **DD-044 / PR-3.5** is
-[specced](superpowers/specs/2026-07-26-preinstrumented-targets-design.md) but not started | nothing (Phase 0 cleared it) | [spec](superpowers/specs/2026-07-24-native-reactive-targets-design.md) · [plan](superpowers/plans/2026-07-24-dd043-phase0-spikes.md) · [evidence](../bench-results/dd043-spikes-2026-07-24/REPORT.md) |
+streaming) is CLEARED; PR-5 is in progress. **DD-044 / PR-3.5** is
+merged as [#109](https://github.com/ianp94/basquin/pull/109) | nothing (Phase 0 cleared it) | [spec](superpowers/specs/2026-07-24-native-reactive-targets-design.md) · [plan](superpowers/plans/2026-07-24-dd043-phase0-spikes.md) · [evidence](../bench-results/dd043-spikes-2026-07-24/REPORT.md) |
 
 ### Why that order
 
@@ -98,12 +115,9 @@ streaming) still gates PR-5. A follow-on **DD-044 / PR-3.5** is
 
 ## Start here next
 
-Run `gh pr list --state open` for what is open right now — this file does not hand-maintain that
-count, the same rot this line itself once had (it previously asserted "One PR is open (#100)"
-after #100 had already merged). #100/#102/#103/#107 are the four most recently merged (scope and
-dates under "Open PRs" below, which DOES need a manual update per newly-opened/merged PR — see
-that section's own citations for how to check it). Four threads are ready to pick up once nothing
-is open, in rough priority:
+Run `gh pr list --repo ianp94/basquin --state open` for current open PRs.
+Resume PR-5 using the immediate-next-work section above. The completed prerequisites and later
+threads below explain the sequencing and preserve their evidence.
 
 0. **DD-043 PR-3 — `basquin-maven-injector` — merged as
    [#103](https://github.com/ianp94/basquin/pull/103) (`b32b394`, 2026-07-31).**
@@ -212,8 +226,8 @@ is open, in rough priority:
    in `BasquinInjector.java`, cross-referenced by `BasquinInjectorGuardsTest.java`'s matching tests, both
    of which change before this doc can.
 
-   **PR-4 (coverage) is built** on branch `dd043-pr4-coverage` — offline-JaCoCo execution injection,
-   `/__basquin/coverage`, the native 2×2 cells — but **not yet opened as a GitHub PR**. Its entry
+   **PR-4 (coverage) merged as [#110](https://github.com/ianp94/basquin/pull/110)** —
+   offline-JaCoCo execution injection, `/__basquin/coverage`, and the native 2×2 cells. Its entry
    gate, spec §8.2 — whether `afterProjectsRead` model mutation reaches the per-project *execution
    plan*, not just resolution — is now **SETTLED**: the injector adds a
    `jacoco-maven-plugin:instrument` execution alongside the dependency and repository it already
@@ -226,20 +240,14 @@ is open, in rough priority:
    still stands: both targets are standalone poms, so a multi-module Maven reactor remains
    unexercised.
 
-   **DD-044 / PR-3.5 is specced but not started**
-   (`docs/superpowers/specs/2026-07-26-preinstrumented-targets-design.md`): the operator cannot today
-   drive a build-time-instrumented target without patching it, because `buildAgentArgs` appends
-   `-javaagent`, `-Xbootclasspath/a` and `-Dbasquin.boundary=agent` **unconditionally** — "inject
-   nothing" is unrepresentable, and a no-agent target still reports `Phase=Injected` for an app the
-   operator never modified. It went through a review round that found five blocking defects; read §2.2a
-   and §2.2b before implementing, as they cover the two windows where the new code could still emit the
-   dishonest signal the whole feature exists to prevent. Slots **before PR-4** only if the in-cluster
-   verification matters sooner than coverage does; otherwise after.
+   **DD-044 / PR-3.5 merged as [#109](https://github.com/ianp94/basquin/pull/109)**.
+   The operator can observe a build-time-instrumented target without patching it.
+   The [spec](superpowers/specs/2026-07-26-preinstrumented-targets-design.md) records the
+   injection and observation semantics and the failure windows covered by the change.
 
-1. **DD-045 — verification-integrity tooling. Start here once PR-3 merges** (user-directed,
-   2026-07-30: build these immediately after the merge).
+1. **DD-045 — verification-integrity tooling, completed through [#108](https://github.com/ianp94/basquin/pull/108)**.
 
-   **Why this is next, and not a cleanup task.** PR-3 took **eight** approver rounds. The feature's thesis
+   **Why this was prioritized.** PR-3 took **eight** approver rounds. The feature's thesis
    held in every one; almost every finding was in the machinery that certifies it, or in the bookkeeping
    around it. Five shapes recurred, and every one is mechanically detectable:
 

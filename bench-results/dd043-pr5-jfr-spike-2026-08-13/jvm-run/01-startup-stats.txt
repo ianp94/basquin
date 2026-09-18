@@ -1,0 +1,5 @@
+state=OPEN
+totalWeight=46612488
+sampleCount=28
+topClassesByWeight=java.util.ArrayList$Itr:37828936,[Ljava.lang.Object;:1886456,[B:1167224,jdk.internal.classfile.impl.AbstractPoolEntry$Utf8EntryImpl:1006176,java.lang.String:933824
+threads=main=38322480:2,JFR Event Stream 1=4239016:11,vert.x-eventloop-thread-1=3022632:5,vert.x-eventloop-thread-6=274416:1,vert.x-eventloop-thread-0=162504:1,vert.x-eventloop-thread-5=140520:2,vert.x-eventloop-thread-2=127288:2,vert.x-eventloop-thread-3=113792:1,vert.x-eventloop-thread-4=107608:1,vert.x-eventloop-thread-7=102120:1,Reference Reaper #1=112:1

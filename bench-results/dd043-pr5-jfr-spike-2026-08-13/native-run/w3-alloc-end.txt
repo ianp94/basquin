@@ -1,0 +1,6 @@
+state=OPEN
+totalWeight=212404648
+sampleCount=1379
+topClassesByWeight=[B:201577776,com.oracle.svm.core.jfr.sampler.AbstractJfrExecutionSampler$UpdateJfrExecutionSamplerOperation:6448264,[Ljava.lang.Object;:1437600,io.netty.handler.timeout.IdleStateHandler:253880,io.netty.channel.DefaultChannelHandlerContext:247088
+threads=executor-thread-1=202262128:308,main=6539688:13,vert.x-eventloop-thread-0=675344:158,vert.x-eventloop-thread-1=338144:113,vert.x-eventloop-thread-2=331704:108,vert.x-eventloop-thread-3=331264:114,vert.x-eventloop-thread-5=329792:113,vert.x-eventloop-thread-6=329696:44,vert.x-eventloop-thread-7=329600:138,vert.x-eventloop-thread-4=329544:115,vert.x-acceptor-thread-0=319216:92,JFR Periodic Tasks=287624:60,Reference Reaper #1=576:1,Reference Handler=296:1,JFR Event Stream 1=32:1
+1786454132.097974406

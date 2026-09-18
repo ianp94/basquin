@@ -78,20 +78,24 @@ public class LeakSoftModeTest {
     /**
      * Closes the seam between the two halves of the end-to-end path: this asserts the agent
      * produces exactly the wire form the driver parses. {@code CoverageGuidedRun.request} splits
-     * the polled body with a 4-field limit and treats {@code f[3].trim().equals("leak")} as the
-     * flag that saves a {@code Leak-Remote} finding (covered from the driver side by
-     * {@code ReportChannelTest.aRecoveredLeakIsSavedAsAFinding}). If the agent's format and the
-     * driver's parse ever drift, the leak silently becomes a clean measurement.
+     * the polled body with a 5-field limit (DD-043 PR-5, D1) and treats
+     * {@code f[3].trim().equals("leak")} as the flag that saves a {@code Leak-Remote} finding
+     * (covered from the driver side by {@code ReportChannelTest.aRecoveredLeakIsSavedAsAFinding}).
+     * If the agent's format and the driver's parse ever drift, the leak silently becomes a clean
+     * measurement — which is exactly what DOES happen to a pre-PR-5 driver reading this line with
+     * its 4-field limit (pinned as a documented consequence in {@code ResultWireSkewTest}).
      */
     @Test public void theRecordedLeakIsOnTheWireInTheFormTheDriverParses() {
         System.setProperty("basquin.invariant.mode", "soft");
         leakingRequest("salt-soft-wire");
 
         String body = ResultStore.format(ResultStore.take("salt-soft-wire"));
-        String[] f = body.split("\\|", 4);
-        assertEquals("four fields: costCsv|invariantCount|detail|leak — " + body, 4, f.length);
+        String[] f = body.split("\\|", 5);
+        assertEquals("five fields: costCsv|invariantCount|detail|leak|disposition — " + body, 5, f.length);
         assertEquals("the driver reads a leak off field 4 only — " + body, "leak", f[3].trim());
         assertEquals("a leak is not an invariant violation and must not inflate that count", "0", f[1].trim());
+        assertEquals("the serialized Tomcat path always publishes `measured` — " + body,
+                ResultStore.DISPOSITION_MEASURED, f[4].trim());
     }
 
     // --- The safety property: hard mode must keep failing loudly ------------------------------

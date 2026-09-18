@@ -175,7 +175,11 @@ public final class RequestBoundary {
             String detail = (count > 0) ? violations.get(0) : null;
             // Composed exactly as the X-Basquin-Cost header is (Agent.lastCostCsv): heap in KB.
             String costCsv = ctx.latencyMs + "," + (ctx.heapDeltaBytes / 1024L) + "," + ctx.threadDelta;
-            ResultStore.put(reqId, new ResultStore.Entry(costCsv, count, detail, ctx.leakDetected));
+            // Always `measured` on this path (DD-043 PR-5, D1): iterations are serialized under
+            // ITERATION_LOCK, so every published sample's window is attributable by construction —
+            // the lock IS the reason no other disposition can arise here.
+            ResultStore.put(reqId, new ResultStore.Entry(costCsv, count, detail, ctx.leakDetected,
+                    ResultStore.DISPOSITION_MEASURED));
         } catch (Throwable ignored) {
             // best-effort publication; never let it fail a request
         }

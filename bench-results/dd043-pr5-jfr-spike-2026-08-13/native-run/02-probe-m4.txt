@@ -1,0 +1,9 @@
+impl=com.oracle.svm.core.jdk.management.SubstrateThreadMXBean
+instanceofComSunManagementThreadMXBean=true
+threadAllocatedMemorySupported=true
+threadAllocatedMemoryEnabled=true
+knownAllocationBytes=8388608
+threadAllocatedBefore=501616
+threadAllocatedAfter=8890352
+threadAllocatedDelta=8388736
+checksum=36

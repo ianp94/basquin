@@ -51,7 +51,22 @@ public final class ResultStore {
     private static final int DETAIL_MAX = 200;   // same cap the header path applies
     public static final String MISS = "miss";
 
-    public record Entry(String costCsv, int invariantCount, String detail, boolean leakDetected) {
+    /**
+     * DD-043 PR-5 (D1): the disposition of a fully-measured sample. The Tomcat path publishes this
+     * on every entry — its iterations are serialized under ITERATION_LOCK, so every published
+     * sample is attributable by construction. The reactive path's other dispositions
+     * ({@code UNMEASURED}, {@code disconnected}, spec §6/§6.1) land with their producers.
+     */
+    public static final String DISPOSITION_MEASURED = "measured";
+
+    /**
+     * {@code disposition} (DD-043 PR-5, D1): how this sample may be used — {@code "measured"} for a
+     * sample whose window is attributable to this request. Producer-controlled vocabulary, never
+     * app-derived. {@code null} formats as an empty field, which a reader must treat as ABSENT
+     * (a pre-PR-5 producer), never as measured-by-default.
+     */
+    public record Entry(String costCsv, int invariantCount, String detail, boolean leakDetected,
+                        String disposition) {
         public Entry {
             if (detail != null && detail.length() > DETAIL_MAX) detail = detail.substring(0, DETAIL_MAX);
         }
@@ -130,10 +145,20 @@ public final class ResultStore {
 
     /**
      * Wire format: ONE LINE PER HOP, {@code '\n'}-separated, each line
-     * {@code costCsv|invariantCount|detail|leak} — four fields, plaintext. {@code detail} is
-     * app-derived, so BOTH {@code '|'} and newlines are sanitised here: a pipe would shift the field
-     * boundaries, and a newline would forge an extra hop line and have the driver count a violation
-     * the app invented. The driver splits on {@code '\n'} and parses each line with a 4-field limit.
+     * {@code costCsv|invariantCount|detail|leak|disposition} — five fields, plaintext (the fifth is
+     * DD-043 PR-5's D1 widening). {@code detail} is app-derived, so BOTH {@code '|'} and newlines
+     * are sanitised here: a pipe would shift the field boundaries, and a newline would forge an
+     * extra hop line and have the driver count a violation the app invented. {@code disposition} is
+     * producer-controlled vocabulary, but it is sanitised identically — defense in depth costs one
+     * call and a compromised producer string must not be able to forge a hop either. The driver
+     * splits on {@code '\n'} and parses each line with a 5-field limit.
+     *
+     * <p><b>Version skew (D1), pinned honestly rather than claimed impossible:</b> a pre-PR-5
+     * driver parses these lines with {@code split("\\|", 4)}, so on a five-field line its
+     * {@code f[3]} reads {@code "leak|<disposition>"} and its {@code "leak".equals(f[3])} check is
+     * a silent leak FALSE-NEGATIVE if negotiation is bypassed (pinned by {@code ResultWireSkewTest}).
+     * Endpoints therefore emit this format only for {@code wire=2}; legacy serialized clients
+     * receive {@link #formatLegacy}, and reactive targets reject legacy polling.
      *
      * <p>Null or empty is {@link #MISS}, so {@code LoadModeControl}'s caller and the driver's
      * {@code POLL_MISS.equals(body)} check are unchanged by accumulation.
@@ -144,13 +169,34 @@ public final class ResultStore {
         for (Entry e : hops) {
             if (e == null) continue;
             if (sb.length() > 0) sb.append('\n');
-            String d = e.detail() == null ? ""
-                    : e.detail().replace('|', '/').replace('\n', ' ').replace('\r', ' ');
+            String d = sanitize(e.detail());
             sb.append(e.costCsv() == null ? "" : e.costCsv()).append('|')
               .append(e.invariantCount()).append('|').append(d).append('|')
-              .append(e.leakDetected() ? "leak" : "");
+              .append(e.leakDetected() ? "leak" : "").append('|')
+              .append(sanitize(e.disposition()));
         }
         return sb.length() == 0 ? MISS : sb.toString();
+    }
+
+    /** Original wire for serialized targets serving old runners. Never append a fifth field. */
+    public static String formatLegacy(List<Entry> hops) {
+        String body = format(hops);
+        if (MISS.equals(body)) return body;
+        StringBuilder out = new StringBuilder();
+        for (String line : body.split("\n")) {
+            if (out.length() > 0) out.append('\n');
+            out.append(line, 0, line.lastIndexOf('|'));
+        }
+        return out.toString();
+    }
+
+    public static final String SERIALIZED_WIRE = "basquin-result-v2:serialized";
+    public static final String REACTIVE_WIRE = "basquin-result-v2:reactive";
+    public static final String UPGRADE_REQUIRED = "err:result-wire-upgrade-required";
+
+    private static String sanitize(String field) {
+        return field == null ? ""
+                : field.replace('|', '/').replace('\n', ' ').replace('\r', ' ');
     }
 
     public static void clearForTest() {

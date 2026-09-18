@@ -28,6 +28,9 @@ import java.util.Map;
 final class FakeInvocationHandler implements InvocationHandler {
 
     private final Map<String, Object> stubbed = new HashMap<>();
+    private final Map<String, Object[]> arguments = new HashMap<>();
+    Object[] arguments(String name) { return arguments.get(name); }
+
     private final List<String> calls = new ArrayList<>();
 
     /**
@@ -56,6 +59,7 @@ final class FakeInvocationHandler implements InvocationHandler {
     @Override
     public Object invoke(Object proxyInstance, Method method, Object[] args) {
         calls.add(method.getName());
+        arguments.put(method.getName(), args);
         if (stubbed.containsKey(method.getName())) {
             return stubbed.get(method.getName());
         }

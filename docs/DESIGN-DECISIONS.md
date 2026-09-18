@@ -2104,3 +2104,44 @@ DD-039's own acceptance evidence is
   different *follow* handling: load measures redirects, explore traverses them.
 - **Do nothing; require grammars to avoid login redirects.** Pushes an HTTP-client bug onto every
   grammar author, and cannot be expressed anyway — the grammar cannot see the 302.
+
+## PR-5 continuation — recovered reports versus attributable heap (2026-09-18)
+
+**Context.** The five-field result parser accepted dispositions but still summed every hop's heap.
+A recovered latency violation is useful even when that request's heap window is contaminated.
+
+**Decision.** Keep report recovery (`CostSample.measured`) separate from heap attribution
+(`heapMeasured`). Explicit dispositions other than `measured` exclude that hop's heap/thread cost
+and make the chain ineligible for composite cost scoring. Preserve its real invariant findings.
+Unknown dispositions fail closed for scoring. This avoids training cost ranking on a partial sum.
+The legacy four-field/empty-field behavior is unchanged pending target-model negotiation.
+
+**Rejected alternatives.** Dropping the whole report would lose valid latency findings. Scoring
+the surviving heap sum would present a partial observation as a complete cost.
+
+**Limits.** This is the driver-side exclusion checkpoint, not completed reactive semantics.
+Target-model negotiation, old-runner compatibility, producer classification, summary counters,
+and explicit attribution in exported coverage-retained corpus entries remain pending in
+[the follow-through checklist](superpowers/plans/2026-09-18-pr5-follow-through.md).
+
+## PR-5 continuation — negotiated wire and reactive heap windows (2026-09-18)
+
+**Decision.** A `wire=2` query parameter opts into five-field records with a model preamble.
+The same endpoint preserves four-field leak flags for old serialized clients; reactive targets
+refuse legacy polling before consuming results. This replaces the previous rollout-only policy.
+A versioned path was rejected because existing endpoints already ignore unknown query parameters,
+allowing one request to work with older producers. Legacy responses cannot identify their model:
+the explicit `basquin.report.legacyModel=reactive` override is required for older reactive targets.
+
+Process-wide overlap epochs retain contamination even if the overlapping peer finishes first.
+Non-driver application traffic participates; control/meta routes remain exempt. GC counts are
+summed across all beans after optional pre-measure GC. Unknown GC counts, overlap, sub-quantum
+and negative deltas exclude heap; the invariant evaluator skips unavailable signals rather than
+substituting zeros. Reactive thread-delta checks are suppressed. Disconnects publish a disposition
+without numeric measurements, and every end-handler releases its window in a finally block.
+
+Corpus entries retain heap attribution; unavailable entries may survive for coverage but cannot
+train cost retention or receive a composite score. Replay export contains only input strings,
+so no new numeric export schema is introduced. Malformed costs and incomplete hop recovery also
+disable composite scoring. Summary counters and driver-side disconnect classification are still
+pending; this is not the end-to-end acceptance checkpoint.

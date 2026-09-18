@@ -1,0 +1,42 @@
+state at each snapshot: ['OPEN', 'OPEN', 'OPEN', 'OPEN', 'OPEN']
+IDLE-1 (20s)                       deltaWeight=     266,560 B  deltaSamples=   128  wall=  20.0s  appThreads=     232,912 B  jfrThreads=      33,648 B
+    vert.x-eventloop-thread-7                      +205,016 B
+    JFR Periodic Tasks                              +33,648 B
+    executor-thread-1                               +24,760 B
+    vert.x-acceptor-thread-0                         +3,136 B
+TRIVIAL (50x /ok)                  deltaWeight=     508,400 B  deltaSamples=   216  wall=   3.2s  appThreads=     466,952 B  jfrThreads=      41,448 B
+    vert.x-eventloop-thread-6                      +209,680 B
+    executor-thread-1                               +69,960 B
+    vert.x-acceptor-thread-0                        +46,344 B
+    JFR Periodic Tasks                              +41,448 B
+    vert.x-eventloop-thread-0                       +23,584 B
+    vert.x-eventloop-thread-4                       +21,712 B
+    vert.x-eventloop-thread-3                       +21,616 B
+    vert.x-eventloop-thread-5                       +21,248 B
+    vert.x-eventloop-thread-2                       +20,832 B
+    vert.x-eventloop-thread-1                       +20,832 B
+    vert.x-eventloop-thread-7                       +11,144 B
+ALLOC (50x alloc?bytes=4194304)    deltaWeight= 160,768,048 B  deltaSamples=   372  wall=   3.3s  appThreads= 160,747,480 B  jfrThreads=      20,568 B
+    executor-thread-1                          +159,708,928 B
+    vert.x-acceptor-thread-0                       +239,056 B
+    vert.x-eventloop-thread-7                      +105,168 B
+    vert.x-eventloop-thread-1                      +105,168 B
+    vert.x-eventloop-thread-0                      +104,216 B
+    vert.x-eventloop-thread-2                       +98,840 B
+    vert.x-eventloop-thread-6                       +98,616 B
+    vert.x-eventloop-thread-3                       +96,992 B
+    vert.x-eventloop-thread-5                       +95,248 B
+    vert.x-eventloop-thread-4                       +95,248 B
+    JFR Periodic Tasks                              +20,568 B
+IDLE-2 (20s)                       deltaWeight=  50,447,672 B  deltaSamples=    47  wall=  20.0s  appThreads=  50,430,080 B  jfrThreads=      17,592 B
+    executor-thread-1                           +50,407,808 B
+    vert.x-eventloop-thread-6                       +22,272 B
+    JFR Periodic Tasks                              +17,592 B
+
+-- raw per-window totals (delivery-time attribution, drains included in active windows) --
+ALLOC=160,768,048 vs max(other)=50,447,672  ->  ALLOC RANKS FIRST (raw): True
+
+-- app-thread-only totals (JFR-machinery threads excluded by name prefix 'JFR') --
+ALLOC=160,747,480 vs max(other)=50,430,080  ratio=3.2x  ->  ALLOC RANKS FIRST (app threads): True
+
+cumulative topClassesByWeight at end: [B:201585472,com.oracle.svm.core.monitor.JavaMonitor:50548464,com.oracle.svm.core.jfr.sampler.AbstractJfrExecutionSampler$UpdateJfrExecutionSamplerOperation:6448264,[Ljava.lang.Object;:1439864,io.netty.handler.timeout.IdleStateHandler:254008
